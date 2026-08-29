@@ -31,13 +31,31 @@
 
 ## Notes
 
-**Validation iterations**: 1 (one correction applied, listed below).
+**Validation iterations**: 1 at authoring time, plus a second round of corrections from
+`/speckit-analyze` after `tasks.md` existed. Both are recorded below.
 
 **Iteration 1 finding — resolved.** Three functional requirements had no acceptance scenario
 exercising them: FR-005 (null, absence, and empty as three distinct states), FR-007's
 order-insensitivity half (mappings equal regardless of key order, sequences not), and FR-026
 (returned trees are deeply immutable). Three acceptance scenarios were added to User Story 1. All
 26 functional requirements now trace to at least one of the 20 acceptance scenarios.
+
+**Post-`/speckit-analyze` corrections (2026-08-29).** Cross-artifact analysis against `plan.md`
+and `tasks.md` surfaced two defects originating in this spec, both now fixed:
+
+- **FR-023 and SC-002 stated an unsatisfiable universal** — that *every* §4.2 decision needs both an
+  accepting and a refusing case. Several §4.2 decisions (entry order preservation, the single
+  definition of equality) have nothing to reject, so no refusing case can exist. The downstream task
+  asserting this obligation could never have passed. Both are now scoped by kind of decision:
+  rejections need a refusing case plus an accepting one; acceptance rules need an accepting case.
+- **Two §4.2 decisions had no conformance case at all** — entry order preservation (FR-003) and
+  code-point comparison without Unicode normalization (FR-006). Neither was caught by the first
+  validation because both requirements *did* have implementing tasks; only the coverage obligation
+  in FR-023 revealed that nothing verified them. Two case groups were added to User Story 1.
+
+The lesson worth keeping: the authoring-time checklist verifies that requirements exist and are
+testable. It cannot tell whether anything actually tests them, because no task list exists yet.
+`/speckit-analyze` is where that gets caught.
 
 **On "no implementation details"** — verified by scan: the spec names no language, runtime, package
 manager, test tool, library, or code construct. YAML, JSON, and TOML appear throughout, but as the

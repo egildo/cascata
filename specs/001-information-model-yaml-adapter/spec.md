@@ -206,8 +206,14 @@ case as data only and confirm it executes without any code change.
   of diagnostic codes with their positions.
 - **FR-022**: A shared runner MUST execute every case and report pass or fail per named case, with a
   failure naming the case and the difference between expected and actual.
-- **FR-023**: Every portability-floor decision in §4.2 MUST have at least one case that is accepted
-  and one that is refused.
+- **FR-023**: Coverage obligations differ by the kind of decision, because not every §4.2 decision
+  has something to reject. Each §4.2 **rejection** — duplicate keys, non-text keys, out-of-schema
+  tags, multi-document input, invalid encoding, and the resource limits — MUST have at least one
+  refusing case asserting the diagnostic *and its position*, plus one accepting case showing the
+  nearest legal document. Each §4.2 **acceptance rule** — entry order preservation, lexical number
+  kind, core-schema booleans, the three-way null/empty/absent distinction, code-point string
+  comparison without normalization, and the single definition of equality — MUST have at least one
+  accepting case.
 - **FR-024**: Adding a case MUST require editing case data only, with no change to adapter or runner
   logic.
 
@@ -234,8 +240,9 @@ case as data only and confirm it executes without any code change.
 
 - **SC-001**: 100% of nodes in every accepted corpus document report a position; the count of
   unpositioned nodes across the entire corpus is zero.
-- **SC-002**: 100% of the portability-floor decisions enumerated in §4.2 have both an accepting and
-  a refusing conformance case.
+- **SC-002**: 100% of the §4.2 decisions are covered per FR-023 — every rejection has both a
+  refusing and an accepting case, and every acceptance rule has an accepting case. No decision is
+  covered by zero cases.
 - **SC-003**: A document containing N distinct floor violations reports all N from one read — a
   config author never needs a second attempt to discover a problem that was already present.
 - **SC-004**: For every refusing case, the reported position selects the offending construct exactly,
