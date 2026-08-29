@@ -1,0 +1,15 @@
+{
+  "name": "tags/set-tag-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: !!set\n  x: null\n  y: null\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "unsupported-tag",
+        "line": 2,
+        "column": 3
+      }
+    ]
+  }
+}

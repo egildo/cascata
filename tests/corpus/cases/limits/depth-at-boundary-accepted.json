@@ -1,0 +1,29 @@
+{
+  "name": "limits/depth-at-boundary-accepted",
+  "cites": "§11",
+  "format": "yaml",
+  "input": "a:\n  b: 1\n",
+  "limits": {
+    "maxDepth": 2
+  },
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "mapping": [
+              [
+                "b",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

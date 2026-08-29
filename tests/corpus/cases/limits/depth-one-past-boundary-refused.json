@@ -1,0 +1,20 @@
+{
+  "name": "limits/depth-one-past-boundary-refused",
+  "cites": "§11",
+  "format": "yaml",
+  "input": "a:\n  b:\n    c: 1\n",
+  "limits": {
+    "maxDepth": 2
+  },
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "depth-limit-exceeded",
+        "line": 3,
+        "column": 8,
+        "start": 15,
+        "end": 16
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "tags/timestamp-tag-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: !!timestamp 2020-01-01\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "unsupported-tag",
+        "line": 1,
+        "column": 16,
+        "start": 15,
+        "end": 25
+      }
+    ]
+  }
+}

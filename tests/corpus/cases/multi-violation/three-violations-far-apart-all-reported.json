@@ -1,0 +1,40 @@
+{
+  "name": "multi-violation/three-violations-far-apart-all-reported",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "dup: 1\ndup: 2\nmiddle: normal\ntagged: !!binary \"aGVsbG8=\"\n1: numeric_key_value\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "duplicate-key",
+        "line": 2,
+        "column": 1,
+        "start": 7,
+        "end": 10,
+        "related": [
+          {
+            "label": "first occurrence",
+            "line": 1,
+            "column": 1,
+            "start": 0,
+            "end": 3
+          }
+        ]
+      },
+      {
+        "code": "unsupported-tag",
+        "line": 4,
+        "column": 18,
+        "start": 46,
+        "end": 56
+      },
+      {
+        "code": "non-string-key",
+        "line": 5,
+        "column": 1,
+        "start": 57,
+        "end": 58
+      }
+    ]
+  }
+}

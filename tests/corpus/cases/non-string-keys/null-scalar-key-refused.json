@@ -1,0 +1,17 @@
+{
+  "name": "non-string-keys/null-scalar-key-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "null: nil\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "non-string-key",
+        "line": 1,
+        "column": 1,
+        "start": 0,
+        "end": 4
+      }
+    ]
+  }
+}

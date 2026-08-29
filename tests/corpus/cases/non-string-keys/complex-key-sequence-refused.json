@@ -1,0 +1,17 @@
+{
+  "name": "non-string-keys/complex-key-sequence-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "? [a, b]\n: value\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "non-string-key",
+        "line": 1,
+        "column": 3,
+        "start": 2,
+        "end": 8
+      }
+    ]
+  }
+}

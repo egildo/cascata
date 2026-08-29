@@ -1,0 +1,15 @@
+{
+  "name": "tags/omap-tag-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: !!omap\n  - x: 1\n  - y: 2\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "unsupported-tag",
+        "line": 2,
+        "column": 3
+      }
+    ]
+  }
+}

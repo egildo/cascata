@@ -1,0 +1,19 @@
+{
+  "name": "tags/explicit-core-tag-accepted",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: !!str yes\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "string",
+            "value": "yes"
+          }
+        ]
+      ]
+    }
+  }
+}

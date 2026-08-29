@@ -1,0 +1,19 @@
+{
+  "name": "non-string-keys/quoted-numeric-looking-key-accepted",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "\"1\": one\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "1",
+          {
+            "kind": "string",
+            "value": "one"
+          }
+        ]
+      ]
+    }
+  }
+}

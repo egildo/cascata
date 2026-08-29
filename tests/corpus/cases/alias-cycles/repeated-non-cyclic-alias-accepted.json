@@ -1,0 +1,54 @@
+{
+  "name": "alias-cycles/repeated-non-cyclic-alias-accepted",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "base: &b\n  x: 1\nfirst: *b\nsecond: *b\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "base",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ]
+            ]
+          }
+        ],
+        [
+          "first",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ]
+            ]
+          }
+        ],
+        [
+          "second",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

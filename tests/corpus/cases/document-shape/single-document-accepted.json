@@ -1,0 +1,19 @@
+{
+  "name": "document-shape/single-document-accepted",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: 1\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    }
+  }
+}

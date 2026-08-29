@@ -1,0 +1,22 @@
+{
+  "name": "limits/size-at-boundary-accepted",
+  "cites": "§11",
+  "format": "yaml",
+  "input": "a: 123456\n",
+  "limits": {
+    "maxBytes": 10
+  },
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "123456"
+          }
+        ]
+      ]
+    }
+  }
+}

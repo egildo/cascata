@@ -1,0 +1,17 @@
+{
+  "name": "tags/binary-tag-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: !!binary \"aGVsbG8=\"\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "unsupported-tag",
+        "line": 1,
+        "column": 13,
+        "start": 12,
+        "end": 22
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "alias-cycles/direct-self-reference-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: &x\n  b: *x\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "alias-cycle",
+        "line": 2,
+        "column": 6,
+        "start": 11,
+        "end": 13
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "document-shape/invalid-utf8-lone-surrogate-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: hello\ud800world\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "invalid-encoding",
+        "line": 1,
+        "column": 9,
+        "start": 8,
+        "end": 11
+      }
+    ]
+  }
+}

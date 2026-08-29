@@ -1,0 +1,26 @@
+{
+  "name": "duplicate-keys/distinct-keys-accepted",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "host: a\nother: b\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "host",
+          {
+            "kind": "string",
+            "value": "a"
+          }
+        ],
+        [
+          "other",
+          {
+            "kind": "string",
+            "value": "b"
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "tags/unknown-tag-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: !mytag foo\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "unsupported-tag",
+        "line": 1,
+        "column": 11,
+        "start": 10,
+        "end": 13
+      }
+    ]
+  }
+}

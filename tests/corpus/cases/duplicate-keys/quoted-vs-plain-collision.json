@@ -1,0 +1,26 @@
+{
+  "name": "duplicate-keys/quoted-vs-plain-collision",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "host: a\n\"host\": b\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "duplicate-key",
+        "line": 2,
+        "column": 1,
+        "start": 8,
+        "end": 14,
+        "related": [
+          {
+            "label": "first occurrence",
+            "line": 1,
+            "column": 1,
+            "start": 0,
+            "end": 4
+          }
+        ]
+      }
+    ]
+  }
+}

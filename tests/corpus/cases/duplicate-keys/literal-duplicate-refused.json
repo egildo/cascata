@@ -1,0 +1,26 @@
+{
+  "name": "duplicate-keys/literal-duplicate-refused",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: 1\na: 2\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "duplicate-key",
+        "line": 2,
+        "column": 1,
+        "start": 5,
+        "end": 6,
+        "related": [
+          {
+            "label": "first occurrence",
+            "line": 1,
+            "column": 1,
+            "start": 0,
+            "end": 1
+          }
+        ]
+      }
+    ]
+  }
+}
