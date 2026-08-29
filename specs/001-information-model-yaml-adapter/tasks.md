@@ -39,12 +39,12 @@ coverage guarantees). Within US1 and US2, cases are written before the code they
 
 **Purpose**: Project initialization
 
-- [ ] T001 Create the `src/` and `tests/` directory skeleton per the Structure Decision in specs/001-information-model-yaml-adapter/plan.md
-- [ ] T002 Initialize the package in package.json with pnpm, ESM output, and Node LTS engines
-- [ ] T003 Configure TypeScript in tsconfig.json with `strict` and `noUncheckedIndexedAccess` enabled
-- [ ] T004 [P] Add `yaml` as the sole runtime dependency, and `vitest` plus `typescript` as dev dependencies, in package.json
-- [ ] T005 [P] Configure Vitest in vitest.config.ts for table-driven suites
-- [ ] T006 [P] Add `test`, `typecheck`, and `build` scripts to package.json
+- [x] T001 Create the `src/` and `tests/` directory skeleton per the Structure Decision in specs/001-information-model-yaml-adapter/plan.md
+- [x] T002 Initialize the package in package.json with pnpm, ESM output, and Node LTS engines
+- [x] T003 Configure TypeScript in tsconfig.json with `strict` and `noUncheckedIndexedAccess` enabled
+- [x] T004 [P] Add `yaml` as the sole runtime dependency, and `vitest` plus `typescript` as dev dependencies, in package.json
+- [x] T005 [P] Configure Vitest in vitest.config.ts for table-driven suites
+- [x] T006 [P] Add `test`, `typecheck`, and `build` scripts to package.json
 
 ---
 
@@ -56,28 +56,28 @@ coverage guarantees). Within US1 and US2, cases are written before the code they
 
 ### The model (format-blind)
 
-- [ ] T007 [P] Define `SourceSpan` and `Origin` with their invariants in src/model/span.ts per data-model.md
-- [ ] T008 Define `Scalar`, `Mapping`, `Sequence` and span-requiring factories in src/model/node.ts so an unpositioned node is unrepresentable (Principle III, FR-001) — depends on T007
-- [ ] T009 [P] Implement the single definition of equality in src/model/equality.ts: scalars by kind and value, mappings order-insensitive, sequences ordered, spans excluded (FR-007) — depends on T008
-- [ ] T010 [P] Implement deep freezing of returned trees in src/model/freeze.ts (FR-026) — depends on T008
+- [x] T007 [P] Define `SourceSpan` and `Origin` with their invariants in src/model/span.ts per data-model.md
+- [x] T008 Define `Scalar`, `Mapping`, `Sequence` and span-requiring factories in src/model/node.ts so an unpositioned node is unrepresentable (Principle III, FR-001) — depends on T007
+- [x] T009 [P] Implement the single definition of equality in src/model/equality.ts: scalars by kind and value, mappings order-insensitive, sequences ordered, spans excluded (FR-007) — depends on T008
+- [x] T010 [P] Implement deep freezing of returned trees in src/model/freeze.ts (FR-026) — depends on T008
 
 ### Diagnostics (format-blind)
 
-- [ ] T011 [P] Define the stable diagnostic code catalogue in src/diagnostics/codes.ts from contracts/diagnostics.md
-- [ ] T012 Define the `Diagnostic` shape with `primary` and labelled `related` spans in src/diagnostics/diagnostic.ts (FR-018) — depends on T007, T011
-- [ ] T013 Implement the collector that accumulates and never throws on the first violation, ordering by position, in src/diagnostics/collector.ts (FR-019) — depends on T012
+- [x] T011 [P] Define the stable diagnostic code catalogue in src/diagnostics/codes.ts from contracts/diagnostics.md
+- [x] T012 Define the `Diagnostic` shape with `primary` and labelled `related` spans in src/diagnostics/diagnostic.ts (FR-018) — depends on T007, T011
+- [x] T013 Implement the collector that accumulates and never throws on the first violation, ordering by position, in src/diagnostics/collector.ts (FR-019) — depends on T012
 
 ### Corpus harness (minimum viable, so stories can write cases)
 
-- [ ] T014 Define and load the conformance case format in tests/corpus/case.ts per contracts/conformance-case.md
-- [ ] T015 Implement the runner executing every case and reporting per named case in tests/corpus/runner.ts — depends on T014
-- [ ] T016 Wire the runner into Vitest in tests/corpus/corpus.test.ts — depends on T015
+- [x] T014 Define and load the conformance case format in tests/corpus/case.ts per contracts/conformance-case.md
+- [x] T015 Implement the runner executing every case and reporting per named case in tests/corpus/runner.ts — depends on T014
+- [x] T016 Wire the runner into Vitest in tests/corpus/corpus.test.ts — depends on T015
 
 ### Boundary and core unit tests
 
-- [ ] T017 [P] Assert the Principle IV dependency direction — nothing in src/model/ or src/diagnostics/ imports from src/adapters/ — in tests/unit/layering.test.ts
-- [ ] T018 [P] Unit-test equality including order-insensitive mappings and `int 2` ≠ `float 2.0` in tests/unit/equality.test.ts — depends on T009
-- [ ] T019 [P] Unit-test that returned trees resist mutation in tests/unit/freeze.test.ts — depends on T010
+- [x] T017 [P] Assert the Principle IV dependency direction — nothing in src/model/ or src/diagnostics/ imports from src/adapters/ — in tests/unit/layering.test.ts
+- [x] T018 [P] Unit-test equality including order-insensitive mappings and `int 2` ≠ `float 2.0` in tests/unit/equality.test.ts — depends on T009
+- [x] T019 [P] Unit-test that returned trees resist mutation in tests/unit/freeze.test.ts — depends on T010
 
 **Checkpoint**: The model, diagnostics, and a working corpus runner exist. Story work can begin.
 
