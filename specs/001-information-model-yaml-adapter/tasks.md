@@ -160,14 +160,14 @@ format-specific logic.
 
 ### Implementation for User Story 3
 
-- [ ] T051 [US3] Select the adapter under test from the case's `format` field, leaving the runner format-agnostic, in tests/corpus/runner.ts (FR-021) — depends on T015
-- [ ] T052 [US3] Discover cases by scanning the corpus directory so adding a file is sufficient in tests/corpus/runner.ts (FR-024) — depends on T015
-- [ ] T053 [US3] Fail loudly on a case that cannot be interpreted rather than skipping it in tests/corpus/runner.ts — depends on T015
-- [ ] T054 [US3] Compare expected diagnostics as a set of code-plus-position, failing on wrong positions and on missing or extra entries, in tests/corpus/runner.ts (SC-004) — depends on T015
-- [ ] T055 [US3] Support selective span assertion by node path in expected trees in tests/corpus/runner.ts — depends on T015, T009
-- [ ] T056 [US3] Report per-case pass or fail with expected-versus-actual detail in tests/corpus/runner.ts (FR-022) — depends on T015
-- [ ] T057 [US3] Assert the FR-023 coverage obligations in tests/corpus/coverage.test.ts: every §4.2 **rejection** has both a refusing case (diagnostic plus position) and an accepting case, and every §4.2 **acceptance rule** has an accepting case (FR-023, SC-002) — depends on T020–T027, T035–T041
-- [ ] T058 [P] [US3] Verify a case added by copy-and-edit runs with no code change, per quickstart scenario 6, in tests/corpus/cases/
+- [x] T051 [US3] Select the adapter under test from the case's `format` field, leaving the runner format-agnostic, in tests/corpus/runner.ts (FR-021) — depends on T015
+- [x] T052 [US3] Discover cases by scanning the corpus directory so adding a file is sufficient in tests/corpus/runner.ts (FR-024) — depends on T015
+- [x] T053 [US3] Fail loudly on a case that cannot be interpreted rather than skipping it in tests/corpus/runner.ts — depends on T015
+- [x] T054 [US3] Compare expected diagnostics as a set of code-plus-position, failing on wrong positions and on missing or extra entries, in tests/corpus/runner.ts (SC-004) — depends on T015
+- [x] T055 [US3] Support selective span assertion by node path in expected trees in tests/corpus/runner.ts — depends on T015, T009
+- [x] T056 [US3] Report per-case pass or fail with expected-versus-actual detail in tests/corpus/runner.ts (FR-022) — depends on T015
+- [x] T057 [US3] Assert the FR-023 coverage obligations in tests/corpus/coverage.test.ts: every §4.2 **rejection** has both a refusing case (diagnostic plus position) and an accepting case, and every §4.2 **acceptance rule** has an accepting case (FR-023, SC-002) — depends on T020–T027, T035–T041
+- [x] T058 [P] [US3] Verify a case added by copy-and-edit runs with no code change, per quickstart scenario 6, in tests/corpus/cases/
 
 **Checkpoint**: The corpus is ready for the JSON and TOML adapters without reshaping.
 
@@ -175,12 +175,12 @@ format-specific logic.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T059 [P] Document the public surface and the diagnostic codes in README.md, citing contracts/parse-api.md
-- [ ] T060 [P] Confirm determinism — identical input yields identical trees and diagnostic order across runs (SC-008) — in tests/unit/determinism.test.ts
-- [ ] T061 [P] Confirm no corpus case causes a throw — bad input always yields diagnostics rather than an exception, per contracts/parse-api.md — in tests/unit/totality.test.ts
-- [ ] T062 [P] Confirm the suite performs no network access, keeping the corpus hermetic, in tests/unit/hermetic.test.ts
-- [ ] T063 Run every validation scenario in specs/001-information-model-yaml-adapter/quickstart.md end to end
-- [ ] T064 Verify the six merge gates in .specify/memory/constitution.md: strict typecheck clean, no `any` or assertion casts on the node model, corpus green, no runtime dependency beyond `yaml`, every diagnostic carrying a position, no import crossing the format-blindness boundary
+- [x] T059 [P] Document the public surface and the diagnostic codes in README.md, citing contracts/parse-api.md
+- [x] T060 [P] Confirm determinism — identical input yields identical trees and diagnostic order across runs (SC-008) — in tests/unit/determinism.test.ts
+- [x] T061 [P] Confirm no corpus case causes a throw — bad input always yields diagnostics rather than an exception, per contracts/parse-api.md — in tests/unit/totality.test.ts
+- [x] T062 [P] Confirm the suite performs no network access, keeping the corpus hermetic, in tests/unit/hermetic.test.ts
+- [x] T063 Run every validation scenario in specs/001-information-model-yaml-adapter/quickstart.md end to end
+- [x] T064 Verify the six merge gates in .specify/memory/constitution.md: strict typecheck clean, no `any` or assertion casts on the node model, corpus green, no runtime dependency beyond `yaml`, every diagnostic carrying a position, no import crossing the format-blindness boundary
 
 ---
 
