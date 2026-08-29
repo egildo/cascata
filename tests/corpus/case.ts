@@ -108,6 +108,17 @@ export type Expect =
  */
 const CITES_PATTERN = /^§\d+(?:\.\d+)*$/;
 
+/**
+ * Optional resource limits for one case (contracts/parse-api.md's
+ * `limits`), e.g. `{"maxDepth": 3}` to make a depth-cap fixture small
+ * enough to read rather than needing 64 levels of real nesting. Absent
+ * fields fall back to the adapter's own defaults.
+ */
+export interface ExpectedLimits {
+  readonly maxDepth?: number;
+  readonly maxBytes?: number;
+}
+
 /** One conformance case (contracts/conformance-case.md "Fields"). */
 export interface ConformanceCase {
   /** Stable identifier, printed on failure. */
@@ -118,6 +129,8 @@ export interface ConformanceCase {
   readonly format: string;
   /** The document text. */
   readonly input: string;
+  /** Resource limits to parse under, if not the adapter's defaults. */
+  readonly limits?: ExpectedLimits;
   readonly expect: Expect;
 }
 
@@ -323,11 +336,25 @@ function parseExpect(raw: unknown, source: string): Expect {
  * Throws — loudly, per the runner contract's point 5 — on anything that
  * does not match contracts/conformance-case.md, rather than skipping it.
  */
+function parseExpectedLimits(raw: unknown, source: string): ExpectedLimits {
+  if (!isPlainObject(raw)) {
+    fail(source, "'limits' must be an object when present");
+  }
+  const { maxDepth, maxBytes } = raw;
+  if (maxDepth !== undefined && (typeof maxDepth !== "number" || !Number.isInteger(maxDepth) || maxDepth < 0)) {
+    fail(source, `'limits.maxDepth' must be a non-negative integer when present, got ${JSON.stringify(maxDepth)}`);
+  }
+  if (maxBytes !== undefined && (typeof maxBytes !== "number" || !Number.isInteger(maxBytes) || maxBytes < 0)) {
+    fail(source, `'limits.maxBytes' must be a non-negative integer when present, got ${JSON.stringify(maxBytes)}`);
+  }
+  return { ...(maxDepth !== undefined ? { maxDepth } : {}), ...(maxBytes !== undefined ? { maxBytes } : {}) };
+}
+
 export function parseCase(raw: unknown, source: string): ConformanceCase {
   if (!isPlainObject(raw)) {
     fail(source, "a case must be a JSON object");
   }
-  const { name, cites, format, input, expect } = raw;
+  const { name, cites, format, input, expect, limits } = raw;
   if (typeof name !== "string" || name.length === 0) {
     fail(source, "'name' must be a non-empty string");
   }
@@ -340,7 +367,14 @@ export function parseCase(raw: unknown, source: string): ConformanceCase {
   if (typeof input !== "string") {
     fail(source, "'input' must be a string");
   }
-  return { name, cites, format, input, expect: parseExpect(expect, source) };
+  return {
+    name,
+    cites,
+    format,
+    input,
+    ...(limits !== undefined ? { limits: parseExpectedLimits(limits, source) } : {}),
+    expect: parseExpect(expect, source),
+  };
 }
 
 /** Read and validate one case from a JSON file. */
