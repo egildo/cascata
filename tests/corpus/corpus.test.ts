@@ -21,7 +21,7 @@ const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "cases");
 // when they arrive (§14 v1.x) — this is the one line User Story 3 (T051)
 // is really about.
 const adapters: AdapterRegistry = {
-  yaml: (input, origin) => parse(input, { origin }),
+  yaml: (input, origin, limits) => parse(input, { origin, limits }),
 };
 
 describe("conformance corpus", () => {

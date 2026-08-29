@@ -6,13 +6,22 @@
  * the anchor's content, not the alias site).
  *
  * This module works entirely in terms of `yaml`'s own AST node types
- * (Alias, YAMLMap, YAMLSeq, Scalar) and never touches Cascata's model or
- * imports from `../../model/` or `../../diagnostics/` — the walk in
- * parse.ts is what converts a resolved AST node into a `Node`, by calling
- * back into its own conversion functions on whatever this module hands
- * back. That split avoids a circular import between the two files: this
- * module only ever returns "the yaml AST node to walk next," or throws one
- * of the two signals below, and never needs to call into parse.ts itself.
+ * (Alias, YAMLMap, YAMLSeq, Scalar) and never touches Cascata's model
+ * (`../../model/`) except for `SourceSpan`, needed only to *label* a
+ * diagnostic — it never builds a `Node`. The walk in parse.ts is what
+ * converts a resolved AST node into a `Node`, by calling back into its own
+ * conversion functions on whatever this module hands back.
+ *
+ * Revised for User Story 2 (Phase 4): every failure here used to throw,
+ * unwinding the entire walk on the first alias problem found anywhere in
+ * the document. FR-019 requires one read to report every violation it can
+ * find, so alias/merge failures are now reported as diagnostics and
+ * skipped — the enclosing structure keeps being walked for anything else
+ * wrong with it — rather than aborting. `alias-cycle` is a stable code
+ * (T047); a dangling alias and an invalid merge source have no code of
+ * their own in contracts/diagnostics.md, so both fall back to
+ * `malformed-document`, same as Phase 3's provisional treatment of all
+ * three — flagged in the Phase 4 report as still true only for those two.
  *
  * `src/adapters/yaml/` is format-aware by design (Principle IV) — this is
  * the one place in the codebase allowed to import from the `yaml` package.
@@ -20,6 +29,9 @@
 
 import { isAlias, isMap, isScalar, isSeq } from "yaml";
 import type { Alias, Document, ParsedNode, Scalar, YAMLMap, YAMLSeq } from "yaml";
+import { createDiagnostic, type Diagnostic } from "../../diagnostics/diagnostic.js";
+import type { SourceSpan } from "../../model/span.js";
+import { aliasCycleDiagnostic } from "./floor.js";
 
 // See parse.ts's module doc for why `.Parsed` is used throughout rather
 // than the bare classes: it is what keeps a mapping's entries and a
@@ -32,51 +44,11 @@ type SeqNode = YAMLSeq.Parsed;
 /** What an alias can resolve to — everything `Alias#resolve` returns except `undefined` (a dangling alias). */
 type AliasTarget = ScalarNode | MapNode | SeqNode;
 
-/**
- * Thrown when an alias's active expansion path loops back on a node still
- * being walked — the document refers to content that encloses itself.
- *
- * Phase 3 does not yet have a dedicated diagnostic code for this: T047
- * (Phase 4) is what turns a caught instance of this error into the
- * `alias-cycle` code at the alias's own position. It is still thrown here,
- * in Phase 3, because the entry point being built in this same phase
- * (`parse()`, T033) must never hang on any input — "Total... none hangs"
- * is a contracts/parse-api.md invariant of the entry point itself, not
- * something deferred to Phase 4. Until T047 lands, parse.ts catches this
- * and reports it as `malformed-document` — an honest description (this
- * really is content the reader can't make sense of) that will be replaced
- * by a precise code once Phase 4 exists.
- */
-export class AliasCycleError extends Error {
-  constructor(public readonly alias: Alias) {
-    super(`Alias '*${alias.source}' refers to content that encloses itself`);
-    this.name = "AliasCycleError";
-  }
-}
+/** Either a resolved AST node, or a diagnostic explaining why there isn't one. */
+export type AliasResolution = { readonly ok: true; readonly target: AliasTarget } | { readonly ok: false; readonly diagnostic: Diagnostic };
 
-/**
- * Thrown when an alias names an anchor that was never defined. `yaml`
- * itself reports no error for this (verified empirically: `parseDocument`
- * on `"a: *nope\n"` produces an empty `errors` array, and
- * `Alias#resolve` simply returns `undefined`) — SPEC.md and the
- * contracts have no dedicated code for a dangling alias either, so this
- * is mapped to `malformed-document` for the same reason as
- * {@link AliasCycleError}: a defensible generic description, not a
- * permanent home.
- */
-export class DanglingAliasError extends Error {
-  constructor(public readonly alias: Alias) {
-    super(`Alias '*${alias.source}' does not refer to any defined anchor`);
-    this.name = "DanglingAliasError";
-  }
-}
-
-/** Thrown when a merge key's value does not resolve to a mapping (or a sequence of mappings). */
-export class InvalidMergeSourceError extends Error {
-  constructor() {
-    super("A merge key ('<<') must resolve to a mapping, or a sequence of mappings");
-    this.name = "InvalidMergeSourceError";
-  }
+function malformedDocumentDiagnostic(message: string, span: SourceSpan): Diagnostic {
+  return createDiagnostic({ code: "malformed-document", message, primary: span });
 }
 
 /**
@@ -92,7 +64,9 @@ export function isMergeKeyPair(key: ParsedNode): boolean {
 
 /**
  * Resolve an alias to its target AST node, guarding the active expansion
- * path against cycles.
+ * path against cycles. Never throws: a dangling alias or a cycle is
+ * reported as a diagnostic result instead, so the caller can skip this one
+ * expansion and keep walking the rest of the document (FR-019).
  *
  * `activePath` holds the AST node object references currently being
  * walked. `Alias#resolve` returns a reference to the anchor's own node
@@ -100,14 +74,19 @@ export function isMergeKeyPair(key: ParsedNode): boolean {
  * anchors returns that exact same `YAMLMap` instance), so a cycle is
  * exactly "the resolved target is already in `activePath`" — no separate
  * anchor-name bookkeeping is needed.
+ *
+ * `aliasSpan` is the alias's own span, used as the diagnostic's primary
+ * position in both failure cases — "the alias closing the cycle"
+ * (contracts/diagnostics.md) for a cycle, and the only position available
+ * for a dangling reference.
  */
-export function resolveAlias(alias: Alias, doc: Document, activePath: ReadonlySet<object>): AliasTarget {
+export function resolveAlias(alias: Alias, doc: Document, activePath: ReadonlySet<object>, aliasSpan: SourceSpan): AliasResolution {
   const target = alias.resolve(doc);
   if (target === undefined) {
-    throw new DanglingAliasError(alias);
+    return { ok: false, diagnostic: malformedDocumentDiagnostic(`Alias '*${alias.source}' does not refer to any defined anchor`, aliasSpan) };
   }
   if (activePath.has(target)) {
-    throw new AliasCycleError(alias);
+    return { ok: false, diagnostic: aliasCycleDiagnostic(alias.source, aliasSpan) };
   }
   if (target.range == null) {
     // Only reachable if `doc` was never actually produced by
@@ -122,15 +101,7 @@ export function resolveAlias(alias: Alias, doc: Document, activePath: ReadonlySe
   // This corrects for that library-typing gap; it is not a cast on
   // Cascata's own node model, which is what the constitution's ban on
   // assertion casts is about.
-  return target as AliasTarget;
-}
-
-function resolveMergeSource(node: ParsedNode, doc: Document, activePath: ReadonlySet<object>): MapNode {
-  const target = isAlias(node) ? resolveAlias(node, doc, activePath) : node;
-  if (!isMap(target)) {
-    throw new InvalidMergeSourceError();
-  }
-  return target;
+  return { ok: true, target: target as AliasTarget };
 }
 
 /**
@@ -139,13 +110,36 @@ function resolveMergeSource(node: ParsedNode, doc: Document, activePath: Readonl
  * conflict. `<<` may name a single mapping (directly, or via one alias) or
  * a sequence of them (`<<: [*a, *b]`), verified empirically for both
  * shapes.
+ *
+ * Never throws. A source that doesn't resolve to a mapping (a dangling
+ * alias, a cycle, or a value that just isn't one) is reported via
+ * `report` and skipped — the *other* sources in the same `<<` list, and
+ * the rest of the enclosing mapping, still get folded/walked.
  */
-export function mergeSources(value: ParsedNode | null, doc: Document, activePath: ReadonlySet<object>): MapNode[] {
+export function mergeSources(
+  value: ParsedNode | null,
+  doc: Document,
+  activePath: ReadonlySet<object>,
+  mergeValueSpan: SourceSpan,
+  report: (diagnostic: Diagnostic) => void,
+): MapNode[] {
   if (value === null) {
-    throw new InvalidMergeSourceError();
+    report(malformedDocumentDiagnostic("A merge key ('<<') must have a value", mergeValueSpan));
+    return [];
   }
-  if (isSeq(value)) {
-    return value.items.map((item) => resolveMergeSource(item, doc, activePath));
+  const candidates = isSeq(value) ? value.items : [value];
+  const sources: MapNode[] = [];
+  for (const candidate of candidates) {
+    const target = isAlias(candidate) ? resolveAlias(candidate, doc, activePath, mergeValueSpan) : { ok: true as const, target: candidate };
+    if (!target.ok) {
+      report(target.diagnostic);
+      continue;
+    }
+    if (!isMap(target.target)) {
+      report(malformedDocumentDiagnostic("A merge key ('<<') must resolve to a mapping, or a sequence of mappings", mergeValueSpan));
+      continue;
+    }
+    sources.push(target.target);
   }
-  return [resolveMergeSource(value, doc, activePath)];
+  return sources;
 }

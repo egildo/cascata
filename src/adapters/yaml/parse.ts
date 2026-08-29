@@ -6,14 +6,15 @@
  * (Principle IV) — this file is where `yaml` (eemeli's) is imported.
  * Everything below turns its AST into Cascata's format-blind model,
  * computing every span itself rather than trusting the library's ranges
- * verbatim: two empirical findings (recorded in the Phase 3 report) meant
+ * verbatim: two empirical findings (recorded in the Phase 3 report, and
+ * confirmed independently by re-probing before Phase 4 began) meant
  * `research.md`'s probe table was not quite right about what `yaml` hands
  * back:
  *
  *   1. `range`/`.pos` offsets are **UTF-16 code-unit indices** into the JS
- *      string, not UTF-8 byte offsets, despite research.md's probe table
- *      calling them "byte offsets". They diverge for any character above
- *      U+007F. `SourceSpan.start`/`.end` are contractually bytes
+ *      string, not UTF-8 byte offsets, despite research.md's original probe
+ *      table calling them "byte offsets". They diverge for any character
+ *      above U+007F. `SourceSpan.start`/`.end` are contractually bytes
  *      (data-model.md), so this file converts, via a single-pass byte
  *      offset table built once per document (`buildByteOffsetTable`) —
  *      not by re-encoding a growing prefix per node, which would be
@@ -31,10 +32,21 @@
  * contributes zero bytes/columns rather than shifting every position by
  * one — `yaml` does not do this itself (verified empirically: a BOM
  * occupies index 0 and is counted like any other character).
+ *
+ * Revised for User Story 2 (Phase 4): FR-019 requires one read to report
+ * every floor violation it can detect, not the first. Every conversion
+ * function below now returns `Node | undefined` and *records* a
+ * diagnostic rather than throwing one, so a violation anywhere does not
+ * stop the walk from finding others elsewhere in the document (SC-003).
+ * The only two checks that still short-circuit the whole read are the
+ * size cap (checked before parsing at all, per contracts/parse-api.md —
+ * "nothing was parsed") and an internal-consistency guard that should
+ * never fire on real input.
  */
 
 import { LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument } from "yaml";
 import type { Alias, Document, ParsedNode, Range, Scalar, YAMLMap, YAMLSeq } from "yaml";
+import { DiagnosticCollector } from "../../diagnostics/collector.js";
 import { createDiagnostic, type Diagnostic } from "../../diagnostics/diagnostic.js";
 import {
   createBoolScalar,
@@ -47,7 +59,9 @@ import {
   type Node,
 } from "../../model/node.js";
 import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span.js";
-import { AliasCycleError, DanglingAliasError, InvalidMergeSourceError, isMergeKeyPair, mergeSources, resolveAlias } from "./expand.js";
+import { resolveAlias, isMergeKeyPair, mergeSources } from "./expand.js";
+import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsupportedTagDiagnostic } from "./floor.js";
+import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "./limits.js";
 
 // `yaml` merges each of these classes with a `.Parsed` namespace member
 // carrying the concrete post-parse shape (a definite `range`, and — for
@@ -155,26 +169,13 @@ function requireRange(node: { range?: Range | null }): Range {
   return node.range;
 }
 
-/** Thrown when a scalar resolves to a value outside the five model kinds (e.g. `!!binary`'s Buffer). See the module doc and the Phase 3 report: tag validation is Phase 4 (T043) work; this is a defensive fallback so parse() stays total in the meantime. */
-class UnsupportedScalarValueError extends Error {
-  constructor(value: unknown) {
-    super(`Scalar value of type '${typeof value}' is outside the portability floor's five kinds`);
-    this.name = "UnsupportedScalarValueError";
-  }
-}
-
-/** Thrown when a mapping key does not resolve to text. Non-string-key rejection with its own diagnostic is Phase 4 (T042); see the module doc. */
-class UnsupportedKeyError extends Error {
-  constructor() {
-    super("A mapping key must be text (non-string keys are a portability-floor violation)");
-    this.name = "UnsupportedKeyError";
-  }
-}
-
 interface WalkContext extends SpanContext {
   readonly doc: Document;
   /** AST node references currently on the active expansion path (research D3). */
   readonly activePath: Set<object>;
+  /** Accumulates every floor violation found during the walk (FR-019). */
+  readonly diagnostics: DiagnosticCollector;
+  readonly limits: ParseLimits;
 }
 
 function hasAnchor(node: unknown): node is { anchor?: string } {
@@ -189,8 +190,34 @@ function anchorNameOf(node: unknown): string | undefined {
   return typeof anchor === "string" && anchor.length > 0 ? anchor : undefined;
 }
 
-/** Convert a scalar AST node's already-resolved JS value into a Cascata Scalar. Kind is decided by the JS type `yaml` already resolved the lexical source to under the core schema — see the module doc's discussion of quoting and tags. */
-function convertScalar(scalarAst: ScalarNode, ctx: SpanContext): Node {
+/**
+ * If `node`'s tag is outside the core-schema allowlist, record an
+ * `unsupported-tag` diagnostic and report `true`. Applies uniformly to
+ * scalars, mappings, and sequences — `!!set`/`!!omap` tag a *collection*,
+ * not a scalar.
+ */
+function reportTagIfUnsupported(node: { tag?: string; range?: Range | null }, ctx: WalkContext): boolean {
+  const tag = node.tag;
+  if (!isUnsupportedTag(tag)) {
+    return false;
+  }
+  ctx.diagnostics.add(unsupportedTagDiagnostic(tag, toSourceSpan(requireRange(node), ctx)));
+  return true;
+}
+
+/**
+ * Convert a scalar AST node's already-resolved JS value into a Cascata
+ * Scalar. Kind is decided by the JS type `yaml` already resolved the
+ * lexical source to under the core schema — see the module doc's
+ * discussion of quoting and tags. Returns `undefined` (with a diagnostic
+ * recorded) if the tag is unsupported, or — defensively, should the tag
+ * check above ever miss something — if the resolved value still isn't one
+ * of the five model kinds.
+ */
+function convertScalar(scalarAst: ScalarNode, ctx: WalkContext): Node | undefined {
+  if (reportTagIfUnsupported(scalarAst, ctx)) {
+    return undefined;
+  }
   const span = toSourceSpan(requireRange(scalarAst), ctx);
   const value: unknown = scalarAst.value;
   if (typeof value === "string") {
@@ -208,14 +235,47 @@ function convertScalar(scalarAst: ScalarNode, ctx: SpanContext): Node {
   if (value === null) {
     return createNullScalar(span);
   }
-  throw new UnsupportedScalarValueError(value);
+  // Defensive: every tag that resolves to a non-core-five JS value (a
+  // Buffer for !!binary, a Date for !!timestamp, ...) is, as far as this
+  // adapter's own corpus has verified, already caught by the tag check
+  // above. Kept so parse() stays total even if that invariant is ever
+  // wrong for some tag this corpus does not cover.
+  ctx.diagnostics.add(
+    createDiagnostic({
+      code: "malformed-document",
+      message: `Scalar value of type '${typeof value}' is outside the portability floor's five kinds`,
+      primary: span,
+    }),
+  );
+  return undefined;
 }
 
-function deriveMappingKey(keyAst: ParsedNode): string {
-  if (isScalar(keyAst) && typeof keyAst.value === "string") {
-    return keyAst.value;
+/**
+ * Resolve a mapping key to its string text, expanding an alias key first
+ * if present. Records `non-string-key` (FR-012) and returns `undefined`
+ * for anything that isn't text — a complex (collection) key, a non-text
+ * scalar key, or an alias that fails to resolve to text — without
+ * throwing, so the rest of the mapping keeps being walked.
+ */
+function deriveMappingKey(keyAst: ParsedNode, ctx: WalkContext): { key: string; span: SourceSpan } | undefined {
+  const keySpan = toSourceSpan(requireRange(keyAst), ctx);
+  if (isAlias(keyAst)) {
+    const resolution = resolveAlias(keyAst, ctx.doc, ctx.activePath, keySpan);
+    if (!resolution.ok) {
+      ctx.diagnostics.add(resolution.diagnostic);
+      return undefined;
+    }
+    if (isScalar(resolution.target) && typeof resolution.target.value === "string") {
+      return { key: resolution.target.value, span: keySpan };
+    }
+    ctx.diagnostics.add(nonStringKeyDiagnostic(keySpan));
+    return undefined;
   }
-  throw new UnsupportedKeyError();
+  if (isScalar(keyAst) && typeof keyAst.value === "string") {
+    return { key: keyAst.value, span: keySpan };
+  }
+  ctx.diagnostics.add(nonStringKeyDiagnostic(keySpan));
+  return undefined;
 }
 
 /**
@@ -225,15 +285,24 @@ function deriveMappingKey(keyAst: ParsedNode): string {
  * is folded first). Recurses through the source's own merge keys, if it
  * has any, and tracks the source itself on the active expansion path so a
  * cycle reachable only through chained merge keys is still caught (see
- * expand.ts's module doc).
+ * expand.ts's module doc). `depth` is the *enclosing* mapping's own depth:
+ * a merge source's entries are folded in as if written directly at this
+ * mapping's level, not at whatever depth the anchor happens to be defined.
+ *
+ * Known imprecision, not exercised by any corpus case: if the same source
+ * mapping is both walked in place elsewhere *and* merged in here, an
+ * internal duplicate key within that source is detected — and reported —
+ * once per site it is folded from, since duplicate tracking is local to
+ * each `buildMappingEntries` call. Harmless (the diagnostic is correct,
+ * just potentially repeated), not fixed given how narrow the scenario is.
  */
-function foldMergeSource(source: MapNode, target: Map<string, Node>, ctx: WalkContext): void {
+function foldMergeSource(source: MapNode, target: Map<string, Node>, ctx: WalkContext, depth: number): void {
   const anchor = anchorNameOf(source);
   if (anchor !== undefined) {
     ctx.activePath.add(source);
   }
   try {
-    for (const [key, node] of buildMappingEntries(source, ctx)) {
+    for (const [key, node] of buildMappingEntries(source, ctx, depth)) {
       if (!target.has(key)) {
         target.set(key, node);
       }
@@ -245,40 +314,80 @@ function foldMergeSource(source: MapNode, target: Map<string, Node>, ctx: WalkCo
   }
 }
 
-function buildMappingEntries(mapAst: MapNode, ctx: WalkContext): Map<string, Node> {
+function buildMappingEntries(mapAst: MapNode, ctx: WalkContext, depth: number): Map<string, Node> {
   const entries = new Map<string, Node>();
+  const firstOccurrence = new Map<string, SourceSpan>();
+
   for (const pair of mapAst.items) {
     const keyAst: ParsedNode = pair.key;
+
     if (isMergeKeyPair(keyAst)) {
-      for (const source of mergeSources(pair.value, ctx.doc, ctx.activePath)) {
-        foldMergeSource(source, entries, ctx);
+      const mergeValueSpan = pair.value !== null ? toSourceSpan(requireRange(pair.value), ctx) : toSourceSpan(requireRange(keyAst), ctx);
+      const sources = mergeSources(pair.value, ctx.doc, ctx.activePath, mergeValueSpan, (diagnostic) => ctx.diagnostics.add(diagnostic));
+      for (const source of sources) {
+        foldMergeSource(source, entries, ctx, depth);
       }
       continue;
     }
-    const key = deriveMappingKey(keyAst);
-    if (pair.value === null) {
-      throw new Error("Internal error: a mapping pair was parsed with no value node at all");
+
+    const keyResult = deriveMappingKey(keyAst, ctx);
+    // Even when the key itself is invalid, the value may still contain
+    // further, independent violations (FR-019) — keep walking it, just
+    // never add it under a key we refused.
+    const valueNode = pair.value !== null ? walkNode(pair.value, ctx, depth + 1) : undefined;
+
+    if (keyResult === undefined) {
+      continue;
     }
-    // Explicit pairs always overwrite, regardless of what a prior merge
-    // fold already placed at this key — that IS "explicit beats merged"
-    // (FR-009). A literal duplicate explicit key never reaches this code:
-    // `yaml` itself reports DUPLICATE_KEY in `doc.errors`, which parseYaml
-    // checks and bails out on before any walk begins (T034); teaching this
-    // function to detect duplicates itself is Phase 4's job (T044), not a
-    // gap in this one.
-    entries.set(key, walkNode(pair.value, ctx));
+
+    const priorSpan = firstOccurrence.get(keyResult.key);
+    if (priorSpan !== undefined) {
+      ctx.diagnostics.add(duplicateKeyDiagnostic(keyResult.span, priorSpan));
+      continue; // first occurrence's value (already in `entries`) is left alone
+    }
+    firstOccurrence.set(keyResult.key, keyResult.span);
+
+    if (valueNode !== undefined) {
+      entries.set(keyResult.key, valueNode);
+    }
   }
   return entries;
 }
 
-function convertMapping(mapAst: MapNode, ctx: WalkContext): Node {
+function convertMapping(mapAst: MapNode, ctx: WalkContext, depth: number): Node | undefined {
+  const tagUnsupported = reportTagIfUnsupported(mapAst, ctx);
+  const entries = buildMappingEntries(mapAst, ctx, depth);
+  if (tagUnsupported) {
+    return undefined;
+  }
   const span = toSourceSpan(requireRange(mapAst), ctx);
-  return createMapping(buildMappingEntries(mapAst, ctx), span);
+  return createMapping(entries, span);
 }
 
-function convertSequence(seqAst: SeqNode, ctx: WalkContext): Node {
+function convertSequence(seqAst: SeqNode, ctx: WalkContext, depth: number): Node | undefined {
+  const tagUnsupported = reportTagIfUnsupported(seqAst, ctx);
+  const items: Node[] = [];
+  for (const itemAst of seqAst.items) {
+    // Defensive: `YAMLSeq.Parsed.items` is typed as `ParsedNode[]`, but
+    // `!!omap` composes to `YAMLOMap` (a `YAMLSeq` subclass) whose actual
+    // runtime items are bare `Pair` objects, not nodes at all (verified
+    // empirically) — a library-typing gap in the same spirit as
+    // `Alias#resolve`'s (see expand.ts). Since `!!omap` is already refused
+    // by the tag check above regardless, there is nothing useful to gain
+    // by walking a shape this adapter does not model; skip rather than
+    // crash.
+    if (!isScalar(itemAst) && !isMap(itemAst) && !isSeq(itemAst) && !isAlias(itemAst)) {
+      continue;
+    }
+    const item = walkNode(itemAst, ctx, depth + 1);
+    if (item !== undefined) {
+      items.push(item);
+    }
+  }
+  if (tagUnsupported) {
+    return undefined;
+  }
   const span = toSourceSpan(requireRange(seqAst), ctx);
-  const items = seqAst.items.map((item) => walkNode(item, ctx));
   return createSequence(items, span);
 }
 
@@ -286,17 +395,29 @@ function convertSequence(seqAst: SeqNode, ctx: WalkContext): Node {
  * Walk one AST node, expanding it if it is an alias (research D4: the
  * resulting Node's position is the anchor's own content, which falls out
  * naturally here — the target is walked with its own range, not the
- * alias's).
+ * alias's). `depth` is this node's own nesting depth; the root is depth 0.
  */
-function walkNode(astNode: ParsedNode, ctx: WalkContext): Node {
+function walkNode(astNode: ParsedNode, ctx: WalkContext, depth: number): Node | undefined {
   if (isAlias(astNode)) {
-    const target = resolveAlias(astNode, ctx.doc, ctx.activePath);
-    return walkAnchoredTarget(target, ctx);
+    const aliasSpan = toSourceSpan(requireRange(astNode), ctx);
+    const resolution = resolveAlias(astNode, ctx.doc, ctx.activePath, aliasSpan);
+    if (!resolution.ok) {
+      ctx.diagnostics.add(resolution.diagnostic);
+      return undefined;
+    }
+    return walkAnchoredTarget(resolution.target, ctx, depth);
   }
-  return walkAnchoredTarget(astNode, ctx);
+  return walkAnchoredTarget(astNode, ctx, depth);
 }
 
-function walkAnchoredTarget(astNode: ScalarNode | MapNode | SeqNode, ctx: WalkContext): Node {
+function walkAnchoredTarget(astNode: ScalarNode | MapNode | SeqNode, ctx: WalkContext, depth: number): Node | undefined {
+  const span = toSourceSpan(requireRange(astNode), ctx);
+  const depthDiagnostic = checkDepthLimit(depth, ctx.limits, span);
+  if (depthDiagnostic !== undefined) {
+    ctx.diagnostics.add(depthDiagnostic);
+    return undefined;
+  }
+
   const anchor = anchorNameOf(astNode);
   if (anchor !== undefined) {
     ctx.activePath.add(astNode);
@@ -306,10 +427,10 @@ function walkAnchoredTarget(astNode: ScalarNode | MapNode | SeqNode, ctx: WalkCo
       return convertScalar(astNode, ctx);
     }
     if (isMap(astNode)) {
-      return convertMapping(astNode, ctx);
+      return convertMapping(astNode, ctx, depth);
     }
     if (isSeq(astNode)) {
-      return convertSequence(astNode, ctx);
+      return convertSequence(astNode, ctx, depth);
     }
     throw new Error("Internal error: encountered an AST node of an unrecognized shape during the walk");
   } finally {
@@ -319,81 +440,138 @@ function walkAnchoredTarget(astNode: ScalarNode | MapNode | SeqNode, ctx: WalkCo
   }
 }
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
- * Map any internal expansion/robustness signal thrown during the walk to
- * a `malformed-document` diagnostic. Several of these (alias cycles,
- * non-string keys, unsupported tags) get their own dedicated code and
- * exact position in Phase 4 (T042, T043, T047) — see each error class's
- * own doc comment. This is Phase 3's honest, generic fallback so `parse()`
- * stays total (contracts/parse-api.md) in the meantime; a zero-width span
- * at offset 0 is used since, unlike a `yaml`-reported syntax error, these
- * signals do not always carry a precise position of their own (e.g. a
- * dangling alias's own position could be attached in a future pass, but
- * isn't wired through as a diagnostic today because Phase 3's own corpus
- * never exercises this path).
+ * Find every unpaired UTF-16 surrogate in `text` (FR-016). A JS string can
+ * only fail to correspond to well-formed Unicode text this way — `parse()`
+ * takes already-decoded text, so this is the one place "not valid UTF-8"
+ * is actually checkable at this layer. `yaml` itself does not reject these
+ * (verified empirically: a lone surrogate embedded in otherwise-plain text
+ * parses with zero errors or warnings), so this is entirely Cascata's own
+ * scan, run once up front — not "before parsing" the way the size cap is
+ * (contracts does not require that here, and `yaml` tolerates the input
+ * fine), so any other floor violations in the same document are still
+ * found.
  */
-function toInternalMalformedDiagnostic(error: unknown, ctx: SpanContext): Diagnostic {
-  let primary: SourceSpan;
-  if (error instanceof AliasCycleError || error instanceof DanglingAliasError) {
-    primary = toSourceSpan(requireRange(error.alias), ctx);
-  } else {
-    primary = createSourceSpan({ origin: ctx.origin, start: 0, end: 0, line: 1, column: 1, documentLength: ctx.documentByteLength });
+function findLoneSurrogateOffsets(text: string): number[] {
+  const offsets: number[] = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = index + 1 < text.length ? text.charCodeAt(index + 1) : Number.NaN;
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        index += 1; // valid surrogate pair; skip its low half
+        continue;
+      }
+      offsets.push(index);
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      offsets.push(index); // lone low surrogate
+    }
   }
-  return createDiagnostic({ code: "malformed-document", message: messageOf(error), primary });
+  return offsets;
+}
+
+interface YamlReaderError {
+  readonly code: string;
+  readonly message: string;
+  readonly pos: readonly [number, number];
 }
 
 /**
- * Map one of `yaml`'s own parse errors (`doc.errors`) to a
- * `malformed-document` diagnostic (T034). Phase 4 (T045) refines this into
- * a full per-code mapping table (`DUPLICATE_KEY` -> `duplicate-key`,
- * `MULTIPLE_DOCS` -> `multiple-documents`, ...); Phase 3 does not
- * distinguish, since none of its own corpus cases produce a `yaml` error
- * in the first place (they are all well-formed documents) — every case
- * exercising this path belongs to Phase 4.
+ * Map one of `yaml`'s own parse errors (`doc.errors`) to a Cascata
+ * diagnostic (T045, research D6). `DUPLICATE_KEY` is deliberately
+ * excluded: floor.ts's own walk-time detection (`buildMappingEntries`)
+ * reports it with the `related` first-occurrence span contracts/
+ * diagnostics.md requires, which `yaml`'s own error (only the second
+ * occurrence's position) cannot supply on its own. `MULTIPLE_DOCS` is
+ * narrowed to the 3-character marker itself (contracts: "the second
+ * document marker"), not `yaml`'s own wider span, which covers everything
+ * after the first document. Everything else becomes `malformed-document`,
+ * using the reader's own reported position as-is.
+ *
+ * `doc.warnings` (`TAG_RESOLVE_FAILED`, the only warning this adapter's
+ * probing ever produced) is deliberately not consumed here: floor.ts's own
+ * tag-allowlist check already catches a genuinely unknown tag the same way
+ * it catches a known non-core one — by exact-URI mismatch — so mapping the
+ * warning too would just report the same violation twice.
  */
-function toReaderErrorDiagnostic(error: { message: string; pos: [number, number] }, ctx: SpanContext): Diagnostic {
+function readerErrorDiagnostic(error: YamlReaderError, ctx: SpanContext): Diagnostic | undefined {
+  if (error.code === "DUPLICATE_KEY") {
+    return undefined;
+  }
   const [start, end] = error.pos;
-  const primary = toSourceSpan([start, end, end], ctx);
-  return createDiagnostic({ code: "malformed-document", message: error.message, primary });
+  if (error.code === "MULTIPLE_DOCS") {
+    const markerSpan = toSourceSpan([start, start + 3, start + 3], ctx);
+    return createDiagnostic({ code: "multiple-documents", message: error.message, primary: markerSpan });
+  }
+  return createDiagnostic({ code: "malformed-document", message: error.message, primary: toSourceSpan([start, end, end], ctx) });
 }
 
 /**
- * Parse YAML text into a Cascata tree or a list of diagnostics. Does not
- * freeze the returned tree — that is `src/index.ts`'s job (T033), so the
- * adapter itself stays reusable by anything that wants the raw walk
- * (e.g. a future `floor.ts`).
+ * Parse YAML text into a Cascata tree or a non-empty, position-ordered
+ * list of diagnostics — never both (research D5). Does not freeze the
+ * returned tree — that is `src/index.ts`'s job, so the adapter itself
+ * stays reusable by anything that wants the raw walk.
  */
-export function parseYaml(rawText: string, origin: Origin): ParseOutcome {
+export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Partial<ParseLimits>): ParseOutcome {
+  const limits = resolveLimits(limitOverrides);
+
+  // Checked before anything else is touched, on the raw input exactly as
+  // received — "refused without being parsed at all" (contracts/parse-api.md).
+  const rawByteLength = Buffer.byteLength(rawText, "utf-8");
+  const sizeDiagnostic = checkSizeLimit(rawByteLength, limits, origin);
+  if (sizeDiagnostic !== undefined) {
+    return { ok: false, diagnostics: [sizeDiagnostic] };
+  }
+
   const text = stripByteOrderMark(rawText);
   const documentByteLength = Buffer.byteLength(text, "utf-8");
   const byteOffsetTable = buildByteOffsetTable(text);
   const lineCounter = new LineCounter();
   const spanContext: SpanContext = { origin, text, lineCounter, byteOffsetTable, documentByteLength };
+  const diagnostics = new DiagnosticCollector();
 
+  // `lineCounter` is only populated as `parseDocument` lexes the text (it
+  // calls `addNewLine` while scanning), so any span computed from it
+  // before this call would be nonsense (verified: line comes back 0).
+  // The lone-surrogate scan below runs on the same `text` regardless, so
+  // ordering it after costs nothing.
   const doc = parseDocument(text, { intAsBigInt: true, merge: true, lineCounter });
 
-  if (doc.errors.length > 0) {
-    return {
-      ok: false,
-      diagnostics: doc.errors.map((error) => toReaderErrorDiagnostic(error, spanContext)),
-    };
+  for (const offset of findLoneSurrogateOffsets(text)) {
+    const span = toSourceSpan([offset, offset + 1, offset + 1], spanContext);
+    diagnostics.add(
+      createDiagnostic({
+        code: "invalid-encoding",
+        message: "Input contains an unpaired UTF-16 surrogate, which cannot correspond to valid UTF-8",
+        primary: span,
+      }),
+    );
   }
 
+  for (const error of doc.errors) {
+    const diagnostic = readerErrorDiagnostic(error, spanContext);
+    if (diagnostic !== undefined) {
+      diagnostics.add(diagnostic);
+    }
+  }
+
+  let tree: Node | undefined;
   if (doc.contents === null) {
     // Empty, comment-only, or whitespace-only input: valid, a null scalar
     // spanning zero width at offset 0 (contracts/parse-api.md).
-    const span = createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: documentByteLength });
-    return { ok: true, tree: createNullScalar(span) };
+    tree = createNullScalar(createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: documentByteLength }));
+  } else {
+    const ctx: WalkContext = { ...spanContext, doc, activePath: new Set(), diagnostics, limits };
+    tree = walkNode(doc.contents, ctx, 0);
   }
 
-  const ctx: WalkContext = { ...spanContext, doc, activePath: new Set() };
-  try {
-    return { ok: true, tree: walkNode(doc.contents, ctx) };
-  } catch (error) {
-    return { ok: false, diagnostics: [toInternalMalformedDiagnostic(error, spanContext)] };
+  if (!diagnostics.isEmpty) {
+    return { ok: false, diagnostics: diagnostics.all() };
   }
+  if (tree === undefined) {
+    // Every `return undefined` path above records a diagnostic first; if
+    // the collector is empty, the walk must have produced a real tree.
+    throw new Error("Internal error: the walk produced no tree despite recording no diagnostics");
+  }
+  return { ok: true, tree };
 }
