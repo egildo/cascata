@@ -58,9 +58,13 @@ function freezeSpan(span: SourceSpan): SourceSpan {
 }
 
 /**
- * Recursively freeze a Node tree, returning it (the same reference is
- * mutated into a frozen state and handed back for convenience at call
- * sites, e.g. `return freeze(tree)`).
+ * Recursively freeze a Node tree and return the frozen tree.
+ *
+ * Reference identity is NOT preserved for mappings: guarding `entries`
+ * requires wrapping it in a Proxy, which means a new `Mapping` object is
+ * built and returned. `freeze(m) !== m` when `m` is a mapping, while
+ * scalars and sequences are frozen in place and handed back. Always use
+ * the return value — never assume the argument was frozen where it stood.
  */
 export function freeze(node: Node): Node {
   freezeSpan(node.span);

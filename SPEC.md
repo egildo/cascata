@@ -59,8 +59,10 @@ The model is an **information model** in the YAML-spec sense (representation gra
 type Node = Scalar | Mapping | Sequence;
 
 interface Base {
-  span: SourceSpan;      // file, line, col, byte offset — NON-OPTIONAL
-  origin: LayerId;       // which document in the cascade produced this node
+  span: SourceSpan;      // layer + file, line, col, byte offset — NON-OPTIONAL
+  // SourceSpan carries the originating LayerId. A span is only meaningful
+  // relative to the document it indexes, so the two travel as one field:
+  // nothing that holds a position can lack the document it is a position in.
   // delegation breadcrumb lives on the provenance chain, not here
 }
 
@@ -379,6 +381,11 @@ All initial open questions are resolved; amendments are integrated into the arti
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
 - **`required` × `provide`** → settled: guaranteed-key pattern is a feature (non-optional TS property); vacuous only under `final provide` (info lint); retraction monotone-legal but parked. See §5.5.
 - **Naming** → settled: **Cascata**.
+- **Node provenance shape** → settled: `origin` lives *inside* `SourceSpan`, not as a sibling field on
+  `Base`. A position is meaningless except relative to the document it indexes, so carrying them
+  separately duplicates the relationship and admits the state this article exists to forbid — a node
+  whose position and whose layer disagree. Amended after v0.1 implementation surfaced the divergence.
+  See §4.1.
 
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
 
