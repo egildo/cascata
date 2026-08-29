@@ -7,6 +7,12 @@
     "tree": {
       "mapping": [
         [
+          "empty_value",
+          {
+            "kind": "null"
+          }
+        ],
+        [
           "explicit_null",
           {
             "kind": "null"
@@ -14,12 +20,6 @@
         ],
         [
           "tilde_null",
-          {
-            "kind": "null"
-          }
-        ],
-        [
-          "empty_value",
           {
             "kind": "null"
           }

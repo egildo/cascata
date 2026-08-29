@@ -7,9 +7,37 @@
     "tree": {
       "mapping": [
         [
-          "small_int",
+          "big_int",
           {
             "kind": "int",
+            "value": "99999999999999999999999999999999"
+          }
+        ],
+        [
+          "leading_dot_float",
+          {
+            "kind": "float",
+            "value": 0.5
+          }
+        ],
+        [
+          "negative_float",
+          {
+            "kind": "float",
+            "value": -1.5
+          }
+        ],
+        [
+          "negative_int",
+          {
+            "kind": "int",
+            "value": "-42"
+          }
+        ],
+        [
+          "quoted_string",
+          {
+            "kind": "string",
             "value": "2"
           }
         ],
@@ -21,38 +49,10 @@
           }
         ],
         [
-          "quoted_string",
+          "small_int",
           {
-            "kind": "string",
+            "kind": "int",
             "value": "2"
-          }
-        ],
-        [
-          "big_int",
-          {
-            "kind": "int",
-            "value": "99999999999999999999999999999999"
-          }
-        ],
-        [
-          "negative_int",
-          {
-            "kind": "int",
-            "value": "-42"
-          }
-        ],
-        [
-          "negative_float",
-          {
-            "kind": "float",
-            "value": -1.5
-          }
-        ],
-        [
-          "leading_dot_float",
-          {
-            "kind": "float",
-            "value": 0.5
           }
         ]
       ]

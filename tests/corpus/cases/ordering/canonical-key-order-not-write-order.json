@@ -1,0 +1,26 @@
+{
+  "name": "ordering/canonical-key-order-not-write-order",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "b: 1\na: 2\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    }
+  }
+}

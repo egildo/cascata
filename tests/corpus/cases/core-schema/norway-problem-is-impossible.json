@@ -7,13 +7,6 @@
     "tree": {
       "mapping": [
         [
-          "norwegian",
-          {
-            "kind": "string",
-            "value": "no"
-          }
-        ],
-        [
           "affirmative",
           {
             "kind": "string",
@@ -21,31 +14,10 @@
           }
         ],
         [
-          "switch_on",
+          "disabled",
           {
-            "kind": "string",
-            "value": "on"
-          }
-        ],
-        [
-          "switch_off",
-          {
-            "kind": "string",
-            "value": "off"
-          }
-        ],
-        [
-          "short_yes",
-          {
-            "kind": "string",
-            "value": "y"
-          }
-        ],
-        [
-          "short_no",
-          {
-            "kind": "string",
-            "value": "n"
+            "kind": "bool",
+            "value": false
           }
         ],
         [
@@ -56,10 +28,38 @@
           }
         ],
         [
-          "disabled",
+          "norwegian",
           {
-            "kind": "bool",
-            "value": false
+            "kind": "string",
+            "value": "no"
+          }
+        ],
+        [
+          "short_no",
+          {
+            "kind": "string",
+            "value": "n"
+          }
+        ],
+        [
+          "short_yes",
+          {
+            "kind": "string",
+            "value": "y"
+          }
+        ],
+        [
+          "switch_off",
+          {
+            "kind": "string",
+            "value": "off"
+          }
+        ],
+        [
+          "switch_on",
+          {
+            "kind": "string",
+            "value": "on"
           }
         ]
       ]

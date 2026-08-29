@@ -1,0 +1,26 @@
+{
+  "name": "ordering/astral-vs-bmp-code-point-order",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "\"😀\": first\n\"�\": second\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "�",
+          {
+            "kind": "string",
+            "value": "second"
+          }
+        ],
+        [
+          "😀",
+          {
+            "kind": "string",
+            "value": "first"
+          }
+        ]
+      ]
+    }
+  }
+}

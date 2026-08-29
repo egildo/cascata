@@ -7,17 +7,17 @@
     "tree": {
       "mapping": [
         [
-          "precomposed",
-          {
-            "kind": "string",
-            "value": "café"
-          }
-        ],
-        [
           "decomposed",
           {
             "kind": "string",
             "value": "café"
+          }
+        ],
+        [
+          "precomposed",
+          {
+            "kind": "string",
+            "value": "café"
           }
         ]
       ]
