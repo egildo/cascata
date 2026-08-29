@@ -1,11 +1,22 @@
 <!--
 Sync Impact Report
 ==================
-Version change: TEMPLATE (unversioned placeholders) → 1.0.0
-Bump rationale: Initial ratification. All template placeholders replaced with
-concrete, project-specific governance; no prior version existed.
+Version change: 1.0.0 → 1.1.0
+Bump rationale: MINOR — Principle V materially expanded with the probe gate and
+its ratification corollary. No principle removed or redefined; prior compliance
+remains valid.
 
-Modified principles: none (initial adoption)
+Modified principles:
+  - V. Citations Are Test Oracles — added "The probe gate", requiring research
+    that concludes a dependency works "for free" to have exercised it against
+    non-ASCII, boundary, and adversarial input before the conclusion is written;
+    plus the corollary that a requirement must not be ratified as a MUST until
+    someone has confirmed the governed component can satisfy it. Both are drawn
+    from defects v0.1 actually shipped, not from anticipated risk.
+
+Prior report (v1.0.0, initial ratification) follows.
+
+Modified principles at 1.0.0: none (initial adoption)
 
 Added sections:
   - Core Principles I–VI (template provided five placeholder slots; six are
@@ -104,6 +115,25 @@ Strict red-green-refactor is NOT mandated for ordinary internals. Corpus-before-
 is mandated absolutely, and an assertion that a standard is honored without a case citing it is
 an unbacked claim.
 
+**The probe gate (added v1.1.0).** Research that concludes a dependency handles something "for
+free" MUST have exercised it against **at least one non-ASCII input, one boundary input, and one
+adversarial input** before that conclusion is written down. A claim resting only on ASCII, or only
+on well-formed input, is not a finding — it is an untested assumption wearing a finding's clothes,
+and it is more dangerous than no research at all because it stops anyone from looking again.
+
+This gate exists because v0.1 produced exactly that failure: a Phase 0 probe recorded the YAML
+reader's positions as byte offsets and its columns as code points, both marked "Free". Both were
+wrong. The probe had used only ASCII documents, where the mistaken and correct readings coincide.
+Nothing failed, nothing warned, and every span in any document containing an accented character or
+an emoji would have been silently wrong — with the corpus unable to catch it, because those cases
+would have been written in ASCII too. It was caught only because an implementer distrusted the
+document and re-probed. That must not be left to luck.
+
+Corollary, same reasoning: a requirement MUST NOT be ratified as a MUST until someone has confirmed
+the component it governs *can* satisfy it. v0.1 shipped FR-016 demanding refusal of invalid UTF-8
+at an entry point that receives already-decoded text, where the property is unenforceable in
+principle. Naming an outcome is not the same as checking it is reachable.
+
 ### VI. Closed Vocabulary, Deny by Default
 
 Every semantic distinction costs a distinct keyword (`SPEC.md` §2.4). Overloading an existing
@@ -186,4 +216,4 @@ and re-runs it after. Every code review verifies the six gates above. Principles
 NON-NEGOTIABLE (I, V) admit no Complexity-Tracking exception: a change that violates them is
 rejected, not justified.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-29
+**Version**: 1.1.0 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-29
