@@ -13,7 +13,7 @@ documentation. Findings below drive every decision that follows.
 
 | Floor requirement (§4.2) | `yaml` behavior | Verdict |
 |---|---|---|
-| Position for every node | `range: [start, valueEnd, nodeEnd]` byte offsets on every node **including keys**; `LineCounter.linePos()` converts to line/column | **Free** |
+| Position for every node | `range: [start, valueEnd, nodeEnd]` on every node **including keys**; `LineCounter.linePos()` gives line/column | **Partly — see the correction below.** The units are wrong for our model and must be converted. |
 | Duplicate keys | `DUPLICATE_KEY` error; **multiple duplicates in one document are all reported**; `"host"` and `host` correctly collide | **Free** |
 | YAML 1.2 core schema / Norway | `no`/`yes`/`off` read as text, only `true`/`false` boolean, under the default core schema | **Free** |
 | Integer precision | `intAsBigInt: true` yields exact big integers | **Free** |
@@ -26,6 +26,36 @@ documentation. Findings below drive every decision that follows.
 | **Alias cycles** | **No error**; produces a circular structure that throws only when serialized | **Cascata must enforce** |
 | Anchors / aliases / merge keys | `Alias` nodes are left in the tree, not expanded; merge keys need `merge: true` or `<<` stays a literal key | **Cascata must expand** |
 | Depth / size caps | A `RESOURCE_EXHAUSTION` backstop exists at extreme flow nesting, but the threshold is the library's, not ours | **Cascata must enforce its own** |
+
+### Correction (2026-08-29, after v0.1 implementation)
+
+**Two claims in the table above were wrong, and both were load-bearing.** They were written from a probe
+that used only ASCII documents, where the mistaken and correct readings coincide. Implementation on
+non-ASCII input exposed them; both are now verified empirically.
+
+1. **`yaml`'s `range` values are UTF-16 code-unit indices into the JS string, not UTF-8 byte offsets.**
+   The two agree for ASCII and diverge the moment a document contains anything else. For
+   `"a: café\nb: 2\n"` — JS length 13, UTF-8 length 14 — the library reports the `2` at 11, while its
+   byte offset is 12. `data-model.md` defines `SourceSpan.start`/`end` as byte offsets, so **the adapter
+   must build a conversion table**; passing the library's numbers through unchanged silently corrupts
+   every span in any document containing a non-ASCII character.
+
+2. **`LineCounter#linePos().col` counts UTF-16 code units, not code points**, contradicting
+   `data-model.md`'s explicit "column is code points, so it matches what an editor shows." An astral
+   character (any emoji) is one code point but two code units, so every column after it is off by one
+   per such character. **The column must be recomputed**; `LineCounter` is trustworthy for the *line*
+   number only, which is unaffected because a newline can never be half of a surrogate pair.
+
+The verdict column above should therefore be read as: positions are *available* for free, but not in
+the units this model requires. The conversion is the adapter's job, and
+`tests/corpus/cases/unicode/astral-character-column-and-byte-offset.json` is the case that holds it.
+
+### Open question: block-collection range extents
+
+For a block mapping or sequence, `range`'s tight upper bound includes the trailing newline of the
+block's final line, unlike scalars, which get a genuinely tight bound. v0.1 sidesteps this — no case
+asserts an exact byte extent on a collection node, only on scalars — but SC-004 exactness at
+collection level will have to settle whether to trim it.
 
 The shape of the milestone follows directly: `yaml` is a lexer with excellent positions and correct
 core-schema semantics; the floor is Cascata's to enforce on top of it.
