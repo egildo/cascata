@@ -1,0 +1,9 @@
+{
+  "name": "equality/whitespace-and-order-insignificant",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: 1\nb: 2\n",
+  "expect": {
+    "equalTo": "b:   2\na:    1\n"
+  }
+}

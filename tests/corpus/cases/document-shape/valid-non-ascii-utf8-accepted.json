@@ -1,0 +1,13 @@
+{
+  "name": "document-shape/valid-non-ascii-utf8-accepted",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "city: café\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        ["city", { "kind": "string", "value": "café" }]
+      ]
+    }
+  }
+}

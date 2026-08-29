@@ -1,0 +1,17 @@
+{
+  "name": "core-schema/boolean-case-sensitivity-boundary",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "capital_true: True\nupper_true: TRUE\nlower_true: true\ncapital_on: On\ncapital_yes: Yes\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        ["capital_on", { "kind": "string", "value": "On" }],
+        ["capital_true", { "kind": "bool", "value": true }],
+        ["capital_yes", { "kind": "string", "value": "Yes" }],
+        ["lower_true", { "kind": "bool", "value": true }],
+        ["upper_true", { "kind": "bool", "value": true }]
+      ]
+    }
+  }
+}
