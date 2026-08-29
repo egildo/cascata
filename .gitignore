@@ -3,3 +3,12 @@
 
 # macOS
 .DS_Store
+
+# Node / pnpm
+node_modules/
+dist/
+*.tsbuildinfo
+
+# pnpm store links (not the lockfile — that is committed)
+.pnpm-store/
+
