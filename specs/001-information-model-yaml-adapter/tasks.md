@@ -126,25 +126,25 @@ several rules far apart asserting all of them come back together.
 
 ### Conformance cases for User Story 2 (write first — Principle V)
 
-- [ ] T035 [P] [US2] Cases for duplicate keys, including quoted-versus-plain collision and assertion of **both** occurrence positions, in tests/corpus/cases/duplicate-keys/
-- [ ] T036 [P] [US2] Cases for complex keys (`? [a, b]`) and non-string scalar keys (`1:`, `true:`, `null:`) in tests/corpus/cases/non-string-keys/
-- [ ] T037 [P] [US2] Cases for non-core tags — `!!binary`, `!!timestamp`, `!!set`, `!!omap` — and an unknown tag, in tests/corpus/cases/tags/
-- [ ] T038 [P] [US2] Cases for multi-document input and invalid UTF-8 in tests/corpus/cases/document-shape/
-- [ ] T039 [P] [US2] Cases for the depth cap and size cap, each at the boundary and one step past it, in tests/corpus/cases/limits/
-- [ ] T040 [P] [US2] Case for an alias cycle, asserting refusal rather than non-termination, in tests/corpus/cases/alias-cycles/
-- [ ] T041 [P] [US2] Case with several violations far apart in one document, asserting the complete set is returned from one read (SC-003), in tests/corpus/cases/multi-violation/
+- [x] T035 [P] [US2] Cases for duplicate keys, including quoted-versus-plain collision and assertion of **both** occurrence positions, in tests/corpus/cases/duplicate-keys/
+- [x] T036 [P] [US2] Cases for complex keys (`? [a, b]`) and non-string scalar keys (`1:`, `true:`, `null:`) in tests/corpus/cases/non-string-keys/
+- [x] T037 [P] [US2] Cases for non-core tags — `!!binary`, `!!timestamp`, `!!set`, `!!omap` — and an unknown tag, in tests/corpus/cases/tags/
+- [x] T038 [P] [US2] Cases for multi-document input and invalid UTF-8 in tests/corpus/cases/document-shape/
+- [x] T039 [P] [US2] Cases for the depth cap and size cap, each at the boundary and one step past it, in tests/corpus/cases/limits/
+- [x] T040 [P] [US2] Case for an alias cycle, asserting refusal rather than non-termination, in tests/corpus/cases/alias-cycles/
+- [x] T041 [P] [US2] Case with several violations far apart in one document, asserting the complete set is returned from one read (SC-003), in tests/corpus/cases/multi-violation/
 
 ### Implementation for User Story 2
 
-- [ ] T042 [US2] Enforce string-only keys, refusing collection keys and non-string scalar keys, in src/adapters/yaml/floor.ts (FR-012) — depends on T031
-- [ ] T043 [US2] Enforce the core-schema tag allowlist per research D2 in src/adapters/yaml/floor.ts (FR-013) — depends on T031
-- [ ] T044 [US2] Recover the first occurrence of a duplicated key and attach it as a `related` span in src/adapters/yaml/floor.ts (FR-018) — depends on T031, T012
-- [ ] T045 [US2] Map the underlying reader's errors and warnings onto Cascata codes per research D6 in src/adapters/yaml/parse.ts — depends on T011, T028
-- [ ] T046 [US2] Surface `maxDepth` and `maxBytes` as public options per contracts/parse-api.md, enforce the size cap before parsing, and track depth during the walk, in src/adapters/yaml/limits.ts (FR-014) — depends on T031
-- [ ] T047 [US2] Detect alias cycles on the active expansion path per research D3 in src/adapters/yaml/expand.ts (FR-015) — depends on T032
-- [ ] T048 [US2] Validate UTF-8 and refuse invalid input with a position in src/adapters/yaml/parse.ts (FR-016) — depends on T013
-- [ ] T049 [US2] Continue the walk past violations so one read reports all of them, ordered by position, in src/adapters/yaml/parse.ts (FR-019) — depends on T042, T043, T044, T045, T046, T047, T048
-- [ ] T050 [US2] Return diagnostics and no tree whenever any violation exists, per research D5, in src/index.ts (FR-020) — depends on T049, T033
+- [x] T042 [US2] Enforce string-only keys, refusing collection keys and non-string scalar keys, in src/adapters/yaml/floor.ts (FR-012) — depends on T031
+- [x] T043 [US2] Enforce the core-schema tag allowlist per research D2 in src/adapters/yaml/floor.ts (FR-013) — depends on T031
+- [x] T044 [US2] Recover the first occurrence of a duplicated key and attach it as a `related` span in src/adapters/yaml/floor.ts (FR-018) — depends on T031, T012
+- [x] T045 [US2] Map the underlying reader's errors and warnings onto Cascata codes per research D6 in src/adapters/yaml/parse.ts — depends on T011, T028
+- [x] T046 [US2] Surface `maxDepth` and `maxBytes` as public options per contracts/parse-api.md, enforce the size cap before parsing, and track depth during the walk, in src/adapters/yaml/limits.ts (FR-014) — depends on T031
+- [x] T047 [US2] Detect alias cycles on the active expansion path per research D3 in src/adapters/yaml/expand.ts (FR-015) — depends on T032
+- [x] T048 [US2] Validate UTF-8 and refuse invalid input with a position in src/adapters/yaml/parse.ts (FR-016) — depends on T013
+- [x] T049 [US2] Continue the walk past violations so one read reports all of them, ordered by position, in src/adapters/yaml/parse.ts (FR-019) — depends on T042, T043, T044, T045, T046, T047, T048
+- [x] T050 [US2] Return diagnostics and no tree whenever any violation exists, per research D5, in src/index.ts (FR-020) — depends on T049, T033
 
 **Checkpoint**: The floor is enforced, completely and precisely, in a single pass.
 
