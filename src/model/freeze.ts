@@ -1,0 +1,93 @@
+/**
+ * Deep immutability of returned trees — SPEC.md §4.1, FR-026,
+ * contracts/parse-api.md ("The tree is deeply frozen before being
+ * returned. Mutation attempts do not succeed.").
+ *
+ * `Object.freeze` alone is not sufficient here: it makes a plain object's
+ * own properties non-writable (so `node.span = ...` throws under ESM's
+ * automatic strict mode, and a frozen array's `.push()` throws because the
+ * array becomes non-extensible) but it does **not** stop `Map.prototype.set`
+ * or `.delete()` on a frozen `Map` instance — those operate on the Map's
+ * internal slot, not on an enumerable property, so freezing the Map object
+ * itself is silently ineffective. `Mapping.entries` is therefore wrapped in
+ * a `Proxy` that forwards every read-only operation to a frozen backing
+ * `Map` and throws on every mutating one.
+ */
+
+import type { Mapping, Node, Sequence } from "./node.js";
+import type { Origin, SourceSpan } from "./span.js";
+
+const MUTATING_MAP_METHODS: ReadonlySet<PropertyKey> = new Set(["set", "delete", "clear"]);
+
+/**
+ * Wrap a `Map` so every mutating method throws, while every read-only
+ * method and iterator behaves exactly as it would on the underlying Map.
+ *
+ * Methods must be forwarded to `target` (the real Map), not to the Proxy
+ * itself — `Map.prototype.get` (and friends) check an internal slot that
+ * only a genuine Map instance has, so calling them with the Proxy as
+ * `this` throws "incompatible receiver". Binding to `target` sidesteps
+ * that without needing to re-implement the Map interface.
+ */
+function guardedMap<K, V>(target: Map<K, V>): ReadonlyMap<K, V> {
+  return new Proxy(target, {
+    get(mapTarget, prop, _receiver) {
+      if (MUTATING_MAP_METHODS.has(prop)) {
+        return () => {
+          throw new TypeError(
+            `Cannot mutate a frozen Mapping: '${String(prop)}' is not permitted on a Cascata node`,
+          );
+        };
+      }
+      const value = Reflect.get(mapTarget, prop, mapTarget);
+      return typeof value === "function" ? value.bind(mapTarget) : value;
+    },
+    set() {
+      throw new TypeError("Cannot mutate a frozen Mapping: assignment is not permitted on a Cascata node");
+    },
+  });
+}
+
+function freezeOrigin(origin: Origin): Origin {
+  return Object.freeze(origin);
+}
+
+function freezeSpan(span: SourceSpan): SourceSpan {
+  freezeOrigin(span.origin);
+  return Object.freeze(span);
+}
+
+/**
+ * Recursively freeze a Node tree, returning it (the same reference is
+ * mutated into a frozen state and handed back for convenience at call
+ * sites, e.g. `return freeze(tree)`).
+ */
+export function freeze(node: Node): Node {
+  freezeSpan(node.span);
+
+  switch (node.type) {
+    case "scalar":
+      return Object.freeze(node);
+
+    case "sequence": {
+      const sequence: Sequence = node;
+      for (const item of sequence.items) {
+        freeze(item);
+      }
+      Object.freeze(sequence.items);
+      return Object.freeze(sequence);
+    }
+
+    case "mapping": {
+      const mapping: Mapping = node;
+      const frozenEntries = new Map<string, Node>();
+      for (const [key, value] of mapping.entries) {
+        frozenEntries.set(key, freeze(value));
+      }
+      Object.freeze(frozenEntries);
+      const guarded = guardedMap(frozenEntries);
+      const replacement: Mapping = { type: "mapping", entries: guarded, span: mapping.span };
+      return Object.freeze(replacement);
+    }
+  }
+}
