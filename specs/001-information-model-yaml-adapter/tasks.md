@@ -107,7 +107,7 @@ the characters that produced it; walk the tree and find no node lacking a positi
 - [x] T028 [US1] Wire `parseDocument` with `intAsBigInt`, `merge`, and a `LineCounter` in src/adapters/yaml/parse.ts per research D1
 - [x] T029 [US1] Convert byte ranges plus `LineCounter` output into `SourceSpan` values in src/adapters/yaml/parse.ts — depends on T028, T007
 - [x] T030 [US1] Derive scalar kind lexically from the node's `source` text and quoting type in src/adapters/yaml/parse.ts (FR-004) — depends on T028
-- [x] T031 [US1] Walk the AST into the model, giving every node — keys included — a span, in src/adapters/yaml/parse.ts — depends on T029, T030, T008
+- [x] T031 [US1] Walk the AST into the model, giving every node a span, in src/adapters/yaml/parse.ts. Key positions are computed during the walk and handed to the floor checks rather than stored: `Mapping.entries` is keyed by bare strings and has nowhere to hold a key span — depends on T029, T030, T008
 - [x] T032 [US1] Expand anchors, aliases, and merge keys, attributing positions to the anchored content per research D4, in src/adapters/yaml/expand.ts — depends on T031
 - [x] T033 [US1] Implement the public `parse()` returning a frozen tree on success in src/index.ts — depends on T031, T032, T010
 - [x] T034 [US1] Map unparseable input to the `malformed-document` diagnostic in src/adapters/yaml/parse.ts — depends on T013, T028
@@ -140,7 +140,7 @@ several rules far apart asserting all of them come back together.
 - [ ] T043 [US2] Enforce the core-schema tag allowlist per research D2 in src/adapters/yaml/floor.ts (FR-013) — depends on T031
 - [ ] T044 [US2] Recover the first occurrence of a duplicated key and attach it as a `related` span in src/adapters/yaml/floor.ts (FR-018) — depends on T031, T012
 - [ ] T045 [US2] Map the underlying reader's errors and warnings onto Cascata codes per research D6 in src/adapters/yaml/parse.ts — depends on T011, T028
-- [ ] T046 [US2] Enforce the size cap before parsing and track depth during the walk in src/adapters/yaml/limits.ts (FR-014) — depends on T031
+- [ ] T046 [US2] Surface `maxDepth` and `maxBytes` as public options per contracts/parse-api.md, enforce the size cap before parsing, and track depth during the walk, in src/adapters/yaml/limits.ts (FR-014) — depends on T031
 - [ ] T047 [US2] Detect alias cycles on the active expansion path per research D3 in src/adapters/yaml/expand.ts (FR-015) — depends on T032
 - [ ] T048 [US2] Validate UTF-8 and refuse invalid input with a position in src/adapters/yaml/parse.ts (FR-016) — depends on T013
 - [ ] T049 [US2] Continue the walk past violations so one read reports all of them, ordered by position, in src/adapters/yaml/parse.ts (FR-019) — depends on T042, T043, T044, T045, T046, T047, T048

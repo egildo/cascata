@@ -47,6 +47,8 @@ Three shapes, per §4.1. Every node carries a `span`.
 - **Mapping** — entries keyed by string, stored in **canonical order**: sorted by code point (§4.2).
   Authored order is discarded, so iteration order and equality agree. An unsorted mapping is as
   unconstructible as an unpositioned node — the factory sorts, and there is no other way in.
+  Keys are bare strings and carry no span of their own; a key's position is computed during the
+  adapter's walk and consumed by the floor checks, never stored in the accepted model.
 - **Sequence** — ordered items; order is significant.
 
 **Construction invariant (Principle III)**: nodes are constructible only through factories that
