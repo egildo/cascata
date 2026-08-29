@@ -1,0 +1,46 @@
+/**
+ * The stable diagnostic code catalogue — contracts/diagnostics.md.
+ *
+ * Codes are stable identifiers and part of the public contract: the corpus
+ * asserts against them, and tooling may branch on them. They are Cascata's
+ * own vocabulary, deliberately not a mirror of any dependency's internal
+ * codes, so a library rename is never a breaking change here (research D6).
+ *
+ * Rules for adding a code (contracts/diagnostics.md):
+ *   1. A new code needs a `SPEC.md` article to cite (Principle I).
+ *   2. It arrives with at least one accepting and one refusing conformance
+ *      case (Principle V).
+ *   3. Codes are never repurposed (Principle VI).
+ */
+
+/** Portability floor (SPEC.md §4.2). */
+export const PORTABILITY_FLOOR_CODES = [
+  "duplicate-key",
+  "non-string-key",
+  "unsupported-tag",
+  "multiple-documents",
+  "invalid-encoding",
+] as const;
+
+/** Resource limits (SPEC.md §11). */
+export const RESOURCE_LIMIT_CODES = ["depth-limit-exceeded", "size-limit-exceeded", "alias-cycle"] as const;
+
+/** Syntax. The one code that wraps a dependency's error rather than expressing a Cascata rule. */
+export const SYNTAX_CODES = ["malformed-document"] as const;
+
+/** Every stable diagnostic code, in the catalogue's declaration order. */
+export const DIAGNOSTIC_CODES = [
+  ...PORTABILITY_FLOOR_CODES,
+  ...RESOURCE_LIMIT_CODES,
+  ...SYNTAX_CODES,
+] as const;
+
+/** A stable, machine-readable diagnostic code. */
+export type DiagnosticCode = (typeof DIAGNOSTIC_CODES)[number];
+
+const DIAGNOSTIC_CODE_SET: ReadonlySet<string> = new Set(DIAGNOSTIC_CODES);
+
+/** Whether `code` is one of the catalogue's stable codes. */
+export function isDiagnosticCode(code: string): code is DiagnosticCode {
+  return DIAGNOSTIC_CODE_SET.has(code);
+}
