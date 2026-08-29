@@ -1,0 +1,53 @@
+{
+  "name": "nullability/explicit-null-vs-empty-vs-absent",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "explicit_null: null\ntilde_null: ~\nempty_value:\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "explicit_null",
+          {
+            "kind": "null"
+          }
+        ],
+        [
+          "tilde_null",
+          {
+            "kind": "null"
+          }
+        ],
+        [
+          "empty_value",
+          {
+            "kind": "null"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/explicit_null",
+        "line": 1,
+        "column": 16,
+        "start": 15,
+        "end": 19
+      },
+      {
+        "pointer": "/tilde_null",
+        "line": 2,
+        "column": 13,
+        "start": 32,
+        "end": 33
+      },
+      {
+        "pointer": "/empty_value",
+        "line": 3,
+        "column": 13,
+        "start": 46,
+        "end": 46
+      }
+    ]
+  }
+}

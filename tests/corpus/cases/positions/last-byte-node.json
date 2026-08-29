@@ -1,0 +1,28 @@
+{
+  "name": "positions/last-byte-node",
+  "cites": "§4.1",
+  "format": "yaml",
+  "input": "a: 1",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/a",
+        "line": 1,
+        "column": 4,
+        "start": 3,
+        "end": 4
+      }
+    ]
+  }
+}

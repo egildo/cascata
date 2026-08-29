@@ -1,0 +1,20 @@
+{
+  "name": "nullability/comment-only-document",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "# just a comment\n",
+  "expect": {
+    "tree": {
+      "kind": "null"
+    },
+    "spans": [
+      {
+        "pointer": "",
+        "line": 1,
+        "column": 1,
+        "start": 0,
+        "end": 0
+      }
+    ]
+  }
+}

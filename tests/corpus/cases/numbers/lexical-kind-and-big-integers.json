@@ -1,0 +1,112 @@
+{
+  "name": "numbers/lexical-kind-and-big-integers",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "small_int: 2\nsmall_float: 2.0\nquoted_string: \"2\"\nbig_int: 99999999999999999999999999999999\nnegative_int: -42\nnegative_float: -1.5\nleading_dot_float: .5\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "small_int",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ],
+        [
+          "small_float",
+          {
+            "kind": "float",
+            "value": 2
+          }
+        ],
+        [
+          "quoted_string",
+          {
+            "kind": "string",
+            "value": "2"
+          }
+        ],
+        [
+          "big_int",
+          {
+            "kind": "int",
+            "value": "99999999999999999999999999999999"
+          }
+        ],
+        [
+          "negative_int",
+          {
+            "kind": "int",
+            "value": "-42"
+          }
+        ],
+        [
+          "negative_float",
+          {
+            "kind": "float",
+            "value": -1.5
+          }
+        ],
+        [
+          "leading_dot_float",
+          {
+            "kind": "float",
+            "value": 0.5
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/small_int",
+        "line": 1,
+        "column": 12,
+        "start": 11,
+        "end": 12
+      },
+      {
+        "pointer": "/small_float",
+        "line": 2,
+        "column": 14,
+        "start": 26,
+        "end": 29
+      },
+      {
+        "pointer": "/quoted_string",
+        "line": 3,
+        "column": 16,
+        "start": 45,
+        "end": 48
+      },
+      {
+        "pointer": "/big_int",
+        "line": 4,
+        "column": 10,
+        "start": 58,
+        "end": 90
+      },
+      {
+        "pointer": "/negative_int",
+        "line": 5,
+        "column": 15,
+        "start": 105,
+        "end": 108
+      },
+      {
+        "pointer": "/negative_float",
+        "line": 6,
+        "column": 17,
+        "start": 125,
+        "end": 129
+      },
+      {
+        "pointer": "/leading_dot_float",
+        "line": 7,
+        "column": 20,
+        "start": 149,
+        "end": 151
+      }
+    ]
+  }
+}

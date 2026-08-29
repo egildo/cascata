@@ -1,0 +1,63 @@
+{
+  "name": "expansion/merge-key-explicit-beats-merged",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "base: &b\n  x: 1\n  y: 2\nchild:\n  <<: *b\n  y: 99\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "base",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ],
+              [
+                "y",
+                {
+                  "kind": "int",
+                  "value": "2"
+                }
+              ]
+            ]
+          }
+        ],
+        [
+          "child",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ],
+              [
+                "y",
+                {
+                  "kind": "int",
+                  "value": "99"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/child/y",
+        "line": 6,
+        "column": 6,
+        "start": 44,
+        "end": 46
+      }
+    ]
+  }
+}

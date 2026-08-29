@@ -1,0 +1,56 @@
+{
+  "name": "expansion/anchor-alias-independent-copies",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "base: &b\n  x: 1\nuse: *b\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "base",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ]
+            ]
+          }
+        ],
+        [
+          "use",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/base/x",
+        "line": 2,
+        "column": 6,
+        "start": 14,
+        "end": 15
+      },
+      {
+        "pointer": "/use/x",
+        "line": 2,
+        "column": 6,
+        "start": 14,
+        "end": 15
+      }
+    ]
+  }
+}

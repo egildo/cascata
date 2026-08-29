@@ -1,0 +1,84 @@
+{
+  "name": "core-schema/norway-problem-is-impossible",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "norwegian: no\naffirmative: yes\nswitch_on: on\nswitch_off: off\nshort_yes: y\nshort_no: n\nenabled: true\ndisabled: false\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "norwegian",
+          {
+            "kind": "string",
+            "value": "no"
+          }
+        ],
+        [
+          "affirmative",
+          {
+            "kind": "string",
+            "value": "yes"
+          }
+        ],
+        [
+          "switch_on",
+          {
+            "kind": "string",
+            "value": "on"
+          }
+        ],
+        [
+          "switch_off",
+          {
+            "kind": "string",
+            "value": "off"
+          }
+        ],
+        [
+          "short_yes",
+          {
+            "kind": "string",
+            "value": "y"
+          }
+        ],
+        [
+          "short_no",
+          {
+            "kind": "string",
+            "value": "n"
+          }
+        ],
+        [
+          "enabled",
+          {
+            "kind": "bool",
+            "value": true
+          }
+        ],
+        [
+          "disabled",
+          {
+            "kind": "bool",
+            "value": false
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/norwegian",
+        "line": 1,
+        "column": 12,
+        "start": 11,
+        "end": 13
+      },
+      {
+        "pointer": "/enabled",
+        "line": 7,
+        "column": 10,
+        "start": 95,
+        "end": 99
+      }
+    ]
+  }
+}

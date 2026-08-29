@@ -1,0 +1,33 @@
+{
+  "name": "ordering/entry-order-preserved-as-written",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "zebra: 1\napple: 2\nmiddle: 3\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "zebra",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "apple",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ],
+        [
+          "middle",
+          {
+            "kind": "int",
+            "value": "3"
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "unicode/no-normalization-precomposed-vs-decomposed",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "precomposed: \"café\"\ndecomposed: \"café\"\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "precomposed",
+          {
+            "kind": "string",
+            "value": "café"
+          }
+        ],
+        [
+          "decomposed",
+          {
+            "kind": "string",
+            "value": "café"
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "name": "expansion/merge-key-multiple-sources-precedence",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: &a\n  x: 1\n  y: 2\nb: &b\n  y: 99\n  z: 3\nchild:\n  <<: [*a, *b]\n  z: 100\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ],
+              [
+                "y",
+                {
+                  "kind": "int",
+                  "value": "2"
+                }
+              ]
+            ]
+          }
+        ],
+        [
+          "b",
+          {
+            "mapping": [
+              [
+                "y",
+                {
+                  "kind": "int",
+                  "value": "99"
+                }
+              ],
+              [
+                "z",
+                {
+                  "kind": "int",
+                  "value": "3"
+                }
+              ]
+            ]
+          }
+        ],
+        [
+          "child",
+          {
+            "mapping": [
+              [
+                "x",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ],
+              [
+                "y",
+                {
+                  "kind": "int",
+                  "value": "2"
+                }
+              ],
+              [
+                "z",
+                {
+                  "kind": "int",
+                  "value": "100"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/child/x",
+        "line": 2,
+        "column": 6,
+        "start": 11,
+        "end": 12
+      },
+      {
+        "pointer": "/child/y",
+        "line": 3,
+        "column": 6,
+        "start": 18,
+        "end": 19
+      },
+      {
+        "pointer": "/child/z",
+        "line": 9,
+        "column": 6,
+        "start": 68,
+        "end": 71
+      }
+    ]
+  }
+}

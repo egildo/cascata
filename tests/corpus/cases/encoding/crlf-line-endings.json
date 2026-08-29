@@ -1,0 +1,35 @@
+{
+  "name": "encoding/crlf-line-endings",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: 1\r\nb: 2\r\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/b",
+        "line": 2,
+        "column": 4,
+        "start": 9,
+        "end": 10
+      }
+    ]
+  }
+}

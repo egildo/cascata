@@ -1,0 +1,42 @@
+{
+  "name": "positions/deep-nested-scalar",
+  "cites": "§4.1",
+  "format": "yaml",
+  "input": "top:\n  mid:\n    leaf: value\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "top",
+          {
+            "mapping": [
+              [
+                "mid",
+                {
+                  "mapping": [
+                    [
+                      "leaf",
+                      {
+                        "kind": "string",
+                        "value": "value"
+                      }
+                    ]
+                  ]
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/top/mid/leaf",
+        "line": 3,
+        "column": 11,
+        "start": 22,
+        "end": 27
+      }
+    ]
+  }
+}
