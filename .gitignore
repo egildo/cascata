@@ -1,0 +1,5 @@
+# Machine-local agent state (may contain credentials/tokens)
+.claude/settings.local.json
+
+# macOS
+.DS_Store
