@@ -12,18 +12,23 @@
  * `ParseOutcome`/`Adapter` mirror contracts/parse-api.md's public shape
  * (`{ ok: true, tree } | { ok: false, diagnostics }`) rather than importing
  * it from `src/index.ts`, because the public entry point is User Story 1
- * work and does not exist yet at this phase. The shapes are structurally
- * identical by construction, so wiring the real `parse()` in later needs
- * no change to this file.
+ * work and did not exist at the time this file was first written. The
+ * shapes are structurally identical by construction, so wiring the real
+ * `parse()` in needs no change to this file.
+ *
+ * Revised once User Story 1 cases were actually being authored against it
+ * (see tests/corpus/case.ts's revision note): tree comparison is now
+ * order-sensitive for mappings, span assertions can carry byte extent
+ * (`start`/`end`), and diagnostic comparison also checks `related` spans.
  */
 
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Diagnostic } from "../../src/diagnostics/diagnostic.js";
+import type { Diagnostic, RelatedSpan } from "../../src/diagnostics/diagnostic.js";
 import type { Node } from "../../src/model/node.js";
 import type { Origin } from "../../src/model/span.js";
 import { createOrigin } from "../../src/model/span.js";
-import type { ConformanceCase, ExpectedNode } from "./case.js";
+import type { ConformanceCase, ExpectedDiagnostic, ExpectedNode, ExpectedRelatedSpan } from "./case.js";
 import { loadCase } from "./case.js";
 
 /** Mirrors contracts/parse-api.md's `ParseResult` — see module doc for why this is not imported. */
@@ -150,8 +155,12 @@ function compareNode(actual: Node, expected: ExpectedNode, path: string, failure
       failures.push(`${path || "(root)"}: expected ${describeExpected(expected)}, got ${describeActual(actual)}`);
       return;
     }
-    const expectedKeys = new Set(Object.keys(expected.mapping));
-    const actualKeys = new Set(actual.entries.keys());
+    const expectedKeysInOrder = expected.mapping.map(([key]) => key);
+    const actualKeysInOrder = [...actual.entries.keys()];
+    const expectedKeys = new Set(expectedKeysInOrder);
+    const actualKeys = new Set(actualKeysInOrder);
+
+    const beforeKeySetChecks = failures.length;
     for (const key of expectedKeys) {
       if (!actualKeys.has(key)) {
         failures.push(`${path || "(root)"}: missing expected key '${key}'`);
@@ -162,10 +171,22 @@ function compareNode(actual: Node, expected: ExpectedNode, path: string, failure
         failures.push(`${path || "(root)"}: unexpected key '${key}'`);
       }
     }
-    for (const key of expectedKeys) {
+
+    // Order is significant here (FR-003) but only worth reporting once the
+    // key sets already agree — otherwise this would just restate the
+    // missing/unexpected-key failures above in a more confusing shape.
+    if (
+      failures.length === beforeKeySetChecks &&
+      expectedKeysInOrder.some((key, index) => key !== actualKeysInOrder[index])
+    ) {
+      failures.push(
+        `${path || "(root)"}: entry order does not match — expected [${expectedKeysInOrder.join(", ")}], got [${actualKeysInOrder.join(", ")}]`,
+      );
+    }
+
+    for (const [key, expectedChild] of expected.mapping) {
       const actualChild = actual.entries.get(key);
-      const expectedChild = expected.mapping[key];
-      if (actualChild !== undefined && expectedChild !== undefined) {
+      if (actualChild !== undefined) {
         compareNode(actualChild, expectedChild, `${path}/${escapePointer(key)}`, failures);
       }
     }
@@ -196,24 +217,68 @@ function escapePointer(segment: string): string {
   return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }
 
-function compareDiagnostics(
-  actual: readonly Diagnostic[],
-  expected: readonly { code: string; line: number; column: number }[],
-  failures: string[],
-): void {
-  const actualTriples = actual.map((d) => ({ code: d.code, line: d.primary.line, column: d.primary.column }));
-  const remainingActual = [...actualTriples];
-
-  for (const exp of expected) {
-    const index = remainingActual.findIndex((a) => a.code === exp.code && a.line === exp.line && a.column === exp.column);
-    if (index === -1) {
-      failures.push(`missing expected diagnostic ${exp.code} at ${exp.line}:${exp.column}`);
-    } else {
-      remainingActual.splice(index, 1);
+/** Compares one diagnostic's `related` spans against what a case expects, in order. */
+function compareRelatedSpans(actual: readonly RelatedSpan[], expected: readonly ExpectedRelatedSpan[], failures: string[]): void {
+  if (actual.length !== expected.length) {
+    failures.push(`expected ${expected.length} related span(s), got ${actual.length}`);
+    return;
+  }
+  for (let index = 0; index < expected.length; index += 1) {
+    const exp = expected[index];
+    const act = actual[index];
+    if (exp === undefined || act === undefined) {
+      continue; // unreachable given the length check above; satisfies noUncheckedIndexedAccess.
+    }
+    if (act.span.line !== exp.line || act.span.column !== exp.column) {
+      failures.push(`related[${index}]: expected ${exp.line}:${exp.column}, got ${act.span.line}:${act.span.column}`);
+    }
+    if (exp.start !== undefined && act.span.start !== exp.start) {
+      failures.push(`related[${index}]: expected start ${exp.start}, got ${act.span.start}`);
+    }
+    if (exp.end !== undefined && act.span.end !== exp.end) {
+      failures.push(`related[${index}]: expected end ${exp.end}, got ${act.span.end}`);
+    }
+    if (exp.label !== undefined && act.label !== exp.label) {
+      failures.push(`related[${index}]: expected label '${exp.label}', got '${act.label}'`);
     }
   }
-  for (const extra of remainingActual) {
-    failures.push(`unexpected diagnostic ${extra.code} at ${extra.line}:${extra.column}`);
+}
+
+/**
+ * Diagnostics are compared as a **set** of {code, line, column}
+ * (contracts/conformance-case.md), reporting both missing and unexpected
+ * entries. Once a primary-position match is found, its `start`/`end` and
+ * `related` spans (when the case asserts them) are checked against that
+ * specific matched diagnostic — a mismatch there is reported as its own
+ * failure rather than as "missing", since the diagnostic itself was found.
+ */
+function compareDiagnostics(actual: readonly Diagnostic[], expected: readonly ExpectedDiagnostic[], failures: string[]): void {
+  const remainingActual = actual.map((diagnostic) => ({ diagnostic, claimed: false }));
+
+  for (const exp of expected) {
+    const match = remainingActual.find(
+      (entry) => !entry.claimed && entry.diagnostic.code === exp.code && entry.diagnostic.primary.line === exp.line && entry.diagnostic.primary.column === exp.column,
+    );
+    if (match === undefined) {
+      failures.push(`missing expected diagnostic ${exp.code} at ${exp.line}:${exp.column}`);
+      continue;
+    }
+    match.claimed = true;
+    const primary = match.diagnostic.primary;
+    if (exp.start !== undefined && primary.start !== exp.start) {
+      failures.push(`diagnostic ${exp.code} at ${exp.line}:${exp.column}: expected start ${exp.start}, got ${primary.start}`);
+    }
+    if (exp.end !== undefined && primary.end !== exp.end) {
+      failures.push(`diagnostic ${exp.code} at ${exp.line}:${exp.column}: expected end ${exp.end}, got ${primary.end}`);
+    }
+    if (exp.related !== undefined) {
+      compareRelatedSpans(match.diagnostic.related, exp.related, failures);
+    }
+  }
+  for (const entry of remainingActual) {
+    if (!entry.claimed) {
+      failures.push(`unexpected diagnostic ${entry.diagnostic.code} at ${entry.diagnostic.primary.line}:${entry.diagnostic.primary.column}`);
+    }
   }
 }
 
@@ -241,10 +306,18 @@ export function runCase(testCase: ConformanceCase, adapters: AdapterRegistry): C
         const node = resolvePointer(outcome.tree, span.pointer);
         if (node === undefined) {
           failures.push(`span assertion at '${span.pointer}': no node at that pointer`);
-        } else if (node.span.line !== span.line || node.span.column !== span.column) {
+          continue;
+        }
+        if (node.span.line !== span.line || node.span.column !== span.column) {
           failures.push(
             `span assertion at '${span.pointer}': expected ${span.line}:${span.column}, got ${node.span.line}:${node.span.column}`,
           );
+        }
+        if (span.start !== undefined && node.span.start !== span.start) {
+          failures.push(`span assertion at '${span.pointer}': expected start ${span.start}, got ${node.span.start}`);
+        }
+        if (span.end !== undefined && node.span.end !== span.end) {
+          failures.push(`span assertion at '${span.pointer}': expected end ${span.end}, got ${node.span.end}`);
         }
       }
     }
