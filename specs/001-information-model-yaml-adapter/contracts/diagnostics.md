@@ -15,9 +15,16 @@ Every diagnostic carries a primary span. Where a second position is meaningful i
 |---|---|---|---|
 | `duplicate-key` | The same key twice in one mapping, including duplicates introduced by expansion and by quoting differences (`"host"` vs `host`) | The later occurrence | The first occurrence, labelled |
 | `non-string-key` | A key that is not text — a sequence or mapping key (`? [a, b]`), or a scalar key that is a number, boolean, or null (`1:`, `true:`) | The key |  |
-| `unsupported-tag` | Any tag outside the YAML 1.2 core schema, including standard tags such as `!!binary`, `!!timestamp`, `!!set`, `!!omap`, and any unknown tag | The tag |  |
+| `unsupported-tag` | Any tag outside the YAML 1.2 core schema, including standard tags such as `!!binary`, `!!timestamp`, `!!set`, `!!omap`, and any unknown tag | The tagged **value** — see the note below |  |
 | `multiple-documents` | More than one document in the input | The second document marker |  |
 | `invalid-encoding` | Bytes that are not valid UTF-8 | The offending byte |  |
+
+**`unsupported-tag` points at the value, not the tag.** The underlying reader exposes no position for
+a tag token itself — only for the value it decorates — and recovering one requires the lossless CST
+layer that §4.3 defers past v1. So the span identifies the value immediately following the offending
+tag. This is a known imprecision, accepted deliberately rather than discovered late: the diagnostic
+names the tag in its message, and the reader is one token away from it. Revisit if and when the CST
+sibling lands.
 
 The `non-string-key` and `unsupported-tag` cases are the ones the underlying library does **not**
 catch — research confirmed both pass through it silently, which is precisely why they are Cascata's

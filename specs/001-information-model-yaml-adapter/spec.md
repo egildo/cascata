@@ -190,7 +190,13 @@ case as data only and confirm it executes without any code change.
 - **FR-014**: A configurable limit on nesting depth and on document size MUST be enforced, and
   exceeding either MUST be refused promptly rather than consuming unbounded memory or time.
 - **FR-015**: An alias cycle MUST be detected and refused rather than expanded indefinitely.
-- **FR-016**: Input that is not valid UTF-8 MUST be refused with a position.
+- **FR-016**: Text that is not well-formed Unicode MUST be refused with a position. In this milestone
+  the entry point receives already-decoded text, which cannot itself *be* invalid UTF-8; the reachable
+  failure is an unpaired surrogate, and that is what is refused. **Known limitation:** because decoding
+  happens before Cascata sees the text, byte sequences that are genuinely invalid UTF-8 will already
+  have become replacement characters and will be accepted as ordinary text. Enforcing §4.2's UTF-8
+  mandate at the byte level requires an entry point that accepts bytes, which arrives with the v0.2
+  resolver — the first component that reads bytes at all.
 - **FR-017**: A document containing more than one document MUST be refused in this milestone.
 
 **Diagnostics** (§10, §11)

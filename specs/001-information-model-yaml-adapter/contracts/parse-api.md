@@ -45,6 +45,12 @@ Size is checked **before** parsing, so a hostile document is refused without bei
 Defaults are proposals of research D7, chosen to clear real configuration documents comfortably; they
 are configurable and the corpus asserts behavior at the boundary and one step past it.
 
+**How depth is counted.** The root node is depth 0, and each nested collection below it adds 1. A
+mapping folded in by a merge key counts at the depth of the mapping receiving it, not at the depth
+where its anchor happens to be written — the fold behaves as if the entries had been written inline
+at that point, and the depth cap follows that fiction. Both rules are part of the contract, not
+implementation detail: `maxDepth: 64` is meaningless without them.
+
 ## Empty documents
 
 An empty document, a comment-only document, and a whitespace-only document are all **valid** and yield
