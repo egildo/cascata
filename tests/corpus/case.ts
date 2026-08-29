@@ -94,9 +94,21 @@ export interface ExpectedDiagnostic {
   readonly related?: readonly ExpectedRelatedSpan[];
 }
 
+/**
+ * `equalTo` is a second document's text (T057's gap, closed rather than
+ * left unfixed): the corpus's other two `Expect` shapes each compare one
+ * parsed tree against one expected shape, which has no way to state "the
+ * single definition of equality" (§4.2) itself — that two *different*
+ * documents must parse to model-equal trees despite differing in ways
+ * equality is defined to ignore (span, mapping write-order, quoting
+ * style). `equalTo` asserts exactly that: both `input` and `equalTo` must
+ * parse successfully, and the real `nodesEqual` (not a case-local
+ * reimplementation) must consider their trees equal.
+ */
 export type Expect =
   | { readonly tree: ExpectedNode; readonly spans?: readonly ExpectedSpan[] }
-  | { readonly diagnostics: readonly ExpectedDiagnostic[] };
+  | { readonly diagnostics: readonly ExpectedDiagnostic[] }
+  | { readonly equalTo: string };
 
 /**
  * A canonical `SPEC.md` section reference: `§` followed by a dot-separated
@@ -308,8 +320,9 @@ function parseExpect(raw: unknown, source: string): Expect {
   }
   const hasTree = "tree" in raw;
   const hasDiagnostics = "diagnostics" in raw;
-  if (hasTree === hasDiagnostics) {
-    fail(source, "'expect' must have exactly one of 'tree' or 'diagnostics'");
+  const hasEqualTo = "equalTo" in raw;
+  if (Number(hasTree) + Number(hasDiagnostics) + Number(hasEqualTo) !== 1) {
+    fail(source, "'expect' must have exactly one of 'tree', 'diagnostics', or 'equalTo'");
   }
   if (hasTree) {
     const tree = parseExpectedNode(raw["tree"], source, "");
@@ -321,6 +334,13 @@ function parseExpect(raw: unknown, source: string): Expect {
       fail(source, "'expect.spans' must be an array when present");
     }
     return { tree, spans: rawSpans.map((span, index) => parseExpectedSpan(span, source, index)) };
+  }
+  if (hasEqualTo) {
+    const equalTo = raw["equalTo"];
+    if (typeof equalTo !== "string") {
+      fail(source, "'expect.equalTo' must be a string");
+    }
+    return { equalTo };
   }
   const rawDiagnostics = raw["diagnostics"];
   if (!Array.isArray(rawDiagnostics)) {

@@ -25,6 +25,7 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Diagnostic, RelatedSpan } from "../../src/diagnostics/diagnostic.js";
+import { nodesEqual } from "../../src/model/equality.js";
 import type { Node } from "../../src/model/node.js";
 import type { Origin } from "../../src/model/span.js";
 import { createOrigin } from "../../src/model/span.js";
@@ -319,6 +320,19 @@ export function runCase(testCase: ConformanceCase, adapters: AdapterRegistry): C
         if (span.end !== undefined && node.span.end !== span.end) {
           failures.push(`span assertion at '${span.pointer}': expected end ${span.end}, got ${node.span.end}`);
         }
+      }
+    }
+  } else if ("equalTo" in testCase.expect) {
+    if (!outcome.ok) {
+      const codes = outcome.diagnostics.map((d) => `${d.code} at ${d.primary.line}:${d.primary.column}`).join(", ");
+      failures.push(`expected the first document to parse, but it produced diagnostics: [${codes}]`);
+    } else {
+      const otherOutcome = adapter(testCase.expect.equalTo, origin, testCase.limits);
+      if (!otherOutcome.ok) {
+        const codes = otherOutcome.diagnostics.map((d) => `${d.code} at ${d.primary.line}:${d.primary.column}`).join(", ");
+        failures.push(`expected the second ('equalTo') document to parse, but it produced diagnostics: [${codes}]`);
+      } else if (!nodesEqual(outcome.tree, otherOutcome.tree)) {
+        failures.push("expected the two documents to produce model-equal trees (nodesEqual), but they did not");
       }
     }
   } else {
