@@ -1,28 +1,28 @@
 /**
  * Wires the conformance corpus runner into Vitest — tasks.md T016.
  *
- * At this checkpoint (end of Phase 2 — Foundational) the corpus directory
- * is empty: User Stories 1–3 (tasks T020 onward) are the ones that add
- * cases and the adapters that read them. This file still runs as a real,
- * asserting test rather than being skipped, so an empty corpus is a
- * visible, passing fact rather than invisible non-coverage — and the
- * moment a case or an adapter shows up, this file starts exercising them
- * with no changes of its own.
+ * Originally written at the end of Phase 2 (Foundational) against an
+ * empty corpus directory and an empty adapter registry, exactly so that
+ * User Story 1 (T020 onward) could add both cases and the YAML adapter
+ * with no change to this file beyond registering the adapter itself —
+ * which is the one line Phase 3 adds below.
  */
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { parse } from "../../src/index.js";
 import { discoverCaseFiles, loadCases, runCases, type AdapterRegistry } from "./runner.js";
 
 const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "cases");
 
-// No format adapters are registered yet. The YAML adapter arrives with
-// User Story 1 (src/adapters/yaml/parse.ts); registering it is the only
-// change future work needs to make here. Left empty rather than stubbed,
-// per the runner contract, so a case naming an unregistered format fails
-// loudly instead of silently reporting nothing.
-const adapters: AdapterRegistry = {};
+// format -> adapter, selected by each case's `format` field (runner
+// contract point 3). JSON and TOML adapters join this registry, unchanged,
+// when they arrive (§14 v1.x) — this is the one line User Story 3 (T051)
+// is really about.
+const adapters: AdapterRegistry = {
+  yaml: (input, origin) => parse(input, { origin }),
+};
 
 describe("conformance corpus", () => {
   const caseFiles = discoverCaseFiles(CASES_DIR);

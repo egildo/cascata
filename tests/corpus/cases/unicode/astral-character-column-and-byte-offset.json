@@ -1,0 +1,42 @@
+{
+  "name": "unicode/astral-character-column-and-byte-offset",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "pair: {first: 🎉, second: 2}\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "pair",
+          {
+            "mapping": [
+              [
+                "first",
+                {
+                  "kind": "string",
+                  "value": "🎉"
+                }
+              ],
+              [
+                "second",
+                {
+                  "kind": "int",
+                  "value": "2"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/pair/second",
+        "line": 1,
+        "column": 26,
+        "start": 28,
+        "end": 29
+      }
+    ]
+  }
+}
