@@ -71,7 +71,7 @@ interface Scalar extends Base {
   value: string | bigint | number | boolean | null;
 }
 
-interface Mapping extends Base { entries: Map<string, Node>; }  // string keys only, order preserved
+interface Mapping extends Base { entries: Map<string, Node>; }  // string keys only, canonical (sorted) order
 interface Sequence extends Base { items: Node[]; }
 ```
 
@@ -86,14 +86,14 @@ The model is the **intersection** of YAML/JSON/TOML semantics. Format surpluses 
 - **Numbers:** int/float distinction is kept (`kind: int` stores `bigint`). Lexical kind wins: YAML `2.0` is a float, not an int. `demand: {type: int}` rejects `2.0`.
 - **Null vs. absence vs. empty are three different things.** TOML has no null; absence covers the semantic need there. **`required` means present AND non-null.**
 - **Booleans/strings:** YAML 1.2 core schema semantics mandated. `yes/no/on/off` are strings. The Norway problem (`no` → `false`) is impossible by decree.
-- **Ordering:** entry order preserved in the model (needed for deterministic `append` folding and faithful errors) but semantically insignificant for mapping equality.
+- **Mapping key order is canonical, not authorial.** Mappings are stored sorted by key (code point order, per the string rule below); document order is discarded like comments and quoting style are. Iteration order and equality therefore agree — a mapping cannot compare equal to another yet enumerate differently. Sequences are untouched: item order is semantically significant and always preserved. Position information is unaffected — spans, not iteration, are what make errors faithful to the source.
 - **Equality** is defined once, on the model: mappings compare unordered by key, sequences ordered, scalars by (kind, value). Merge, diamond dedup, and test assertions all inherit it.
 - **Strings:** UTF-8 (RFC 3629) mandatory. Comparison by code point sequence; **no** Unicode normalization (deliberate decision per UAX #15, not an omission).
 - **Hygiene:** line endings normalized for span math; parse depth and document size capped (remote documents are accepted).
 
 ### 4.3 Lossy by design; CST door left open
 
-The model discards comments, quoting style, indentation, anchor names. v1 is read-and-validate only. Spans stay precise and adapters stay structured so a per-format lossless CST sibling (for future `tool set` / migrations, à la `toml_edit` or `yaml` Document mode) can slot in later without clobbering user comments.
+The model discards comments, quoting style, indentation, anchor names, and authored key order (§4.2). v1 is read-and-validate only. Spans stay precise and adapters stay structured so a per-format lossless CST sibling (for future `tool set` / migrations, à la `toml_edit` or `yaml` Document mode) can slot in later without clobbering user comments.
 
 ---
 
@@ -320,7 +320,7 @@ Posture: **maximal conformance at the membrane, original at the core.** Every ci
 | TOML | **TOML v1.0.0** + `toml-test` | Adapter conformance; borrow the test-suite shape |
 | Encoding | RFC 3629 (UTF-8), UAX #15 (cited for the no-normalization decision) | Model |
 | Data model prose | RFC 8949 §2 (CBOR) | Crib for the model article |
-| Canonicalization / pinning | **RFC 8785 (JCS)** + SHA-256 (FIPS 180-4) | Reproducible `$pin` hashes |
+| Canonicalization / pinning | **RFC 8785 (JCS)** + SHA-256 (FIPS 180-4) | Reproducible `$pin` hashes. **Divergence, deliberate:** JCS sorts by UTF-16 code unit; the model sorts by code point (§4.2). These differ above the BMP. They are not required to agree — JCS governs the serialized byte string being hashed, the model governs in-memory structure — and the model uses one string rule throughout rather than two. |
 | Integrity pattern | W3C Subresource Integrity | Legibility of the pinning story |
 | Tree addressing | **RFC 6901 (JSON Pointer)** | Errors, `tool why`, graft points — verbatim |
 | Merge baseline | RFC 7386 (JSON Merge Patch) | Cited as the default-replace baseline we exceed |
@@ -381,6 +381,12 @@ All initial open questions are resolved; amendments are integrated into the arti
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
 - **`required` × `provide`** → settled: guaranteed-key pattern is a feature (non-optional TS property); vacuous only under `final provide` (info lint); retraction monotone-legal but parked. See §5.5.
 - **Naming** → settled: **Cascata**.
+- **Mapping key order** → settled: **canonical (sorted), not authorial.** The prior rule preserved document order
+  while declaring it insignificant for equality. Both of its stated justifications failed on inspection: `append`
+  folding is ordered by layer and by sequence position, never by sibling-key order (§5.3, §6.1), and faithful errors
+  come from spans, which every node carries unconditionally (§4.1, §10). What was left was a mapping that could
+  compare equal to another yet enumerate differently — a discrepancy with no cited beneficiary. Sorting costs the
+  authored order in dumps and gains agreement between equality and iteration. See §4.2.
 - **Node provenance shape** → settled: `origin` lives *inside* `SourceSpan`, not as a sibling field on
   `Base`. A position is meaningless except relative to the document it indexes, so carrying them
   separately duplicates the relationship and admits the state this article exists to forbid — a node

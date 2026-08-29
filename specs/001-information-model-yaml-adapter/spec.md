@@ -60,8 +60,9 @@ whole tree and assert no reachable node lacks a position. Testable with no other
    key that is simply not present, **When** it is parsed, **Then** all three are distinguishable
    from one another.
 8. **Given** two documents listing the same keys and values in different order, **When** both are
-   parsed and compared, **Then** the mappings are equal; **and given** two documents listing the
-   same sequence items in different order, **Then** the sequences are not equal.
+   parsed, **Then** both mappings enumerate their keys in the same canonical (sorted) order and the
+   two are equal; **and given** two documents listing the same sequence items in different order,
+   **Then** the sequences are not equal.
 9. **Given** a returned tree, **When** a consumer attempts to change any node within it, **Then**
    the attempt does not succeed and the tree is unchanged.
 
@@ -160,7 +161,9 @@ case as data only and confirm it executes without any code change.
 - **FR-002**: The model MUST consist of exactly three node shapes — scalar, mapping, sequence — and
   every scalar MUST record which of five kinds it was written as: text, integer, float, boolean, or
   null.
-- **FR-003**: Mapping keys MUST be text. Entry order MUST be preserved.
+- **FR-003**: Mapping keys MUST be text. Mappings MUST be stored in canonical key order — sorted by
+  code point, per FR-006 — with the order the author wrote discarded. Iteration order and equality
+  therefore agree. Sequence item order MUST be preserved, being semantically significant.
 - **FR-004**: Integers MUST be preserved exactly at any magnitude, with no rounding or loss. How a
   number was written decides its kind: `2.0` is a float and `2` is an integer, and the two MUST NOT
   be equal.
@@ -210,7 +213,7 @@ case as data only and confirm it executes without any code change.
   has something to reject. Each §4.2 **rejection** — duplicate keys, non-text keys, out-of-schema
   tags, multi-document input, invalid encoding, and the resource limits — MUST have at least one
   refusing case asserting the diagnostic *and its position*, plus one accepting case showing the
-  nearest legal document. Each §4.2 **acceptance rule** — entry order preservation, lexical number
+  nearest legal document. Each §4.2 **acceptance rule** — canonical mapping key order, lexical number
   kind, core-schema booleans, the three-way null/empty/absent distinction, code-point string
   comparison without normalization, and the single definition of equality — MUST have at least one
   accepting case.

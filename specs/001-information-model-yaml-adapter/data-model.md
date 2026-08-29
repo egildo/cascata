@@ -44,8 +44,9 @@ Three shapes, per §4.1. Every node carries a `span`.
 - **Scalar** — carries `kind` (`string` | `int` | `float` | `bool` | `null`) and a value whose type
   follows `kind`. Integers are exact at any magnitude. `kind` is decided **lexically**: `2` is an
   `int`, `2.0` is a `float`, and a quoted `"2"` is a `string` (§4.2).
-- **Mapping** — ordered entries keyed by string. Order is preserved for deterministic folding and
-  faithful errors, and is *insignificant* for equality.
+- **Mapping** — entries keyed by string, stored in **canonical order**: sorted by code point (§4.2).
+  Authored order is discarded, so iteration order and equality agree. An unsorted mapping is as
+  unconstructible as an unpositioned node — the factory sorts, and there is no other way in.
 - **Sequence** — ordered items; order is significant.
 
 **Construction invariant (Principle III)**: nodes are constructible only through factories that
@@ -61,7 +62,8 @@ Defined exactly once, over the model (§4.2), and used by every comparison in th
 asserts against it today; merge and diamond dedup will inherit it unchanged.
 
 - Scalars: equal when `kind` **and** value are equal. `int 2` ≠ `float 2.0` — different kinds.
-- Mappings: equal when they have the same key set and equal values per key, **regardless of order**.
+- Mappings: equal when they have the same key set and equal values per key. Order does not enter the
+  comparison — and since mappings are stored canonically, two equal mappings also enumerate alike.
 - Sequences: equal when the same length and equal items **in order**.
 - Spans and origins take **no part** in equality — two documents that say the same thing are equal
   even though they say it in different places.
