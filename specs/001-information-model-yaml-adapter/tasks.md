@@ -93,24 +93,24 @@ the characters that produced it; walk the tree and find no node lacking a positi
 
 ### Conformance cases for User Story 1 (write first — Principle V)
 
-- [ ] T020 [P] [US1] Cases asserting exact positions for deep nodes, first-byte and last-byte nodes, in tests/corpus/cases/positions/
-- [ ] T021 [P] [US1] Cases asserting YAML 1.2 core schema — `no`/`yes`/`on`/`off` as text, only `true`/`false` boolean — in tests/corpus/cases/core-schema/
-- [ ] T022 [P] [US1] Cases asserting lexical number kind (`2` int, `2.0` float, quoted `"2"` string) and exact large integers, in tests/corpus/cases/numbers/
-- [ ] T023 [P] [US1] Cases distinguishing explicit null, empty value, and absent key, plus empty, comment-only, and whitespace-only documents, in tests/corpus/cases/nullability/
-- [ ] T024 [P] [US1] Cases asserting anchors, aliases, and merge keys expand to independent copies with no references, and that explicit keys beat merged ones, in tests/corpus/cases/expansion/
-- [ ] T025 [P] [US1] Cases asserting position stability across BOM and CRLF line endings in tests/corpus/cases/encoding/
-- [ ] T026 [P] [US1] Cases asserting mapping entry order is preserved in the model while remaining insignificant for equality (FR-003) in tests/corpus/cases/ordering/
-- [ ] T027 [P] [US1] Cases asserting strings compare by code point with no Unicode normalization — precomposed `é` (U+00E9) is not equal to `e` plus combining acute (U+0065 U+0301) (FR-006) in tests/corpus/cases/unicode/
+- [x] T020 [P] [US1] Cases asserting exact positions for deep nodes, first-byte and last-byte nodes, in tests/corpus/cases/positions/
+- [x] T021 [P] [US1] Cases asserting YAML 1.2 core schema — `no`/`yes`/`on`/`off` as text, only `true`/`false` boolean — in tests/corpus/cases/core-schema/
+- [x] T022 [P] [US1] Cases asserting lexical number kind (`2` int, `2.0` float, quoted `"2"` string) and exact large integers, in tests/corpus/cases/numbers/
+- [x] T023 [P] [US1] Cases distinguishing explicit null, empty value, and absent key, plus empty, comment-only, and whitespace-only documents, in tests/corpus/cases/nullability/
+- [x] T024 [P] [US1] Cases asserting anchors, aliases, and merge keys expand to independent copies with no references, and that explicit keys beat merged ones, in tests/corpus/cases/expansion/
+- [x] T025 [P] [US1] Cases asserting position stability across BOM and CRLF line endings in tests/corpus/cases/encoding/
+- [x] T026 [P] [US1] Cases asserting mappings are canonicalized — sorted by key on construction, by Unicode code point rather than UTF-16 code unit — and that equality remains order-insensitive (§4.2, amended) in tests/corpus/cases/ordering/
+- [x] T027 [P] [US1] Cases asserting strings compare by code point with no Unicode normalization — precomposed `é` (U+00E9) is not equal to `e` plus combining acute (U+0065 U+0301) (FR-006) in tests/corpus/cases/unicode/
 
 ### Implementation for User Story 1
 
-- [ ] T028 [US1] Wire `parseDocument` with `intAsBigInt`, `merge`, and a `LineCounter` in src/adapters/yaml/parse.ts per research D1
-- [ ] T029 [US1] Convert byte ranges plus `LineCounter` output into `SourceSpan` values in src/adapters/yaml/parse.ts — depends on T028, T007
-- [ ] T030 [US1] Derive scalar kind lexically from the node's `source` text and quoting type in src/adapters/yaml/parse.ts (FR-004) — depends on T028
-- [ ] T031 [US1] Walk the AST into the model, giving every node — keys included — a span, in src/adapters/yaml/parse.ts — depends on T029, T030, T008
-- [ ] T032 [US1] Expand anchors, aliases, and merge keys, attributing positions to the anchored content per research D4, in src/adapters/yaml/expand.ts — depends on T031
-- [ ] T033 [US1] Implement the public `parse()` returning a frozen tree on success in src/index.ts — depends on T031, T032, T010
-- [ ] T034 [US1] Map unparseable input to the `malformed-document` diagnostic in src/adapters/yaml/parse.ts — depends on T013, T028
+- [x] T028 [US1] Wire `parseDocument` with `intAsBigInt`, `merge`, and a `LineCounter` in src/adapters/yaml/parse.ts per research D1
+- [x] T029 [US1] Convert byte ranges plus `LineCounter` output into `SourceSpan` values in src/adapters/yaml/parse.ts — depends on T028, T007
+- [x] T030 [US1] Derive scalar kind lexically from the node's `source` text and quoting type in src/adapters/yaml/parse.ts (FR-004) — depends on T028
+- [x] T031 [US1] Walk the AST into the model, giving every node — keys included — a span, in src/adapters/yaml/parse.ts — depends on T029, T030, T008
+- [x] T032 [US1] Expand anchors, aliases, and merge keys, attributing positions to the anchored content per research D4, in src/adapters/yaml/expand.ts — depends on T031
+- [x] T033 [US1] Implement the public `parse()` returning a frozen tree on success in src/index.ts — depends on T031, T032, T010
+- [x] T034 [US1] Map unparseable input to the `malformed-document` diagnostic in src/adapters/yaml/parse.ts — depends on T013, T028
 
 **Checkpoint**: A well-formed document becomes a fully positioned, frozen tree. MVP complete.
 
