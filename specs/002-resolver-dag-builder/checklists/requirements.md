@@ -59,12 +59,19 @@ probing rather than assumption:
   how much of it is genuinely required for immutable, content-addressed schema documents deserves
   scoping before it is built.
 
-**Known disagreement with `SPEC.md`, recorded not hidden.** FR-014 makes content-hash verification
-conditional on a hash being present, which narrows §11's "Remote schemas: HTTPS; pinned by content
-hash." Under Principle I, `SPEC.md` governs product semantics, so **§11 requires an explicit amendment
-before this requirement is implemented** — otherwise v0.2 ships behavior its constitution does not
-sanction. This is exactly the drift that produced the `origin`/`SourceSpan` divergence in v0.1, caught
-there only by an implementer questioning the artifacts. It is flagged here at authoring time instead.
+**Disagreement with `SPEC.md` §11 — raised at authoring time, now resolved.** The draft made
+content-hash verification conditional on a hash being present, which read as narrowing §11's "pinned
+by content hash." Raising it produced a better answer than the one proposed: the tension was not a
+weakening to be justified but a misplaced decision. Pinning policy belongs to the pedigree, not the
+library — §2.3's authority flows downward, and a published root legislates what its descendants must
+do. §11 and §15 were amended to say the library verifies and the pedigree legislates, with the
+legislation arriving alongside sealing (§6.3, roadmap v0.7). Spec and canon now agree, and FR-026
+exists because that amendment made unpinned-link reportability a MUST.
+
+The process point worth keeping: this was caught before implementation because the divergence was
+written down at authoring time rather than absorbed. The equivalent divergence in v0.1 — `origin`
+inside `SourceSpan` versus alongside it — was found only when an implementer questioned the artifacts,
+two phases later.
 
 **Carried-forward correction.** FR-001–FR-004 exist because v0.1's FR-016 demanded refusal of invalid
 UTF-8 at an entry point that receives already-decoded text, where the property is unenforceable —

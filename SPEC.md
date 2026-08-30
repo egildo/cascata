@@ -302,7 +302,7 @@ styles:
 
 ## 11. Security Model (summary)
 
-- Remote schemas: HTTPS; pinned by content hash (`$pin`, JCS + SHA-256); immutable cache per RFC 9111 semantics; lockfile-friendly.
+- **Remote schemas: HTTPS, always.** Pinning by content hash (`$pin`, JCS + SHA-256) is **verified whenever a pin is present**, and verification is absolute: mismatched bytes are refused and never enter the graph. Whether a pin is *required* is not the library's decision but the pedigree's — authority flows downward (§2.3), and a published root legislates what its descendants must do, here as everywhere. v1 ships the mechanism; the legislation (a root demanding pinned adoption) belongs with sealing and authority (§6.3). An unpinned reference is therefore fetched on TLS alone, and **an unpinned remote link MUST be reportable**, so a root's demand is auditable and an author can see what they are trusting unverified. One limit is inherent rather than chosen: a root's demand can only be read after that root has been fetched, so it hardens every subsequent resolution but not the first — which is what a lockfile closes. Immutable content-addressed cache per RFC 9111 semantics; lockfile-friendly.
 - A remote schema can never trigger local file reads outside the sandbox (delegation rules, §8.4) nor remote delegation without user opt-in.
 - YAML custom tags rejected; parse depth/size capped; duplicate keys rejected.
 - The schema language itself is versioned via the meta-schema's own pedigree.
@@ -381,6 +381,13 @@ All initial open questions are resolved; amendments are integrated into the arti
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
 - **`required` × `provide`** → settled: guaranteed-key pattern is a feature (non-optional TS property); vacuous only under `final provide` (info lint); retraction monotone-legal but parked. See §5.5.
 - **Naming** → settled: **Cascata**.
+- **Remote pinning policy** → settled: **the library verifies, the pedigree legislates.** `$pin` is verified
+  whenever present, absolutely; whether one is *required* is a governance decision belonging to a published
+  root under §2.3's downward authority, and arrives with sealing (§6.3, roadmap v0.7). The prior text named
+  the mechanism and was silent on the required/optional axis, which read as a mandate the library was failing
+  to enforce. Unpinned links must be reportable so the policy is auditable. Inherent limit: a root's demand is
+  readable only after the root is fetched, so it cannot protect its own first fetch — a lockfile closes that.
+  See §11.
 - **Mapping key order** → settled: **canonical (sorted), not authorial.** The prior rule preserved document order
   while declaring it insignificant for equality. Both of its stated justifications failed on inspection: `append`
   folding is ordered by layer and by sequence position, never by sibling-key order (§5.3, §6.1), and faithful errors

@@ -110,6 +110,9 @@ address is refused, and that a second resolution succeeds with the network unava
    is refused with a diagnostic saying so, rather than hanging or reporting a different problem.
 6. **Given** two documents referencing the same remote identity, **When** resolved, **Then** it is
    fetched once.
+7. **Given** a chain containing one pinned and one unpinned remote reference, **When** the pedigree
+   is queried, **Then** it distinguishes which entries were verified against a hash and which were
+   taken on TLS alone.
 
 ---
 
@@ -208,6 +211,9 @@ position of the offending reference.
 - **FR-018**: A document that is neither cached nor reachable MUST be refused with a diagnostic that
   says exactly that.
 - **FR-019**: Each distinct remote identity MUST be fetched at most once per resolution.
+- **FR-026**: The pedigree MUST report, for each entry, whether it was verified against a content
+  hash, so that an unpinned remote link is visible rather than silent (§11). This is what makes a
+  published root's future demand for pinned adoption auditable.
 
 **Sandbox** (§8.4's razor, applied to references)
 
@@ -262,12 +268,12 @@ position of the offending reference.
 
 ## Assumptions
 
-- **Pinning is optional in v0.2, and this narrows `SPEC.md` §11.** §11 states remote schemas are
-  "pinned by content hash"; the decision taken here is that a hash is **verified when present** and a
-  remote reference without one is still fetched. This is deliberate and recorded rather than
-  discovered: §11 requires an explicit amendment to match, since an unpinned remote reference is a
-  trust-on-first-fetch that §11's "fetch ≠ trust" posture does not currently sanction. Until that
-  amendment lands, this requirement and §11 disagree, and §11 governs under Principle I.
+- **Pinning is verified when present, not required — and `SPEC.md` §11 now says so.** §11 was amended
+  (logged in §15) to settle where the decision lives: the library ships the *mechanism* (verification,
+  which is absolute) and a published root ships the *policy*, under §2.3's downward authority. A root
+  demanding pinned adoption is governance, and governance arrives with sealing in §6.3 / roadmap v0.7.
+  This spec and the canon therefore agree; FR-026 exists because §11's amendment made unpinned-link
+  reportability a MUST.
 - **Caching is on disk and content-addressed; a lockfile is not in v0.2.** §11 calls the cache
   "lockfile-friendly", which is a property of the design rather than a deliverable here.
 - **The sandbox root is caller-supplied**, with no default inferred from the entry document's
