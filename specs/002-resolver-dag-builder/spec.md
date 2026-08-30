@@ -111,8 +111,10 @@ address is refused, and that a second resolution succeeds with the network unava
    network available, **Then** it resolves from cache and succeeds.
 5. **Given** a remote document never fetched and no network available, **When** resolved, **Then** it
    is refused with a diagnostic saying so, rather than hanging or reporting a different problem.
-6. **Given** two documents referencing the same remote identity, **When** resolved, **Then** it is
-   fetched once.
+6. **Given** the graph builder is asked twice for one remote identity, **When** the second request is
+   made, **Then** it is answered from the first fetch rather than fetched again. Asserted against the
+   builder directly: two *documents* referencing one identity requires a diamond, and single-parent
+   adoption cannot form one (FR-019).
 7. **Given** a chain containing one pinned and one unpinned remote reference, **When** the pedigree
    is queried, **Then** it distinguishes which entries were verified against a hash and which were
    taken on TLS alone.
@@ -205,6 +207,11 @@ position of the offending reference.
   name the same document.
 - **FR-008**: The resolved set MUST form a directed acyclic graph. A cycle MUST be refused.
 - **FR-009**: A document reachable by more than one route MUST be read once and appear once.
+  **Not exercisable end-to-end in this milestone**, and deliberately so: `SPEC.md` §9 makes `$schema` and
+  `$adopts` single scalars, so a resolution is structurally a chain — one edge per document — and no
+  arrangement of those two keys produces two routes to one document without also producing a cycle. The
+  requirement stands because delegation (§8, v0.6) and multi-adoption via C3 both need the machinery; it is
+  verified directly against the graph builder rather than through a document fixture that cannot exist.
 - **FR-010**: A configurable limit on chain length MUST be enforced.
 
 **Pedigree** (§6.1)
@@ -233,7 +240,9 @@ position of the offending reference.
   says exactly that. A document that **is** cached but stale, with no network available, MUST still
   resolve: a content-addressed body cannot silently drift, so staleness is a revalidation hint
   rather than grounds for refusal.
-- **FR-019**: Each distinct remote identity MUST be fetched at most once per resolution.
+- **FR-019**: Each distinct remote identity MUST be fetched at most once per resolution. Subject to the same
+  limitation as FR-009 and verified the same way — two references naming one URL requires a diamond, which a
+  single-parent chain cannot form.
 - **FR-026**: The pedigree MUST report, for each entry, whether it was verified against a content
   hash, so that an unpinned remote link is visible rather than silent (§11). This is what makes a
   published root's future demand for pinned adoption auditable.

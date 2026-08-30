@@ -229,7 +229,7 @@ has its own checkpoint and delivers separately testable value.
 
 - T002, T003 in Setup
 - T004, T005, T009 at the start of Foundational; then T011 alongside T012
-- **All of T013–T015** (US1 cases), **T019–T023** (US2), **T036–T041** (US3), **T051–T058** (US4) —
+- **All of T013–T015** (US1 cases), **T019–T024** (US2), **T036–T042** (US3), **T051–T058** (US4) —
   each group is separate directories with no shared state
 - T066, T068, T069 in Polish
 

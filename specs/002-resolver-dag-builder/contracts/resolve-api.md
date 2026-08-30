@@ -8,7 +8,7 @@
 parse(bytes, { origin }) -> ParseResult                      // v0.1's entry, now taking bytes
 parseText(text, { origin }) -> ParseResult                   // retained; cannot enforce UTF-8
 
-resolve(entry, { sandboxRoot, cacheDir, transport?, limits? }) -> ResolveResult
+resolve(entry, { sandboxRoot, cacheDir?, transport?, limits? }) -> ResolveResult
 
 ResolveResult =
   | { ok: true,  graph: Graph, pedigree: Pedigree }
@@ -17,6 +17,12 @@ ResolveResult =
 
 `sandboxRoot` is **required**. There is no default and none is inferred from the entry document's
 location (FR-022) — a capability is granted, never ambient.
+
+`cacheDir` is **conditionally required**: optional in the type, but resolution refuses the moment it
+reaches an `https://` reference without one. A purely local chain neither needs nor should demand it,
+and requiring it unconditionally would make every local caller declare a capability it cannot use.
+The posture is the same as `sandboxRoot`'s — granted rather than ambient — enforced where it becomes
+load-bearing rather than at the door.
 
 ## Behavioral contract
 
