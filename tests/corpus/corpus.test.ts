@@ -11,8 +11,8 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parse } from "../../src/index.js";
 import { discoverCaseFiles, loadCases, runCases, type AdapterRegistry } from "./runner.js";
+import { parseYamlInput } from "./yaml-adapter.js";
 
 const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "cases");
 
@@ -21,7 +21,7 @@ const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "cases");
 // when they arrive (§14 v1.x) — this is the one line User Story 3 (T051)
 // is really about.
 const adapters: AdapterRegistry = {
-  yaml: (input, origin, limits) => parse(input, { origin, limits }),
+  yaml: (input, origin, limits) => parseYamlInput(input, { origin, limits }),
 };
 
 describe("conformance corpus", () => {

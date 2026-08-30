@@ -575,3 +575,200 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   }
   return { ok: true, tree };
 }
+
+// --- Bytes entry point (v0.2, User Story 1) ---------------------------
+//
+// FR-001/FR-002 (specs/002-resolver-dag-builder/spec.md): the primary
+// entry point takes bytes, and invalid UTF-8 (RFC 3629) must be refused
+// at the offending *byte* offset, never repaired into replacement
+// characters. This is the property v0.1 could not enforce (research D8):
+// `parseYaml` above receives already-decoded text, and by the time a
+// caller has a JS string, invalid bytes have already become U+FFFD —
+// verified empirically, not assumed (constitution v1.1.0's probe gate).
+//
+// The validator below is intentionally NOT "decode with the default
+// (repairing) TextDecoder, then scan the result for U+FFFD": a document
+// may legitimately *contain* U+FFFD (its own case, tests/corpus/cases/
+// bytes-encoding/legitimate-replacement-character-accepted.json), so that
+// approach cannot tell "was always U+FFFD" from "was repaired into one",
+// and repairing at all is what FR-002 forbids. Validation runs on the
+// bytes directly, per RFC 3629 / Unicode Table 3-7's well-formedness
+// rules, before any decoding is attempted.
+
+function isContinuationByteAt(bytes: Uint8Array, index: number): boolean {
+  if (index >= bytes.length) {
+    return false;
+  }
+  const value = bytes[index];
+  return value !== undefined && value >= 0x80 && value <= 0xbf;
+}
+
+function isByteInRangeAt(bytes: Uint8Array, index: number, min: number, max: number): boolean {
+  if (index >= bytes.length) {
+    return false;
+  }
+  const value = bytes[index];
+  return value !== undefined && value >= min && value <= max;
+}
+
+/**
+ * The byte offset of the first ill-formed UTF-8 sequence in `bytes`, or
+ * `undefined` if every byte belongs to a well-formed sequence. Well-formed
+ * here excludes overlong encodings, encoded surrogates (U+D800-U+DFFF),
+ * and code points past U+10FFFF, matching Unicode's Table 3-7 exactly —
+ * a plain per-byte continuation-count check would silently accept all
+ * three.
+ */
+function findFirstInvalidUtf8ByteOffset(bytes: Uint8Array): number | undefined {
+  const length = bytes.length;
+  let index = 0;
+  while (index < length) {
+    const leadByte = bytes[index];
+    if (leadByte === undefined) {
+      // Unreachable: index < length guarantees a defined element.
+      throw new Error("Internal error: UTF-8 scan indexed past the end of the byte array");
+    }
+    if (leadByte <= 0x7f) {
+      index += 1;
+      continue;
+    }
+    if (leadByte >= 0xc2 && leadByte <= 0xdf) {
+      if (!isContinuationByteAt(bytes, index + 1)) return index;
+      index += 2;
+      continue;
+    }
+    if (leadByte === 0xe0) {
+      if (!isByteInRangeAt(bytes, index + 1, 0xa0, 0xbf)) return index; // excludes overlong (E0 80-9F)
+      if (!isContinuationByteAt(bytes, index + 2)) return index;
+      index += 3;
+      continue;
+    }
+    if (leadByte >= 0xe1 && leadByte <= 0xec) {
+      if (!isContinuationByteAt(bytes, index + 1)) return index;
+      if (!isContinuationByteAt(bytes, index + 2)) return index;
+      index += 3;
+      continue;
+    }
+    if (leadByte === 0xed) {
+      if (!isByteInRangeAt(bytes, index + 1, 0x80, 0x9f)) return index; // excludes encoded surrogates (ED A0-BF)
+      if (!isContinuationByteAt(bytes, index + 2)) return index;
+      index += 3;
+      continue;
+    }
+    if (leadByte >= 0xee && leadByte <= 0xef) {
+      if (!isContinuationByteAt(bytes, index + 1)) return index;
+      if (!isContinuationByteAt(bytes, index + 2)) return index;
+      index += 3;
+      continue;
+    }
+    if (leadByte === 0xf0) {
+      if (!isByteInRangeAt(bytes, index + 1, 0x90, 0xbf)) return index; // excludes overlong (F0 80-8F)
+      if (!isContinuationByteAt(bytes, index + 2)) return index;
+      if (!isContinuationByteAt(bytes, index + 3)) return index;
+      index += 4;
+      continue;
+    }
+    if (leadByte >= 0xf1 && leadByte <= 0xf3) {
+      if (!isContinuationByteAt(bytes, index + 1)) return index;
+      if (!isContinuationByteAt(bytes, index + 2)) return index;
+      if (!isContinuationByteAt(bytes, index + 3)) return index;
+      index += 4;
+      continue;
+    }
+    if (leadByte === 0xf4) {
+      if (!isByteInRangeAt(bytes, index + 1, 0x80, 0x8f)) return index; // excludes > U+10FFFF (F4 90-BF)
+      if (!isContinuationByteAt(bytes, index + 2)) return index;
+      if (!isContinuationByteAt(bytes, index + 3)) return index;
+      index += 4;
+      continue;
+    }
+    // 0x80-0xC1: a bare continuation byte, or C0/C1 (which can only start
+    // an overlong 2-byte sequence and so are never valid lead bytes).
+    // 0xF5-0xFF: beyond the range that can encode a code point <= U+10FFFF.
+    // No byte in either set may ever lead a well-formed sequence.
+    return index;
+  }
+  return undefined;
+}
+
+/**
+ * Line/column of `offset`, computed directly from the raw bytes rather
+ * than through `LineCounter` (there is no decoded string yet to build one
+ * from at this point — this runs *before* decoding, on the byte prefix
+ * known to be well-formed since `offset` is where that stops being true).
+ * Column is a code-point count, matching every other span in this
+ * codebase (parse.ts's module doc above).
+ */
+function locateByteOffset(bytes: Uint8Array, offset: number): { line: number; column: number } {
+  let line = 1;
+  let lineStartByteOffset = 0;
+  for (let index = 0; index < offset; index += 1) {
+    if (bytes[index] === 0x0a) {
+      line += 1;
+      lineStartByteOffset = index + 1;
+    }
+  }
+  let decodedLinePrefix: string;
+  try {
+    decodedLinePrefix = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(lineStartByteOffset, offset));
+  } catch (error) {
+    // Should be unreachable: findFirstInvalidUtf8ByteOffset guarantees
+    // everything before `offset` is well-formed. Thrown rather than
+    // silently mis-reporting a position, matching this file's existing
+    // "Internal error" convention.
+    throw new Error(`Internal error: byte range [${String(lineStartByteOffset)}, ${String(offset)}) was reported well-formed but failed to decode: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const column = [...decodedLinePrefix].length + 1;
+  return { line, column };
+}
+
+/**
+ * Parse YAML bytes into a Cascata tree or a non-empty diagnostic list.
+ * The primary v0.2 entry point (contracts/resolve-api.md): validates
+ * UTF-8 on the bytes themselves, then decodes and delegates to
+ * `parseYaml`, so a valid document produces byte-for-byte the same tree
+ * (spans included) `parseYaml` would from the equivalent text (FR-004) —
+ * they are, after this point, literally the same function call.
+ */
+export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides?: Partial<ParseLimits>): ParseOutcome {
+  const limits = resolveLimits(limitOverrides);
+
+  // Checked on the raw byte length before anything else, same as the text
+  // path checks Buffer.byteLength first — "refused without being parsed
+  // at all" (contracts/parse-api.md).
+  const sizeDiagnostic = checkSizeLimit(bytes.length, limits, origin);
+  if (sizeDiagnostic !== undefined) {
+    return { ok: false, diagnostics: [sizeDiagnostic] };
+  }
+
+  const invalidOffset = findFirstInvalidUtf8ByteOffset(bytes);
+  if (invalidOffset !== undefined) {
+    const location = locateByteOffset(bytes, invalidOffset);
+    const span = createSourceSpan({
+      origin,
+      start: invalidOffset,
+      end: invalidOffset + 1,
+      line: location.line,
+      column: location.column,
+      documentLength: bytes.length,
+    });
+    const diagnostic = createDiagnostic({
+      code: "invalid-encoding",
+      message: `Byte ${invalidOffset} begins a sequence that is not well-formed UTF-8 (RFC 3629)`,
+      primary: span,
+    });
+    return { ok: false, diagnostics: [diagnostic] };
+  }
+
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (error) {
+    // Should be unreachable: findFirstInvalidUtf8ByteOffset found nothing
+    // wrong. Thrown rather than silently falling back to a repairing
+    // decode, which is exactly the bug FR-002 exists to forbid.
+    throw new Error(`Internal error: UTF-8 validation found no invalid byte, but strict decoding still failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return parseYaml(text, origin, limitOverrides);
+}

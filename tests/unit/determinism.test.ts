@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parse } from "../../src/index.js";
+import { parseText } from "../../src/index.js";
 import type { Node } from "../../src/model/node.js";
 
 const CORPUS_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "cases");
@@ -70,8 +70,8 @@ describe("determinism (SC-008)", () => {
   it("produces an identical (value- and position-wise) tree across repeated parses of an accepting document", () => {
     const input = loadInput("expansion/merge-key-multiple-sources-precedence.json");
     const origin = { id: "determinism-tree", label: "<determinism-tree>" };
-    const first = parse(input, { origin });
-    const second = parse(input, { origin });
+    const first = parseText(input, { origin });
+    const second = parseText(input, { origin });
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (!first.ok || !second.ok) {
@@ -83,8 +83,8 @@ describe("determinism (SC-008)", () => {
   it("produces an identical, identically-ordered diagnostic list across repeated parses of a refusing document", () => {
     const input = loadInput("multi-violation/three-violations-far-apart-all-reported.json");
     const origin = { id: "determinism-diagnostics", label: "<determinism-diagnostics>" };
-    const first = parse(input, { origin });
-    const second = parse(input, { origin });
+    const first = parseText(input, { origin });
+    const second = parseText(input, { origin });
     expect(first.ok).toBe(false);
     expect(second.ok).toBe(false);
     if (first.ok || second.ok) {
@@ -99,7 +99,7 @@ describe("determinism (SC-008)", () => {
   it("running the same accepting document ten times in a row never diverges", () => {
     const input = loadInput("numbers/lexical-kind-and-big-integers.json");
     const origin = { id: "determinism-repeat", label: "<determinism-repeat>" };
-    const results = Array.from({ length: 10 }, () => parse(input, { origin }));
+    const results = Array.from({ length: 10 }, () => parseText(input, { origin }));
     for (const result of results) {
       expect(result.ok).toBe(true);
     }

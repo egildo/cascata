@@ -50,7 +50,7 @@ describe("T053: fails loudly on a case that cannot be interpreted, rather than s
 
 describe("T051: the runner selects an adapter purely by the case's `format` field", () => {
   it("dispatches to whichever adapter a made-up format name resolves to, proving no format is hardcoded", () => {
-    let received: string | undefined;
+    let received: string | Uint8Array | undefined;
     const adapters: AdapterRegistry = {
       "a-made-up-format": ((input) => {
         received = input;

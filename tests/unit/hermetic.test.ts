@@ -19,8 +19,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parse } from "../../src/index.js";
+import { sourceOf } from "../corpus/case.js";
 import { loadCases } from "../corpus/runner.js";
+import { parseYamlInput } from "../corpus/yaml-adapter.js";
 
 const SRC_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "src");
 const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "cases");
@@ -72,7 +73,7 @@ describe("hermetic: no network access", () => {
       expect(cases.length).toBeGreaterThan(0);
       for (const testCase of cases) {
         const origin = { id: testCase.name, label: testCase.name };
-        expect(() => parse(testCase.input, { origin, limits: testCase.limits })).not.toThrow();
+        expect(() => parseYamlInput(sourceOf(testCase), { origin, limits: testCase.limits })).not.toThrow();
       }
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });

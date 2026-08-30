@@ -30,13 +30,19 @@ import type { Node } from "../../src/model/node.js";
 import type { Origin } from "../../src/model/span.js";
 import { createOrigin } from "../../src/model/span.js";
 import type { ConformanceCase, ExpectedDiagnostic, ExpectedLimits, ExpectedNode, ExpectedRelatedSpan } from "./case.js";
-import { loadCase } from "./case.js";
+import { loadCase, sourceOf } from "./case.js";
 
 /** Mirrors contracts/parse-api.md's `ParseResult` — see module doc for why this is not imported. */
 export type ParseOutcome = { ok: true; tree: Node } | { ok: false; diagnostics: readonly Diagnostic[] };
 
-/** One format adapter under test, e.g. the eventual YAML adapter. `limits` is optional — a case omitting it gets the adapter's own defaults. */
-export type Adapter = (input: string, origin: Origin, limits?: ExpectedLimits) => ParseOutcome;
+/**
+ * One format adapter under test, e.g. the YAML adapter. `input` is either
+ * decoded text or raw bytes — v0.2's bytes entry point (contracts/
+ * resolve-api.md) needs cases exercising both, and an adapter registered
+ * here is expected to dispatch on which one it was given. `limits` is
+ * optional — a case omitting it gets the adapter's own defaults.
+ */
+export type Adapter = (input: string | Uint8Array, origin: Origin, limits?: ExpectedLimits) => ParseOutcome;
 
 /** Format name -> adapter. Selecting by `format` is what keeps this runner itself format-agnostic. */
 export type AdapterRegistry = Readonly<Record<string, Adapter>>;
@@ -294,7 +300,7 @@ export function runCase(testCase: ConformanceCase, adapters: AdapterRegistry): C
   }
 
   const origin = createOrigin(testCase.name, testCase.name);
-  const outcome = adapter(testCase.input, origin, testCase.limits);
+  const outcome = adapter(sourceOf(testCase), origin, testCase.limits);
   const failures: string[] = [];
 
   if ("tree" in testCase.expect) {

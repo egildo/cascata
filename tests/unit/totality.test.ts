@@ -3,14 +3,16 @@
  * always yields diagnostics, never an exception. "Total" means every
  * input produces one of the two `ParseResult` outcomes — this test is
  * that property checked directly, over every corpus fixture (so a future
- * case is covered automatically) plus a handful of adversarial inputs no
- * fixture happens to already be.
+ * case is covered automatically, text or bytes alike) plus a handful of
+ * adversarial inputs no fixture happens to already be.
  */
 
 import { describe, expect, it } from "vitest";
-import { parse } from "../../src/index.js";
+import { parseText } from "../../src/index.js";
 import type { Expect } from "../corpus/case.js";
+import { sourceOf } from "../corpus/case.js";
 import { loadCases } from "../corpus/runner.js";
+import { parseYamlInput } from "../corpus/yaml-adapter.js";
 
 const CASES_DIR = new URL("../corpus/cases", import.meta.url).pathname;
 
@@ -18,7 +20,7 @@ function equalToOf(expect: Expect): string | undefined {
   return "equalTo" in expect ? expect.equalTo : undefined;
 }
 
-describe("totality: parse() never throws for bad input", () => {
+describe("totality: parse()/parseText() never throw for bad input", () => {
   const cases = loadCases(CASES_DIR);
 
   it("loaded at least one case (guards against this test vacuously passing)", () => {
@@ -28,10 +30,10 @@ describe("totality: parse() never throws for bad input", () => {
   for (const testCase of cases) {
     it(`does not throw on ${testCase.name}`, () => {
       const origin = { id: testCase.name, label: testCase.name };
-      expect(() => parse(testCase.input, { origin, limits: testCase.limits })).not.toThrow();
+      expect(() => parseYamlInput(sourceOf(testCase), { origin, limits: testCase.limits })).not.toThrow();
       const equalTo = equalToOf(testCase.expect);
       if (equalTo !== undefined) {
-        expect(() => parse(equalTo, { origin, limits: testCase.limits })).not.toThrow();
+        expect(() => parseText(equalTo, { origin, limits: testCase.limits })).not.toThrow();
       }
     });
   }
@@ -51,16 +53,25 @@ describe("totality: parse() never throws for bad input", () => {
   for (const [name, input] of adversarialInputs) {
     it("does not throw on adversarial input: " + name, () => {
       const origin = { id: "totality-adversarial", label: "<totality-adversarial>" };
-      expect(() => parse(input, { origin })).not.toThrow();
+      expect(() => parseText(input, { origin })).not.toThrow();
+      // Also through the bytes entry point, UTF-8 encoded — the lone
+      // surrogates above cannot be UTF-8 encoded faithfully (TextEncoder
+      // replaces them), so they are skipped for the bytes path; every
+      // other adversarial input here is well-formed text and should
+      // round-trip through parse(bytes, ...) without throwing either.
+      if (!name.includes("surrogate")) {
+        const bytes = new TextEncoder().encode(input);
+        expect(() => parseYamlInput(bytes, { origin })).not.toThrow();
+      }
     });
   }
 
   it("does not throw on input past the default 8 MiB size cap", () => {
     const oversized = "a: " + "x".repeat(9 * 1024 * 1024) + "\n";
     const origin = { id: "totality-oversized", label: "<totality-oversized>" };
-    let result: ReturnType<typeof parse> | undefined;
+    let result: ReturnType<typeof parseText> | undefined;
     expect(() => {
-      result = parse(oversized, { origin });
+      result = parseText(oversized, { origin });
     }).not.toThrow();
     expect(result?.ok).toBe(false);
   });
@@ -78,9 +89,19 @@ describe("totality: parse() never throws for bad input", () => {
           .join("\n");
     }
     const origin = { id: "totality-deep", label: "<totality-deep>" };
-    let result: ReturnType<typeof parse> | undefined;
+    let result: ReturnType<typeof parseText> | undefined;
     expect(() => {
-      result = parse(input, { origin });
+      result = parseText(input, { origin });
+    }).not.toThrow();
+    expect(result?.ok).toBe(false);
+  });
+
+  it("does not throw on bytes that are not valid UTF-8 at all", () => {
+    const origin = { id: "totality-invalid-utf8", label: "<totality-invalid-utf8>" };
+    const invalidBytes = new Uint8Array([0x61, 0x3a, 0x20, 0xc0, 0x80, 0x0a]); // "a: " + an overlong encoding
+    let result: ReturnType<typeof parseYamlInput> | undefined;
+    expect(() => {
+      result = parseYamlInput(invalidBytes, { origin });
     }).not.toThrow();
     expect(result?.ok).toBe(false);
   });
