@@ -1,6 +1,15 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.1.0 → 1.1.1
+Bump rationale: PATCH — factual correction, no principle changed. The Security
+paragraph asserted RFC 8785 (JCS) canonicalization for $pin, which SPEC.md §6.1
+withdrew during v0.2 planning. A governance document was stating as constraint
+something the specification it defers to had disproven. Found by an implementer
+reading both, which is the same failure mode as the v0.2 redirect gaps.
+
+Prior report (v1.1.0) follows.
+
 Version change: 1.0.0 → 1.1.0
 Bump rationale: MINOR — Principle V materially expanded with the probe gate and
 its ratification corollary. No principle removed or redefined; prior compliance
@@ -164,8 +173,11 @@ requires an amendment to this section; dev dependencies do not.
 UTF-8 with code-point comparison and **no** Unicode normalization. Equality is defined exactly once,
 on the model, and merge, diamond dedup, and test assertions all consume that one definition.
 
-**Security.** Remote schemas are HTTPS-only and pinned by `$pin` = RFC 8785 (JCS) canonicalization
-+ SHA-256; the fetch cache is content-addressed and immutable, honoring RFC 9111. Parse depth and
+**Security.** Remote schemas are HTTPS-only and pinned by `$pin` = SHA-256 over the document's exact
+bytes (`SPEC.md` §6.1, amended v0.2 — RFC 8785/JCS was specified here and withdrawn, because it
+cannot represent this model's exact integers or its int/float distinction and would therefore collide
+on values the model holds unequal); the fetch cache is content-addressed and immutable, honoring the
+subset of RFC 9111 that immutable content-addressed documents actually require. Parse depth and
 document size are capped. Duplicate keys, YAML custom tags, and complex keys are rejected, never
 coerced. **Tests MUST NOT perform network access** — remote behavior is exercised against recorded
 fixtures, so the pinning and caching logic is testable and CI is hermetic.
@@ -216,4 +228,4 @@ and re-runs it after. Every code review verifies the six gates above. Principles
 NON-NEGOTIABLE (I, V) admit no Complexity-Tracking exception: a change that violates them is
 rejected, not justified.
 
-**Version**: 1.1.0 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-29
+**Version**: 1.1.1 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-30
