@@ -18,52 +18,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseText } from "../../src/index.js";
-import type { Node } from "../../src/model/node.js";
+import { identicalTrees } from "./tree-equality.js";
 
 const CORPUS_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "cases");
 
 function loadInput(relativePath: string): string {
   return JSON.parse(readFileSync(join(CORPUS_ROOT, relativePath), "utf-8")).input;
-}
-
-/** Structural equality including span and canonical order — stricter than model equality (nodesEqual), which deliberately ignores both. */
-function identicalTrees(a: Node, b: Node): boolean {
-  if (a.type !== b.type) return false;
-  const spanEqual =
-    a.span.origin.id === b.span.origin.id &&
-    a.span.start === b.span.start &&
-    a.span.end === b.span.end &&
-    a.span.line === b.span.line &&
-    a.span.column === b.span.column;
-  if (!spanEqual) return false;
-
-  if (a.type === "scalar" && b.type === "scalar") {
-    return a.kind === b.kind && a.value === b.value;
-  }
-  if (a.type === "mapping" && b.type === "mapping") {
-    const keysA = [...a.entries.keys()];
-    const keysB = [...b.entries.keys()];
-    if (keysA.length !== keysB.length) return false;
-    for (let i = 0; i < keysA.length; i += 1) {
-      if (keysA[i] !== keysB[i]) return false; // order must match too — canonical order is deterministic
-    }
-    for (const key of keysA) {
-      const valueA = a.entries.get(key);
-      const valueB = b.entries.get(key);
-      if (valueA === undefined || valueB === undefined || !identicalTrees(valueA, valueB)) return false;
-    }
-    return true;
-  }
-  if (a.type === "sequence" && b.type === "sequence") {
-    if (a.items.length !== b.items.length) return false;
-    for (let i = 0; i < a.items.length; i += 1) {
-      const itemA = a.items[i];
-      const itemB = b.items[i];
-      if (itemA === undefined || itemB === undefined || !identicalTrees(itemA, itemB)) return false;
-    }
-    return true;
-  }
-  return false;
 }
 
 describe("determinism (SC-008)", () => {
