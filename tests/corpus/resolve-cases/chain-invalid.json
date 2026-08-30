@@ -1,0 +1,19 @@
+{
+  "name": "T022: a schema declaring two distinct $adopts parents is refused as multiple-adoption, naming both",
+  "cites": "v0.2 FR-005",
+  "fixtureDir": "chain-invalid",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "multiple-adoption",
+        "primary": { "document": "schema-a.yaml", "line": 3, "column": 5, "start": 33, "end": 48 },
+        "related": [
+          { "label": "first parent", "document": "schema-a.yaml", "line": 2, "column": 5, "start": 13, "end": 28 }
+        ]
+      }
+    ]
+  }
+}

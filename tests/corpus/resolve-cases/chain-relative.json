@@ -1,0 +1,33 @@
+{
+  "name": "T020: a relative $adopts resolves against the referring schema's own directory, not the config's or the cwd's",
+  "cites": "v0.2 FR-006",
+  "fixtureDir": "chain-relative",
+  "entry": "config/config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "config/config.yaml", "hash": "d3f1f8eedc9eb99a46eab164591fc9a7baf4954eddd0b2f8944515229a890038" },
+      { "location": "schemas/schema-a.yaml", "hash": "36bfde94b8eeb7632cef48431977c2cc617ff272a5677cfc4b7976258c583137" },
+      { "location": "schemas/schema-b.yaml", "hash": "ba6ef7be83a277c129a9515e2e684af554e383709f654938102e41c408df71f9" }
+    ],
+    "pedigree": [
+      {
+        "location": "schemas/schema-b.yaml",
+        "hash": "ba6ef7be83a277c129a9515e2e684af554e383709f654938102e41c408df71f9",
+        "kind": "adopts",
+        "authority": "schema-authored",
+        "verified": false,
+        "via": { "document": "schemas/schema-a.yaml", "line": 1, "column": 10, "start": 9, "end": 24 }
+      },
+      {
+        "location": "schemas/schema-a.yaml",
+        "hash": "36bfde94b8eeb7632cef48431977c2cc617ff272a5677cfc4b7976258c583137",
+        "kind": "schema",
+        "authority": "config-authored",
+        "verified": false,
+        "via": { "document": "config/config.yaml", "line": 1, "column": 10, "start": 9, "end": 33 }
+      }
+    ]
+  }
+}

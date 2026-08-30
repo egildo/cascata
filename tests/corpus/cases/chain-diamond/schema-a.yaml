@@ -1,0 +1,4 @@
+$adopts:
+  - ./shared/root.yaml
+  - ../chain-diamond/shared/root.yaml
+title: A

@@ -1,0 +1,42 @@
+{
+  "name": "T019: a three-deep local $adopts chain resolves in root-to-leaf pedigree order",
+  "cites": "v0.2 FR-011",
+  "fixtureDir": "chain-local",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "config.yaml", "hash": "1c3bce2dabaca0fc9fe34732356e2f9fb958d4c7dc467e9443f1824c89d5d459" },
+      { "location": "schema-a.yaml", "hash": "36bfde94b8eeb7632cef48431977c2cc617ff272a5677cfc4b7976258c583137" },
+      { "location": "schema-b.yaml", "hash": "deebd0efa137fe9fc28e8491bb36b00bf490b4961e18e5958a8982f2d8c3082e" },
+      { "location": "schema-c.yaml", "hash": "7bda98a15b75233e13dcbbc15a1459484eb83212fba2887c2936bed76e577798" }
+    ],
+    "pedigree": [
+      {
+        "location": "schema-c.yaml",
+        "hash": "7bda98a15b75233e13dcbbc15a1459484eb83212fba2887c2936bed76e577798",
+        "kind": "adopts",
+        "authority": "schema-authored",
+        "verified": false,
+        "via": { "document": "schema-b.yaml", "line": 1, "column": 10, "start": 9, "end": 24 }
+      },
+      {
+        "location": "schema-b.yaml",
+        "hash": "deebd0efa137fe9fc28e8491bb36b00bf490b4961e18e5958a8982f2d8c3082e",
+        "kind": "adopts",
+        "authority": "schema-authored",
+        "verified": false,
+        "via": { "document": "schema-a.yaml", "line": 1, "column": 10, "start": 9, "end": 24 }
+      },
+      {
+        "location": "schema-a.yaml",
+        "hash": "36bfde94b8eeb7632cef48431977c2cc617ff272a5677cfc4b7976258c583137",
+        "kind": "schema",
+        "authority": "config-authored",
+        "verified": false,
+        "via": { "document": "config.yaml", "line": 1, "column": 10, "start": 9, "end": 24 }
+      }
+    ]
+  }
+}

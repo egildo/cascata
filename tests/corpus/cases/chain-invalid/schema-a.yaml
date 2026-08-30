@@ -1,0 +1,4 @@
+$adopts:
+  - ./parent-1.yaml
+  - ./parent-2.yaml
+title: A

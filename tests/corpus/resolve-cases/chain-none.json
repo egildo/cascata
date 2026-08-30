@@ -1,0 +1,14 @@
+{
+  "name": "T023: an entry document with no $schema resolves to a single-document graph and an empty pedigree",
+  "cites": "v0.2 FR-011",
+  "fixtureDir": "chain-none",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "config.yaml", "hash": "80ab8032f40d108949d109d652b7580a17b262570505f111a730928efba8d949" }
+    ],
+    "pedigree": []
+  }
+}

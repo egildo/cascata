@@ -99,23 +99,23 @@ order. No network.
 
 ### Conformance cases for User Story 2 (write first)
 
-- [ ] T019 [P] [US2] Cases for a three-deep local chain asserting pedigree order and each entry's identity, in tests/corpus/cases/chain-local/
-- [ ] T020 [P] [US2] Cases placing config and schema in **different directories**, asserting relative references resolve against the referring document rather than the entry or the working directory, in tests/corpus/cases/chain-relative/
-- [ ] T021 [P] [US2] Case for a schema reachable by two routes, asserting it is read once and appears once, in tests/corpus/cases/chain-diamond/
-- [ ] T022 [P] [US2] Case for a schema declaring two `$adopts` parents, asserting `multiple-adoption` with both positions, in tests/corpus/cases/chain-invalid/
-- [ ] T023 [P] [US2] Case for an entry document with no `$schema`, asserting a single-document graph and an empty pedigree, in tests/corpus/cases/chain-none/
+- [x] T019 [P] [US2] Cases for a three-deep local chain asserting pedigree order and each entry's identity, in tests/corpus/cases/chain-local/
+- [x] T020 [P] [US2] Cases placing config and schema in **different directories**, asserting relative references resolve against the referring document rather than the entry or the working directory, in tests/corpus/cases/chain-relative/
+- [x] T021 [P] [US2] Case for a schema reachable by two routes, asserting it is read once and appears once, in tests/corpus/cases/chain-diamond/
+- [x] T022 [P] [US2] Case for a schema declaring two `$adopts` parents, asserting `multiple-adoption` with both positions, in tests/corpus/cases/chain-invalid/
+- [x] T023 [P] [US2] Case for an entry document with no `$schema`, asserting a single-document graph and an empty pedigree, in tests/corpus/cases/chain-none/
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Extract `$schema` and `$adopts` from a parsed tree into `Reference` values carrying their spans, in src/resolve/reference.ts (FR-005) — depends on T005
-- [ ] T025 [US2] Derive `authority` from the document carrying the reference, never from the reference's own text, in src/resolve/reference.ts — depends on T024
-- [ ] T026 [US2] Resolve relative references against the referring document's directory in src/resolve/location.ts (FR-006)
-- [ ] T027 [US2] Read local documents and assemble resolved documents carrying the reference that brought them in, in src/resolve/location.ts — depends on T026, T007
-- [ ] T028 [US2] Build the DAG with dedup by location before fetch and by content hash after, per research D5, in src/graph/build.ts (FR-007, FR-009) — depends on T027
-- [ ] T029 [US2] Detect cycles on location during resolution, before bytes exist, in src/graph/build.ts (FR-008) — depends on T028
-- [ ] T030 [US2] Refuse a second `$adopts` parent in src/graph/build.ts (FR-005) — depends on T028
-- [ ] T031 [US2] Produce the ordered root-to-leaf pedigree with each entry's identity and originating reference position, in src/graph/pedigree.ts (FR-011, FR-012) — depends on T028
-- [ ] T032 [US2] Add `adapters/registry.ts` mapping a format name to an adapter, and the `resolve()` orchestrator in src/index.ts that consults it between resolve and graph — depends on T028, T031
+- [x] T024 [US2] Extract `$schema` and `$adopts` from a parsed tree into `Reference` values carrying their spans, in src/resolve/reference.ts (FR-005) — depends on T005
+- [x] T025 [US2] Derive `authority` from the document carrying the reference, never from the reference's own text, in src/resolve/reference.ts — depends on T024
+- [x] T026 [US2] Resolve relative references against the referring document's directory in src/resolve/location.ts (FR-006)
+- [x] T027 [US2] Read local documents and assemble resolved documents carrying the reference that brought them in, in src/resolve/location.ts — depends on T026, T007
+- [x] T028 [US2] Build the DAG with dedup by location before fetch and by content hash after, per research D5, in src/graph/build.ts (FR-007, FR-009) — depends on T027
+- [x] T029 [US2] Detect cycles on location during resolution, before bytes exist, in src/graph/build.ts (FR-008) — depends on T028
+- [x] T030 [US2] Refuse a second `$adopts` parent in src/graph/build.ts (FR-005) — depends on T028
+- [x] T031 [US2] Produce the ordered root-to-leaf pedigree with each entry's identity and originating reference position, in src/graph/pedigree.ts (FR-011, FR-012) — depends on T028
+- [x] T032 [US2] Add `adapters/registry.ts` mapping a format name to an adapter, and the `resolve()` orchestrator in src/index.ts that consults it between resolve and graph — depends on T028, T031
 
 **Checkpoint**: `SPEC.md` §9's worked chain is executable rather than illustrative.
 
