@@ -1,0 +1,3 @@
+$schema: https://example.test/schema-pinned.yaml
+$pin: not-a-real-pin
+name: config-malformed

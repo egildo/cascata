@@ -1,0 +1,3 @@
+$schema: https://example.test/schema-pinned.yaml
+$pin: sha256:a99f9ed290b231b6eac71550fac6684390c32ad9d8f66b88e7224411f5b2ffad
+name: config-match

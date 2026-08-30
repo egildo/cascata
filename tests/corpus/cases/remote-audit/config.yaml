@@ -1,0 +1,3 @@
+$schema: https://example.test/schema-a.yaml
+$pin: sha256:f57d5299795e751a7527e051541b251e220b36292a14dd15874e0c3e11b30fa8
+name: config-audit

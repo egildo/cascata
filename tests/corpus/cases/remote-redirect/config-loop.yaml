@@ -1,0 +1,2 @@
+$schema: https://example.test/loop-1.yaml
+name: config-redirect-loop

@@ -134,24 +134,24 @@ verification, refusal on mismatch, and success on a second run with every reques
 
 ### Conformance cases for User Story 3 (write first)
 
-- [ ] T036 [P] [US3] Cases for a successful HTTPS fetch joining the graph like a local document, in tests/corpus/cases/remote-fetch/
-- [ ] T037 [P] [US3] Cases for a pin that matches, one that mismatches, and one that is malformed, in tests/corpus/cases/remote-pin/
-- [ ] T038 [P] [US3] Cases for offline resolution from cache, for a document neither cached nor reachable, and for a **stale** cached document with no network (FR-018), in tests/corpus/cases/remote-offline/
-- [ ] T039 [P] [US3] Case asserting one remote identity referenced twice is fetched once, in tests/corpus/cases/remote-dedup/
-- [ ] T040 [P] [US3] Case asserting the pedigree distinguishes hash-verified entries from unpinned ones, in tests/corpus/cases/remote-audit/ (FR-026)
-- [ ] T041 [P] [US3] Cases for revalidation — a first response with an `ETag`, a second returning `304` — in tests/corpus/cases/remote-cache/
-- [ ] T042 [P] [US3] Cases for redirect safety — an HTTPS response redirecting to plain HTTP, and a redirect loop exceeding the hop cap — asserting `insecure-redirect` and `too-many-redirects`, in tests/corpus/cases/remote-redirect/ (FR-027, FR-028)
+- [x] T036 [P] [US3] Cases for a successful HTTPS fetch joining the graph like a local document, in tests/corpus/cases/remote-fetch/
+- [x] T037 [P] [US3] Cases for a pin that matches, one that mismatches, and one that is malformed, in tests/corpus/cases/remote-pin/
+- [x] T038 [P] [US3] Cases for offline resolution from cache, for a document neither cached nor reachable, and for a **stale** cached document with no network (FR-018), in tests/corpus/cases/remote-offline/
+- [x] T039 [P] [US3] Case asserting one remote identity referenced twice is fetched once, in tests/corpus/cases/remote-dedup/. **Retargeted, for T021's exact reason applied to the remote case:** `$adopts`/`$schema` being single string scalars makes a resolution structurally a straight chain, so no fixture in this milestone's vocabulary lets two *different* documents' references name the same remote URL — the diamond this scenario needs cannot arise end-to-end until delegation (§8) or multi-adoption exist. Tested directly instead, in tests/unit/graph-remote-dedup.test.ts, driving the same beginVisit/registerContent/finishVisit protocol `src/index.ts` uses, twice, against one shared `GraphBuilder`
+- [x] T040 [P] [US3] Case asserting the pedigree distinguishes hash-verified entries from unpinned ones, in tests/corpus/cases/remote-audit/ (FR-026)
+- [x] T041 [P] [US3] Cases for revalidation — a first response with an `ETag`, a second returning `304` — in tests/corpus/cases/remote-cache/
+- [x] T042 [P] [US3] Cases for redirect safety — an HTTPS response redirecting to plain HTTP, and a redirect loop exceeding the hop cap — asserting `insecure-redirect` and `too-many-redirects`, in tests/corpus/cases/remote-redirect/ (FR-027, FR-028)
 
 ### Implementation for User Story 3
 
-- [ ] T043 [US3] Implement HTTPS-only fetching with a request timeout in src/resolve/fetch.ts (FR-013) — depends on T009
-- [ ] T044 [US3] Enforce the response size cap **during streaming**, so an unbounded body is cut off rather than measured after, in src/resolve/fetch.ts — depends on T043
-- [ ] T045 [US3] Follow redirects manually, one hop at a time, refusing any hop leaving HTTPS and capping the hop count at `maxRedirects`, per research D4 (FR-027, FR-028), in src/resolve/fetch.ts — depends on T043
-- [ ] T046 [US3] Implement the content-addressed cache store in src/resolve/cache.ts (FR-016) — depends on T007
-- [ ] T047 [US3] Implement the named RFC 9111 subset from research D3 — freshness lifetime, `ETag`/`Last-Modified` revalidation, `no-store`/`no-cache` — and nothing beyond it, in src/resolve/cache.ts (FR-017) — depends on T046
-- [ ] T048 [US3] Verify fetched bytes against a stated pin and **discard them on mismatch** so they never enter the graph, in src/resolve/fetch.ts (FR-014) — depends on T008, T043
-- [ ] T049 [US3] Fetch each distinct remote identity at most once per resolution in src/graph/build.ts (FR-019) — depends on T029, T043
-- [ ] T050 [US3] Record on each pedigree entry whether it was hash-verified, in src/graph/pedigree.ts (FR-026) — depends on T034, T048
+- [x] T043 [US3] Implement HTTPS-only fetching with a request timeout in src/resolve/fetch.ts (FR-013) — depends on T009
+- [x] T044 [US3] Enforce the response size cap **during streaming**, so an unbounded body is cut off rather than measured after, in src/resolve/fetch.ts — depends on T043
+- [x] T045 [US3] Follow redirects manually, one hop at a time, refusing any hop leaving HTTPS and capping the hop count at `maxRedirects`, per research D4 (FR-027, FR-028), in src/resolve/fetch.ts — depends on T043
+- [x] T046 [US3] Implement the content-addressed cache store in src/resolve/cache.ts (FR-016) — depends on T007
+- [x] T047 [US3] Implement the named RFC 9111 subset from research D3 — freshness lifetime, `ETag`/`Last-Modified` revalidation, `no-store`/`no-cache` — and nothing beyond it, in src/resolve/cache.ts (FR-017) — depends on T046
+- [x] T048 [US3] Verify fetched bytes against a stated pin and **discard them on mismatch** so they never enter the graph, in src/resolve/fetch.ts (FR-014) — depends on T008, T043
+- [x] T049 [US3] Fetch each distinct remote identity at most once per resolution in src/graph/build.ts (FR-019) — depends on T029, T043
+- [x] T050 [US3] Record on each pedigree entry whether it was hash-verified, in src/graph/pedigree.ts (FR-026) — depends on T034, T048
 
 **Checkpoint**: The cascade escapes one machine, and fetching still does not mean trusting.
 
