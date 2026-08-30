@@ -104,7 +104,7 @@ what makes FR-009 and FR-019 hold simultaneously.
 
 **Alternatives considered**: hash-only identity (rejected — cannot prevent the duplicate fetch, and
 cannot detect a cycle before it completes); location-only identity (rejected — misses that two URLs
-serve the same bytes, which is exactly the diamond §6.1 wants deduped).
+serve the same bytes, which is the case content-hash identity exists for — though note §6.1 makes adoption single-parent, so **no diamond can arise from `$adopts` in v1**; this machinery is for delegation (v0.6) and for multi-adoption via C3 when it lands. An earlier draft of this decision cited "the diamond §6.1 wants deduped", which inverted what §6.1 actually says.)
 
 ### D6 — The sandbox is judged on the resolved target, through symlinks
 

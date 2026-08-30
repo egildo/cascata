@@ -69,8 +69,8 @@ graph. Requires no network.
 **Acceptance Scenarios**:
 
 1. **Given** a config whose `$schema` names a local schema that itself `$adopts` a further local
-   schema, **When** resolved, **Then** all three documents are read and the pedigree lists their
-   identities in root-to-leaf order.
+   schema, **When** resolved, **Then** all three documents are read, and the pedigree lists the **two
+   schema** identities in root-to-leaf order — the config is the graph's entry, not a pedigree entry.
 2. **Given** a reference written as a relative path, **When** resolved, **Then** it is interpreted
    relative to the directory of the document that **contains** the reference, not the working
    directory or the entry document.
@@ -259,8 +259,10 @@ position of the offending reference.
 
 ### Measurable Outcomes
 
-- **SC-001**: A config three schemas deep resolves into a pedigree listing all four identities in
-  root-to-leaf order, with no network access.
+- **SC-001**: A config three schemas deep resolves into a pedigree listing the **three schema**
+  identities in root-to-leaf order, with no network access. The config is not in the pedigree — it is
+  the graph's entry, and the pedigree answers "what schemas am I bound by", to which the config is not
+  an answer (FR-011).
 - **SC-002**: 100% of resolution failures report a position in a document the author wrote, never an
   anonymous failure or one located only in a fetched file.
 - **SC-003**: A previously resolved chain resolves successfully with the network unavailable, in 100%
