@@ -101,7 +101,7 @@ order. No network.
 
 - [x] T019 [P] [US2] Cases for a three-deep local chain asserting pedigree order and each entry's identity, in tests/corpus/cases/chain-local/
 - [x] T020 [P] [US2] Cases placing config and schema in **different directories**, asserting relative references resolve against the referring document rather than the entry or the working directory, in tests/corpus/cases/chain-relative/
-- [x] T021 [P] [US2] Case for a schema reachable by two routes, asserting it is read once and appears once, in tests/corpus/cases/chain-diamond/
+- [x] T021 [P] [US2] Assert content-hash dedup — two locations with byte-identical content converge to one graph node, and an already-resolved location is answered as a duplicate — in tests/unit/graph-content-dedup.test.ts (v0.2 FR-009). **Retargeted after `SPEC.md` §9 settled `$adopts` as a scalar:** with single-parent adoption the chain is structurally a straight line, so no fixture in this milestone's vocabulary can produce two edges converging on one document. The dedup machinery is real — delegation (§8) and future multi-adoption need it — so it is tested directly rather than through a scenario that can no longer occur
 - [x] T022 [P] [US2] Case for a schema declaring two `$adopts` parents, asserting `multiple-adoption` with both positions, in tests/corpus/cases/chain-invalid/
 - [x] T023 [P] [US2] Case for an entry document with no `$schema`, asserting a single-document graph and an empty pedigree, in tests/corpus/cases/chain-none/
 - [x] T024 [P] [US2] Cases for tilde expansion — a config `$schema` beginning `~/` resolving, and a schema `$adopts` beginning `~/` not expanding — in tests/corpus/cases/chain-tilde/
@@ -114,7 +114,7 @@ order. No network.
 - [x] T028 [US2] Read local documents and assemble resolved documents carrying the reference that brought them in, in src/resolve/location.ts — depends on T027, T007
 - [x] T029 [US2] Build the DAG with dedup by location before fetch and by content hash after, per research D5, in src/graph/build.ts (FR-007, FR-009) — depends on T028
 - [x] T030 [US2] Detect cycles on location during resolution, before bytes exist, in src/graph/build.ts (FR-008) — depends on T029
-- [x] T031 [US2] Refuse a second `$adopts` parent in src/graph/build.ts (FR-005) — depends on T029
+- [x] T031 [US2] Refuse a second `$adopts` parent in src/resolve/reference.ts (v0.2 FR-005) — depends on T029. **Moved from `src/graph/build.ts`:** once `$adopts` became a single scalar (T032), multiplicity is a shape question answerable before any location is resolved, so it belongs at extraction rather than at graph build
 - [x] T032 [US2] Refuse a sequence-valued `$adopts` with `multiple-adoption` and accept only a single string scalar per `SPEC.md` §9, in src/resolve/reference.ts (v0.2 FR-005) — removes the sequence-as-valid-syntax reading an implementer had to invent before §9 specified the shape
 - [x] T033 [US2] Expand a leading `~/` in **config-authored** references only, never schema-authored ones, in src/resolve/location.ts (v0.2 FR-029) — `SPEC.md` §9's own worked chain depends on it
 - [x] T034 [US2] Produce the ordered root-to-leaf pedigree with each entry's identity and originating reference position, in src/graph/pedigree.ts (FR-011, FR-012) — depends on T029
