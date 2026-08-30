@@ -27,8 +27,11 @@ import type { Node } from "./model/node.js";
 import { freeze } from "./model/freeze.js";
 import { createOrigin, createSourceSpan, type Origin } from "./model/span.js";
 import { extractAdoptsReference, extractSchemaReference, type ExtractedReference, type Reference } from "./resolve/reference.js";
-import { createResolvedDocument, readLocalDocument, resolveReferenceLocation, toAbsoluteEntryLocation } from "./resolve/location.js";
+import { classifyReferenceLocation, readLocalDocument, toAbsoluteEntryLocation, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
+import { DocumentCache } from "./resolve/cache.js";
+import { createNetworkTransport, resolveFetchLimits, resolveRemoteDocument, type FetchLimits, type RemoteDocumentFailure } from "./resolve/fetch.js";
+import type { Transport } from "./resolve/transport.js";
 import { buildGraph, GraphBuilder, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 
@@ -42,6 +45,8 @@ export type { ParseLimits } from "./adapters/yaml/limits.js";
 export type { Reference, ReferenceAuthority, ReferenceKind } from "./resolve/reference.js";
 export type { Graph, GraphDocument, GraphDocumentIdentity, GraphReference } from "./graph/build.js";
 export type { Pedigree, PedigreeEntry } from "./graph/pedigree.js";
+export type { FetchLimits } from "./resolve/fetch.js";
+export type { Recording, RecordedFailure, RecordedFailureKind, RecordedResponse, RecordingOutcome, Transport } from "./resolve/transport.js";
 
 /** The result of one `parse()`/`parseText()` call. Never both a tree and diagnostics. */
 export type ParseResult = { readonly ok: true; readonly tree: Node } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -118,15 +123,12 @@ export function parseText(text: string, options: ParseOptions): ParseResult {
 // necessarily driven from here, because it is the one module allowed to
 // see both sides of the boundary.
 //
-// **Scope of this slice (User Story 2 only, Phase 4's checkpoint)**:
-// local files only. `ResolveOptions` deliberately omits `cacheDir`,
-// `transport`, and `limits` from contracts/resolve-api.md's full shape —
-// none of them has anything to consume yet (fetching, caching, and
-// chain-length enforcement are User Story 3/4, out of scope here per the
-// milestone assignment) and accepting an option with zero effect would
-// be dishonest scaffolding. See the milestone report for the complete
-// list of what contracts/resolve-api.md describes that this slice does
-// not implement.
+// **Scope of this slice (User Story 3, Phase 5's checkpoint)**: local
+// files *and* HTTPS fetching, pinning, and caching. `chain-limit-exceeded`
+// enforcement (`maxChainLength`) and the sandbox-escape check remain
+// User Story 4, out of scope here — see the milestone report for the
+// complete list of what contracts/resolve-api.md describes that this
+// slice does not implement.
 
 export interface ResolveOptions {
   /**
@@ -138,6 +140,59 @@ export interface ResolveOptions {
    * had for a different field. See the milestone report.
    */
   readonly sandboxRoot: string;
+  /**
+   * Where fetched remote documents are cached on disk (v0.2 FR-016).
+   * **Optional here**, deliberately narrower than
+   * contracts/resolve-api.md's literal `{ sandboxRoot, cacheDir, … }`
+   * shape (which shows it without a `?`): a resolution that never
+   * reaches a remote reference has nothing to cache, and requiring it
+   * unconditionally would gratuitously break every purely-local caller
+   * (User Story 2's own tests among them) for a capability they cannot
+   * possibly exercise. If resolution *does* reach an `https://`
+   * reference and no `cacheDir` was supplied, `resolve()` throws — the
+   * same "required exactly when needed, granted, never ambient"
+   * posture `sandboxRoot` has always had (Principle VI) — rather than
+   * inferring a default location. See the milestone report for this
+   * judgment call.
+   */
+  readonly cacheDir?: string;
+  /**
+   * Injection point for the HTTP transport (research D7). Omit for the
+   * real network; tests always supply a `RecordedTransport`
+   * (constitution, Technology & Security Constraints — no test in this
+   * codebase ever omits this field).
+   */
+  readonly transport?: Transport;
+  /** Overrides for `resolve/fetch.ts`'s `FetchLimits` (`maxRedirects`, `requestTimeoutMs`, `maxBytes`). `maxChainLength` is not yet part of this type — User Story 4, out of scope here. */
+  readonly limits?: Partial<FetchLimits>;
+}
+
+/**
+ * What `walkAdoptsChain` needs to resolve an `https://` reference — built
+ * once per `resolve()` call from `ResolveOptions`, lazily (only
+ * constructed if `cacheDir` was supplied), and threaded down rather than
+ * reconstructed per reference. `undefined` when the caller supplied no
+ * `cacheDir` at all; a remote reference reached with this `undefined`
+ * throws (see `ResolveOptions.cacheDir`'s own doc).
+ */
+interface RemoteContext {
+  readonly cache: DocumentCache;
+  readonly transport: Transport;
+  readonly limits: FetchLimits;
+}
+
+function buildRemoteContext(options: ResolveOptions): RemoteContext | undefined {
+  if (options.cacheDir === undefined) {
+    return undefined;
+  }
+  const limits = resolveFetchLimits(options.limits);
+  return {
+    cache: new DocumentCache(options.cacheDir),
+    // Real network only when no test (or caller) supplies one — see
+    // createNetworkTransport's own doc: never exercised by this suite.
+    transport: options.transport ?? createNetworkTransport(limits.maxBytes),
+    limits,
+  };
 }
 
 export type ResolveResult = { readonly ok: true; readonly graph: Graph; readonly pedigree: Pedigree } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -227,17 +282,144 @@ function multipleAdoptionDiagnostic(extraction: { readonly sequenceSpan: ReturnT
 
 type ChainWalkResult = { readonly ok: true; readonly documentsLeafToRoot: GraphDocument[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
+/** Bytes plus verification status, whatever their source (local read or remote fetch+cache+pin) — the one shape `walkAdoptsChain` needs past this point, so its parse/dedup/recurse logic below does not care which. */
+type ReadOutcomeUnified = { readonly ok: true; readonly bytes: Uint8Array; readonly verified: boolean } | { readonly ok: false; readonly diagnostic: Diagnostic };
+
 /**
- * Walk one `$adopts` step: resolve `candidate`'s location against
- * `referringLocation` (T027 — never against the entry or the working
- * directory), check it against the builder **before** reading anything
- * (T030), read and parse it if genuinely new, then recurse into its own
+ * contracts/diagnostics.md's fetching-and-integrity codes (T045, T048),
+ * plus `document-not-cached` and v0.1's `size-limit-exceeded` reused for
+ * an oversized remote body — every way `resolve/fetch.ts`'s
+ * `resolveRemoteDocument` can refuse, translated into a `Diagnostic`
+ * anchored to `candidate` (contracts/diagnostics.md: "a resolution code
+ * MUST anchor to a reference, never to a fetched document alone").
+ */
+function remoteFailureDiagnostic(failure: RemoteDocumentFailure, candidate: Reference): Diagnostic {
+  switch (failure.kind) {
+    case "unsupported-scheme":
+      return createDiagnostic({
+        code: "unsupported-scheme",
+        message: `Reference '${candidate.text}' redirected to an unsupported scheme '${failure.scheme}:' — only HTTPS is permitted (v0.2 FR-013)`,
+        primary: candidate.span,
+      });
+    case "insecure-redirect":
+      return createDiagnostic({
+        code: "insecure-redirect",
+        message: `Reference '${candidate.text}' redirected to a non-HTTPS location ('${failure.location}') — every redirect hop must satisfy v0.2 FR-013, and the insecure hop is refused before it is followed`,
+        primary: candidate.span,
+      });
+    case "too-many-redirects":
+      return createDiagnostic({
+        code: "too-many-redirects",
+        message: `Reference '${candidate.text}' exceeded the redirect hop limit (v0.2 FR-028)`,
+        primary: candidate.span,
+      });
+    case "size-limit-exceeded":
+      return createDiagnostic({
+        code: "size-limit-exceeded",
+        message: `Fetched document at '${candidate.text}' is at least ${failure.actualBytes} bytes, exceeding the size limit`,
+        primary: candidate.span,
+      });
+    case "not-cached":
+      return createDiagnostic({
+        code: "document-not-cached",
+        message: `Reference '${candidate.text}' is neither reachable nor already cached (v0.2 FR-018)`,
+        primary: candidate.span,
+      });
+    case "pin-mismatch":
+      return createDiagnostic({
+        code: "pin-mismatch",
+        message: `Fetched bytes for '${candidate.text}' do not match the stated $pin — expected sha256:${failure.expected}, got sha256:${failure.actual} (v0.2 FR-014)`,
+        primary: candidate.span,
+      });
+    case "malformed-pin":
+      return createDiagnostic({
+        code: "malformed-pin",
+        message: `'$pin' on the reference to '${candidate.text}' is not a well-formed 'sha256:<64 hex digits>' value (v0.2 FR-015)`,
+        primary: candidate.span,
+      });
+  }
+}
+
+/**
+ * Read `candidate`'s bytes, whichever kind of location it names —
+ * dispatching to a local read or (via `remote`) a cache-aware HTTPS
+ * fetch with `$pin` verification. `remote` is `undefined` exactly when
+ * `ResolveOptions.cacheDir` was never supplied; reaching an `https`
+ * target with no `remote` is a programmer error (see
+ * `ResolveOptions.cacheDir`'s own doc), not a document-shaped refusal —
+ * it throws, matching `sandboxRoot`'s and `origin`'s existing posture.
+ */
+async function readAtTarget(target: ReferenceLocationKind, candidate: Reference, remote: RemoteContext | undefined): Promise<ReadOutcomeUnified> {
+  if (target.kind === "unsupported-scheme") {
+    // Unreachable via walkAdoptsChain's own call site, which branches on
+    // `target.kind` before ever calling this function — kept exhaustive
+    // here defensively rather than asserted away.
+    throw new Error(`Internal error: readAtTarget called with an unsupported-scheme target ('${target.scheme}:')`);
+  }
+  if (target.kind === "local") {
+    const read = readLocalDocument(target.location);
+    if (!read.ok) {
+      return {
+        ok: false,
+        diagnostic: createDiagnostic({
+          code: "document-unreachable",
+          message: `Cannot read '${target.location}' (referenced as '${candidate.text}'): ${read.reason}`,
+          primary: candidate.span,
+        }),
+      };
+    }
+    return { ok: true, bytes: read.bytes, verified: false };
+  }
+  if (remote === undefined) {
+    throw new Error(
+      `resolve() requires 'cacheDir' (v0.2 FR-016) to fetch the remote reference '${candidate.text}' — there is no default and none is inferred, the same "granted, never ambient" posture as 'sandboxRoot'`,
+    );
+  }
+  const fetched = await resolveRemoteDocument(target.url, candidate.pin, remote);
+  if (!fetched.ok) {
+    return { ok: false, diagnostic: remoteFailureDiagnostic(fetched.failure, candidate) };
+  }
+  return { ok: true, bytes: fetched.bytes, verified: fetched.verified };
+}
+
+/**
+ * Walk one `$adopts`/`$schema` step: classify `candidate`'s target
+ * against `referringLocation` (T027/T043 — never against the entry or
+ * the working directory, and scheme-aware since User Story 3), check it
+ * against the builder **before** reading anything (T030), read (locally
+ * or remotely) and parse it if genuinely new, then recurse into its own
  * `$adopts`. Returns every schema document from `candidate` down to the
  * chain's root, in discovery (leaf-to-root) order — `graph/build.ts` and
  * `graph/pedigree.ts`'s shared contract for that order.
+ *
+ * The builder's `location` key is the lexically-resolved local path or
+ * the (already-redirect-resolved-to-nothing-yet) URL string, uniformly —
+ * `GraphBuilder` only ever sees an opaque string (research D5), so
+ * location-based pre-fetch dedup (v0.2 FR-019, T045) falls out of the
+ * exact same mechanism v0.2 FR-009 already uses for local files, applied
+ * to a URL. See the milestone report for why no fixture in this
+ * milestone's `$schema`/`$adopts` vocabulary can exercise two references
+ * converging on one *remote* identity end-to-end (the same structural
+ * finding recorded for T021's local case) — the mechanism is tested
+ * directly instead, in `tests/unit/graph-remote-dedup.test.ts`.
  */
-async function walkAdoptsChain(candidate: Reference, referringLocation: string, builder: GraphBuilder): Promise<ChainWalkResult> {
-  const location = resolveReferenceLocation(candidate, referringLocation);
+async function walkAdoptsChain(candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined): Promise<ChainWalkResult> {
+  const target = classifyReferenceLocation(candidate, referringLocation);
+  if (target.kind === "unsupported-scheme") {
+    // Refused *before any request is made* (v0.2 FR-013) — this branch
+    // never reaches resolve/fetch.ts at all.
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          code: "unsupported-scheme",
+          message: `Reference '${candidate.text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.2 FR-013)`,
+          primary: candidate.span,
+        }),
+      ],
+    };
+  }
+  const location = target.kind === "local" ? target.location : target.url;
   const decision = builder.beginVisit(location, candidate);
 
   if (decision.kind === "cycle") {
@@ -245,23 +427,16 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
   }
   if (decision.kind === "duplicate") {
     // Already fully resolved (and its own $adopts chain already walked)
-    // earlier in this same traversal — FR-009. Nothing further to do.
+    // earlier in this same traversal — FR-009, and (for a remote
+    // location) FR-019: nothing further to do, and in particular no
+    // second fetch is ever attempted.
     return { ok: true, documentsLeafToRoot: [decision.document] };
   }
 
-  const read = readLocalDocument(location);
+  const read = await readAtTarget(target, candidate, remote);
   if (!read.ok) {
     builder.abandonVisit(location);
-    return {
-      ok: false,
-      diagnostics: [
-        createDiagnostic({
-          code: "document-unreachable",
-          message: `Cannot read '${location}' (referenced as '${candidate.text}'): ${read.reason}`,
-          primary: candidate.span,
-        }),
-      ],
-    };
+    return { ok: false, diagnostics: [read.diagnostic] };
   }
 
   const parsed = parseAtLocation(read.bytes, location);
@@ -283,8 +458,8 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
     };
   }
 
-  const resolvedDoc = createResolvedDocument(location, read.bytes, candidate);
-  const document: GraphDocument = { identity: resolvedDoc.identity, tree: freeze(parsed.tree), via: candidate, verified: resolvedDoc.verified };
+  const identity = createDocumentIdentity(location, read.bytes);
+  const document: GraphDocument = { identity, tree: freeze(parsed.tree), via: candidate, verified: read.verified };
   // `location` stays on the active stack past this point (T030's fix —
   // see graph/build.ts's module doc): a self-reference in this exact
   // document's own $adopts must still be seen as a cycle, not a
@@ -312,7 +487,7 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
     return { ok: true, documentsLeafToRoot: [canonical] };
   }
 
-  const parentResult = await walkAdoptsChain(adoptsExtraction.reference, location, builder);
+  const parentResult = await walkAdoptsChain(adoptsExtraction.reference, location, builder, remote);
   if (!parentResult.ok) {
     // Aborting the whole resolve() call regardless — no further use of
     // `builder` follows, so `location`'s frame is left on the (about to
@@ -325,14 +500,18 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
 
 /**
  * Follow `$schema` from `entryPath` through `$adopts` into a graph and a
- * root-to-leaf pedigree — local files only in this slice (User Story 2;
- * User Story 3 adds HTTPS fetching to the same traversal without
- * changing this function's shape). Never throws for bad *documents*
- * (contracts/resolve-api.md point 1) — a missing sandbox root is the one
- * programmer error that still throws, matching `parse()`'s `origin`.
+ * root-to-leaf pedigree — local files and, as of User Story 3, `https://`
+ * references too (fetched, cached, and pin-verified through the same
+ * traversal, without changing this function's own shape). The entry
+ * document itself is always local in this milestone (`entryPath` is a
+ * caller-supplied path, never a URL). Never throws for bad *documents*
+ * (contracts/resolve-api.md point 1) — a missing `sandboxRoot`, or a
+ * remote reference reached with no `cacheDir` supplied, are the
+ * programmer errors that still throw, matching `parse()`'s `origin`.
  */
 export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
   requireSandboxRoot(options);
+  const remote = buildRemoteContext(options);
 
   const builder = new GraphBuilder();
   const entryLocation = toAbsoluteEntryLocation(entryPath);
@@ -393,7 +572,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     return { ok: true, graph, pedigree: buildPedigree(graph) };
   }
 
-  const chainResult = await walkAdoptsChain(schemaExtraction.reference, entryLocation, builder);
+  const chainResult = await walkAdoptsChain(schemaExtraction.reference, entryLocation, builder, remote);
   if (!chainResult.ok) {
     // Aborting the whole call — no further use of `builder` follows, so
     // `entryLocation`'s frame is left on the (about to be discarded)

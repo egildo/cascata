@@ -1,6 +1,7 @@
 /**
  * Local-path resolution and file reads — data-model.md "Resolved
- * Document"; v0.2 FR-006, FR-007, FR-029; tasks.md T027-T028, T033.
+ * Document"; v0.2 FR-006, FR-007, FR-013, FR-029; tasks.md T027-T028,
+ * T033, T043 (`classifyReferenceLocation`, User Story 3's routing point).
  *
  * **The trap this file exists to avoid (CLAUDE.md, T027)**: a relative
  * reference resolves against the directory of the document that
@@ -8,12 +9,14 @@
  * process's working directory. `resolveReferenceLocation` takes the
  * *referring* document's own location as an explicit parameter for
  * exactly this reason; there is no function here that resolves against
- * `process.cwd()` implicitly.
+ * `process.cwd()` implicitly. `classifyReferenceLocation` extends the
+ * same principle to a referring document that is itself remote.
  *
- * This slice (User Story 2) is local-file-only: no scheme detection, no
- * HTTPS, no sandbox enforcement. Both arrive with User Story 3 (fetch.ts)
- * and User Story 4 (the sandbox checks this file's own module doc
- * forward-references but does not yet implement — see the report).
+ * Scheme-aware as of User Story 3: `classifyReferenceLocation` decides
+ * local vs. HTTPS vs. refused-scheme, *before* `src/index.ts` ever calls
+ * `resolve/fetch.ts`. Sandbox enforcement (schema-authored references
+ * confined to `sandboxRoot`, config-authored ones exempt) is still User
+ * Story 4, out of scope for this slice — see the milestone report.
  *
  * `src/resolve/` must never import from `src/adapters/` — enforced by
  * tests/unit/layering.test.ts.
@@ -68,6 +71,65 @@ function expandTilde(reference: Reference): string {
     return resolvePath(homedir(), reference.text.slice(2));
   }
   return reference.text;
+}
+
+/**
+ * What a reference's location turns out to be, once its scheme (if any)
+ * is considered — v0.2 User Story 3 (T043-T045), FR-013. Three outcomes:
+ *
+ * - `"local"` — no scheme prefix (a relative or absolute filesystem
+ *   path, or the referring document is itself local and the text has no
+ *   `scheme://` at all). Carries the same lexically-resolved location
+ *   `resolveReferenceLocation` would have produced — this function is a
+ *   superset of that one, not a replacement for it (see below).
+ * - `"https"` — an absolute `https://` URL, or a schemeless reference
+ *   resolved against a referring document that is *itself* remote
+ *   (joined via WHATWG `URL`'s own relative-resolution rules, which is
+ *   what makes a remote schema's own relative `$adopts` resolve against
+ *   *its* location rather than the entry document's — the same FR-006
+ *   principle `resolveReferenceLocation` applies locally, extended to
+ *   the remote case).
+ * - `"unsupported-scheme"` — an absolute URL whose scheme is anything
+ *   else (`http:`, `file:`, `data:`, …). Refused with `unsupported-scheme`
+ *   *before any request is made* (FR-013) — the caller never reaches
+ *   `resolve/fetch.ts` for this outcome.
+ */
+export type ReferenceLocationKind =
+  | { readonly kind: "local"; readonly location: string }
+  | { readonly kind: "https"; readonly url: string }
+  | { readonly kind: "unsupported-scheme"; readonly scheme: string };
+
+/** An absolute-URL scheme prefix, e.g. `https://`, `http://`, `file://` — deliberately requires the double slash, so a Windows-style drive path (`C:\foo`) is never misread as scheme `c` (a single-letter scheme is technically legal URI grammar, but nothing in this codebase's fixtures or `SPEC.md` ever writes one, and treating `C:\` as local is the only reading that does not make an ordinary Windows absolute path unusable). */
+const ABSOLUTE_URL_SCHEME_PATTERN = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//;
+
+/** Whether `location` (already resolved — a real local path or a URL string) is itself an `https://` location, i.e. the *referring* document was reached remotely. */
+const HTTPS_LOCATION_PATTERN = /^https:\/\//i;
+
+/**
+ * Classify `reference`'s target before deciding how to read it (T043's
+ * routing point in `src/index.ts`): a local filesystem path, an HTTPS
+ * URL to fetch, or a scheme FR-013 refuses outright. Tilde-expands first
+ * (`expandTilde`, FR-029), exactly as `resolveReferenceLocation` does,
+ * so the two functions agree on every local case — see that function's
+ * own doc; this one exists alongside it, not in place of it, because
+ * `resolveReferenceLocation`'s local-only contract (documented on itself)
+ * predates scheme-awareness and nothing outside this module depends on
+ * it gaining a scheme argument.
+ */
+export function classifyReferenceLocation(reference: Reference, referringDocumentLocation: string): ReferenceLocationKind {
+  const text = expandTilde(reference);
+  const schemeMatch = ABSOLUTE_URL_SCHEME_PATTERN.exec(text);
+  if (schemeMatch !== null) {
+    const scheme = (schemeMatch[1] ?? "").toLowerCase();
+    if (scheme === "https") {
+      return { kind: "https", url: text };
+    }
+    return { kind: "unsupported-scheme", scheme };
+  }
+  if (HTTPS_LOCATION_PATTERN.test(referringDocumentLocation)) {
+    return { kind: "https", url: new URL(text, referringDocumentLocation).toString() };
+  }
+  return { kind: "local", location: resolvePath(dirname(referringDocumentLocation), text) };
 }
 
 /**
