@@ -189,11 +189,12 @@ offending reference.
 ## Phase 7: Polish & Cross-Cutting Concerns
 
 - [ ] T063 [P] Document the resolution surface and the v0.2 diagnostic codes in README.md, citing contracts/resolve-api.md
-- [ ] T064 [P] Confirm resolution is deterministic — same inputs and cache state give the same graph, pedigree order, and diagnostic order — in tests/unit/resolve-determinism.test.ts (SC-009)
-- [ ] T065 [P] Re-assert the suite performs no network access now that a fetch layer exists, in tests/unit/hermetic.test.ts
-- [ ] T066 Confirm all 168 v0.1 tests still pass unchanged by running the full suite, so nothing in specs/001-information-model-yaml-adapter/ regressed
-- [ ] T067 Run every validation scenario in specs/002-resolver-dag-builder/quickstart.md end to end
-- [ ] T068 Verify the six merge gates in .specify/memory/constitution.md, plus the extended layering boundary from T012
+- [ ] T064 [P] Add the two byte-validator cases an independent review found missing — a codepoint past U+10FFFF (lead byte `F5`–`FF`, or `F4` with a second byte above `8F`), and an invalid byte preceded by a **valid non-ASCII prefix**, which is what would catch a regression validating a decoded string rather than raw bytes — in tests/corpus/cases/bytes-encoding/
+- [ ] T065 [P] Confirm resolution is deterministic — same inputs and cache state give the same graph, pedigree order, and diagnostic order — in tests/unit/resolve-determinism.test.ts (SC-009)
+- [ ] T066 [P] Re-assert the suite performs no network access now that a fetch layer exists, in tests/unit/hermetic.test.ts
+- [ ] T067 Confirm all 168 v0.1 tests still pass unchanged by running the full suite, so nothing in specs/001-information-model-yaml-adapter/ regressed
+- [ ] T068 Run every validation scenario in specs/002-resolver-dag-builder/quickstart.md end to end
+- [ ] T069 Verify the six merge gates in .specify/memory/constitution.md, plus the extended layering boundary from T012
 
 ---
 
@@ -227,7 +228,7 @@ has its own checkpoint and delivers separately testable value.
 - T004, T005, T009 at the start of Foundational; then T011 alongside T012
 - **All of T013–T015** (US1 cases), **T019–T023** (US2), **T033–T038** (US3), **T048–T055** (US4) —
   each group is separate directories with no shared state
-- T063, T064, T065 in Polish
+- T063, T065, T066 in Polish
 
 ---
 
@@ -282,5 +283,5 @@ and it is worth landing before the resolver begins.
 - **T029 (cycle detection before bytes)** — detection that waits for content never fires, because the
   cycle prevents the content from ever arriving.
 
-**Also**: v0.1's 168 tests must stay green throughout (T066), and `parseText` must keep working —
+**Also**: v0.1's 168 tests must stay green throughout (T067), and `parseText` must keep working —
 this milestone corrects a v0.1 defect without breaking v0.1 consumers.
