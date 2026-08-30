@@ -4,7 +4,7 @@
  * One document's pointer at another: a `$schema` a config names, or an
  * `$adopts` a schema names. Constructible only with a span, exactly as a
  * `Node` is (Principle III) — there is no path by which a reference can
- * exist without a position to blame a resolution failure on (FR-023).
+ * exist without a position to blame a resolution failure on (v0.2 FR-023).
  *
  * This is Foundational scaffolding (tasks.md Phase 2): nothing in this
  * milestone's slice (T001-T018) extracts a `Reference` from a parsed tree
@@ -20,7 +20,7 @@
 
 import type { SourceSpan } from "../model/span.js";
 
-/** A config names its governing schema; a schema names exactly one parent (FR-005). */
+/** A config names its governing schema; a schema names exactly one parent (v0.2 FR-005). */
 export type ReferenceKind = "schema" | "adopts";
 
 /**
@@ -28,7 +28,7 @@ export type ReferenceKind = "schema" | "adopts";
  * was written*, never by the reference's own text (data-model.md's
  * invariant), so a schema cannot claim config authority to escape the
  * sandbox (D6). Config-authored references are exempt from the sandbox;
- * schema-authored ones are confined to it (FR-020, FR-021 — User Story 4,
+ * schema-authored ones are confined to it (v0.2 FR-020, FR-021 — User Story 4,
  * out of scope for this slice, but the distinction is recorded here where
  * the `Reference` itself is defined).
  */

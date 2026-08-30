@@ -10,12 +10,12 @@
  *
  * `parseText(text, options)` is v0.1's original entry point, renamed but
  * behaviorally unchanged, retained for callers already holding decoded
- * text. It cannot enforce FR-002 — documented here, not silently implied
+ * text. It cannot enforce v0.2 FR-002 — documented here, not silently implied
  * otherwise, per the corollary constitution v1.1.0 added to Principle V
  * after v0.1 shipped that exact unenforceable requirement.
  *
  * Given valid UTF-8 bytes, both produce identical trees, spans included
- * (FR-004) — mechanically true, not just in intent: `parse` decodes and
+ * (v0.2 FR-004) — mechanically true, not just in intent: `parse` decodes and
  * then calls the same underlying function `parseText` calls.
  */
 
@@ -57,7 +57,7 @@ function requireOrigin(options: ParseOptions, fnName: string): void {
  * the caller genuinely only has decoded text.
  *
  * Bytes that are not valid UTF-8 (RFC 3629) are refused with a diagnostic
- * naming the offending **byte** offset (FR-002); they are never repaired
+ * naming the offending **byte** offset (v0.2 FR-002); they are never repaired
  * into replacement characters.
  *
  * Never throws for bad *documents* — a malformed, hostile, or unportable
@@ -77,7 +77,7 @@ export function parse(bytes: Uint8Array, options: ParseOptions): ParseResult {
  * Parse a document's already-decoded text into a positioned, frozen tree,
  * or a non-empty, position-ordered list of diagnostics.
  *
- * **Cannot enforce FR-002.** By the time a caller holds a JS string,
+ * **Cannot enforce v0.2 FR-002.** By the time a caller holds a JS string,
  * bytes that were not valid UTF-8 have already been decoded — typically
  * into U+FFFD replacement characters — and this function cannot
  * distinguish that from a document that legitimately contains U+FFFD.

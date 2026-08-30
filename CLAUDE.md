@@ -12,7 +12,11 @@ provenance-rich. This file is the working method; it is not a substitute for the
 3. **`specs/NNN-*/`** — per-milestone spec, plan, research, data model, contracts, tasks.
 
 **Requirement numbers are milestone-local.** v0.1 FR-016 (invalid UTF-8) and v0.2 FR-016 (offline
-cache resolution) are different requirements. Always cite as "v0.2 FR-016", never bare.
+cache resolution) are different requirements. **New citations must be qualified** — "v0.2 FR-016",
+never bare — in code comments, commit messages, and instructions to agents. Unqualified citations
+survive in v0.1-era files under `src/model/`, `src/diagnostics/`, and `src/adapters/`; read those as
+v0.1. Do not retro-qualify them in bulk: the churn is not worth it, and the ambiguity only bites
+where the two milestones' code sits side by side, which is `src/index.ts` and `src/resolve/`.
 
 ## Non-negotiables
 

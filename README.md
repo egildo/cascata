@@ -23,13 +23,16 @@ pnpm install
 Everything below is exported from the package root. There is no compatibility promise before v1.0
 (contracts/parse-api.md).
 
-### `parse(text, options)`
+### `parse(bytes, options)`
+
+The primary entry point. Takes bytes, because that is the only boundary at which `SPEC.md` §4.2's
+UTF-8 mandate is enforceable — see the note on `parseText` below.
 
 ```typescript
 import { parse, createOrigin } from "cascata";
 
 const origin = createOrigin("config.yaml", "config.yaml"); // id, then a human-readable label
-const result = parse("a: 1\nb: 2\n", { origin });
+const result = parse(new TextEncoder().encode("a: 1\nb: 2\n"), { origin });
 
 if (result.ok) {
   result.tree; // a frozen Node
@@ -114,12 +117,17 @@ human-readable `message`, a `primary: SourceSpan`, and zero or more labelled `re
 | `alias-cycle` | An alias referring to content that encloses itself, at the closing alias |
 | `malformed-document` | Input the underlying reader cannot parse at all, or an otherwise-uncategorized reader error |
 
-**Known limitation** (`spec.md` FR-016): `parse()` receives already-decoded text, which cannot itself
-*be* invalid UTF-8 — decoding already happened before Cascata saw it. `invalid-encoding` catches the
-one reachable failure at this layer (an unpaired surrogate); byte sequences that were genuinely invalid
-UTF-8 will already have become replacement characters by the time `parse()` runs, and are accepted as
-ordinary text. Enforcing the byte-level UTF-8 mandate requires an entry point that reads bytes, which
-arrives with the v0.2 resolver.
+### `parseText(text, options)`
+
+Retained for callers that already hold decoded text. Produces trees identical to `parse()` for valid
+input, spans included.
+
+**Known limitation** (v0.1 FR-016, superseded by v0.2 FR-002): `parseText()` receives already-decoded
+text, which cannot itself *be* invalid UTF-8 — decoding happened before Cascata saw it. Byte sequences
+that were genuinely invalid UTF-8 have already become replacement characters by the time
+`parseText()` runs, and are accepted as ordinary text. **`parse()` does not have this limitation**: it
+validates the bytes against RFC 3629 before decoding and refuses them with the offending byte offset.
+Prefer `parse()` wherever you hold bytes.
 
 ## Scripts
 
