@@ -252,6 +252,8 @@ Ident    := [A-Za-z_] [A-Za-z0-9_-]*
 
 Reserved document keys: `$id`, `$version`, `$adopts`, `$pin`, `$schema` (config-side pointer), later `$extends`.
 
+**`$adopts` and `$schema` are single string scalars.** A sequence value is refused — not as a malformed value, but with a diagnostic saying v1 adopts exactly one parent (§6.1), because that is the shape multi-adoption will take when C3 linearization lands and an author writing it early deserves to be told which version they are ahead of. Two `$adopts` keys in one mapping are already impossible: duplicate keys are refused (§4.2).
+
 Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, plus JSON-Schema-named leaf constraints: `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`, `format`), `provide`, `cascade: replace | append`, `seal: open | closed`, `final`, `delegate: allow`.
 
 Top-level schema sections: `types`, `keys`.
@@ -283,7 +285,8 @@ keys:
 
 ```yaml
 # ./site.yaml   (the config)
-$schema: ~/.config/house.yaml
+$schema: ~/.config/house.yaml   # a leading `~/` expands to the user's home directory —
+                                # permitted because a config's own reference is author consent (§8.1)
 styles:
   - https://example.com/theme.css
 # resolves to [base.css, theme.css] — valid against house AND core, provably
@@ -381,6 +384,16 @@ All initial open questions are resolved; amendments are integrated into the arti
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
 - **`required` × `provide`** → settled: guaranteed-key pattern is a feature (non-optional TS property); vacuous only under `final provide` (info lint); retraction monotone-legal but parked. See §5.5.
 - **Naming** → settled: **Cascata**.
+- **`$adopts` shape and tilde paths** → settled: **`$adopts` and `$schema` are single string scalars**, and a
+  leading `~/` in a **config-authored** reference expands to the user's home directory. Both were silences
+  rather than decisions, and both bit an implementer. §6.1 said `$adopts` takes exactly one parent but never
+  said what the value looked like — and since duplicate keys are already refused (§4.2), a scalar makes
+  "more than one parent" unwritable, so any diagnostic for it is unreachable. A sequence is therefore
+  refused with a diagnostic that names the restriction, rather than being either legal or merely malformed.
+  Separately, §9's own worked chain wrote `~/.config/house.yaml` while tilde expansion appeared nowhere in
+  the specification, so the example could not have resolved. Expansion is limited to config-authored
+  references, which are already sandbox-exempt under §8.1's razor, so it grants schemas no new reach.
+  See §9.
 - **Pin basis** → settled: **the exact bytes, not a canonical form.** §6.1 originally specified RFC 8785
   (JCS) canonicalization before SHA-256. Probing it against this model found it unimplementable in two
   independent ways: JCS serializes numbers as IEEE-754 doubles, so an exact integer past that range cannot

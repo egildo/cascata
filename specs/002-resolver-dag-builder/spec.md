@@ -74,6 +74,9 @@ graph. Requires no network.
 2. **Given** a reference written as a relative path, **When** resolved, **Then** it is interpreted
    relative to the directory of the document that **contains** the reference, not the working
    directory or the entry document.
+3. **Given** a config whose `$schema` begins `~/`, **When** resolved, **Then** it resolves against the
+   user's home directory; **and given** a schema whose `$adopts` begins `~/`, **Then** it does not
+   expand, and is judged as the literal relative path it is.
 3. **Given** a chain in which one schema is reachable by two different routes, **When** resolved,
    **Then** it is read once and appears once in the graph, matched by canonical identity rather than
    by the text of the reference.
@@ -186,9 +189,17 @@ position of the offending reference.
 **Resolving references** (§3, §6.1)
 
 - **FR-005**: A config MUST be able to name its governing schema, and a schema MUST be able to name
-  exactly one parent. A document declaring more than one parent MUST be refused.
+  exactly one parent. Both references are **single string scalars** (`SPEC.md` §9). A sequence value
+  MUST be refused with a diagnostic naming the one-parent restriction — not treated as a malformed
+  value — because that is the shape multi-adoption will take, and an author writing it early is ahead
+  of the version rather than wrong. Two `$adopts` keys in one mapping are already impossible, since
+  duplicate keys are refused.
 - **FR-006**: A reference written as a relative path MUST resolve against the directory of the
   document containing it.
+- **FR-029**: A **config-authored** reference beginning `~/` MUST resolve against the user's home
+  directory (`SPEC.md` §9). Schema-authored references MUST NOT expand it — a schema naming a path
+  outside the project is what FR-021 exists to refuse, and expansion would only make that easier to
+  write.
 - **FR-007**: Every resolved document MUST carry a **canonical identity** — its location together
   with the hash of its bytes — and identity, not reference text, MUST decide whether two references
   name the same document.

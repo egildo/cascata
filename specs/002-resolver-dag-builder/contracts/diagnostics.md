@@ -14,7 +14,7 @@ kind, because the evidence is spread across files the author may not have opened
 |---|---|---|---|
 | `document-unreachable` | A referenced document that does not exist, cannot be read, or timed out | The reference | |
 | `reference-cycle` | A reference closing a loop | The reference that closed it | Each reference in the cycle, labelled, in chain order |
-| `multiple-adoption` | A schema declaring more than one `$adopts` parent (v1 pedigree is a chain) | The second parent | The first |
+| `multiple-adoption` | A sequence-valued `$adopts` — the only way to express more than one parent, since duplicate keys are already refused. v1 adopts exactly one (`SPEC.md` §6.1, §9) | The second entry | The first |
 | `chain-limit-exceeded` | A pedigree longer than `maxChainLength` | The reference that crossed it | |
 | `unsupported-scheme` | A reference whose scheme is not HTTPS or a relative path — `http:`, `file:`, `data:` | The reference | |
 | `sandbox-escape` | A **schema-authored** local reference resolving outside the sandbox root, including through a symlink | The reference | |
