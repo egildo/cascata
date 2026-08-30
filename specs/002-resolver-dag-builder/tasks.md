@@ -40,9 +40,9 @@ v0.2 builds on working code rather than an empty repository. Two consequences:
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the `src/resolve/` and `src/graph/` directory skeleton per plan.md's Structure Decision
-- [ ] T002 [P] Create the recorded-response fixture directory tests/corpus/recorded/ per contracts/recorded-responses.md
-- [ ] T003 [P] Add the test cache directory .cascata-cache/ to .gitignore so cache artifacts written by the suite are never committed
+- [x] T001 Create the `src/resolve/` and `src/graph/` directory skeleton per plan.md's Structure Decision
+- [x] T002 [P] Create the recorded-response fixture directory tests/corpus/recorded/ per contracts/recorded-responses.md
+- [x] T003 [P] Add the test cache directory .cascata-cache/ to .gitignore so cache artifacts written by the suite are never committed
 
 ---
 
@@ -52,15 +52,15 @@ v0.2 builds on working code rather than an empty repository. Two consequences:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T004 [P] Add the v0.2 diagnostic codes from contracts/diagnostics.md to src/diagnostics/codes.ts, leaving v0.1's untouched
-- [ ] T005 [P] Define `Reference` with `text`, `span`, `kind`, `authority`, and optional `pin` in src/resolve/reference.ts, constructible only with a span (Principle III)
-- [ ] T006 Define `DocumentIdentity` as location plus content hash in src/resolve/identity.ts — depends on T005
-- [ ] T007 Implement SHA-256 over exact bytes in src/resolve/identity.ts per research D1 — no canonicalization, no text decoding — depends on T006
-- [ ] T008 Implement `$pin` parsing and verification, distinguishing malformed from mismatched, in src/resolve/identity.ts — depends on T007
-- [ ] T009 [P] Define the recorded-response transport seam in tests/corpus/transport.ts per contracts/recorded-responses.md, failing loudly on an unmatched request
-- [ ] T010 Assert unconsumed recordings fail a case, so a test expecting a fetch fails when none happens, in tests/corpus/transport.ts — depends on T009
-- [ ] T011 [P] Unit-test hashing and pin verification, including a pin that is well-formed but wrong versus one that is malformed, in tests/unit/identity.test.ts — depends on T008
-- [ ] T012 Extend the policed set in tests/unit/layering.test.ts: `src/resolve/` and `src/graph/` may not import adapters, and `src/graph/` may not import `src/resolve/` — depends on T001
+- [x] T004 [P] Add the v0.2 diagnostic codes from contracts/diagnostics.md to src/diagnostics/codes.ts, leaving v0.1's untouched
+- [x] T005 [P] Define `Reference` with `text`, `span`, `kind`, `authority`, and optional `pin` in src/resolve/reference.ts, constructible only with a span (Principle III)
+- [x] T006 Define `DocumentIdentity` as location plus content hash in src/resolve/identity.ts — depends on T005
+- [x] T007 Implement SHA-256 over exact bytes in src/resolve/identity.ts per research D1 — no canonicalization, no text decoding — depends on T006
+- [x] T008 Implement `$pin` parsing and verification, distinguishing malformed from mismatched, in src/resolve/identity.ts — depends on T007
+- [x] T009 [P] Define the recorded-response transport seam in tests/corpus/transport.ts per contracts/recorded-responses.md, failing loudly on an unmatched request
+- [x] T010 Assert unconsumed recordings fail a case, so a test expecting a fetch fails when none happens, in tests/corpus/transport.ts — depends on T009
+- [x] T011 [P] Unit-test hashing and pin verification, including a pin that is well-formed but wrong versus one that is malformed, in tests/unit/identity.test.ts — depends on T008
+- [x] T012 Extend the policed set in tests/unit/layering.test.ts: `src/resolve/` and `src/graph/` may not import adapters, and `src/graph/` may not import `src/resolve/` — depends on T001
 
 **Checkpoint**: Entities, hashing, and a hermetic transport exist. Story work can begin.
 
@@ -75,15 +75,15 @@ the same document as valid bytes and get a tree identical to v0.1's from equival
 
 ### Conformance cases for User Story 1 (write first — Principle V)
 
-- [ ] T013 [P] [US1] Cases for invalid UTF-8 — a truncated multi-byte sequence, an overlong encoding, a bare continuation byte — each asserting the offending byte offset, in tests/corpus/cases/bytes-encoding/
-- [ ] T014 [P] [US1] Cases asserting valid non-ASCII bytes produce spans identical to v0.1's from the equivalent text, in tests/corpus/cases/bytes-parity/
-- [ ] T015 [P] [US1] Case asserting a byte-order mark in the byte stream leaves positions unchanged, in tests/corpus/cases/bytes-bom/
+- [x] T013 [P] [US1] Cases for invalid UTF-8 — a truncated multi-byte sequence, an overlong encoding, a bare continuation byte — each asserting the offending byte offset, in tests/corpus/cases/bytes-encoding/
+- [x] T014 [P] [US1] Cases asserting valid non-ASCII bytes produce spans identical to v0.1's from the equivalent text, in tests/corpus/cases/bytes-parity/
+- [x] T015 [P] [US1] Case asserting a byte-order mark in the byte stream leaves positions unchanged, in tests/corpus/cases/bytes-bom/
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] Decode and validate UTF-8 strictly, reporting the offending byte offset rather than substituting replacement characters, in src/adapters/yaml/parse.ts (FR-002)
-- [ ] T017 [US1] Add the bytes-accepting `parse()` to src/index.ts, keeping `parseText()` and documenting that it cannot enforce FR-002 (FR-001, FR-003) — depends on T016
-- [ ] T018 [US1] Confirm byte and text entry points produce identical trees for valid UTF-8, spans included, in tests/unit/entry-parity.test.ts (FR-004) — depends on T017
+- [x] T016 [US1] Decode and validate UTF-8 strictly, reporting the offending byte offset rather than substituting replacement characters, in src/adapters/yaml/parse.ts (FR-002)
+- [x] T017 [US1] Add the bytes-accepting `parse()` to src/index.ts, keeping `parseText()` and documenting that it cannot enforce FR-002 (FR-001, FR-003) — depends on T016
+- [x] T018 [US1] Confirm byte and text entry points produce identical trees for valid UTF-8, spans included, in tests/unit/entry-parity.test.ts (FR-004) — depends on T017
 
 **Checkpoint**: §4.2's UTF-8 mandate is enforceable for the first time. MVP complete.
 
