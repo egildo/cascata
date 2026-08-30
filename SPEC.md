@@ -149,7 +149,7 @@ Refinement. Preserves substitutability and the ancestor's identity as the thing 
 **Pre-commitment for future multi-adoption: C3 linearization** (Python MRO / Dylan). Chosen because C3 is itself *monotone* — a child's linearization never reorders any ancestor's — which keeps `append` fold order stable when a layer is inserted into an existing hierarchy; and it fails loudly (inconsistent hierarchies have no C3 solution → graph-build error), matching the collision-is-an-error house style. Fold rule: provisions apply in linearization order root→leaf; a shared ancestor (deduped by pin) contributes exactly once at its linearized position. Demands are unaffected — intersection is commutative and idempotent.
 
 - `$id`: a URI (RFC 3986).
-- `$pin`: `sha256:…` content hash over the canonical form (RFC 8785 JCS serialization → SHA-256, FIPS 180-4). Same pattern as W3C Subresource Integrity.
+- `$pin`: `sha256:…` content hash over the document's **exact bytes** — SHA-256 (FIPS 180-4), the W3C Subresource Integrity pattern followed literally rather than merely echoed. **Not over a canonical form.** RFC 8785 (JCS) cannot express this model: it serializes numbers as IEEE-754 doubles, so an exact integer beyond that range (§4.2) is unrepresentable, and `2` and `2.0` — values this model holds to be different — serialize identically and would collide. A pin therefore names one published artifact byte-for-byte; the same document re-indented, or expressed in another format, is a different artifact with a different pin. That is the intent: a pin is an integrity check on a fetch, not a statement about meaning.
 - `$version`: integer in v1; SemVer 2.0.0 if it grows.
 - CLI surface: `tool why <config>` prints the pedigree; `tool certify <config> --against <root-hash>` answers the substitutability question.
 
@@ -302,7 +302,7 @@ styles:
 
 ## 11. Security Model (summary)
 
-- **Remote schemas: HTTPS, always.** Pinning by content hash (`$pin`, JCS + SHA-256) is **verified whenever a pin is present**, and verification is absolute: mismatched bytes are refused and never enter the graph. Whether a pin is *required* is not the library's decision but the pedigree's — authority flows downward (§2.3), and a published root legislates what its descendants must do, here as everywhere. v1 ships the mechanism; the legislation (a root demanding pinned adoption) belongs with sealing and authority (§6.3). An unpinned reference is therefore fetched on TLS alone, and **an unpinned remote link MUST be reportable**, so a root's demand is auditable and an author can see what they are trusting unverified. One limit is inherent rather than chosen: a root's demand can only be read after that root has been fetched, so it hardens every subsequent resolution but not the first — which is what a lockfile closes. Immutable content-addressed cache per RFC 9111 semantics; lockfile-friendly.
+- **Remote schemas: HTTPS, always.** Pinning by content hash (`$pin`, SHA-256 over the exact bytes, §6.1) is **verified whenever a pin is present**, and verification is absolute: mismatched bytes are refused and never enter the graph. Whether a pin is *required* is not the library's decision but the pedigree's — authority flows downward (§2.3), and a published root legislates what its descendants must do, here as everywhere. v1 ships the mechanism; the legislation (a root demanding pinned adoption) belongs with sealing and authority (§6.3). An unpinned reference is therefore fetched on TLS alone, and **an unpinned remote link MUST be reportable**, so a root's demand is auditable and an author can see what they are trusting unverified. One limit is inherent rather than chosen: a root's demand can only be read after that root has been fetched, so it hardens every subsequent resolution but not the first — which is what a lockfile closes. Immutable content-addressed cache per RFC 9111 semantics; lockfile-friendly.
 - A remote schema can never trigger local file reads outside the sandbox (delegation rules, §8.4) nor remote delegation without user opt-in.
 - YAML custom tags rejected; parse depth/size capped; duplicate keys rejected.
 - The schema language itself is versioned via the meta-schema's own pedigree.
@@ -320,7 +320,7 @@ Posture: **maximal conformance at the membrane, original at the core.** Every ci
 | TOML | **TOML v1.0.0** + `toml-test` | Adapter conformance; borrow the test-suite shape |
 | Encoding | RFC 3629 (UTF-8), UAX #15 (cited for the no-normalization decision) | Model |
 | Data model prose | RFC 8949 §2 (CBOR) | Crib for the model article |
-| Canonicalization / pinning | **RFC 8785 (JCS)** + SHA-256 (FIPS 180-4) | Reproducible `$pin` hashes. **Divergence, deliberate:** JCS sorts by UTF-16 code unit; the model sorts by code point (§4.2). These differ above the BMP. They are not required to agree — JCS governs the serialized byte string being hashed, the model governs in-memory structure — and the model uses one string rule throughout rather than two. |
+| Pinning | **SHA-256** (FIPS 180-4) over exact bytes | Reproducible `$pin` hashes. RFC 8785 (JCS) was specified here and **withdrawn**: it cannot represent this model's exact integers or its int/float distinction, so it would both fail on large numbers and collide on values the model holds unequal (§6.1). Hashing raw bytes conforms to W3C SRI literally instead. |
 | Integrity pattern | W3C Subresource Integrity | Legibility of the pinning story |
 | Tree addressing | **RFC 6901 (JSON Pointer)** | Errors, `tool why`, graft points — verbatim |
 | Merge baseline | RFC 7386 (JSON Merge Patch) | Cited as the default-replace baseline we exceed |
@@ -361,7 +361,7 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 ## 14. Roadmap
 
 1. **v0.1** — Information model spec + YAML adapter (positioned nodes, portability-floor rejections) + shared conformance corpus skeleton.
-2. **v0.2** — Resolver + DAG builder: `$adopts`, pinning (JCS+SHA-256), cycle detection, diamond dedup, HTTP caching.
+2. **v0.2** — Resolver + DAG builder: `$adopts`, pinning (SHA-256 over exact bytes), cycle detection, diamond dedup, HTTP caching.
 3. **v0.3** — Merge engine with per-key strategies (`replace`, `append`) and full provenance; `tool why`.
 4. **v0.4** — Constraint checker (closed vocabulary), whole-chain validation, error contract; `tool certify`.
 5. **v0.5** — Types (`types` section, selector parameters, namespace collision errors).
@@ -381,6 +381,14 @@ All initial open questions are resolved; amendments are integrated into the arti
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
 - **`required` × `provide`** → settled: guaranteed-key pattern is a feature (non-optional TS property); vacuous only under `final provide` (info lint); retraction monotone-legal but parked. See §5.5.
 - **Naming** → settled: **Cascata**.
+- **Pin basis** → settled: **the exact bytes, not a canonical form.** §6.1 originally specified RFC 8785
+  (JCS) canonicalization before SHA-256. Probing it against this model found it unimplementable in two
+  independent ways: JCS serializes numbers as IEEE-754 doubles, so an exact integer past that range cannot
+  be represented at all, and `2` (int) and `2.0` (float) — which §4.2 holds to be *different values* —
+  serialize identically, producing a hash collision by construction in a security primitive. Hashing raw
+  bytes is faithful, needs no canonicalizer, and follows W3C Subresource Integrity literally rather than by
+  analogy. Cost accepted: a pin names one artifact byte-for-byte, so reformatting breaks it and the same
+  document in another format hashes differently. See §6.1.
 - **Remote pinning policy** → settled: **the library verifies, the pedigree legislates.** `$pin` is verified
   whenever present, absolutely; whether one is *required* is a governance decision belonging to a published
   root under §2.3's downward authority, and arrives with sealing (§6.3, roadmap v0.7). The prior text named

@@ -1,0 +1,58 @@
+# Contract: Resolution Entry Point
+
+**Implements**: FR-001–FR-004, FR-022, FR-025 | **Stability**: no compatibility promise before v1.0
+
+## Shape
+
+```
+parse(bytes, { origin }) -> ParseResult                      // v0.1's entry, now taking bytes
+parseText(text, { origin }) -> ParseResult                   // retained; cannot enforce UTF-8
+
+resolve(entry, { sandboxRoot, cacheDir, transport?, limits? }) -> ResolveResult
+
+ResolveResult =
+  | { ok: true,  graph: Graph, pedigree: Pedigree }
+  | { ok: false, diagnostics: Diagnostic[] }   // non-empty, ordered
+```
+
+`sandboxRoot` is **required**. There is no default and none is inferred from the entry document's
+location (FR-022) — a capability is granted, never ambient.
+
+## Behavioral contract
+
+1. **Never throws for bad input.** Unreachable documents, cycles, pin mismatches, sandbox escapes
+   are all diagnostics. Exceptions remain for programmer error — a missing `sandboxRoot`.
+2. **Total.** Every input terminates: cycles are detected, chain length is capped, fetches time out.
+3. **Deterministic.** Same inputs and same cache state produce the same graph, the same pedigree
+   order, and the same diagnostics in the same order (SC-009).
+4. **Complete.** Independent failures are all reported from one attempt (FR-025), as v0.1 does
+   within a document.
+5. **No network when cached.** A chain whose documents were all fetched before resolves offline
+   (FR-016).
+6. **Nothing unverified enters the graph.** When a pin is present and does not match, the bytes are
+   discarded, not merely flagged (FR-014).
+
+## Bytes and text
+
+`parse` taking bytes is what makes §4.2's UTF-8 mandate enforceable; `parseText` cannot, because
+invalid sequences have already become replacement characters before it is called — verified, not
+assumed. `parseText` documents this rather than implying otherwise (FR-003).
+
+Given valid UTF-8, both produce identical trees, spans included (FR-004).
+
+## Limits
+
+| Option | Default | Refused with |
+|---|---|---|
+| `maxChainLength` | 32 | `chain-limit-exceeded` |
+| `maxRedirects` | 5 | `too-many-redirects` |
+| `requestTimeoutMs` | 10000 | `document-unreachable` |
+| `maxBytes` | 8 MiB (from v0.1) | `size-limit-exceeded` |
+
+Response size is enforced **during** streaming, not after: a hostile server advertising a small
+body and sending an unbounded one must be cut off, not measured afterwards.
+
+## Transport seam
+
+`transport` is an injection point supplying recorded responses in tests (research D7). Its absence
+means the real network. It exists so the suite stays hermetic, not as a general extension point.
