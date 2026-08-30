@@ -3,15 +3,17 @@
  * research D7.
  *
  * Tests MUST NOT perform network access (constitution, Technology &
- * Security Constraints). Remote behavior in User Story 3 (fetching,
- * caching, pinning — out of scope for this slice) will be exercised
+ * Security Constraints). Remote behavior (User Story 3) is exercised
  * against recorded responses supplied through this seam rather than the
- * real network. This is Foundational scaffolding (tasks.md Phase 2): no
- * fetch layer exists yet to consume a `Transport` (`src/resolve/fetch.ts`
- * is User Story 3, T040), so nothing in this slice constructs a real,
- * network-backed implementation of it — only this recorded one, and the
- * unit tests proving its own two guarantees (T010, and this file's
- * `RecordedTransport` tests).
+ * real network.
+ *
+ * The shapes (`Transport`, `RecordingOutcome`, etc.) now live in
+ * `src/resolve/transport.ts` — moved there once `src/resolve/fetch.ts`
+ * (T043) needed to reference the same contract this file's
+ * `RecordedTransport` implements; see that file's module doc for why.
+ * Re-exported here so every existing import site
+ * (`tests/corpus/transport.test.ts`, this milestone's remote-* tests)
+ * needs no change.
  *
  * A `Transport` models one HTTP request/response at a time — a single
  * hop, deliberately. Following redirects hop-by-hop (research D4) is
@@ -19,33 +21,9 @@
  * *this* request was made," once per call.
  */
 
-/** One recorded HTTP response: status, headers, and body **bytes** — not text, so encoding cases are expressible against a fetched document (contracts/recorded-responses.md). */
-export interface RecordedResponse {
-  readonly status: number;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly body: Uint8Array;
-}
+import type { RecordedFailure, RecordedFailureKind, RecordedResponse, Recording, RecordingOutcome, Transport } from "../../src/resolve/transport.js";
 
-/** A recorded failure to reach the server at all — distinct from a response, so the offline/unreachable paths (FR-018) are testable without a real timeout. */
-export type RecordedFailureKind = "connection-refused" | "timeout";
-
-export interface RecordedFailure {
-  readonly kind: RecordedFailureKind;
-}
-
-export type RecordingOutcome = { readonly kind: "response"; readonly response: RecordedResponse } | { readonly kind: "failure"; readonly failure: RecordedFailure };
-
-/** One entry in a case's recorded-response list: a request to match, and what happens when it's made. */
-export interface Recording {
-  readonly url: string;
-  readonly method: string;
-  readonly outcome: RecordingOutcome;
-}
-
-/** What `src/resolve/fetch.ts` (User Story 3) will depend on to make one request — implemented for tests by `RecordedTransport` here, and by a real `fetch`-backed transport when that file is written. */
-export interface Transport {
-  request(url: string, method: string): Promise<RecordingOutcome>;
-}
+export type { RecordedFailure, RecordedFailureKind, RecordedResponse, Recording, RecordingOutcome, Transport };
 
 function recordingKey(url: string, method: string): string {
   return `${method} ${url}`;
