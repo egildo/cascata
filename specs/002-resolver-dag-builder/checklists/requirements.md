@@ -31,7 +31,8 @@
 
 ## Notes
 
-**Validation iterations**: 1 (one correction applied).
+**Validation iterations**: 1 at authoring time, plus a second round from `/speckit-analyze` once
+`tasks.md` existed. Both recorded below.
 
 **Iteration 1 finding — resolved.** Two functional requirements had no acceptance scenario exercising
 them: FR-022 (the sandbox root must be caller-supplied, never inferred) and FR-025 (resolution reports
@@ -42,6 +43,30 @@ This is the **same defect class** the v0.1 checklist caught at its own first ite
 requirements involved were the ones stating a policy rather than describing a visible action — the
 kind that read as settled and quietly go unverified. Worth treating as a standing check rather than a
 coincidence.
+
+**Post-`/speckit-analyze` corrections (2026-08-30) — two CRITICAL.** Cross-artifact analysis found a
+security property that had entered the design through a side door and never became a requirement:
+
+- **Redirects had no functional requirement.** They appeared in this spec's *edge cases*, in research
+  D4, in both contracts, and in quickstart scenario 5 — but never in the FR list. FR-013 refuses
+  non-HTTPS *references*, and a redirect is not a reference, so the HTTPS guarantee had a documented
+  bypass with nothing forbidding it. `/speckit-tasks` correctly produced no task, because there was no
+  requirement to derive one from. Added FR-027 (every hop must satisfy FR-013, checked before it is
+  followed) and FR-028 (hops are capped).
+- **The redirect cap was enforced by nothing.** research D4 said "a redirect limit applies" and
+  `contracts/resolve-api.md` published `maxRedirects` and `too-many-redirects`, but no task counted
+  hops — so a redirect loop would never terminate, contradicting that same contract's stated "Total.
+  Every input terminates." Now enforced in T042 with cases in T039.
+
+Also closed: a stale cached document with no network had an edge case and a data-model assertion but
+no requirement (now in FR-018), and a garbled setup task naming `cascata:` as a directory.
+
+**The lesson, which differs from v0.1's.** There the defects were requirements that were unsatisfiable
+or unverified. Here the defect was a requirement that was never written at all, while every downstream
+artifact behaved as though it had been. An edge case is not a requirement; a research decision is not
+a requirement; a diagnostic code in a contract is not a requirement. Only the FR list feeds task
+generation, so anything that matters and lives solely outside it will be designed, documented,
+contracted — and never built.
 
 **Applying the v1.1.0 probe gate to this specification.** The constitution now requires that research
 concluding a dependency handles something "for free" be exercised against non-ASCII, boundary, and

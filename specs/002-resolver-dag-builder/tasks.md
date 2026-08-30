@@ -42,7 +42,7 @@ v0.2 builds on working code rather than an empty repository. Two consequences:
 
 - [ ] T001 Create the `src/resolve/` and `src/graph/` directory skeleton per plan.md's Structure Decision
 - [ ] T002 [P] Create the recorded-response fixture directory tests/corpus/recorded/ per contracts/recorded-responses.md
-- [ ] T003 [P] Add a `cascata:` scratch cache directory to .gitignore so test cache artifacts are never committed
+- [ ] T003 [P] Add the test cache directory .cascata-cache/ to .gitignore so cache artifacts written by the suite are never committed
 
 ---
 
@@ -133,21 +133,22 @@ verification, refusal on mismatch, and success on a second run with every reques
 
 - [ ] T033 [P] [US3] Cases for a successful HTTPS fetch joining the graph like a local document, in tests/corpus/cases/remote-fetch/
 - [ ] T034 [P] [US3] Cases for a pin that matches, one that mismatches, and one that is malformed, in tests/corpus/cases/remote-pin/
-- [ ] T035 [P] [US3] Cases for offline resolution from cache, and for a document neither cached nor reachable, in tests/corpus/cases/remote-offline/
+- [ ] T035 [P] [US3] Cases for offline resolution from cache, for a document neither cached nor reachable, and for a **stale** cached document with no network (FR-018), in tests/corpus/cases/remote-offline/
 - [ ] T036 [P] [US3] Case asserting one remote identity referenced twice is fetched once, in tests/corpus/cases/remote-dedup/
 - [ ] T037 [P] [US3] Case asserting the pedigree distinguishes hash-verified entries from unpinned ones, in tests/corpus/cases/remote-audit/ (FR-026)
 - [ ] T038 [P] [US3] Cases for revalidation — a first response with an `ETag`, a second returning `304` — in tests/corpus/cases/remote-cache/
+- [ ] T039 [P] [US3] Cases for redirect safety — an HTTPS response redirecting to plain HTTP, and a redirect loop exceeding the hop cap — asserting `insecure-redirect` and `too-many-redirects`, in tests/corpus/cases/remote-redirect/ (FR-027, FR-028)
 
 ### Implementation for User Story 3
 
-- [ ] T039 [US3] Implement HTTPS-only fetching with a request timeout in src/resolve/fetch.ts (FR-013) — depends on T009
-- [ ] T040 [US3] Enforce the response size cap **during streaming**, so an unbounded body is cut off rather than measured after, in src/resolve/fetch.ts — depends on T039
-- [ ] T041 [US3] Follow redirects manually, one hop at a time, refusing any hop leaving HTTPS, per research D4, in src/resolve/fetch.ts — depends on T039
-- [ ] T042 [US3] Implement the content-addressed cache store in src/resolve/cache.ts (FR-016) — depends on T007
-- [ ] T043 [US3] Implement the named RFC 9111 subset from research D3 — freshness lifetime, `ETag`/`Last-Modified` revalidation, `no-store`/`no-cache` — and nothing beyond it, in src/resolve/cache.ts (FR-017) — depends on T042
-- [ ] T044 [US3] Verify fetched bytes against a stated pin and **discard them on mismatch** so they never enter the graph, in src/resolve/fetch.ts (FR-014) — depends on T008, T039
-- [ ] T045 [US3] Fetch each distinct remote identity at most once per resolution in src/graph/build.ts (FR-019) — depends on T028, T039
-- [ ] T046 [US3] Record on each pedigree entry whether it was hash-verified, in src/graph/pedigree.ts (FR-026) — depends on T031, T044
+- [ ] T040 [US3] Implement HTTPS-only fetching with a request timeout in src/resolve/fetch.ts (FR-013) — depends on T009
+- [ ] T041 [US3] Enforce the response size cap **during streaming**, so an unbounded body is cut off rather than measured after, in src/resolve/fetch.ts — depends on T040
+- [ ] T042 [US3] Follow redirects manually, one hop at a time, refusing any hop leaving HTTPS and capping the hop count at `maxRedirects`, per research D4 (FR-027, FR-028), in src/resolve/fetch.ts — depends on T040
+- [ ] T043 [US3] Implement the content-addressed cache store in src/resolve/cache.ts (FR-016) — depends on T007
+- [ ] T044 [US3] Implement the named RFC 9111 subset from research D3 — freshness lifetime, `ETag`/`Last-Modified` revalidation, `no-store`/`no-cache` — and nothing beyond it, in src/resolve/cache.ts (FR-017) — depends on T043
+- [ ] T045 [US3] Verify fetched bytes against a stated pin and **discard them on mismatch** so they never enter the graph, in src/resolve/fetch.ts (FR-014) — depends on T008, T040
+- [ ] T046 [US3] Fetch each distinct remote identity at most once per resolution in src/graph/build.ts (FR-019) — depends on T028, T040
+- [ ] T047 [US3] Record on each pedigree entry whether it was hash-verified, in src/graph/pedigree.ts (FR-026) — depends on T031, T045
 
 **Checkpoint**: The cascade escapes one machine, and fetching still does not mean trusting.
 
@@ -162,24 +163,24 @@ offending reference.
 
 ### Conformance cases for User Story 4 (write first)
 
-- [ ] T047 [P] [US4] Cases for a self-referencing schema and a mutually referencing pair, asserting `reference-cycle` names every reference in the loop in chain order, in tests/corpus/cases/fail-cycle/
-- [ ] T048 [P] [US4] Cases for a missing and an unreadable document, asserting `document-unreachable` at the reference's position, in tests/corpus/cases/fail-unreachable/
-- [ ] T049 [P] [US4] Cases for a **schema** referencing outside the sandbox by relative path, by absolute path, and **through a symlink whose target is outside**, in tests/corpus/cases/fail-sandbox/
-- [ ] T050 [P] [US4] Case asserting a **config's own** reference outside the sandbox is permitted, per `SPEC.md` §9's worked example, in tests/corpus/cases/sandbox-config-exempt/
-- [ ] T051 [P] [US4] Cases for `unsupported-scheme` on `http:`, `file:`, and `data:`, asserting no request is attempted, in tests/corpus/cases/fail-scheme/
-- [ ] T052 [P] [US4] Case for a chain past `maxChainLength`, in tests/corpus/cases/fail-chain-limit/
-- [ ] T053 [P] [US4] Case for a fetched document that is unparseable, asserting the failure is attributed to the reference that fetched it, in tests/corpus/cases/fail-fetched-malformed/ (FR-024)
-- [ ] T054 [P] [US4] Case with independent failures in separate branches — a missing local file and a disallowed scheme — asserting both are reported from one attempt, in tests/corpus/cases/fail-multi/ (FR-025)
+- [ ] T048 [P] [US4] Cases for a self-referencing schema and a mutually referencing pair, asserting `reference-cycle` names every reference in the loop in chain order, in tests/corpus/cases/fail-cycle/
+- [ ] T049 [P] [US4] Cases for a missing and an unreadable document, asserting `document-unreachable` at the reference's position, in tests/corpus/cases/fail-unreachable/
+- [ ] T050 [P] [US4] Cases for a **schema** referencing outside the sandbox by relative path, by absolute path, and **through a symlink whose target is outside**, in tests/corpus/cases/fail-sandbox/
+- [ ] T051 [P] [US4] Case asserting a **config's own** reference outside the sandbox is permitted, per `SPEC.md` §9's worked example, in tests/corpus/cases/sandbox-config-exempt/
+- [ ] T052 [P] [US4] Cases for `unsupported-scheme` on `http:`, `file:`, and `data:`, asserting no request is attempted, in tests/corpus/cases/fail-scheme/
+- [ ] T053 [P] [US4] Case for a chain past `maxChainLength`, in tests/corpus/cases/fail-chain-limit/
+- [ ] T054 [P] [US4] Case for a fetched document that is unparseable, asserting the failure is attributed to the reference that fetched it, in tests/corpus/cases/fail-fetched-malformed/ (FR-024)
+- [ ] T055 [P] [US4] Case with independent failures in separate branches — a missing local file and a disallowed scheme — asserting both are reported from one attempt, in tests/corpus/cases/fail-multi/ (FR-025)
 
 ### Implementation for User Story 4
 
-- [ ] T055 [US4] Enforce the sandbox on the **resolved real path**, following symlinks, for schema-authored references only, in src/resolve/location.ts (FR-021) — depends on T025, T026
-- [ ] T056 [US4] Exempt config-authored references from the sandbox in src/resolve/location.ts (FR-020) — depends on T055
-- [ ] T057 [US4] Require a caller-supplied sandbox root, erroring to the caller rather than inferring one, in src/index.ts (FR-022) — depends on T032
-- [ ] T058 [US4] Refuse non-HTTPS schemes before any request is made, in src/resolve/location.ts (FR-013) — depends on T026
-- [ ] T059 [US4] Enforce `maxChainLength` during resolution in src/graph/build.ts (FR-010) — depends on T028
-- [ ] T060 [US4] Attach the originating reference and its span to every resolution diagnostic in src/resolve/reference.ts (FR-023, FR-024) — depends on T024, T004
-- [ ] T061 [US4] Continue resolving independent branches past a failure so one attempt reports all of them, in src/graph/build.ts (FR-025) — depends on T055, T058, T059, T060
+- [ ] T056 [US4] Enforce the sandbox on the **resolved real path**, following symlinks, for schema-authored references only, in src/resolve/location.ts (FR-021) — depends on T025, T026
+- [ ] T057 [US4] Exempt config-authored references from the sandbox in src/resolve/location.ts (FR-020) — depends on T056
+- [ ] T058 [US4] Require a caller-supplied sandbox root, erroring to the caller rather than inferring one, in src/index.ts (FR-022) — depends on T032
+- [ ] T059 [US4] Refuse non-HTTPS schemes before any request is made, in src/resolve/location.ts (FR-013) — depends on T026
+- [ ] T060 [US4] Enforce `maxChainLength` during resolution in src/graph/build.ts (FR-010) — depends on T028
+- [ ] T061 [US4] Attach the originating reference and its span to every resolution diagnostic in src/resolve/reference.ts (FR-023, FR-024) — depends on T024, T004
+- [ ] T062 [US4] Continue resolving independent branches past a failure so one attempt reports all of them, in src/graph/build.ts (FR-025) — depends on T056, T059, T060, T061
 
 **Checkpoint**: Every failure is traceable to something the author wrote.
 
@@ -187,12 +188,12 @@ offending reference.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T062 [P] Document the resolution surface and the v0.2 diagnostic codes in README.md, citing contracts/resolve-api.md
-- [ ] T063 [P] Confirm resolution is deterministic — same inputs and cache state give the same graph, pedigree order, and diagnostic order — in tests/unit/resolve-determinism.test.ts (SC-009)
-- [ ] T064 [P] Re-assert the suite performs no network access now that a fetch layer exists, in tests/unit/hermetic.test.ts
-- [ ] T065 Confirm all 168 v0.1 tests still pass unchanged by running the full suite, so nothing in specs/001-information-model-yaml-adapter/ regressed
-- [ ] T066 Run every validation scenario in specs/002-resolver-dag-builder/quickstart.md end to end
-- [ ] T067 Verify the six merge gates in .specify/memory/constitution.md, plus the extended layering boundary from T012
+- [ ] T063 [P] Document the resolution surface and the v0.2 diagnostic codes in README.md, citing contracts/resolve-api.md
+- [ ] T064 [P] Confirm resolution is deterministic — same inputs and cache state give the same graph, pedigree order, and diagnostic order — in tests/unit/resolve-determinism.test.ts (SC-009)
+- [ ] T065 [P] Re-assert the suite performs no network access now that a fetch layer exists, in tests/unit/hermetic.test.ts
+- [ ] T066 Confirm all 168 v0.1 tests still pass unchanged by running the full suite, so nothing in specs/001-information-model-yaml-adapter/ regressed
+- [ ] T067 Run every validation scenario in specs/002-resolver-dag-builder/quickstart.md end to end
+- [ ] T068 Verify the six merge gates in .specify/memory/constitution.md, plus the extended layering boundary from T012
 
 ---
 
@@ -224,9 +225,9 @@ has its own checkpoint and delivers separately testable value.
 
 - T002, T003 in Setup
 - T004, T005, T009 at the start of Foundational; then T011 alongside T012
-- **All of T013–T015** (US1 cases), **T019–T023** (US2), **T033–T038** (US3), **T047–T054** (US4) —
+- **All of T013–T015** (US1 cases), **T019–T023** (US2), **T033–T038** (US3), **T048–T055** (US4) —
   each group is separate directories with no shared state
-- T062, T063, T064 in Polish
+- T063, T064, T065 in Polish
 
 ---
 
@@ -268,18 +269,18 @@ and it is worth landing before the resolver begins.
 
 **Five tasks carry most of the risk. Each has a failure mode that passes a naive test:**
 
-- **T040 (streaming size cap)** — a cap measured *after* the body arrives is not a cap. A server
+- **T041 (streaming size cap)** — a cap measured *after* the body arrives is not a cap. A server
   advertising a small `Content-Length` and sending gigabytes must be cut off mid-stream. A test using
   an honest fixture passes either way.
-- **T055 (sandbox through symlinks)** — a lexical path check looks exactly like a sandbox until a
-  link inside the root points outside it. T049's symlink case is the one that separates them.
-- **T044 (pin mismatch discards bytes)** — reporting a mismatch while still using the document is the
+- **T056 (sandbox through symlinks)** — a lexical path check looks exactly like a sandbox until a
+  link inside the root points outside it. T050's symlink case is the one that separates them.
+- **T045 (pin mismatch discards bytes)** — reporting a mismatch while still using the document is the
   easy mistake, and every assertion about the diagnostic passes while it happens. Assert the graph's
   contents, not just the diagnostic.
-- **T061 (collect-all across branches)** — the same failure mode v0.1 hit: code that stops at the
-  first failure passes every single-failure case. T054 is the only guard.
+- **T062 (collect-all across branches)** — the same failure mode v0.1 hit: code that stops at the
+  first failure passes every single-failure case. T055 is the only guard.
 - **T029 (cycle detection before bytes)** — detection that waits for content never fires, because the
   cycle prevents the content from ever arriving.
 
-**Also**: v0.1's 168 tests must stay green throughout (T065), and `parseText` must keep working —
+**Also**: v0.1's 168 tests must stay green throughout (T066), and `parseText` must keep working —
 this milestone corrects a v0.1 defect without breaking v0.1 consumers.

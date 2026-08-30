@@ -113,6 +113,10 @@ address is refused, and that a second resolution succeeds with the network unava
 7. **Given** a chain containing one pinned and one unpinned remote reference, **When** the pedigree
    is queried, **Then** it distinguishes which entries were verified against a hash and which were
    taken on TLS alone.
+8. **Given** an HTTPS reference whose response redirects to a plain HTTP address, **When** resolved,
+   **Then** the hop is refused before it is followed — not merely noticed after the fact.
+9. **Given** a reference whose responses redirect in a loop, **When** resolved, **Then** it is refused
+   once the hop cap is exceeded, rather than followed indefinitely.
 
 ---
 
@@ -204,12 +208,20 @@ position of the offending reference.
   request is made.
 - **FR-014**: When a reference carries a content hash, the fetched bytes MUST be verified against it
   and refused on mismatch, naming expected and actual. Unverified bytes MUST NOT enter the graph.
+- **FR-027**: Redirects MUST be followed one hop at a time, and **every hop MUST satisfy FR-013**. A
+  hop leaving HTTPS MUST be refused before it is followed. Checking only the final destination is
+  insufficient — by then the insecure request has already been made, which is the exact bypass FR-013
+  exists to prevent.
+- **FR-028**: The number of redirect hops MUST be capped, and exceeding the cap MUST be refused. A
+  redirect loop MUST NOT be followed indefinitely.
 - **FR-015**: A malformed content hash MUST be refused distinctly from one that does not match.
 - **FR-016**: Fetched documents MUST be cached by content identity and reused across runs, so that a
   previously resolved chain resolves with no network available.
 - **FR-017**: Cache freshness MUST follow HTTP caching semantics (RFC 9111).
 - **FR-018**: A document that is neither cached nor reachable MUST be refused with a diagnostic that
-  says exactly that.
+  says exactly that. A document that **is** cached but stale, with no network available, MUST still
+  resolve: a content-addressed body cannot silently drift, so staleness is a revalidation hint
+  rather than grounds for refusal.
 - **FR-019**: Each distinct remote identity MUST be fetched at most once per resolution.
 - **FR-026**: The pedigree MUST report, for each entry, whether it was verified against a content
   hash, so that an unpinned remote link is visible rather than silent (§11). This is what makes a
@@ -255,7 +267,8 @@ position of the offending reference.
   of cases where every document was fetched at least once before.
 - **SC-004**: A remote document whose bytes do not match a stated hash is refused 100% of the time,
   and its bytes never reach the graph.
-- **SC-005**: A non-HTTPS remote reference is refused without any network request being made.
+- **SC-005**: A non-HTTPS remote reference is refused without any network request being made, and a
+  redirect leaving HTTPS is refused before that hop is followed, in 100% of cases.
 - **SC-006**: A schema attempting to read a local file outside the sandbox root is refused 100% of the
   time, including via symbolic links.
 - **SC-007**: A document reachable by N distinct routes is read once, and each distinct remote
