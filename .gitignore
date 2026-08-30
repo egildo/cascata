@@ -12,3 +12,6 @@ dist/
 # pnpm store links (not the lockfile — that is committed)
 .pnpm-store/
 
+# v0.2 test cache — resolution tests write here; never committed
+.cascata-cache/
+
