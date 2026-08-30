@@ -28,11 +28,30 @@ export const RESOURCE_LIMIT_CODES = ["depth-limit-exceeded", "size-limit-exceede
 /** Syntax. The one code that wraps a dependency's error rather than expressing a Cascata rule. */
 export const SYNTAX_CODES = ["malformed-document"] as const;
 
-/** Every stable diagnostic code, in the catalogue's declaration order. */
+/**
+ * Reference resolution (v0.2, SPEC.md §3, §6.1) — contracts/diagnostics.md
+ * (002). A resolution code MUST anchor to a reference, never to a fetched
+ * document alone.
+ */
+export const REFERENCE_RESOLUTION_CODES = [
+  "document-unreachable",
+  "reference-cycle",
+  "multiple-adoption",
+  "chain-limit-exceeded",
+  "unsupported-scheme",
+  "sandbox-escape",
+] as const;
+
+/** Fetching and integrity (v0.2, SPEC.md §6.1, §11) — contracts/diagnostics.md (002). */
+export const FETCH_INTEGRITY_CODES = ["pin-mismatch", "malformed-pin", "insecure-redirect", "too-many-redirects", "document-not-cached"] as const;
+
+/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's codes are unchanged; v0.2 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
   ...SYNTAX_CODES,
+  ...REFERENCE_RESOLUTION_CODES,
+  ...FETCH_INTEGRITY_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */
