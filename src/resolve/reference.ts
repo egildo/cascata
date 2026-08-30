@@ -23,9 +23,14 @@
 
 import type { Node } from "../model/node.js";
 import type { SourceSpan } from "../model/span.js";
+import type { Reference, ReferenceAuthority, ReferenceKind } from "../model/reference.js";
+
+// Re-exported so callers of this module keep one import path for "references"; the single
+// declaration lives in model/ so graph/ can share it without crossing the Principle IV boundary.
+export type { Reference, ReferenceAuthority, ReferenceKind };
 
 /** A config names its governing schema; a schema names exactly one parent (v0.2 FR-005). */
-export type ReferenceKind = "schema" | "adopts";
+
 
 /**
  * Which document carries the reference — decided by *where the reference
@@ -36,19 +41,9 @@ export type ReferenceKind = "schema" | "adopts";
  * out of scope for this slice, but the distinction is recorded here where
  * the `Reference` itself is defined).
  */
-export type ReferenceAuthority = "config-authored" | "schema-authored";
+
 
 /** One document's pointer at another, with everything a resolution diagnostic needs to blame it. */
-export interface Reference {
-  /** What was written — a relative path or an absolute URL. */
-  readonly text: string;
-  /** Where it was written, in the document that wrote it. */
-  readonly span: SourceSpan;
-  readonly kind: ReferenceKind;
-  readonly authority: ReferenceAuthority;
-  /** The stated `$pin` content hash, if any — raw text; parsing and verification are identity.ts's job. */
-  readonly pin?: string;
-}
 
 /**
  * Construct a Reference. `span` is required, matching every other

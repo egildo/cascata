@@ -17,14 +17,12 @@
  */
 
 import { createHash } from "node:crypto";
+import type { DocumentIdentity } from "../model/identity.js";
+
+// Re-exported for the same reason as reference.ts — one declaration, in model/.
+export type { DocumentIdentity };
 
 /** What makes two fetches the same document: an absolute resolved location plus the hash of its bytes. */
-export interface DocumentIdentity {
-  /** The absolute resolved location — a real path, or a normalized URL. */
-  readonly location: string;
-  /** Lowercase hex SHA-256 over the exact bytes, e.g. `"9f2c...".repeat` to 64 characters. */
-  readonly hash: string;
-}
 
 /**
  * SHA-256 over `bytes` exactly as given — no canonicalization, no text

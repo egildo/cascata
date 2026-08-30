@@ -85,7 +85,9 @@ specs/002-resolver-dag-builder/
 
 ```text
 src/
-├── model/                  # unchanged from v0.1; still format-blind
+├── model/                  # format-blind core; imports nothing outside itself
+│   ├── reference.ts        # NEW — the `Reference` shape, shared by resolve/ and graph/
+│   ├── identity.ts         # NEW — the `DocumentIdentity` shape, likewise
 ├── diagnostics/            # gains the v0.2 codes
 ├── adapters/
 │   ├── registry.ts         # NEW — the only place that maps a format name to an adapter
@@ -108,6 +110,16 @@ tests/
 └── unit/
     └── layering.test.ts    # extended: resolve/ and graph/ join the policed set
 ```
+
+**Where shared shapes live.** `resolve/` produces `Reference` and `DocumentIdentity`; `graph/`
+consumes them; Principle IV forbids `graph/` importing `resolve/`. The first implementation resolved
+that by declaring both shapes twice and relying on structural typing — which compiled, but left no
+single source of truth, kept in step only by the orchestrator failing to build if they drifted. The
+shapes now live in **`src/model/`**, which both layers may depend on because it is the format-blind
+core and imports nothing outside itself. Behaviour did not move: constructing and extracting
+references remains `resolve/reference.ts`'s job, hashing remains `resolve/identity.ts`'s, and
+`model/` declares shapes and knows nothing about `$schema`, `$adopts`, or documents. This is the
+answer to a question this plan originally left open, and it is worth settling before `graph/` grows.
 
 **Structure Decision**: `resolve/` and `graph/` are split along the same seam Principle IV already
 draws. `resolve/` deals in bytes and locations and never learns what a document *says*; `graph/`

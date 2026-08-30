@@ -48,26 +48,19 @@
 
 import type { Node } from "../model/node.js";
 import type { SourceSpan } from "../model/span.js";
+import type { DocumentIdentity } from "../model/identity.js";
+import type { Reference, ReferenceAuthority, ReferenceKind } from "../model/reference.js";
 
-/** Structurally identical to `resolve/reference.ts`'s `ReferenceKind` — see the module doc. */
-export type GraphReferenceKind = "schema" | "adopts";
-/** Structurally identical to `resolve/reference.ts`'s `ReferenceAuthority`. */
-export type GraphReferenceAuthority = "config-authored" | "schema-authored";
+// These were four structurally identical redeclarations until model/reference.ts and
+// model/identity.ts gave both layers one source of truth. The aliases are kept so this
+// module's existing callers need no churn; they name the same types, not copies of them.
+export type GraphReferenceKind = ReferenceKind;
+export type GraphReferenceAuthority = ReferenceAuthority;
+export type GraphReference = Reference;
+export type GraphDocumentIdentity = DocumentIdentity;
 
-/** Structurally identical to `resolve/reference.ts`'s `Reference` — see the module doc for why this is a separate declaration, not an import. */
-export interface GraphReference {
-  readonly text: string;
-  readonly span: SourceSpan;
-  readonly kind: GraphReferenceKind;
-  readonly authority: GraphReferenceAuthority;
-  readonly pin?: string;
-}
 
-/** Structurally identical to `resolve/identity.ts`'s `DocumentIdentity`. */
-export interface GraphDocumentIdentity {
-  readonly location: string;
-  readonly hash: string;
-}
+
 
 /** One document in the graph: its identity, its parsed tree, and the reference that brought it in (absent only for the entry document). */
 export interface GraphDocument {
