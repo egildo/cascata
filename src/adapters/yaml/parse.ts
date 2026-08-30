@@ -710,7 +710,7 @@ function locateByteOffset(bytes: Uint8Array, offset: number): { line: number; co
   }
   let decodedLinePrefix: string;
   try {
-    decodedLinePrefix = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(lineStartByteOffset, offset));
+    decodedLinePrefix = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes.subarray(lineStartByteOffset, offset));
   } catch (error) {
     // Should be unreachable: findFirstInvalidUtf8ByteOffset guarantees
     // everything before `offset` is well-formed. Thrown rather than
@@ -729,6 +729,19 @@ function locateByteOffset(bytes: Uint8Array, offset: number): { line: number; co
  * `parseYaml`, so a valid document produces byte-for-byte the same tree
  * (spans included) `parseYaml` would from the equivalent text (FR-004) —
  * they are, after this point, literally the same function call.
+ *
+ * `TextDecoder`'s `ignoreBOM` option is set to `true` here — the
+ * WHATWG-spec-confusing name means "do not silently strip a leading BOM
+ * yourself," i.e. `ignoreBOM: false` (the default) makes the decoder
+ * strip it, which was caught only by sabotage-testing this exact
+ * function: disabling `stripByteOrderMark` below and re-running the
+ * corpus left tests/corpus/cases/bytes-bom/ passing anyway, revealing
+ * that the default decoder had already removed the BOM before
+ * `stripByteOrderMark` ever ran, so the sabotage was invisible from this
+ * path. Correct by accident is still an accident: `ignoreBOM: true`
+ * makes BOM stripping happen in exactly one place (`stripByteOrderMark`,
+ * shared with the text path) rather than twice, coincidentally, in two
+ * different layers.
  */
 export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides?: Partial<ParseLimits>): ParseOutcome {
   const limits = resolveLimits(limitOverrides);
@@ -762,7 +775,7 @@ export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides
 
   let text: string;
   try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
   } catch (error) {
     // Should be unreachable: findFirstInvalidUtf8ByteOffset found nothing
     // wrong. Thrown rather than silently falling back to a repairing

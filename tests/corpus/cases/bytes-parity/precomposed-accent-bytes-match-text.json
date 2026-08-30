@@ -1,0 +1,32 @@
+{
+  "name": "bytes-parity/precomposed-accent-bytes-match-text",
+  "cites": "§4.2",
+  "format": "yaml",
+  "inputBytes": [
+    99,
+    105,
+    116,
+    121,
+    58,
+    32,
+    99,
+    97,
+    102,
+    195,
+    169,
+    10
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "city",
+          {
+            "kind": "string",
+            "value": "café"
+          }
+        ]
+      ]
+    }
+  }
+}

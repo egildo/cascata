@@ -1,0 +1,27 @@
+{
+  "name": "bytes-encoding/legitimate-replacement-character-accepted",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "inputBytes": [
+    97,
+    58,
+    32,
+    239,
+    191,
+    189,
+    10
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "string",
+            "value": "\ufffd"
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "name": "bytes-parity/astral-character-bytes-match-text",
+  "cites": "§4.2",
+  "format": "yaml",
+  "inputBytes": [
+    112,
+    97,
+    105,
+    114,
+    58,
+    32,
+    123,
+    102,
+    105,
+    114,
+    115,
+    116,
+    58,
+    32,
+    240,
+    159,
+    142,
+    137,
+    44,
+    32,
+    115,
+    101,
+    99,
+    111,
+    110,
+    100,
+    58,
+    32,
+    50,
+    125,
+    10
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "pair",
+          {
+            "mapping": [
+              [
+                "first",
+                {
+                  "kind": "string",
+                  "value": "🎉"
+                }
+              ],
+              [
+                "second",
+                {
+                  "kind": "int",
+                  "value": "2"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/pair/second",
+        "line": 1,
+        "column": 26,
+        "start": 28,
+        "end": 29
+      }
+    ]
+  }
+}

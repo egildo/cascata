@@ -1,0 +1,49 @@
+{
+  "name": "bytes-bom/byte-order-mark-in-byte-stream-unchanged",
+  "cites": "§4.2",
+  "format": "yaml",
+  "inputBytes": [
+    239,
+    187,
+    191,
+    97,
+    58,
+    32,
+    49,
+    10,
+    98,
+    58,
+    32,
+    50,
+    10
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/b",
+        "line": 2,
+        "column": 4,
+        "start": 8,
+        "end": 9
+      }
+    ]
+  }
+}

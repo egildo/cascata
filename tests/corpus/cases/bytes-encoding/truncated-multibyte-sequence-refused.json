@@ -1,0 +1,23 @@
+{
+  "name": "bytes-encoding/truncated-multibyte-sequence-refused",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "inputBytes": [
+    97,
+    58,
+    32,
+    226,
+    130
+  ],
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "invalid-encoding",
+        "line": 1,
+        "column": 4,
+        "start": 3,
+        "end": 4
+      }
+    ]
+  }
+}
