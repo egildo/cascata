@@ -22,8 +22,8 @@
  * tests/unit/layering.test.ts.
  */
 
-import { dirname, resolve as resolvePath } from "node:path";
-import { readFileSync } from "node:fs";
+import { dirname, resolve as resolvePath, sep } from "node:path";
+import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { createDocumentIdentity, type DocumentIdentity } from "./identity.js";
 import type { Reference } from "./reference.js";
@@ -99,8 +99,28 @@ export type ReferenceLocationKind =
   | { readonly kind: "https"; readonly url: string }
   | { readonly kind: "unsupported-scheme"; readonly scheme: string };
 
-/** An absolute-URL scheme prefix, e.g. `https://`, `http://`, `file://` — deliberately requires the double slash, so a Windows-style drive path (`C:\foo`) is never misread as scheme `c` (a single-letter scheme is technically legal URI grammar, but nothing in this codebase's fixtures or `SPEC.md` ever writes one, and treating `C:\` as local is the only reading that does not make an ordinary Windows absolute path unusable). */
+/** An absolute-URL scheme prefix with a `//` authority, e.g. `https://`, `http://`, `file://`. Retained alongside `SCHEME_PREFIX_PATTERN` (below) for the `"https"` classification specifically, which needs the authority form. */
 const ABSOLUTE_URL_SCHEME_PATTERN = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//;
+
+/**
+ * Any URI scheme prefix, **with or without** a `//` authority — `data:`
+ * and `mailto:` alike, not just `scheme://…`. Requires the scheme name to
+ * be **at least two characters**, which is what lets this pattern catch
+ * `data:text/plain,…` (v0.2 FR-013 — T055's own conformance case; RFC
+ * 3986 URI grammar makes an opaque `scheme:data` just as valid a URI as
+ * `scheme://authority/path`, so requiring `//` here would miss every
+ * scheme, `data:` included, that is legally written without one) while
+ * still reading a Windows-style drive path (`C:\foo`) as local: `new
+ * URL("C:\\foo")` parses with protocol `c:` (verified, not assumed), and
+ * a single-letter scheme is exactly what distinguishes an accidental
+ * drive-letter match from a real, multi-character URI scheme. Nothing in
+ * this codebase's fixtures or `SPEC.md` ever writes a genuine
+ * single-letter scheme. `ABSOLUTE_URL_SCHEME_PATTERN` above predates this
+ * pattern and undercounted `data:`/`mailto:`-shaped references as
+ * `"local"` until T055's conformance case caught it — see the milestone
+ * report.
+ */
+const SCHEME_PREFIX_PATTERN = /^([a-zA-Z][a-zA-Z0-9+.-]+):/;
 
 /** Whether `location` (already resolved — a real local path or a URL string) is itself an `https://` location, i.e. the *referring* document was reached remotely. */
 const HTTPS_LOCATION_PATTERN = /^https:\/\//i;
@@ -118,13 +138,20 @@ const HTTPS_LOCATION_PATTERN = /^https:\/\//i;
  */
 export function classifyReferenceLocation(reference: Reference, referringDocumentLocation: string): ReferenceLocationKind {
   const text = expandTilde(reference);
-  const schemeMatch = ABSOLUTE_URL_SCHEME_PATTERN.exec(text);
-  if (schemeMatch !== null) {
-    const scheme = (schemeMatch[1] ?? "").toLowerCase();
+  if (ABSOLUTE_URL_SCHEME_PATTERN.test(text)) {
+    const scheme = (ABSOLUTE_URL_SCHEME_PATTERN.exec(text)?.[1] ?? "").toLowerCase();
     if (scheme === "https") {
       return { kind: "https", url: text };
     }
     return { kind: "unsupported-scheme", scheme };
+  }
+  // No `//` authority, but still an absolute URI with a real (2+
+  // character) scheme — `data:…`, `mailto:…`. Never `"https"` here (that
+  // case is handled above, and a bare `https:` with no authority is not
+  // one this codebase treats as reachable), so this is always a refusal.
+  const schemePrefixMatch = SCHEME_PREFIX_PATTERN.exec(text);
+  if (schemePrefixMatch !== null) {
+    return { kind: "unsupported-scheme", scheme: (schemePrefixMatch[1] ?? "").toLowerCase() };
   }
   if (HTTPS_LOCATION_PATTERN.test(referringDocumentLocation)) {
     return { kind: "https", url: new URL(text, referringDocumentLocation).toString() };
@@ -165,6 +192,79 @@ export function resolveReferenceLocation(reference: Reference, referringDocument
 /** Resolve a caller-supplied entry path to an absolute location, the same way every other reference is resolved — relative to `process.cwd()` if not already absolute. This is the *one* legitimate use of the working directory in this module: there is no "referring document" for the entry itself. */
 export function toAbsoluteEntryLocation(entryPath: string): string {
   return resolvePath(entryPath);
+}
+
+/** Resolve a caller-supplied sandbox root to an absolute path, the same way `toAbsoluteEntryLocation` does for the entry document — relative to `process.cwd()` if not already absolute. A second legitimate use of the working directory: `sandboxRoot` (v0.2 FR-022) has no "referring document" either, being supplied directly by the caller rather than written by any document. */
+export function toAbsoluteSandboxRoot(sandboxRoot: string): string {
+  return resolvePath(sandboxRoot);
+}
+
+/**
+ * Whether `location` — already lexically resolved (`classifyReferenceLocation`'s
+ * `"local"` output) — lies within `sandboxRoot`, **judged on the resolved
+ * real path, following symbolic links** (v0.2 FR-021; research D6; `SPEC.md`
+ * §8.4). This is the security boundary the whole milestone exists to
+ * enforce: a check against the *lexical* path is bypassed the moment a
+ * symlink sitting inside the root points somewhere outside it — a schema
+ * that can read arbitrary files on the reader's machine is exactly the
+ * failure §8.4 exists to prevent, and a symlink is a completely ordinary
+ * way to arrange that.
+ *
+ * `fs.realpathSync` is used for both `location` and `sandboxRoot` —
+ * `sandboxRoot` too, in case the root itself is (or sits under) a
+ * symlink, so both sides of the comparison are canonicalized consistently.
+ * If `location` does not exist at all, `realpathSync` throws; this
+ * function then falls back to the already-normalized *lexical* path
+ * (`classifyReferenceLocation`'s output has already resolved `.`/`..`
+ * segments) rather than treating "does not exist" as either an automatic
+ * pass or an automatic sandbox-escape refusal. This is a deliberate
+ * judgment call, recorded here and in the milestone report: a target that
+ * does not exist poses no exfiltration risk (nothing can be read from
+ * it), and the ordinary `document-unreachable` check downstream already
+ * reports "this reference does not resolve to a readable document" with
+ * its own clear diagnostic — conflating that with `sandbox-escape` would
+ * blur two distinct failures into one. If `sandboxRoot` itself cannot be
+ * canonicalized (rare — a caller-supplied root that does not exist), the
+ * same fallback applies to it, so a caller misconfiguration here still
+ * cannot crash `resolve()` (contracts/resolve-api.md point 1, "Never
+ * throws for bad input").
+ *
+ * String-prefix comparison, not `path.relative`, because it is the
+ * simplest check that is still exactly right once both sides are
+ * absolute and normalized: equal to the root, or the root followed by a
+ * path separator, never a bare prefix match (`/sandboxfoo` must not be
+ * read as inside `/sandbox`).
+ */
+export function isWithinSandbox(location: string, sandboxRoot: string): boolean {
+  const realSandboxRoot = safeRealpath(sandboxRoot);
+  const realLocation = safeRealpath(location);
+  return realLocation === realSandboxRoot || realLocation.startsWith(realSandboxRoot + sep);
+}
+
+/** `fs.realpathSync`, falling back to the already-normalized lexical path (`path.resolve`'s output, idempotent on an already-absolute path) when the target cannot be canonicalized — e.g. it does not exist. See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is not treated as a sandbox verdict in either direction. */
+function safeRealpath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolvePath(path);
+  }
+}
+
+/**
+ * Whether `candidate`'s **schema-authored** local target escapes
+ * `sandboxRoot` (v0.2 FR-021) — always `false` for a **config-authored**
+ * reference (v0.2 FR-020, `SPEC.md` §8.1's razor: the author wrote it,
+ * which is consent; `SPEC.md` §9's own worked chain, `$schema:
+ * ~/.config/house.yaml`, depends on this exemption). `authority` is read
+ * from `candidate` itself, never inferred from `location`'s text — the
+ * same invariant `Reference.authority` documents on itself (D6: a schema
+ * cannot claim config authority to escape the sandbox).
+ */
+export function isSandboxEscape(candidate: Reference, location: string, sandboxRoot: string): boolean {
+  if (candidate.authority !== "schema-authored") {
+    return false;
+  }
+  return !isWithinSandbox(location, sandboxRoot);
 }
 
 export type ReadOutcome = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly reason: string };

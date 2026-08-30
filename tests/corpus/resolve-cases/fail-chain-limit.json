@@ -1,0 +1,17 @@
+{
+  "name": "T056: a chain longer than the configured maxChainLength is refused as chain-limit-exceeded at the reference that crossed it",
+  "cites": "v0.2 FR-010",
+  "fixtureDir": "fail-chain-limit",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "maxChainLength": 2,
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "chain-limit-exceeded",
+        "primary": { "document": "s2.yaml", "line": 1, "column": 10, "start": 9, "end": 18 }
+      }
+    ]
+  }
+}

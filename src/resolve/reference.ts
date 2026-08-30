@@ -24,6 +24,8 @@
 import type { Node } from "../model/node.js";
 import type { SourceSpan } from "../model/span.js";
 import type { Reference, ReferenceAuthority, ReferenceKind } from "../model/reference.js";
+import { createDiagnostic, type Diagnostic, type RelatedSpan } from "../diagnostics/diagnostic.js";
+import type { DiagnosticCode } from "../diagnostics/codes.js";
 
 // Re-exported so callers of this module keep one import path for "references"; the single
 // declaration lives in model/ so graph/ can share it without crossing the Principle IV boundary.
@@ -64,6 +66,25 @@ export function createReference(fields: {
     authority: fields.authority,
     ...(fields.pin !== undefined ? { pin: fields.pin } : {}),
   };
+}
+
+/**
+ * Build a resolution `Diagnostic` anchored to `reference`'s own span
+ * (v0.2 FR-023, FR-024; tasks.md T064; contracts/diagnostics.md's rule:
+ * "a resolution code MUST anchor to a reference, never to a fetched
+ * document alone"). Not the only place a resolution diagnostic is built
+ * in this codebase — most of `src/index.ts`'s call sites predate this
+ * helper and already pass `candidate.span` as `primary` directly, which
+ * satisfies the identical invariant by construction (verified by
+ * inspection, not refactored wholesale here to avoid churning already-
+ * conformance-tested call sites — see the milestone report) — but every
+ * *new* resolution diagnostic this milestone slice adds (`sandbox-escape`,
+ * `chain-limit-exceeded`) goes through this one function, so there is
+ * exactly one place in `src/resolve/` that can construct one, and it
+ * cannot be constructed without a `Reference` to anchor it to.
+ */
+export function referenceDiagnostic(code: DiagnosticCode, reference: Reference, message: string, related?: readonly RelatedSpan[]): Diagnostic {
+  return createDiagnostic({ code, message, primary: reference.span, ...(related !== undefined ? { related } : {}) });
 }
 
 // --- Extraction from a parsed tree (v0.2 User Story 2, T025-T026, T032) ---

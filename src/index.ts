@@ -26,13 +26,13 @@ import { createDiagnostic, type Diagnostic } from "./diagnostics/diagnostic.js";
 import type { Node } from "./model/node.js";
 import { freeze } from "./model/freeze.js";
 import { createOrigin, createSourceSpan, type Origin } from "./model/span.js";
-import { extractAdoptsReference, extractSchemaReference, type ExtractedReference, type Reference } from "./resolve/reference.js";
-import { classifyReferenceLocation, readLocalDocument, toAbsoluteEntryLocation, type ReferenceLocationKind } from "./resolve/location.js";
+import { extractAdoptsReference, extractSchemaReference, referenceDiagnostic, type ExtractedReference, type Reference } from "./resolve/reference.js";
+import { classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoot, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
 import { DocumentCache } from "./resolve/cache.js";
 import { createNetworkTransport, resolveFetchLimits, resolveRemoteDocument, type FetchLimits, type RemoteDocumentFailure } from "./resolve/fetch.js";
 import type { Transport } from "./resolve/transport.js";
-import { buildGraph, GraphBuilder, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
+import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 
 export type { Diagnostic, RelatedSpan } from "./diagnostics/diagnostic.js";
@@ -123,23 +123,33 @@ export function parseText(text: string, options: ParseOptions): ParseResult {
 // necessarily driven from here, because it is the one module allowed to
 // see both sides of the boundary.
 //
-// **Scope of this slice (User Story 3, Phase 5's checkpoint)**: local
-// files *and* HTTPS fetching, pinning, and caching. `chain-limit-exceeded`
-// enforcement (`maxChainLength`) and the sandbox-escape check remain
-// User Story 4, out of scope here — see the milestone report for the
-// complete list of what contracts/resolve-api.md describes that this
-// slice does not implement.
+// **Scope, as of User Story 4 (Phase 6's checkpoint)**: local files,
+// HTTPS fetching/pinning/caching, and precise refusal — cycles,
+// unreachable documents, the sandbox (judged on the resolved real path,
+// following symlinks — research D6), unsupported schemes,
+// `chain-limit-exceeded`, and collect-all across independent branches
+// (not exercisable end-to-end in this milestone's single-parent
+// `$schema`/`$adopts` vocabulary — see `src/graph/build.ts`'s
+// `resolveAllBranches` and the milestone report).
 
 export interface ResolveOptions {
   /**
    * Required — no default, none inferred from the entry document's
-   * location (v0.2 FR-022). Not yet **enforced** in this slice (the
-   * sandbox-escape check is User Story 4's `src/resolve/location.ts`
-   * work, T059-T060) — only required and validated for presence, the
-   * same partial-implementation posture `parse()`'s `origin` has always
-   * had for a different field. See the milestone report.
+   * location (v0.2 FR-022). **Enforced** as of User Story 4: a
+   * schema-authored local reference resolving outside this root — judged
+   * on the real, symlink-resolved path (`src/resolve/location.ts`'s
+   * `isSandboxEscape`, FR-021, research D6) — is refused as
+   * `sandbox-escape`. A config-authored reference is exempt (FR-020).
    */
   readonly sandboxRoot: string;
+  /**
+   * The maximum number of **schema** documents (the pedigree, not
+   * counting the entry/config document) a chain may contain before being
+   * refused as `chain-limit-exceeded` (v0.2 FR-010). Defaults to
+   * `graph/build.ts`'s `DEFAULT_MAX_CHAIN_LENGTH` (32), matching
+   * contracts/resolve-api.md's documented default.
+   */
+  readonly maxChainLength?: number;
   /**
    * Where fetched remote documents are cached on disk (v0.2 FR-016).
    * **Optional here**, deliberately narrower than
@@ -163,7 +173,7 @@ export interface ResolveOptions {
    * codebase ever omits this field).
    */
   readonly transport?: Transport;
-  /** Overrides for `resolve/fetch.ts`'s `FetchLimits` (`maxRedirects`, `requestTimeoutMs`, `maxBytes`). `maxChainLength` is not yet part of this type — User Story 4, out of scope here. */
+  /** Overrides for `resolve/fetch.ts`'s `FetchLimits` (`maxRedirects`, `requestTimeoutMs`, `maxBytes`). `maxChainLength` is a top-level field on this interface, not part of `FetchLimits` — it bounds the schema chain (`src/graph/build.ts`), not any one HTTP fetch. */
   readonly limits?: Partial<FetchLimits>;
 }
 
@@ -218,22 +228,43 @@ function parseAtLocation(bytes: Uint8Array, location: string): ReturnType<typeof
   return parseYamlBytes(bytes, origin);
 }
 
-/** contracts/diagnostics.md's `reference-cycle`: primary is the reference that just closed the loop; `related` names every other reference in the loop, in chain order, labelled by position. Full precision here (exact labelling conventions) is User Story 4's conformance obligation (T051) — this slice implements the mechanism termination depends on (T030) and a reasonable rendering of it, not a polished one. See the milestone report. */
+/**
+ * contracts/diagnostics.md's `reference-cycle`: primary is the reference
+ * that just closed the loop; `related` names **every other reference in
+ * the cycle itself**, in chain order (T051's conformance obligation,
+ * settled here — an earlier version of this function, written before
+ * T051 existed to judge it, over-included one reference; see below and
+ * the milestone report for the full derivation).
+ *
+ * `chain` (from `GraphBuilder.beginVisit`'s `"cycle"` decision) is
+ * `stack.slice(cycleStart)` plus the closing frame — which includes, at
+ * index 0, the frame for the *first* time the repeated location was
+ * visited. That frame's `incoming` is the reference that **originally
+ * reached** the repeated location from *outside* the loop (e.g. a
+ * config's `$schema` reaching a schema that later turns out to
+ * self-`$adopts`) — not a reference *within* the loop at all,
+ * graph-theoretically: a cycle beginning and ending at node X consists of
+ * the edges from X back to X, not the edge that led into X in the first
+ * place. Including it in `related` over-reports for a plain
+ * self-reference (schema `$adopts` itself): the naive `chain.slice(0,-1)`
+ * would name the edge that discovered the schema as if it were part of
+ * the loop, when the loop is a single edge (the self-reference) with
+ * *nothing* else in it. `chain.slice(1, -1)` — dropping both the
+ * first-reached frame and the closing frame, which `primary` already
+ * covers — is what actually walks the interior of the loop: empty for a
+ * pure self-reference, and for a longer cycle (a → b → a), exactly the
+ * other edges within it (a's own outgoing edge to b), in chain order.
+ */
 function cycleDiagnostic(chain: readonly { readonly location: string; readonly incoming?: GraphReference }[]): Diagnostic {
   const closing = chain[chain.length - 1];
   if (closing?.incoming === undefined) {
     throw new Error("Internal error: a cycle's closing frame has no incoming reference");
   }
   const related = chain
-    .slice(0, -1)
+    .slice(1, -1)
     .map((frame, index) => (frame.incoming === undefined ? undefined : { label: `cycle position ${index + 1}`, span: frame.incoming.span }))
     .filter((entry): entry is { label: string; span: ReturnType<typeof createSourceSpan> } => entry !== undefined);
-  return createDiagnostic({
-    code: "reference-cycle",
-    message: `Reference '${closing.incoming.text}' closes a cycle back to an already-visited document`,
-    primary: closing.incoming.span,
-    related,
-  });
+  return referenceDiagnostic("reference-cycle", closing.incoming, `Reference '${closing.incoming.text}' closes a cycle back to an already-visited document`, related);
 }
 
 /**
@@ -403,20 +434,26 @@ async function readAtTarget(target: ReferenceLocationKind, candidate: Reference,
  * finding recorded for T021's local case) — the mechanism is tested
  * directly instead, in `tests/unit/graph-remote-dedup.test.ts`.
  */
-async function walkAdoptsChain(candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined): Promise<ChainWalkResult> {
+async function walkAdoptsChain(candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined, sandboxRoot: string): Promise<ChainWalkResult> {
   const target = classifyReferenceLocation(candidate, referringLocation);
   if (target.kind === "unsupported-scheme") {
     // Refused *before any request is made* (v0.2 FR-013) — this branch
     // never reaches resolve/fetch.ts at all.
     return {
       ok: false,
-      diagnostics: [
-        createDiagnostic({
-          code: "unsupported-scheme",
-          message: `Reference '${candidate.text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.2 FR-013)`,
-          primary: candidate.span,
-        }),
-      ],
+      diagnostics: [referenceDiagnostic("unsupported-scheme", candidate, `Reference '${candidate.text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.2 FR-013)`)],
+    };
+  }
+  if (target.kind === "local" && isSandboxEscape(candidate, target.location, sandboxRoot)) {
+    // Refused *before any read is attempted* (v0.2 FR-021, research D6) —
+    // judged on the resolved real path, following symlinks
+    // (`isSandboxEscape`/`isWithinSandbox`, `src/resolve/location.ts`).
+    // Config-authored references are exempt (FR-020) — `isSandboxEscape`
+    // itself never returns `true` for one, so this branch is only ever
+    // reached for a schema-authored reference.
+    return {
+      ok: false,
+      diagnostics: [referenceDiagnostic("sandbox-escape", candidate, `Schema-authored reference '${candidate.text}' resolves outside the sandbox root '${sandboxRoot}' (v0.2 FR-021)`)],
     };
   }
   const location = target.kind === "local" ? target.location : target.url;
@@ -431,6 +468,15 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
     // location) FR-019: nothing further to do, and in particular no
     // second fetch is ever attempted.
     return { ok: true, documentsLeafToRoot: [decision.document] };
+  }
+  if (decision.kind === "chain-limit-exceeded") {
+    // v0.2 FR-010, T056/T063: refused before `location` is read at all —
+    // `candidate` is "the reference that crossed it" (contracts/
+    // diagnostics.md's `chain-limit-exceeded` row).
+    return {
+      ok: false,
+      diagnostics: [referenceDiagnostic("chain-limit-exceeded", candidate, `Reference '${candidate.text}' would extend the schema chain past the configured maxChainLength (v0.2 FR-010)`)],
+    };
   }
 
   const read = await readAtTarget(target, candidate, remote);
@@ -487,7 +533,7 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
     return { ok: true, documentsLeafToRoot: [canonical] };
   }
 
-  const parentResult = await walkAdoptsChain(adoptsExtraction.reference, location, builder, remote);
+  const parentResult = await walkAdoptsChain(adoptsExtraction.reference, location, builder, remote, sandboxRoot);
   if (!parentResult.ok) {
     // Aborting the whole resolve() call regardless — no further use of
     // `builder` follows, so `location`'s frame is left on the (about to
@@ -512,8 +558,10 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
 export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
   requireSandboxRoot(options);
   const remote = buildRemoteContext(options);
+  const sandboxRoot = toAbsoluteSandboxRoot(options.sandboxRoot);
+  const maxChainLength = options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH;
 
-  const builder = new GraphBuilder();
+  const builder = new GraphBuilder(maxChainLength);
   const entryLocation = toAbsoluteEntryLocation(entryPath);
   const entryOrigin = createOrigin(entryLocation, entryLocation);
 
@@ -572,7 +620,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     return { ok: true, graph, pedigree: buildPedigree(graph) };
   }
 
-  const chainResult = await walkAdoptsChain(schemaExtraction.reference, entryLocation, builder, remote);
+  const chainResult = await walkAdoptsChain(schemaExtraction.reference, entryLocation, builder, remote, sandboxRoot);
   if (!chainResult.ok) {
     // Aborting the whole call — no further use of `builder` follows, so
     // `entryLocation`'s frame is left on the (about to be discarded)

@@ -1,0 +1,25 @@
+{
+  "name": "T054: a config's own $schema pointing outside the sandbox root (via ~/) is permitted — SPEC.md §9's worked example, and the config-authored exemption from FR-021",
+  "cites": "v0.2 FR-020",
+  "fixtureDir": "sandbox-config-exempt",
+  "entry": "project/config.yaml",
+  "sandboxRoot": "project",
+  "homeDir": "fakehome",
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "project/config.yaml", "hash": "78a6a2b9dc1e14adb3e14020aeaf812aeb899e3efe8efdf38c64884bf3e16e5e" },
+      { "location": "fakehome/house.yaml", "hash": "493e027c62ce55afd9f927a0b292c365fd7579867bdabec029921613bd1254b1" }
+    ],
+    "pedigree": [
+      {
+        "location": "fakehome/house.yaml",
+        "hash": "493e027c62ce55afd9f927a0b292c365fd7579867bdabec029921613bd1254b1",
+        "kind": "schema",
+        "authority": "config-authored",
+        "verified": false,
+        "via": { "document": "project/config.yaml", "line": 1, "column": 10, "start": 9, "end": 21 }
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "T051: a schema that $adopts itself is refused as reference-cycle, naming only the closing self-reference",
+  "cites": "v0.2 FR-008",
+  "fixtureDir": "fail-cycle/self",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "reference-cycle",
+        "primary": { "document": "schema.yaml", "line": 1, "column": 10, "start": 9, "end": 22 }
+      }
+    ]
+  }
+}

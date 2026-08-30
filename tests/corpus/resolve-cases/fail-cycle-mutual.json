@@ -1,0 +1,19 @@
+{
+  "name": "T051: two schemas that mutually $adopt each other are refused as reference-cycle, naming the closing reference and the other loop member",
+  "cites": "v0.2 FR-008",
+  "fixtureDir": "fail-cycle/mutual",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "reference-cycle",
+        "primary": { "document": "b.yaml", "line": 1, "column": 10, "start": 9, "end": 17 },
+        "related": [
+          { "label": "cycle position 1", "document": "a.yaml", "line": 1, "column": 10, "start": 9, "end": 17 }
+        ]
+      }
+    ]
+  }
+}

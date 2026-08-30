@@ -100,6 +100,14 @@ export interface ResolveCase {
    * user's home. Absent for every case that doesn't touch `~/`.
    */
   readonly homeDir?: string;
+  /**
+   * Optional: overrides `resolve()`'s `maxChainLength` (default 32,
+   * contracts/resolve-api.md's "Limits" table) for this case. Lets
+   * `chain-limit-exceeded` (T056, v0.2 FR-010) be exercised against a
+   * small, hand-writable fixture chain rather than 33+ files authored
+   * just to reach the production default.
+   */
+  readonly maxChainLength?: number;
   readonly expect: ResolveExpect;
 }
 
@@ -272,7 +280,20 @@ export function loadResolveCase(file: string): ResolveCase {
   if (homeDirRaw !== undefined && typeof homeDirRaw !== "string") {
     fail(file, `'homeDir' must be a string if present, got ${JSON.stringify(homeDirRaw)}`);
   }
+  const maxChainLengthRaw = raw["maxChainLength"];
+  if (maxChainLengthRaw !== undefined && (typeof maxChainLengthRaw !== "number" || !Number.isInteger(maxChainLengthRaw))) {
+    fail(file, `'maxChainLength' must be an integer if present, got ${JSON.stringify(maxChainLengthRaw)}`);
+  }
   const expect = parseExpect(raw["expect"], file);
   const fixtureDir = join(dirname(file), "..", "cases", fixtureDirField);
-  return { name, cites, fixtureDir, entry, sandboxRoot, expect, ...(typeof homeDirRaw === "string" ? { homeDir: homeDirRaw } : {}) };
+  return {
+    name,
+    cites,
+    fixtureDir,
+    entry,
+    sandboxRoot,
+    expect,
+    ...(typeof homeDirRaw === "string" ? { homeDir: homeDirRaw } : {}),
+    ...(typeof maxChainLengthRaw === "number" ? { maxChainLength: maxChainLengthRaw } : {}),
+  };
 }

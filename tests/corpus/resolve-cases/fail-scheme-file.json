@@ -1,0 +1,16 @@
+{
+  "name": "T055: a $schema naming a file: URL is refused as unsupported-scheme before any request is made",
+  "cites": "v0.2 FR-013",
+  "fixtureDir": "fail-scheme/file",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unsupported-scheme",
+        "primary": { "document": "config.yaml", "line": 1, "column": 10, "start": 9, "end": 27 }
+      }
+    ]
+  }
+}

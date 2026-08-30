@@ -1,0 +1,16 @@
+{
+  "name": "T052: a $schema naming a directory (not a document at all) is refused as document-unreachable at the reference's position",
+  "cites": "v0.2 FR-023",
+  "fixtureDir": "fail-unreachable/directory",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "document-unreachable",
+        "primary": { "document": "config.yaml", "line": 1, "column": 10, "start": 9, "end": 21 }
+      }
+    ]
+  }
+}
