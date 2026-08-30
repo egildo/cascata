@@ -1,0 +1,55 @@
+/**
+ * The ordered root-to-leaf pedigree — data-model.md "Pedigree"; SPEC.md
+ * §6.1 ("Pedigree is a first-class, queryable ordered chain of schema
+ * identities... from root to leaf"); v0.2 FR-011, FR-012; tasks.md T031.
+ *
+ * **Scope note, settled here because two clauses of spec.md disagree on
+ * it (see the milestone report in full)**: FR-011 says the pedigree
+ * lists "the schema identities" root to leaf, and data-model.md's own
+ * "Pedigree" entry agrees ("the ordered chain of schema identities, root
+ * to leaf") — neither mentions the config/entry document. SC-001 and
+ * Acceptance Scenario 1's prose, read carelessly, could be taken to
+ * include it ("all three documents are read and the pedigree lists
+ * their identities"; "a config three schemas deep... a pedigree listing
+ * all four identities"). This implementation follows the two precise,
+ * structural statements (FR-011, data-model.md) over the loosely-worded
+ * ones: **the pedigree never includes the entry/config document.** The
+ * `Graph` does include it (as `graph.entry`) — that is where "all
+ * documents were read" is actually asserted.
+ */
+
+import type { Graph, GraphDocument, GraphDocumentIdentity, GraphReference } from "./build.js";
+
+/** One entry in the pedigree: a schema's identity, the reference that adopted/named it, and whether that reference was hash-verified (FR-026). */
+export interface PedigreeEntry {
+  readonly identity: GraphDocumentIdentity;
+  /** The reference that brought this schema into the chain. Never absent for a pedigree entry — only the entry/config document (never itself in the pedigree) can lack one. */
+  readonly via: GraphReference;
+  readonly verified: boolean;
+}
+
+/** Root-to-leaf order: index 0 is the ultimate ancestor with no further `$adopts`; the last entry is the schema the config names directly with `$schema`. A chain, never a tree (`$adopts` takes exactly one parent in v1 — SPEC.md §6.1) — this type is a plain array for exactly that reason, not a graph structure. */
+export type Pedigree = readonly PedigreeEntry[];
+
+/**
+ * Derive the pedigree from an assembled `Graph`. Pure — no traversal
+ * logic of its own; `graph.documents` already holds every schema
+ * document in **discovery order** (`graph/build.ts`'s contract: entry
+ * first, then leaf-to-root — the schema the config names directly is
+ * discovered before its ancestors). Reversing everything after the entry
+ * turns that into root-to-leaf.
+ */
+export function buildPedigree(graph: Graph): Pedigree {
+  const schemaDocuments: readonly GraphDocument[] = graph.documents.slice(1);
+  const rootToLeaf = [...schemaDocuments].reverse();
+  return rootToLeaf.map((document) => {
+    if (document.via === undefined) {
+      // Unreachable given graph/build.ts's contract: every document
+      // after `graph.documents[0]` (the entry) was added via
+      // `GraphBuilder.completeVisit`, which the orchestrator only calls
+      // with a document built from a `Reference` that discovered it.
+      throw new Error(`Internal error: pedigree document at '${document.identity.location}' has no 'via' reference`);
+    }
+    return { identity: document.identity, via: document.via, verified: document.verified };
+  });
+}
