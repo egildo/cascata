@@ -104,7 +104,7 @@ order. No network.
 - [x] T021 [P] [US2] Case for a schema reachable by two routes, asserting it is read once and appears once, in tests/corpus/cases/chain-diamond/
 - [x] T022 [P] [US2] Case for a schema declaring two `$adopts` parents, asserting `multiple-adoption` with both positions, in tests/corpus/cases/chain-invalid/
 - [x] T023 [P] [US2] Case for an entry document with no `$schema`, asserting a single-document graph and an empty pedigree, in tests/corpus/cases/chain-none/
-- [ ] T024 [P] [US2] Cases for tilde expansion — a config `$schema` beginning `~/` resolving, and a schema `$adopts` beginning `~/` not expanding — in tests/corpus/cases/chain-tilde/
+- [x] T024 [P] [US2] Cases for tilde expansion — a config `$schema` beginning `~/` resolving, and a schema `$adopts` beginning `~/` not expanding — in tests/corpus/cases/chain-tilde/
 
 ### Implementation for User Story 2
 
@@ -115,8 +115,8 @@ order. No network.
 - [x] T029 [US2] Build the DAG with dedup by location before fetch and by content hash after, per research D5, in src/graph/build.ts (FR-007, FR-009) — depends on T028
 - [x] T030 [US2] Detect cycles on location during resolution, before bytes exist, in src/graph/build.ts (FR-008) — depends on T029
 - [x] T031 [US2] Refuse a second `$adopts` parent in src/graph/build.ts (FR-005) — depends on T029
-- [ ] T032 [US2] Refuse a sequence-valued `$adopts` with `multiple-adoption` and accept only a single string scalar per `SPEC.md` §9, in src/resolve/reference.ts (v0.2 FR-005) — removes the sequence-as-valid-syntax reading an implementer had to invent before §9 specified the shape
-- [ ] T033 [US2] Expand a leading `~/` in **config-authored** references only, never schema-authored ones, in src/resolve/location.ts (v0.2 FR-029) — `SPEC.md` §9's own worked chain depends on it
+- [x] T032 [US2] Refuse a sequence-valued `$adopts` with `multiple-adoption` and accept only a single string scalar per `SPEC.md` §9, in src/resolve/reference.ts (v0.2 FR-005) — removes the sequence-as-valid-syntax reading an implementer had to invent before §9 specified the shape
+- [x] T033 [US2] Expand a leading `~/` in **config-authored** references only, never schema-authored ones, in src/resolve/location.ts (v0.2 FR-029) — `SPEC.md` §9's own worked chain depends on it
 - [x] T034 [US2] Produce the ordered root-to-leaf pedigree with each entry's identity and originating reference position, in src/graph/pedigree.ts (FR-011, FR-012) — depends on T029
 - [x] T035 [US2] Add `adapters/registry.ts` mapping a format name to an adapter, and the `resolve()` orchestrator in src/index.ts that consults it between resolve and graph — depends on T029, T034
 

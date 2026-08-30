@@ -91,6 +91,15 @@ export interface ResolveCase {
   readonly entry: string;
   /** Sandbox root, relative to `fixtureDir` (not enforced in this slice — see report; required per contracts/resolve-api.md regardless). */
   readonly sandboxRoot: string;
+  /**
+   * Optional: a directory, relative to `fixtureDir`, that the runner
+   * points `$HOME` at for the duration of this case's `resolve()` call
+   * (T024, v0.2 FR-029 — tilde expansion). `os.homedir()` honors `$HOME`
+   * on POSIX, so this lets a case exercise a config-authored `~/…`
+   * reference against a **fixture** directory rather than the real
+   * user's home. Absent for every case that doesn't touch `~/`.
+   */
+  readonly homeDir?: string;
   readonly expect: ResolveExpect;
 }
 
@@ -259,7 +268,11 @@ export function loadResolveCase(file: string): ResolveCase {
   const fixtureDirField = requireString(raw, "fixtureDir", file, "$");
   const entry = requireString(raw, "entry", file, "$");
   const sandboxRoot = requireString(raw, "sandboxRoot", file, "$");
+  const homeDirRaw = raw["homeDir"];
+  if (homeDirRaw !== undefined && typeof homeDirRaw !== "string") {
+    fail(file, `'homeDir' must be a string if present, got ${JSON.stringify(homeDirRaw)}`);
+  }
   const expect = parseExpect(raw["expect"], file);
   const fixtureDir = join(dirname(file), "..", "cases", fixtureDirField);
-  return { name, cites, fixtureDir, entry, sandboxRoot, expect };
+  return { name, cites, fixtureDir, entry, sandboxRoot, expect, ...(typeof homeDirRaw === "string" ? { homeDir: homeDirRaw } : {}) };
 }

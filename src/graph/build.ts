@@ -1,7 +1,8 @@
 /**
  * DAG assembly — data-model.md "Graph"; SPEC.md §3 ("Graph build:
  * Documents -> DAG"), §6.1; v0.2 FR-007, FR-008, FR-009; tasks.md
- * T028-T030.
+ * T029-T030 (dedup and cycle detection — `$adopts` multiplicity, T031's
+ * original home, has since moved to src/resolve/reference.ts; see below).
  *
  * **Principle IV boundary (plan.md's Structure Decision)**: `src/graph/`
  * deals in already-parsed trees and never fetches, never touches a path,
@@ -18,13 +19,31 @@
  * exactly. See the milestone report for why this duplication (rather
  * than a shared type in `src/model/`) was the call made here.
  *
- * **The trap this file exists to avoid (CLAUDE.md, T029)**: cycle
+ * **The trap this file exists to avoid (CLAUDE.md, T030)**: cycle
  * detection that waits for a document's bytes/hash to exist never fires,
  * because the cycle is exactly what prevents those bytes from ever
  * arriving. `GraphBuilder.beginVisit` therefore operates on `location`
  * strings alone (research D5) — it never sees a byte, a hash, or a
  * parsed tree. The orchestrator calls it *before* attempting to read
  * anything at that location.
+ *
+ * **`$adopts` multiplicity no longer lives here.** An earlier version of
+ * this file resolved every `$adopts` sequence-item's location and
+ * refused `multiple-adoption` only when two *distinct* locations
+ * resulted, reading a same-target sequence as legal (T021's "diamond").
+ * `SPEC.md` §9 has since settled the question the other way: `$adopts`
+ * and `$schema` are single string scalars, full stop, and *any* sequence
+ * value is refused regardless of what its items resolve to. That check
+ * is now a pure shape check on the parsed tree (`resolve/reference.ts`,
+ * T032) needing no location resolution at all, so it moved there. A
+ * genuine diamond — one node reached by two distinct edges — cannot
+ * arise from `$schema`/`$adopts` in v1 at all (SPEC.md §6.1: adoption is
+ * single-parent, so the pedigree is a chain); `registerContent`'s
+ * content-hash dedup above remains exactly as written because it is
+ * real machinery for delegation and future multi-adoption (research D5,
+ * corrected), just not something this milestone's `$schema`/`$adopts`
+ * chain alone can exercise end-to-end — see `tests/unit/
+ * graph-content-dedup.test.ts` and the milestone report.
  */
 
 import type { Node } from "../model/node.js";
@@ -107,7 +126,7 @@ export type VisitDecision =
  * rather than silently fixed)**: an earlier version of this class popped
  * `location` off the active stack as soon as its own bytes were read and
  * parsed, before the orchestrator recursed into *that document's own*
- * `$adopts`. That is exactly the T029 trap in a different costume: a
+ * `$adopts`. That is exactly the T030 trap in a different costume: a
  * schema whose `$adopts` names itself was resolved as a `"duplicate"`
  * (already in `resolvedByLocation`) instead of a `"cycle"` (still on the
  * active stack), because the stack had already been popped by the time
@@ -124,7 +143,7 @@ export class GraphBuilder {
 
   /**
    * Decide what to do about `location` before any byte of it has been
-   * read (T029). Three outcomes:
+   * read (T030). Three outcomes:
    *
    * - `"cycle"` — `location` is already on the active path: refuse,
    *   naming every reference from where the cycle starts back to the one
@@ -207,64 +226,3 @@ export function buildGraph(entry: GraphDocument, restInDiscoveryOrder: readonly 
   return { entry, documents: [entry, ...restInDiscoveryOrder] };
 }
 
-// --- `$adopts` multiplicity (T030, FR-005) ------------------------------
-//
-// A schema names *exactly one* parent (SPEC.md §6.1: "v1 restriction
-// (settled): `$adopts` takes exactly one parent"). `resolve/reference.ts`
-// may hand back more than one candidate `Reference` when `$adopts` is
-// written as a sequence (its own module doc explains why: that syntax is
-// this implementation's way of expressing "the same document reached by
-// two different spellings" as *distinct from* "two genuinely different
-// parents" — spec.md's Edge Cases and Acceptance Scenario 4). Telling
-// those apart needs each candidate's **resolved location**, which is a
-// `resolve/location.ts` computation graph/ cannot perform itself (the
-// Principle IV boundary again) — so the orchestrator resolves every
-// candidate's location first and hands the (reference, location) pairs
-// here as plain data.
-
-/** One `$adopts` candidate, with its location already resolved (lexically, before any read — same discipline as cycle detection) by the orchestrator. */
-export interface AdoptsCandidate {
-  readonly reference: GraphReference;
-  readonly location: string;
-}
-
-export type AdoptsResolution =
-  | { readonly kind: "none" }
-  | { readonly kind: "single"; readonly location: string; readonly reference: GraphReference }
-  | { readonly kind: "multiple-adoption"; readonly first: GraphReference; readonly second: GraphReference };
-
-/**
- * Collapse `$adopts` candidates to their distinct resolved locations.
- * Two candidates naming the *same* resolved location are one parent
- * spelled twice (T021's diamond — legal); the first candidate to
- * introduce a *second, different* resolved location is refused as
- * `multiple-adoption`, with that candidate's reference as the primary
- * span ("the second parent") and the first distinct candidate's
- * reference as `related` ("the first") — contracts/diagnostics.md's
- * table for this code, applied literally.
- */
-export function resolveAdoptsCandidates(candidates: readonly AdoptsCandidate[]): AdoptsResolution {
-  if (candidates.length === 0) {
-    return { kind: "none" };
-  }
-  const seenLocations = new Set<string>();
-  let firstDistinct: AdoptsCandidate | undefined;
-  for (const candidate of candidates) {
-    if (seenLocations.has(candidate.location)) {
-      continue;
-    }
-    seenLocations.add(candidate.location);
-    if (firstDistinct === undefined) {
-      firstDistinct = candidate;
-    } else {
-      return { kind: "multiple-adoption", first: firstDistinct.reference, second: candidate.reference };
-    }
-  }
-  // firstDistinct is set: candidates was non-empty and at least one
-  // location was recorded before the loop could exit without it.
-  const single = firstDistinct;
-  if (single === undefined) {
-    throw new Error("Internal error: resolveAdoptsCandidates saw candidates but recorded no distinct location");
-  }
-  return { kind: "single", location: single.location, reference: single.reference };
-}

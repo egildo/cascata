@@ -26,18 +26,10 @@ import { createDiagnostic, type Diagnostic } from "./diagnostics/diagnostic.js";
 import type { Node } from "./model/node.js";
 import { freeze } from "./model/freeze.js";
 import { createOrigin, createSourceSpan, type Origin } from "./model/span.js";
-import { extractAdoptsReferences, extractSchemaReference, type Reference } from "./resolve/reference.js";
+import { extractAdoptsReference, extractSchemaReference, type ExtractedReference, type Reference } from "./resolve/reference.js";
 import { createResolvedDocument, readLocalDocument, resolveReferenceLocation, toAbsoluteEntryLocation } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
-import {
-  buildGraph,
-  GraphBuilder,
-  resolveAdoptsCandidates,
-  type AdoptsCandidate,
-  type Graph,
-  type GraphDocument,
-  type GraphReference,
-} from "./graph/build.js";
+import { buildGraph, GraphBuilder, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 
 export type { Diagnostic, RelatedSpan } from "./diagnostics/diagnostic.js";
@@ -141,7 +133,7 @@ export interface ResolveOptions {
    * Required — no default, none inferred from the entry document's
    * location (v0.2 FR-022). Not yet **enforced** in this slice (the
    * sandbox-escape check is User Story 4's `src/resolve/location.ts`
-   * work, T056-T057) — only required and validated for presence, the
+   * work, T059-T060) — only required and validated for presence, the
    * same partial-implementation posture `parse()`'s `origin` has always
    * had for a different field. See the milestone report.
    */
@@ -171,7 +163,7 @@ function parseAtLocation(bytes: Uint8Array, location: string): ReturnType<typeof
   return parseYamlBytes(bytes, origin);
 }
 
-/** contracts/diagnostics.md's `reference-cycle`: primary is the reference that just closed the loop; `related` names every other reference in the loop, in chain order, labelled by position. Full precision here (exact labelling conventions) is User Story 4's conformance obligation (T048) — this slice implements the mechanism termination depends on (T029) and a reasonable rendering of it, not a polished one. See the milestone report. */
+/** contracts/diagnostics.md's `reference-cycle`: primary is the reference that just closed the loop; `related` names every other reference in the loop, in chain order, labelled by position. Full precision here (exact labelling conventions) is User Story 4's conformance obligation (T051) — this slice implements the mechanism termination depends on (T030) and a reasonable rendering of it, not a polished one. See the milestone report. */
 function cycleDiagnostic(chain: readonly { readonly location: string; readonly incoming?: GraphReference }[]): Diagnostic {
   const closing = chain[chain.length - 1];
   if (closing?.incoming === undefined) {
@@ -189,19 +181,63 @@ function cycleDiagnostic(chain: readonly { readonly location: string; readonly i
   });
 }
 
+/**
+ * contracts/diagnostics.md's `multiple-adoption`, now (SPEC.md §9,
+ * amended) refused purely on **shape** — any sequence value for
+ * `$adopts`/`$schema` — rather than on how many *distinct* locations its
+ * items name. `extraction.entries` holds a `Reference` per string-scalar
+ * sequence item (T032):
+ *
+ * - 2+ entries: primary is the **second** entry's span, `related` names
+ *   the first (contracts/diagnostics.md's table, applied literally).
+ * - exactly 1 entry: no "second" exists — the sole entry's span is the
+ *   only reasonable anchor, so it becomes primary with no `related`.
+ * - 0 entries (every item was non-string, or the sequence was empty):
+ *   nothing to anchor to but the sequence node itself.
+ *
+ * These last two cases aren't explicitly worked out in
+ * contracts/diagnostics.md's table (which only shows the 2-entry case) —
+ * a judgment call recorded in the milestone report, not a spec quotation.
+ */
+function multipleAdoptionDiagnostic(extraction: { readonly sequenceSpan: ReturnType<typeof createSourceSpan>; readonly entries: readonly GraphReference[] }): Diagnostic {
+  const [first, second] = extraction.entries;
+  if (second !== undefined) {
+    return createDiagnostic({
+      code: "multiple-adoption",
+      message: "A sequence value is refused for '$adopts'/'$schema' — v1 adopts exactly one parent (SPEC.md §6.1, §9)",
+      primary: second.span,
+      related: first === undefined ? [] : [{ label: "first parent", span: first.span }],
+    });
+  }
+  if (first !== undefined) {
+    return createDiagnostic({
+      code: "multiple-adoption",
+      message: "A sequence value is refused for '$adopts'/'$schema', even with a single item — v1 adopts exactly one parent, written as a single string scalar (SPEC.md §6.1, §9)",
+      primary: first.span,
+      related: [],
+    });
+  }
+  return createDiagnostic({
+    code: "multiple-adoption",
+    message: "A sequence value is refused for '$adopts'/'$schema' — v1 adopts exactly one parent, written as a single string scalar (SPEC.md §6.1, §9)",
+    primary: extraction.sequenceSpan,
+    related: [],
+  });
+}
+
 type ChainWalkResult = { readonly ok: true; readonly documentsLeafToRoot: GraphDocument[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /**
  * Walk one `$adopts` step: resolve `candidate`'s location against
- * `referringLocation` (T026 — never against the entry or the working
+ * `referringLocation` (T027 — never against the entry or the working
  * directory), check it against the builder **before** reading anything
- * (T029), read and parse it if genuinely new, then recurse into its own
+ * (T030), read and parse it if genuinely new, then recurse into its own
  * `$adopts`. Returns every schema document from `candidate` down to the
  * chain's root, in discovery (leaf-to-root) order — `graph/build.ts` and
  * `graph/pedigree.ts`'s shared contract for that order.
  */
 async function walkAdoptsChain(candidate: Reference, referringLocation: string, builder: GraphBuilder): Promise<ChainWalkResult> {
-  const location = resolveReferenceLocation(candidate.text, referringLocation);
+  const location = resolveReferenceLocation(candidate, referringLocation);
   const decision = builder.beginVisit(location, candidate);
 
   if (decision.kind === "cycle") {
@@ -249,7 +285,7 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
 
   const resolvedDoc = createResolvedDocument(location, read.bytes, candidate);
   const document: GraphDocument = { identity: resolvedDoc.identity, tree: freeze(parsed.tree), via: candidate, verified: resolvedDoc.verified };
-  // `location` stays on the active stack past this point (T029's fix —
+  // `location` stays on the active stack past this point (T030's fix —
   // see graph/build.ts's module doc): a self-reference in this exact
   // document's own $adopts must still be seen as a cycle, not a
   // duplicate, which requires `location` to still be "active" while its
@@ -265,39 +301,18 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
     return { ok: true, documentsLeafToRoot: [canonical] };
   }
 
-  const adoptsCandidates = extractAdoptsReferences(canonical.tree);
-  const withLocations: AdoptsCandidate[] = adoptsCandidates.map((reference) => ({
-    reference,
-    location: resolveReferenceLocation(reference.text, location),
-  }));
-  const resolution = resolveAdoptsCandidates(withLocations);
+  const adoptsExtraction: ExtractedReference = extractAdoptsReference(canonical.tree);
 
-  if (resolution.kind === "multiple-adoption") {
+  if (adoptsExtraction.kind === "sequence") {
     builder.abandonVisit(location);
-    return {
-      ok: false,
-      diagnostics: [
-        createDiagnostic({
-          code: "multiple-adoption",
-          message: `Schema at '${location}' declares more than one '$adopts' parent`,
-          primary: resolution.second.span,
-          related: [{ label: "first parent", span: resolution.first.span }],
-        }),
-      ],
-    };
+    return { ok: false, diagnostics: [multipleAdoptionDiagnostic(adoptsExtraction)] };
   }
-  if (resolution.kind === "none") {
+  if (adoptsExtraction.kind === "none") {
     builder.finishVisit(location, canonical);
     return { ok: true, documentsLeafToRoot: [canonical] };
   }
 
-  // Find the original Reference (not the structurally-equal GraphReference
-  // copy) so recursion keeps working in resolve/reference.ts's own type.
-  const parentReference = adoptsCandidates.find((reference) => reference === resolution.reference);
-  if (parentReference === undefined) {
-    throw new Error("Internal error: resolveAdoptsCandidates returned a reference not among its own candidates");
-  }
-  const parentResult = await walkAdoptsChain(parentReference, location, builder);
+  const parentResult = await walkAdoptsChain(adoptsExtraction.reference, location, builder);
   if (!parentResult.ok) {
     // Aborting the whole resolve() call regardless — no further use of
     // `builder` follows, so `location`'s frame is left on the (about to
@@ -361,8 +376,16 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
   // still be caught as a cycle.
   const canonicalEntry = builder.registerContent(entryLocation, entryDocument);
 
-  const schemaReference = extractSchemaReference(canonicalEntry.tree);
-  if (schemaReference === undefined) {
+  const schemaExtraction: ExtractedReference = extractSchemaReference(canonicalEntry.tree);
+  if (schemaExtraction.kind === "sequence") {
+    // Not yet on the "aborting the whole call" path below — nothing has
+    // recursed yet, so closing out the entry's own visit costs nothing
+    // and keeps the builder's invariants honest even though this
+    // instance is discarded either way.
+    builder.abandonVisit(entryLocation);
+    return { ok: false, diagnostics: [multipleAdoptionDiagnostic(schemaExtraction)] };
+  }
+  if (schemaExtraction.kind === "none") {
     // Legal: no $schema at all (spec.md's Edge Cases; T023) — a
     // single-document graph and an empty pedigree.
     builder.finishVisit(entryLocation, canonicalEntry);
@@ -370,7 +393,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     return { ok: true, graph, pedigree: buildPedigree(graph) };
   }
 
-  const chainResult = await walkAdoptsChain(schemaReference, entryLocation, builder);
+  const chainResult = await walkAdoptsChain(schemaExtraction.reference, entryLocation, builder);
   if (!chainResult.ok) {
     // Aborting the whole call — no further use of `builder` follows, so
     // `entryLocation`'s frame is left on the (about to be discarded)

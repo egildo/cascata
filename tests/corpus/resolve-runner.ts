@@ -117,12 +117,38 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
   });
 }
 
+/**
+ * Run `resolve()` for one case, temporarily pointing `$HOME` at
+ * `testCase.homeDir` (relative to `fixtureDir`) if the case sets one —
+ * `os.homedir()` (which `src/resolve/location.ts` calls for tilde
+ * expansion, v0.2 FR-029) honors `$HOME` on POSIX. Restored in a
+ * `finally` even if `resolve()` throws, so one case's override can never
+ * leak into another's — cases can run in the same process/worker.
+ */
+async function resolveWithHomeOverride(entryPath: string, sandboxRoot: string, homeDir: string | undefined): Promise<Awaited<ReturnType<typeof resolve>>> {
+  if (homeDir === undefined) {
+    return resolve(entryPath, { sandboxRoot });
+  }
+  const previousHome = process.env["HOME"];
+  process.env["HOME"] = homeDir;
+  try {
+    return await resolve(entryPath, { sandboxRoot });
+  } finally {
+    if (previousHome === undefined) {
+      delete process.env["HOME"];
+    } else {
+      process.env["HOME"] = previousHome;
+    }
+  }
+}
+
 export async function runResolveCase(testCase: ResolveCase): Promise<ResolveCaseResult> {
   const failures: string[] = [];
   const entryPath = join(testCase.fixtureDir, testCase.entry);
   const sandboxRoot = join(testCase.fixtureDir, testCase.sandboxRoot);
+  const homeDir = testCase.homeDir === undefined ? undefined : join(testCase.fixtureDir, testCase.homeDir);
 
-  const result = await resolve(entryPath, { sandboxRoot });
+  const result = await resolveWithHomeOverride(entryPath, sandboxRoot, homeDir);
 
   if (testCase.expect.ok) {
     if (!result.ok) {
