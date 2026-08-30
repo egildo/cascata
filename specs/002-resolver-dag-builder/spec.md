@@ -152,9 +152,11 @@ position of the offending reference.
    rather than followed indefinitely.
 6. **Given** a fetched document that is not readable as a document at all, **When** resolved, **Then**
    the failure is reported against the reference that fetched it, not as an anonymous parse error.
-7. **Given** a resolution with several independent problems — a missing local file in one branch and
-   a disallowed scheme in another — **When** resolved, **Then** both are reported from one attempt,
-   not just whichever was reached first.
+7. **Given** the graph builder is handed several independent branches, one failing on a missing file
+   and another on a disallowed scheme, **When** they are resolved, **Then** both failures are
+   reported from one attempt. Asserted against the builder directly: a chain of single-scalar
+   references cannot present two independent failures, since reaching the second requires the first
+   to have succeeded (FR-025).
 8. **Given** a caller that supplies no sandbox root, **When** resolution is requested, **Then** it is
    an error to the caller rather than a root being guessed from the entry document's location.
 
@@ -263,7 +265,12 @@ position of the offending reference.
 - **FR-024**: A failure inside a fetched document MUST be attributable to the reference that fetched
   it, so an author can trace it back to something they wrote.
 - **FR-025**: Resolution MUST report every failure it can determine independently, rather than only
-  the first, consistent with v0.1's collect-all behavior.
+  the first, consistent with v0.1's collect-all behavior. **Not exercisable end-to-end in this
+  milestone**, for the same structural reason as FR-009 and FR-019: with `$schema` and `$adopts` as
+  single scalars, a resolution is a chain, and each step's success is a precondition for even
+  discovering the next reference's text — so at most one failure exists to report. The machinery is
+  required and verified directly against the graph builder, because delegation (§8, v0.6) introduces
+  genuinely independent branches and will need it.
 
 ### Key Entities
 
@@ -300,6 +307,23 @@ position of the offending reference.
   the same pedigree order, and the same diagnostics in the same order on every run.
 - **SC-010**: Invalid UTF-8 bytes are refused with a byte position in 100% of cases, and never
   silently become replacement characters.
+
+## A structural note on FR-009, FR-019, and FR-025
+
+Three requirements in this specification describe scenarios that `SPEC.md` §9 makes impossible here:
+two routes converging on one document, one identity referenced twice, and independent failures in
+separate branches. All three assume a **branching** reference graph. Single-parent adoption makes
+resolution a **chain**, so none can be constructed from `$schema` and `$adopts` alone.
+
+This was not noticed at authoring time because all three are natural imports from v0.1, where a
+single document genuinely does have many independent violations to collect. Resolution is a different
+shape, and the requirements were written before anything had to satisfy them. Each was found by an
+implementer, one per slice, and each is retargeted the same way: the machinery is real and required —
+delegation (§8, v0.6) and multi-adoption via C3 both introduce genuine branching — so it is verified
+directly against the graph builder rather than through a document fixture that cannot exist.
+
+The lesson worth carrying to v0.3: a requirement about *many* of something needs the vocabulary that
+produces many of them to exist first.
 
 ## Assumptions
 
