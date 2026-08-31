@@ -141,17 +141,17 @@ explicit null is rejected.
 
 ### Conformance cases for User Story 3 (write first)
 
-- [ ] T034 [P] [US3] Case for `required` with no `provide` and no value anywhere in the chain — asserting the key is reported missing, at a position naming the demanding layer (FR-027, spec.md Acceptance Scenario 1) — in `tests/corpus/cases/validate-required/missing/`
-- [ ] T035 [P] [US3] Case for `required` + `provide`, config omitting the key — asserting a **valid** result with **zero diagnostics of any level** (FR-029, spec.md Acceptance Scenario 2) — in `tests/corpus/cases/validate-required/guaranteed-key/`
-- [ ] T036 [P] [US3] Case for `required` + `provide`, config supplying its own value — asserting valid (FR-027) — in `tests/corpus/cases/validate-required/own-value/`
-- [ ] T037 [P] [US3] Case for `required` + `provide`, config writing an explicit `null` — asserting rejection even though a `provide` exists (FR-030, spec.md Acceptance Scenario 3) — in `tests/corpus/cases/validate-required/explicit-null/`
-- [ ] T038 [P] [US3] Case for `required` keys nested inside a mapping the config omits entirely — asserting **one** violation at the mapping's own pointer, not one per nested required key (FR-031, spec.md Acceptance Scenario 4) — in `tests/corpus/cases/validate-required/absent-parent/`
+- [x] T034 [P] [US3] Case for `required` with no `provide` and no value anywhere in the chain — asserting the key is reported missing, at a position naming the demanding layer (FR-027, spec.md Acceptance Scenario 1) — in `tests/corpus/cases/validate-required/missing/`
+- [x] T035 [P] [US3] Case for `required` + `provide`, config omitting the key — asserting a **valid** result with **zero diagnostics of any level** (FR-029, spec.md Acceptance Scenario 2) — in `tests/corpus/cases/validate-required/guaranteed-key/`
+- [x] T036 [P] [US3] Case for `required` + `provide`, config supplying its own value — asserting valid (FR-027) — in `tests/corpus/cases/validate-required/own-value/`
+- [x] T037 [P] [US3] Case for `required` + `provide`, config writing an explicit `null` — asserting rejection even though a `provide` exists (FR-030, spec.md Acceptance Scenario 3) — in `tests/corpus/cases/validate-required/explicit-null/`
+- [x] T038 [P] [US3] Case for `required` keys nested inside a mapping the config omits entirely — asserting **one** violation at the mapping's own pointer, not one per nested required key (FR-031, spec.md Acceptance Scenario 4) — in `tests/corpus/cases/validate-required/absent-parent/`
 
 ### Implementation for User Story 3
 
-- [ ] T039 [US3] Implement the `required` check against the merged (post-merge) tree — present and `kind !== "null"` (§4.2, §5.5) — in `src/validate/constraints.ts` (FR-027, FR-028) — depends on T021
-- [ ] T040 [US3] Confirm a `provide`-filled `required` key produces no diagnostic — this needs no new code beyond T039 (the merged tree already has the provided value in place by the time `validate()` runs; T039 only checks presence-and-non-null, which the fold already guaranteed) — verify by test, not by new logic (FR-029) — depends on T039
-- [ ] T041 [US3] Stop the walk at the first missing ancestor pointer for a `required` demand, rather than resolving every nested required key against a tree position that does not exist, in `src/validate/check.ts` (FR-031) — depends on T031, T039
+- [x] T039 [US3] Implement the `required` check against the merged (post-merge) tree — present and `kind !== "null"` (§4.2, §5.5) — in `src/validate/constraints.ts` (FR-027, FR-028) — depends on T021
+- [x] T040 [US3] Confirm a `provide`-filled `required` key produces no diagnostic — this needs no new code beyond T039 (the merged tree already has the provided value in place by the time `validate()` runs; T039 only checks presence-and-non-null, which the fold already guaranteed) — verify by test, not by new logic (FR-029) — depends on T039
+- [x] T041 [US3] Stop the walk at the first missing ancestor pointer for a `required` demand, rather than resolving every nested required key against a tree position that does not exist, in `src/validate/check.ts` (FR-031) — depends on T031, T039
 
 **Checkpoint**: The guaranteed-key pattern works; nulling-out is refused; no diagnostic cascade.
 

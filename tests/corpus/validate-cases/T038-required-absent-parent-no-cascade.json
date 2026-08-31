@@ -1,0 +1,19 @@
+{
+  "name": "T038: a required key demanded on a mapping-typed value produces exactly one violation when the mapping itself is absent -- no cascade, even though the same demand also declares type: mapping (FR-031, spec.md Acceptance Scenario 4)",
+  "cites": "v0.4 FR-031",
+  "fixtureDir": "validate-required/absent-parent",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "required-violated",
+        "document": "config.yaml",
+        "pointer": "",
+        "demand": { "pointer": "/keys/network/demand/required", "document": "schema.yaml", "line": 5, "column": 17 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

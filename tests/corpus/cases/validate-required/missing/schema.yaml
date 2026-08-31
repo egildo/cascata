@@ -1,0 +1,4 @@
+keys:
+  name:
+    demand:
+      required: true

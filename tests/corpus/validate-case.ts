@@ -25,10 +25,19 @@ import { parseExpectedNode, type ExpectedNode } from "./case.js";
 /** One expected diagnostic from a failed validate() — v0.4's fuller contract, beyond merge-case.ts's ExpectedMergeDiagnostic. */
 export interface ExpectedValidateDiagnostic {
   readonly code: DiagnosticCode;
-  /** The offending value's own document (relative to the case's fixture directory) and position — `Diagnostic.primary`. */
+  /** The offending value's own document (relative to the case's fixture directory) — `Diagnostic.primary.origin`. Always asserted. */
   readonly document: string;
-  readonly line: number;
-  readonly column: number;
+  /**
+   * `line`/`column` are optional, mirroring `case.ts`'s "spans are asserted
+   * selectively" convention — some positions (e.g. the merged tree's own
+   * root span, anchoring an absent top-level `required` key with no
+   * shallower ancestor to point at) are governed by v0.1's adapter
+   * conventions this milestone does not re-derive, so a case naming only
+   * the document is a complete, honest assertion rather than a guess at a
+   * byte position this file's own logic does not own.
+   */
+  readonly line?: number;
+  readonly column?: number;
   readonly start?: number;
   readonly end?: number;
   /** RFC 6901 pointer into the **merged** configuration (`Diagnostic.pointer`, FR-024). Asserted only when supplied — a vocabulary-only diagnostic has none. */
@@ -103,6 +112,17 @@ function parseExpectedDemand(raw: unknown, source: string, at: string): Expected
   return { pointer, document, line, column };
 }
 
+function parseOptionalNumber(raw: Record<string, unknown>, field: string, source: string, at: string): number | undefined {
+  const value = raw[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number") {
+    fail(source, `'${at}.${field}' must be a number if present, got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
 function parseValidateDiagnostic(raw: unknown, source: string, at: string): ExpectedValidateDiagnostic {
   if (!isPlainObject(raw)) {
     fail(source, `'${at}' must be an object`);
@@ -112,8 +132,8 @@ function parseValidateDiagnostic(raw: unknown, source: string, at: string): Expe
     fail(source, `'${at}.code' must be a known DiagnosticCode, got ${JSON.stringify(codeRaw)}`);
   }
   const document = requireString(raw, "document", source, at);
-  const line = requireNumber(raw, "line", source, at);
-  const column = requireNumber(raw, "column", source, at);
+  const line = parseOptionalNumber(raw, "line", source, at);
+  const column = parseOptionalNumber(raw, "column", source, at);
   const start = parseOptionalOffset(raw, "start", source, at);
   const end = parseOptionalOffset(raw, "end", source, at);
   const pointerRaw = raw["pointer"];
@@ -125,8 +145,8 @@ function parseValidateDiagnostic(raw: unknown, source: string, at: string): Expe
   return {
     code: codeRaw,
     document,
-    line,
-    column,
+    ...(line !== undefined ? { line } : {}),
+    ...(column !== undefined ? { column } : {}),
     ...(start !== undefined ? { start } : {}),
     ...(end !== undefined ? { end } : {}),
     ...(pointer !== undefined ? { pointer } : {}),

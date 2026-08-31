@@ -1,0 +1,5 @@
+keys:
+  name:
+    demand:
+      required: true
+    provide: default-name

@@ -1,0 +1,8 @@
+{
+  "name": "T036: required + provide, config supplies its own value -- valid",
+  "cites": "v0.4 FR-027",
+  "fixtureDir": "validate-required/own-value",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

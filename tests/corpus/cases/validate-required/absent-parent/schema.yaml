@@ -1,0 +1,5 @@
+keys:
+  network:
+    demand:
+      type: mapping
+      required: true

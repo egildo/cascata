@@ -1,0 +1,21 @@
+{
+  "name": "T037: required + provide, config writes an explicit null -- rejected even though a provide exists (FR-030, spec.md Acceptance Scenario 3)",
+  "cites": "v0.4 FR-030",
+  "fixtureDir": "validate-required/explicit-null",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "required-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 7,
+        "pointer": "/name",
+        "demand": { "pointer": "/keys/name/demand/required", "document": "schema.yaml", "line": 4, "column": 17 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

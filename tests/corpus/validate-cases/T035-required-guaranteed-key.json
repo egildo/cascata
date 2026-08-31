@@ -1,0 +1,8 @@
+{
+  "name": "T035: required + provide, config omits the key -- valid, zero diagnostics of any level (FR-029, spec.md Acceptance Scenario 2)",
+  "cites": "v0.4 FR-029",
+  "fixtureDir": "validate-required/guaranteed-key",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

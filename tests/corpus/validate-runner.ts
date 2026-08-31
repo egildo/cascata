@@ -41,8 +41,10 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
     if (actualDocument !== expectedDiagnostic.document) {
       failures.push(`${label}: expected document '${expectedDiagnostic.document}', got '${actualDocument}'`);
     }
-    if (actualDiagnostic.primary.line !== expectedDiagnostic.line || actualDiagnostic.primary.column !== expectedDiagnostic.column) {
-      failures.push(`${label}: expected position ${expectedDiagnostic.line}:${expectedDiagnostic.column}, got ${actualDiagnostic.primary.line}:${actualDiagnostic.primary.column}`);
+    if (expectedDiagnostic.line !== undefined || expectedDiagnostic.column !== undefined) {
+      if (actualDiagnostic.primary.line !== expectedDiagnostic.line || actualDiagnostic.primary.column !== expectedDiagnostic.column) {
+        failures.push(`${label}: expected position ${expectedDiagnostic.line}:${expectedDiagnostic.column}, got ${actualDiagnostic.primary.line}:${actualDiagnostic.primary.column}`);
+      }
     }
     if (expectedDiagnostic.start !== undefined && actualDiagnostic.primary.start !== expectedDiagnostic.start) {
       failures.push(`${label}: expected start ${expectedDiagnostic.start}, got ${actualDiagnostic.primary.start}`);

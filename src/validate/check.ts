@@ -31,7 +31,7 @@ import { pointerFromPath, resolvePointer } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { readDemandVocabulary, type DemandKeyword } from "./vocabulary.js";
-import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, checkType, parseTypeDemand, type ViolationSite } from "./constraints.js";
+import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, checkType, parseTypeDemand, requiredViolationCause, type ViolationSite } from "./constraints.js";
 import { renderViolation, type Demand, type Violation } from "./violation.js";
 
 export type CheckOutcome = { readonly ok: true } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -126,6 +126,43 @@ function violationsForItems(layer: Layer, keyName: string, itemsDeclaration: Nod
   return violations;
 }
 
+/** Whether a `required` demand's own value actually asserts the requirement — only literal `true` does (§5.2's "required: Add legal, Remove never" gives no meaning to an explicit `false` beyond "not required", which is silence's own default; a non-bool value is a malformed shape US4 refuses, not this function's job). */
+function isRequiredTrue(node: Node): boolean {
+  return node.type === "scalar" && node.kind === "bool" && node.value === true;
+}
+
+/**
+ * Check one `required: true` demand against the post-merge tree (§5.5,
+ * FR-027–FR-031). `value` is `undefined` when `keyName` is absent from the
+ * merged tree entirely.
+ *
+ * **Absent case**: anchored at the merged tree's own root (`mergedPointer:
+ * ""`, `configuration.tree`'s own span as the offending "value") — the
+ * *nearest resolvable ancestor pointer* contracts/diagnostics.md's
+ * `required-violated` row asks for, applied to a top-level key (this
+ * milestone's `demand` vocabulary reaches exactly one level deep — see
+ * this module's own report note on spec.md's nested-mapping Acceptance
+ * Scenario). One violation, never a cascade, because there is no deeper
+ * `required` this walk could even discover to cascade into.
+ *
+ * **Explicit-null case**: anchored at the `null` scalar's own span and
+ * document (FR-030) — which may be the config's or a schema's, whichever
+ * layer actually wrote the null.
+ */
+function violationForRequired(configuration: MergedConfiguration, layer: Layer, keyName: string, requiredNode: Node, value: Node | undefined): Violation | undefined {
+  const cause = requiredViolationCause(value);
+  if (cause === undefined) {
+    return undefined;
+  }
+  const demand = buildDemand(layer, keyName, ["required"], requiredNode);
+  if (cause === "null") {
+    // `value` is defined and a null scalar whenever cause === "null".
+    const nullNode = value as Node;
+    return toViolation(configuration, demand, pointerFromPath([keyName]), { pointerSuffix: [], node: nullNode, reason: { kind: "required-violated", cause: "null" } });
+  }
+  return toViolation(configuration, demand, "", { pointerSuffix: [], node: configuration.tree, reason: { kind: "required-violated", cause: "absent" } });
+}
+
 /** Check one schema layer's own `demand` vocabulary against `configuration.tree`. A `role !== "schema"` layer (the config) contributes nothing (v0.4 FR-003, mirroring v0.3 FR-015's posture for `cascade`). */
 function violationsForLayer(configuration: MergedConfiguration, layer: Layer): Violation[] {
   if (layer.role !== "schema") {
@@ -136,13 +173,25 @@ function violationsForLayer(configuration: MergedConfiguration, layer: Layer): V
   for (const [keyName, raw] of vocabulary) {
     const keyPointer = pointerFromPath([keyName]);
     const value = resolvePointer(configuration.tree, keyPointer);
+
+    const requiredNode = raw.get("required");
+    if (requiredNode !== undefined && isRequiredTrue(requiredNode)) {
+      const violation = violationForRequired(configuration, layer, keyName, requiredNode, value);
+      if (violation !== undefined) {
+        violations.push(violation);
+      }
+    }
+
     if (value === undefined) {
       // FR-021's converse: a demand constrains a value if one exists.
-      // `required`'s own absence-handling (User Story 3) is a different
-      // check, not this one.
+      // `required` (just above) is the one exception — it is exactly the
+      // check that must run when a value does *not* exist.
       continue;
     }
     for (const [keyword, keywordValue] of raw) {
+      if (keyword === "required") {
+        continue; // handled above, regardless of whether value is defined.
+      }
       if (LEAF_KEYWORDS.has(keyword)) {
         const sites = runLeafCheck(keyword as DemandKeyword, keywordValue, value);
         for (const site of sites) {
@@ -154,7 +203,7 @@ function violationsForLayer(configuration: MergedConfiguration, layer: Layer): V
       if (keyword === "items") {
         violations.push(...violationsForItems(layer, keyName, keywordValue, value, configuration));
       }
-      // "required" (US3), "accept"/"format" (never reach here as values — US4 refuses them at the vocabulary level) — no other case.
+      // "accept"/"format" never reach here as values — US4 refuses them at the vocabulary level.
     }
   }
   return violations;

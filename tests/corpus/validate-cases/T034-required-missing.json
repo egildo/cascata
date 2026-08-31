@@ -1,0 +1,19 @@
+{
+  "name": "T034: a required key absent with no provide anywhere in the chain is reported missing, naming the demanding layer (FR-027, spec.md Acceptance Scenario 1)",
+  "cites": "v0.4 FR-027",
+  "fixtureDir": "validate-required/missing",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "required-violated",
+        "document": "config.yaml",
+        "pointer": "",
+        "demand": { "pointer": "/keys/name/demand/required", "document": "schema.yaml", "line": 4, "column": 17 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}
