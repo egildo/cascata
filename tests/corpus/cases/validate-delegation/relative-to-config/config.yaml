@@ -1,0 +1,2 @@
+$schema: ./schemas/schema.yaml
+network: ./fragment.yaml

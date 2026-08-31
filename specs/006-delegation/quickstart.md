@@ -25,13 +25,27 @@ pnpm test
 9. **Sandbox escape, absolute path, and un-opted-in remote target are each refused** (US4, AS1-3);
    **the same remote case succeeds with opt-in** (US4, AS4).
 10. **A delegation cycle is refused** (US4, AS6).
-11. **The depth-limit sabotage-relevant case**: `tests/corpus/cases/validate-delegation/depth-limit/`,
-    a generated chain of 65 fragment files, each delegating to the next — expected `depth-limit-exceeded`
-    at hop 65, confirmed reachable (unlike v0.5's own depth guard) since each hop is a real file, not
-    bounded by any single parse call's own depth cap.
+11. **The depth-limit guard, tested directly, not end to end** — **this line originally claimed a
+    65-real-file fixture reaches `MAX_DELEGATION_DEPTH` and was wrong; corrected here, not
+    appended-to, because a quickstart is meant to be run, and running the original claim would have
+    sent a reader looking for a fixture that does not exist.** A real hop-to-hop delegation chain is
+    schema-nesting-bound, not file-count-bound: `walkForDelegation` re-checks each further hop
+    against the *same* grant node's own `.keys` map (`src/index.ts`'s own comment at the recursive
+    call), so permitting hop *N+1* costs the schema one more `demand.keys.<name>.delegate: allow`
+    level of raw nesting — the identical "named nesting costs raw YAML depth" fact v0.5 found for
+    `MAX_DEMAND_DEPTH`. A schema deep enough to permit 64 real hops needs roughly 3 x 64 = 192 YAML
+    nesting levels, which trips v0.1's own 64-level parse-depth cap (`depth-limit-exceeded` from
+    `parse()`) at semantic hop depth ~21 — 43 hops short of `MAX_DELEGATION_DEPTH`. This was
+    confirmed by actually generating and running such a schema, not reasoned about in the abstract
+    (`research.md` D5's own correction). `MAX_DELEGATION_DEPTH` and its tracker (`DelegationCycleTracker`)
+    are therefore exported from `src/index.ts` specifically so `tests/unit/delegation-depth-limit.test.ts`
+    can exercise the guard's own logic directly — exact-boundary acceptance/overflow, cycle-vs-depth
+    distinction — bypassing both file I/O and the now-proven-unreachable schema-nesting path. Treat
+    this guard as defence in depth whose own trigger condition is not reachable through the public
+    pipeline, exactly like v0.5's `MAX_DEMAND_DEPTH` and `type-name-collision` before it.
 
 ```bash
-pnpm vitest run tests/corpus/validate-corpus.test.ts tests/unit/delegation-monotonicity.test.ts tests/unit/layering.test.ts
+pnpm vitest run tests/corpus/validate-corpus.test.ts tests/unit/delegation-monotonicity.test.ts tests/unit/delegation-sandbox-confinement.test.ts tests/unit/delegation-depth-limit.test.ts tests/unit/layering.test.ts
 ```
 
 ## What is not validated here

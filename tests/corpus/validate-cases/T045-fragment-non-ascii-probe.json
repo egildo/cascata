@@ -1,0 +1,24 @@
+{
+  "name": "T045: a violation inside a fragment, preceded on the same line by an astral-plane emoji and a precomposed accented character, is reported at the correct code-point column -- not the UTF-16 code-unit column a surrogate pair would produce (Constitution Principle V's probe gate: the delegation-specific fresh-parse-per-graft path gets its own non-ASCII probe, not just an inherited one from the entry-document parse path)",
+  "cites": "v0.6 FR-017",
+  "fixtureDir": "validate-delegation/fragment-non-ascii",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "network.yaml",
+        "line": 1,
+        "column": 24,
+        "pointer": "/network/host",
+        "demand": { "pointer": "/keys/network/demand/keys/host/demand/minLength", "document": "schema.yaml", "line": 9, "column": 24 },
+        "pedigreePosition": 0,
+        "delegatedFrom": [
+          { "document": "config.yaml", "line": 2, "column": 10 }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "T037: a delegated path resolves relative to the delegating config's own directory, not the schema's -- the schema lives in a subdirectory, the fragment sits beside the config (spec.md US4 Acceptance Scenario 5, FR-021)",
+  "cites": "v0.6 FR-021",
+  "fixtureDir": "validate-delegation/relative-to-config",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        ["network", { "mapping": [ ["host", { "kind": "string", "value": "example.com" }] ] }]
+      ]
+    }
+  }
+}
