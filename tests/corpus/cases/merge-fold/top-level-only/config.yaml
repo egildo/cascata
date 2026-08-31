@@ -1,0 +1,6 @@
+$schema: ./schema.yaml
+items:
+  - config-item
+other:
+  items:
+    - config-nested-item

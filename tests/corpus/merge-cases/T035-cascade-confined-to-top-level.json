@@ -1,0 +1,36 @@
+{
+  "name": "v0.3 FR-027/T035: cascade and provide govern only the top-level key of the same name — a nested key named 'items' inside 'other' does not accumulate even though the top-level 'items' key does",
+  "cites": "v0.3 FR-027",
+  "fixtureDir": "merge-fold/top-level-only",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "items",
+          {
+            "sequence": [
+              { "kind": "string", "value": "schema-item" },
+              { "kind": "string", "value": "config-item" }
+            ]
+          }
+        ],
+        [
+          "other",
+          {
+            "mapping": [
+              [
+                "items",
+                {
+                  "sequence": [{ "kind": "string", "value": "config-nested-item" }]
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

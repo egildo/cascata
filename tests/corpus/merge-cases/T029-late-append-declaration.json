@@ -1,0 +1,23 @@
+{
+  "name": "T029/v0.3 FR-026: root provides [a] with no strategy, a middle layer provides [b] with no strategy, a leaf declares append and provides [c] — folds to [b, c], not [a, b, c]: the leaf's declaration governs from itself downward and does not reach back over the middle layer's already-settled replace",
+  "cites": "v0.3 FR-026",
+  "fixtureDir": "merge-append/late-declaration",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "items",
+          {
+            "sequence": [
+              { "kind": "string", "value": "mid-b" },
+              { "kind": "string", "value": "leaf-c" }
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

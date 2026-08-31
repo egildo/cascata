@@ -67,6 +67,17 @@ export interface KeyVocabulary {
  * `schemaTree` itself not being a mapping (a pathological schema whose
  * whole document is a scalar or a sequence) is handled the same way, for
  * the same reason: there is no `keys:` entry to find.
+ *
+ * **`keysNode.entries` is read one level deep only (v0.3 FR-027, T035)** —
+ * each `keyName` here names a key of the merged configuration's own **top
+ * level**; there is no syntax for `keys.<name>.<nested>` reaching into a
+ * key's own value, and none is invented by reading any deeper than this
+ * one loop does. `src/merge/fold.ts` enforces the consequence structurally
+ * rather than by a second check here: `strategy` is threaded into
+ * `mergeMappings` only for the outermost call, and every recursive call for
+ * nested structure passes an empty strategy map, so a `keys:` entry can
+ * never affect anything but the top-level key of the same name — see that
+ * file's own module doc, rule 4.
  */
 export function readKeysVocabulary(schemaTree: Node): ReadonlyMap<string, KeyVocabulary> {
   const result = new Map<string, KeyVocabulary>();
@@ -123,7 +134,7 @@ export function effectiveStrategy(key: string, strategies: ReadonlyMap<string, M
  * `cascade` declaration it cannot interpret exactly as it treats no
  * declaration at all, per this file's own module doc.
  */
-function interpretCascade(node: Node): MergeStrategy | undefined {
+export function interpretCascade(node: Node): MergeStrategy | undefined {
   if (node.type === "scalar" && node.kind === "string" && (node.value === "append" || node.value === "replace")) {
     return node.value;
   }
@@ -206,6 +217,55 @@ export function resolveStrategies(layers: readonly Layer[]): StrategyResolution 
   }
 
   return { strategies, diagnostics };
+}
+
+/**
+ * Advance `running`'s per-key strategy state by exactly one schema layer's
+ * own declarations, root-to-leaf — the mechanism `fold()` uses to apply a
+ * strategy **from its declaring layer downward** (v0.3 FR-026, T034), by
+ * calling this once per layer, in the same order it merges that layer's
+ * contribution, rather than resolving one flat map before the fold begins
+ * and applying it uniformly to every layer.
+ *
+ * Deliberately does **not** check for a weakening — that is
+ * `resolveStrategies`' whole-stack validation, which MUST already have
+ * run (and found no diagnostics) before `fold()` relies on this function.
+ * Given a stack `resolveStrategies` has accepted, the only transition that
+ * can ever occur is tightening (`"replace"` → `"append"`); an explicit
+ * `"replace"` declaration is therefore never itself acted on here — in a
+ * validated stack it can only be restating the current strategy or
+ * following a legal one-way transition already applied by an earlier
+ * layer, both of which "leave the map unchanged" already covers. Calling
+ * this on a stack `resolveStrategies` has refused is unspecified — nothing
+ * in `fold()` does, and `foldConfiguration` never calls `fold()` when
+ * `resolveStrategies` reported a diagnostic.
+ *
+ * Returns `running` itself, unchanged (no allocation), for the common
+ * case — every `role: "config"` layer (FR-015: never read), and a schema
+ * with no `cascade` declaration that tightens anything.
+ */
+export function advanceStrategies(running: ReadonlyMap<string, MergeStrategy>, layer: Layer): ReadonlyMap<string, MergeStrategy> {
+  if (layer.role !== "schema") {
+    return running;
+  }
+  const vocabulary = readKeysVocabulary(layer.tree);
+  let next: Map<string, MergeStrategy> | undefined;
+  for (const [key, declaration] of vocabulary) {
+    if (declaration.cascade === undefined) {
+      continue;
+    }
+    if (interpretCascade(declaration.cascade) !== "append") {
+      continue; // Not a tightening — either "replace", or unrecognized (Phase 6's refusal).
+    }
+    if (effectiveStrategy(key, running) === "append") {
+      continue; // Already there — restating is vacuous.
+    }
+    if (next === undefined) {
+      next = new Map(running);
+    }
+    next.set(key, "append");
+  }
+  return next ?? running;
 }
 
 // --- Append accumulation — User Story 2 (T029) ----------------------------

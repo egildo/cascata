@@ -35,6 +35,7 @@ import type { Transport } from "./resolve/transport.js";
 import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 import { foldConfiguration } from "./merge/fold.js";
+import { why as whyImpl } from "./merge/provenance.js";
 import type { MergedConfiguration } from "./merge/provenance.js";
 
 export type { Diagnostic, RelatedSpan } from "./diagnostics/diagnostic.js";
@@ -49,7 +50,7 @@ export type { Graph, GraphDocument, GraphDocumentIdentity, GraphReference } from
 export type { Pedigree, PedigreeEntry } from "./graph/pedigree.js";
 export type { FetchLimits } from "./resolve/fetch.js";
 export type { Recording, RecordedFailure, RecordedFailureKind, RecordedResponse, RecordingOutcome, Transport } from "./resolve/transport.js";
-export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord } from "./merge/provenance.js";
+export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord, WhyResult } from "./merge/provenance.js";
 
 /** The result of one `parse()`/`parseText()` call. Never both a tree and diagnostics. */
 export type ParseResult = { readonly ok: true; readonly tree: Node } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -669,9 +670,19 @@ export type MergeResult = { readonly ok: true; readonly configuration: MergedCon
  * ancestor made `append`. The rest of this milestone's merge policy
  * validation (an unknown or non-string `cascade`, `append` over a
  * non-sequence, `merge-by-key`) is still Phase 6 (User Story 4), not yet
- * implemented. `why()` (Phase 5, User Story 3) is not exported here
- * either — see `src/merge/provenance.ts`'s module doc.
+ * implemented.
  */
 export function merge(resolved: MergeInput): MergeResult {
   return foldConfiguration(resolved.graph, resolved.pedigree);
 }
+
+// --- why() — User Story 3 (v0.3, tasks.md T049) --------------------------
+
+/**
+ * Answer where a merged value came from — `merge-api.md`'s three
+ * outcomes: an ordered `chain`, `synthesized` for a container no single
+ * layer wrote, or `unknown-pointer` for a pointer that names nothing in
+ * `configuration.tree`. A library function, not a command (research D3) —
+ * `SPEC.md` §10 writes `tool why`, but no CLI ships in this milestone.
+ */
+export const why = whyImpl;

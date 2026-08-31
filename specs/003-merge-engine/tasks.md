@@ -105,7 +105,7 @@ sequence; every item present, root-first, nothing removed.
 - [x] T026 [P] [US2] Case asserting an empty contribution removes nothing (FR-012), in tests/corpus/cases/merge-append/empty/
 - [x] T027 [P] [US2] Case asserting a key with no declared strategy behaves as `replace` (FR-011), in tests/corpus/cases/merge-append/default/
 - [x] T028 [P] [US2] Cases for strategy mutation — a descendant weakening `append` to `replace` asserting `cascade-strategy-weakened`, and a descendant tightening `replace` to `append` asserting it is permitted — in tests/corpus/cases/merge-append/strategy-mutation/ (v0.3 FR-016)
-- [ ] T029 [P] [US2] Case for the discriminating scenario a v0.3 implementer surfaced — root provides `[a]` with no strategy, a middle layer `[b]`, a leaf declares `append` and provides `[c]` — asserting `[b, c]`, in tests/corpus/cases/merge-append/late-declaration/ (v0.3 FR-026)
+- [x] T029 [P] [US2] Case for the discriminating scenario a v0.3 implementer surfaced — root provides `[a]` with no strategy, a middle layer `[b]`, a leaf declares `append` and provides `[c]` — asserting `[b, c]`, in tests/corpus/cases/merge-append/late-declaration/ (v0.3 FR-026)
 
 ### Implementation for User Story 2
 
@@ -113,8 +113,8 @@ sequence; every item present, root-first, nothing removed.
 - [x] T031 [US2] Default every undeclared key to `replace` in src/merge/strategy.ts (FR-011) — depends on T008
 - [x] T032 [US2] Resolve disagreeing strategy declarations deterministically in src/merge/strategy.ts (v0.3 FR-016) — a descendant may tighten `replace` to `append`, which removes nothing; weakening the other way is T033's refusal. **Superseded wording:** this task said "the nearer layer governing" until `SPEC.md` §5.2 gained its cascade-strategy row; that rule would have let a descendant discard every ancestor's contribution — depends on T030
 - [x] T033 [US2] Refuse a strategy weakened away from accumulation, per `SPEC.md` §5.2's cascade-strategy row, in src/merge/strategy.ts (v0.3 FR-016) — depends on T030
-- [ ] T034 [US2] Apply a strategy from its declaring layer downward rather than uniformly across the key, in src/merge/strategy.ts and src/merge/fold.ts (v0.3 FR-026) — the first implementation read `SPEC.md` §5.2's "once a key accumulates" as governing the whole stack, which let a leaf reach back over an ancestor's settled `replace`; §5.2 now says downward — depends on T030
-- [ ] T035 [US2] Confine `cascade` and `provide` to top-level keys, with no nested-key syntax invented, in src/merge/strategy.ts (v0.3 FR-027) — an implementer inferred this correctly from §9's worked chain when nothing stated it; now stated
+- [x] T034 [US2] Apply a strategy from its declaring layer downward rather than uniformly across the key, in src/merge/strategy.ts and src/merge/fold.ts (v0.3 FR-026) — the first implementation read `SPEC.md` §5.2's "once a key accumulates" as governing the whole stack, which let a leaf reach back over an ancestor's settled `replace`; §5.2 now says downward — depends on T030
+- [x] T035 [US2] Confine `cascade` and `provide` to top-level keys, with no nested-key syntax invented, in src/merge/strategy.ts (v0.3 FR-027) — an implementer inferred this correctly from §9's worked chain when nothing stated it; now stated
 
 ### Property tests for User Story 2 (Principle II — the first milestone it binds)
 

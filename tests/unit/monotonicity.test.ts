@@ -10,13 +10,31 @@
  *
  * - **`cascade: append` arrays** (§5.2's row: "Append provisions" legal,
  *   "Remove inherited items" never) — discharged **fully**. Over randomly
- *   generated layer stacks: no ancestor's contribution is ever absent from
- *   the accumulated result, appending never removes an inherited item, and
- *   the order is always root-first. Separately, no stack in which a
- *   strategy weakens from `append` to `replace` is ever accepted — the
- *   `cascade` strategy row's "Never" clause, immediately below the arrays
- *   row in the table and load-bearing for it (a silent weakening would
- *   let the arrays row's "never remove" be violated by construction).
+ *   generated layer stacks: appending never removes an item accumulation
+ *   actually reached, and the order is always root-first from wherever
+ *   accumulation began. Separately, no stack in which a strategy weakens
+ *   from `append` to `replace` is ever accepted — the `cascade` strategy
+ *   row's "Never" clause, immediately below the arrays row in the table
+ *   and load-bearing for it (a silent weakening would let the arrays
+ *   row's "never remove" be violated by construction).
+ *
+ *   **Corrected for v0.3 FR-026 (tasks.md T034).** This file's own first
+ *   version encoded "no ancestor's contribution is ever absent" —
+ *   literally every layer's own items, unconditionally — which was the
+ *   *uniform* reading of §5.2's "once a key accumulates, it keeps
+ *   accumulating" that a v0.3 implementer surfaced as ambiguous and that
+ *   `SPEC.md` §5.2 was then amended to settle **against**: a strategy
+ *   governs from the layer that declares it *downward*, so a layer whose
+ *   contribution was already replaced by an ordinary (still-`replace`)
+ *   layer **before** any layer ever declared `append` is genuinely gone,
+ *   and asserting its presence would have been asserting the bug this
+ *   property test exists to catch. `simulateAccumulation` (below) computes
+ *   the corrected expectation independently of the implementation, per
+ *   Principle V — it does not special-case the discriminating scenario,
+ *   it simply implements the same two rules `fold()` does (first
+ *   contributor wins the base case; every layer after that either
+ *   replaces or accumulates depending on the strategy *in effect at that
+ *   layer*) and lets the random search find whichever trials exercise it.
  *
  * - **Defaults (`provide`)** (§5.2's row: "Replace with any value
  *   satisfying accumulated demands" legal, "Provide a value violating any
@@ -124,11 +142,11 @@ function configLayerFor(id: string, rank: number, key: string, items: readonly s
 }
 
 function foldLayers(layers: readonly Layer[]): { readonly ok: true; readonly tree: Node } | { readonly ok: false; readonly diagnostics: ReturnType<typeof resolveStrategies>["diagnostics"] } {
-  const { strategies, diagnostics } = resolveStrategies(layers);
+  const { diagnostics } = resolveStrategies(layers);
   if (diagnostics.length > 0) {
     return { ok: false, diagnostics };
   }
-  return { ok: true, tree: fold(layers, strategies) };
+  return { ok: true, tree: fold(layers) };
 }
 
 function stringsOf(node: Node | undefined): readonly string[] | undefined {
@@ -143,8 +161,43 @@ function stringsOf(node: Node | undefined): readonly string[] | undefined {
 const KEY = "items";
 const TRIALS = 300;
 
-describe("monotonicity (Principle II, SPEC.md §5.2) — cascade: append row (FR-023, FR-016)", () => {
-  it("over randomly generated layer stacks, accumulation is always root-first and every ancestor's contribution — including empty ones — survives", () => {
+/**
+ * Simulate the fold's own §5.2 semantics over plain string arrays, to
+ * compute this property test's expected value independently of the real
+ * implementation (Principle V: never derive an expectation by copying the
+ * implementation's output) — but faithful to v0.3 FR-026/T034's corrected
+ * reading: a strategy governs **from its declaring layer downward**, not
+ * uniformly across the whole stack. Before that correction this function
+ * would have been `perLayerCascade` — the whole point of the fix is that
+ * one flat "resolved strategy" is not enough information to reproduce the
+ * fold's actual behaviour, since the SAME final strategy (`"append"`)
+ * yields different results depending on *when* it was declared.
+ *
+ * Mirrors `fold()`'s own two base rules exactly: the first layer to
+ * contribute anything just becomes the running value, regardless of
+ * strategy (nothing precedes it to replace or accumulate against); every
+ * layer after that either replaces the running value wholesale
+ * (`"replace"`) or concatenates onto it (`"append"`), and a layer with no
+ * items (`undefined`) contributes nothing either way (rule 6).
+ */
+function simulateAccumulation(perLayerCascade: readonly ("append" | "replace" | undefined)[], perLayerItems: readonly (readonly string[] | undefined)[]): readonly string[] | undefined {
+  let strategy: "append" | "replace" = "replace";
+  let current: string[] | undefined;
+  for (let i = 0; i < perLayerItems.length; i += 1) {
+    if (perLayerCascade[i] === "append") {
+      strategy = "append"; // Tighten — one-way, matches strategy.ts's advanceStrategies.
+    }
+    const items = perLayerItems[i];
+    if (items === undefined) {
+      continue; // Rule 6: silence contributes nothing.
+    }
+    current = current === undefined || strategy === "replace" ? [...items] : [...current, ...items];
+  }
+  return current;
+}
+
+describe("monotonicity (Principle II, SPEC.md §5.2) — cascade: append row (FR-023, FR-016, v0.3 FR-026)", () => {
+  it("over randomly generated layer stacks, accumulation is root-first from the declaring layer downward, and never drops a contribution accumulation actually reached", () => {
     for (let trial = 0; trial < TRIALS; trial += 1) {
       const rng = mulberry32(trial + 1);
       // Roughly one trial in seven is a single-layer (config-only) stack —
@@ -154,6 +207,7 @@ describe("monotonicity (Principle II, SPEC.md §5.2) — cascade: append row (FR
 
       const layers: Layer[] = [];
       const perLayerItems: (readonly string[] | undefined)[] = [];
+      const perLayerCascade: ("append" | "replace" | undefined)[] = [];
       let sawAnyDeclaredItems = false;
 
       for (let i = 0; i < schemaCount; i += 1) {
@@ -163,12 +217,14 @@ describe("monotonicity (Principle II, SPEC.md §5.2) — cascade: append row (FR
         if (items !== undefined) sawAnyDeclaredItems = true;
         layers.push(schemaLayerFor(`schema-${trial}-${i}`, i, KEY, cascade, items));
         perLayerItems.push(items);
+        perLayerCascade.push(cascade);
       }
       const configHasItems = rng() < 0.8;
       const configItems = configHasItems ? Array.from({ length: randInt(rng, 0, 3) }, () => randomLabel(rng)) : undefined;
       if (configItems !== undefined) sawAnyDeclaredItems = true;
       layers.push(configLayerFor(`config-${trial}`, schemaCount, KEY, configItems));
       perLayerItems.push(configItems);
+      perLayerCascade.push(undefined); // FR-015: a config never declares cascade.
 
       const outcome = foldLayers(layers);
       expect(outcome.ok, `trial ${trial}: expected a valid stack (no weakening was generated) to fold successfully`).toBe(true);
@@ -187,15 +243,11 @@ describe("monotonicity (Principle II, SPEC.md §5.2) — cascade: append row (FR
         continue;
       }
 
-      // An append declaration was forced at `appendAt`, so §5.2's row
-      // applies: root-first concatenation of every layer's own items,
-      // `undefined` contributing nothing (rule 6), an explicit `[]`
-      // contributing zero items without erasing the key's presence.
-      const expected = perLayerItems.flatMap((items) => items ?? []);
+      const expected = simulateAccumulation(perLayerCascade, perLayerItems);
       if (!sawAnyDeclaredItems) {
         expect(actual, `trial ${trial}: no layer ever declared '${KEY}' at all`).toBeUndefined();
       } else {
-        expect(actual, `trial ${trial}: root-first accumulation, nothing dropped`).toEqual(expected);
+        expect(actual, `trial ${trial}: matches the declaring-layer-downward simulation`).toEqual(expected);
       }
     }
   });

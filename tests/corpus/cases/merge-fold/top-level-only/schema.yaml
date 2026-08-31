@@ -1,0 +1,9 @@
+keys:
+  items:
+    cascade: append
+    provide:
+      - schema-item
+  other:
+    provide:
+      items:
+        - schema-nested-item

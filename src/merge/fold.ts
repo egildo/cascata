@@ -1,11 +1,15 @@
 /**
  * The fold — SPEC.md §5.1, §5.3; contracts/precedence.md's numbered list;
- * research D4; v0.3 FR-004 through FR-010; tasks.md T010, T018–T023.
+ * research D4; v0.3 FR-004 through FR-010, FR-026, FR-027; tasks.md T010,
+ * T018–T023, T034, T035, T044.
  *
  * Folds a ranked stack of `Layer`s (root schema lowest, config highest —
- * contracts/precedence.md rule 1) into one `Node` tree. The whole
- * algorithm is contracts/precedence.md's numbered list, applied
- * mechanically:
+ * contracts/precedence.md rule 1) into one `Node` tree, while
+ * `src/merge/provenance.ts`'s `ProvenanceBuilder` grows the provenance
+ * record alongside it (T044) — never reconstructed from the finished tree
+ * afterward; see that file's module doc for why that distinction is
+ * load-bearing. The whole algorithm is contracts/precedence.md's numbered
+ * list, applied mechanically:
  *
  * 1. A nearer layer beats a further one.
  * 2. Mappings on both sides merge deeply, rule 1 applying independently to
@@ -17,17 +21,36 @@
  *    never has to happen. This file recurses on nothing but a
  *    mapping-vs-mapping pairing; every other pairing falls straight
  *    through to "replace" *unless* rule 4 below applies to that key.
- * 4. `cascade: append` (User Story 2, Phase 4): a top-level key resolved to
- *    `"append"` by `strategy.ts`'s `resolveStrategies` accumulates
- *    root-first instead of replacing — `strategy.ts`'s `accumulateAppend`
- *    does the accumulating; this file only decides, per top-level key,
- *    whether to call it (`effectiveStrategy`) instead of the ordinary rule
- *    1-3 pairing. Confined to **top-level keys only**: `keys:` in a schema
- *    names a key of the config's own top level (`SPEC.md` §9's worked
- *    chain — `keys.styles` governs a top-level `styles:`), never a nested
- *    key of the same name buried inside another key's value, so strategies
- *    are threaded into the outermost `mergeMappings` call alone; every
- *    recursive call for nested structure passes `NO_STRATEGIES`.
+ * 4. `cascade: append` (User Story 2, Phase 4): a top-level key currently
+ *    `"append"` accumulates root-first instead of replacing —
+ *    `strategy.ts`'s `accumulateAppend` does the accumulating; this file
+ *    only decides, per top-level key, whether to call it
+ *    (`effectiveStrategy`) instead of the ordinary rule 1-3 pairing.
+ *    Confined to **top-level keys only** (v0.3 FR-027, T035): `keys:` in a
+ *    schema names a key of the config's own top level (`SPEC.md` §9's
+ *    worked chain — `keys.styles` governs a top-level `styles:`), never a
+ *    nested key of the same name buried inside another key's value, so
+ *    strategies are threaded into the outermost `mergeMappings` call
+ *    alone; every recursive call for nested structure passes
+ *    `NO_STRATEGIES`.
+ *
+ *    **Which strategy is "current" changes as the fold proceeds** (v0.3
+ *    FR-026, T034): rather than resolving one strategy per key before
+ *    folding begins and applying it to every layer alike, `fold()` calls
+ *    `strategy.ts`'s `advanceStrategies` once per layer, immediately
+ *    before merging that layer's own contribution — so a layer that
+ *    declares `append` accumulates its own contribution and every later
+ *    one onto whatever the fold has already produced, and never reaches
+ *    back to re-combine layers that already settled under `replace`
+ *    before the declaration existed. The discriminating case (tasks.md
+ *    T029): root provides `[a]` with no strategy, a middle layer `[b]`
+ *    with no strategy, a leaf declares `append` and provides `[c]` — root
+ *    is the fold's base case (nothing to merge against yet), middle
+ *    *replaces* it (ordinary rule 3 — `[a]` is gone), and only then does
+ *    the leaf's declaration make anything accumulate, onto `[b]`. Result:
+ *    `[b, c]`, not `[a, b, c]` — the first implementation resolved one
+ *    flat map before folding and got this case wrong; see the milestone
+ *    report.
  * 5. An explicit null is a value, not an absence — this needs **no special
  *    case** below: a `null` scalar `Node` is an ordinary `Node`, and this
  *    file never treats "the node at this position" as absent unless the
@@ -37,10 +60,6 @@
  *    that conflation a type error, not just a discipline.
  * 6. Absence contributes nothing — a layer with nothing to say about a
  *    position is skipped, never treated as clearing it.
- *
- * **Provenance is not built here in this slice.** See
- * `src/merge/provenance.ts`'s module doc: recording the chain (including
- * what got overridden) is tasks.md T041, Phase 5, out of T001–T024's scope.
  */
 
 import { createMapping, type Mapping, type Node } from "../model/node.js";
@@ -48,8 +67,8 @@ import { freeze } from "../model/freeze.js";
 import type { Graph } from "../graph/build.js";
 import type { Pedigree } from "../graph/pedigree.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
-import { accumulateAppend, effectiveStrategy, readKeysVocabulary, resolveStrategies } from "./strategy.js";
-import type { Layer, MergedConfiguration, MergeStrategy } from "./provenance.js";
+import { accumulateAppend, advanceStrategies, effectiveStrategy, readKeysVocabulary, resolveStrategies } from "./strategy.js";
+import { createProvenanceBuilder, type Layer, type MergedConfiguration, type MergeStrategy, type ProvenanceBuilder, type ProvenanceRecord } from "./provenance.js";
 
 /** No key has a declared strategy — used for every merge below the top level, where `cascade` never applies (rule 4's own doc comment above). */
 const NO_STRATEGIES: ReadonlyMap<string, MergeStrategy> = new Map();
@@ -182,14 +201,28 @@ function contributionOf(layer: Layer): Node | undefined {
  * `mergeValue`'s own recursive call below always passes `NO_STRATEGIES`
  * for nested structure, which is what confines `cascade` to top-level
  * keys (this function's module-doc rule 4).
+ *
+ * `path` is this mapping's own position (`[]` at the top level), and
+ * `builder` is where every merge decision below is also recorded as
+ * provenance (T044) — `current` genuinely is a mapping at `path` already
+ * (this function is only ever called once `mergeValue` has confirmed
+ * both sides are mappings), and `incoming` is now a *second* (or third,
+ * ...) layer contributing one there too, so this position becomes
+ * `synthesized` (`src/merge/provenance.ts`'s module doc) regardless of
+ * whether any individual key inside collides.
  */
-function mergeMappings(current: Mapping, incoming: Mapping, strategies: ReadonlyMap<string, MergeStrategy>): Mapping {
+function mergeMappings(path: readonly string[], current: Mapping, incoming: Mapping, layer: Layer, strategies: ReadonlyMap<string, MergeStrategy>, builder: ProvenanceBuilder): Mapping {
+  builder.recordSynthesized(path);
   const keys = new Set<string>([...current.entries.keys(), ...incoming.entries.keys()]);
   const merged: [string, Node][] = [];
   for (const key of keys) {
+    const childPath = [...path, key];
     const currentValue = current.entries.get(key);
     const incomingValue = incoming.entries.get(key);
     if (effectiveStrategy(key, strategies) === "append") {
+      if (incomingValue !== undefined) {
+        builder.recordAccumulation(childPath, incomingValue.span, layer);
+      }
       const accumulated = accumulateAppend(currentValue, incomingValue);
       if (accumulated !== undefined) {
         merged.push([key, accumulated]);
@@ -200,10 +233,14 @@ function mergeMappings(current: Mapping, incoming: Mapping, strategies: Readonly
       continue;
     }
     if (currentValue !== undefined && incomingValue !== undefined) {
-      merged.push([key, mergeValue(currentValue, incomingValue, NO_STRATEGIES)]);
+      merged.push([key, mergeValue(childPath, currentValue, incomingValue, layer, NO_STRATEGIES, builder)]);
     } else if (incomingValue !== undefined) {
+      builder.recordFreshContribution(childPath, incomingValue, layer);
       merged.push([key, incomingValue]);
     } else if (currentValue !== undefined) {
+      // Untouched by this layer — whatever provenance this key already
+      // carries (from whichever earlier layer(s) actually contributed at
+      // `childPath`) stays exactly as it was; nothing new to record.
       merged.push([key, currentValue]);
     }
     // else unreachable: `key` was drawn from the union of both maps' own keys.
@@ -219,43 +256,67 @@ function mergeMappings(current: Mapping, incoming: Mapping, strategies: Readonly
  * `incoming` (rule 3) — which is also where rule 5 (null replaces) falls
  * out for free, since a `null` scalar is just another `Node` that "replaces
  * wholesale" like any other. `strategies` is threaded straight through to
- * `mergeMappings` unchanged — it is this function's caller (`fold`, at the
- * top level) that decides whether `strategies` carries real entries or is
- * `NO_STRATEGIES`.
+ * `mergeMappings` unchanged — it is this function's caller that decides
+ * whether `strategies` carries real entries or is `NO_STRATEGIES`.
+ *
+ * `current === undefined` is unreachable here in practice — `fold()`'s own
+ * loop only calls this once a first contribution already exists, recording
+ * that first contribution itself rather than calling this function — but
+ * the case is handled defensively (as a fresh contribution) rather than
+ * assumed away, since nothing about this function's own signature rules
+ * it out.
  */
-function mergeValue(current: Node | undefined, incoming: Node, strategies: ReadonlyMap<string, MergeStrategy>): Node {
+function mergeValue(path: readonly string[], current: Node | undefined, incoming: Node, layer: Layer, strategies: ReadonlyMap<string, MergeStrategy>, builder: ProvenanceBuilder): Node {
   if (current === undefined) {
+    builder.recordFreshContribution(path, incoming, layer);
     return incoming;
   }
   if (current.type === "mapping" && incoming.type === "mapping") {
-    return mergeMappings(current, incoming, strategies);
+    return mergeMappings(path, current, incoming, layer, strategies, builder);
   }
+  builder.recordReplacement(path, current, incoming, layer);
   return incoming;
 }
 
 /**
- * Fold every layer, root to leaf, into one `Node` tree (FR-004). A
- * single-layer fold (just the config, no schema at all) is the identity —
- * FR-009 — because the loop below never calls `mergeValue` at all in that
- * case: there is only ever one contribution, taken as-is.
+ * Fold every layer, root to leaf, into one `Node` tree plus its
+ * provenance record (FR-004, T044). A single-layer fold (just the config,
+ * no schema at all) is the identity — FR-009 — because the loop below
+ * never calls `mergeValue` at all in that case: there is only ever one
+ * contribution, taken as-is (still recorded as that single layer's
+ * `"won"` chain, per SC-002).
  *
- * `strategies` (default `NO_STRATEGIES`, so every existing caller that
- * predates User Story 2 — including this file's own hand-constructed unit
- * tests — is unaffected and every key still folds as `replace`) is
- * `strategy.ts`'s `resolveStrategies` output: one resolved `MergeStrategy`
- * per top-level key, already reconciled across the whole layer stack
- * (rule 4). Threaded only into the top-level `mergeValue` call below —
- * every nested merge confines itself to `NO_STRATEGIES` (`mergeMappings`'s
- * own doc comment).
+ * Strategy state is **not** resolved once before this loop runs and then
+ * applied uniformly — `strategy.ts`'s `advanceStrategies` is called once
+ * per layer, immediately before merging that layer's own contribution,
+ * which is what makes a strategy take effect "from its declaring layer
+ * downward" (v0.3 FR-026, T034) rather than reaching back over layers
+ * that already settled under a different strategy. This function assumes
+ * the caller has already run `resolveStrategies` and found no diagnostics
+ * — `advanceStrategies`'s own doc comment explains why calling this on an
+ * invalid (weakening) stack is unspecified.
  */
-export function fold(layers: readonly Layer[], strategies: ReadonlyMap<string, MergeStrategy> = NO_STRATEGIES): Node {
+export function fold(layers: readonly Layer[]): Node {
+  return foldWithProvenance(layers).tree;
+}
+
+/** `fold()`'s full result — the tree plus the provenance record built alongside it. `foldConfiguration` is `fold()`'s only caller that needs the provenance half; every other caller (this file's own hand-constructed unit tests among them) just wants the tree, which is what `fold()` itself returns. */
+export function foldWithProvenance(layers: readonly Layer[]): { readonly tree: Node; readonly provenance: ProvenanceRecord } {
+  const builder = createProvenanceBuilder();
   let result: Node | undefined;
+  let strategies: ReadonlyMap<string, MergeStrategy> = NO_STRATEGIES;
   for (const layer of layers) {
+    strategies = advanceStrategies(strategies, layer);
     const contribution = contributionOf(layer);
     if (contribution === undefined) {
       continue;
     }
-    result = result === undefined ? contribution : mergeValue(result, contribution, strategies);
+    if (result === undefined) {
+      builder.recordFreshContribution([], contribution, layer);
+      result = contribution;
+    } else {
+      result = mergeValue([], result, contribution, layer, strategies, builder);
+    }
   }
   if (result === undefined) {
     // Unreachable: `deriveLayers` always appends the config layer last, and
@@ -263,7 +324,7 @@ export function fold(layers: readonly Layer[], strategies: ReadonlyMap<string, M
     // `undefined` — `GraphDocument.tree` is non-optional).
     throw new Error("Internal error: fold() produced no result — deriveLayers should always include a config layer");
   }
-  return result;
+  return { tree: result, provenance: builder.finish() };
 }
 
 /** `foldConfiguration`'s result — never both a configuration and diagnostics (mirrors `MergeResult` in `src/index.ts`, which this shape feeds directly). */
@@ -271,31 +332,35 @@ export type FoldOutcome = { readonly ok: true; readonly configuration: MergedCon
 
 /**
  * Fold a resolved graph and its pedigree into a `MergedConfiguration`, or
- * refuse with diagnostics (FR-004, FR-010, FR-016). The tree is deeply
- * frozen before being returned, so it satisfies every v0.1 invariant merge
- * inherits rather than is exempted from: every node positioned (true
- * throughout — no node here is ever constructed without a span, by the
- * model's own construction invariant), mappings in canonical key order
- * (`createMapping` always sorts), and deeply frozen (`freeze`, called once
- * here, exactly as v0.1's own `parse` does at its own boundary).
+ * refuse with diagnostics (FR-004, FR-010, FR-016, FR-017). The tree is
+ * deeply frozen before being returned, so it satisfies every v0.1
+ * invariant merge inherits rather than is exempted from: every node
+ * positioned (true throughout — no node here is ever constructed without
+ * a span, by the model's own construction invariant), mappings in
+ * canonical key order (`createMapping` always sorts), and deeply frozen
+ * (`freeze`, called once here, exactly as v0.1's own `parse` does at its
+ * own boundary). `freeze` mutates every node's own `span` object in place
+ * (`src/model/freeze.ts`) rather than cloning it, so the `SourceSpan`
+ * references already captured in `provenance`'s entries are the exact
+ * same objects the frozen tree ends up holding — the two structures never
+ * diverge over freezing.
  *
  * `resolveStrategies` runs **before** the fold itself: a `cascade-strategy
  * -weakened` refusal (T032) is a fact about the pedigree's own vocabulary,
  * independent of any data, so there is no reason to build a tree first and
  * discover it cannot be trusted — this mirrors User Story 4's later
  * refusals (Phase 6, not yet implemented), which will extend the same
- * `diagnostics.length > 0` branch rather than add a second one.
- *
- * `provenance` is the empty record in this slice — see
- * `src/merge/provenance.ts`'s module doc for why populating it is Phase 5
- * work (T041) rather than part of this fold.
+ * `diagnostics.length > 0` branch rather than add a second one. Its own
+ * `strategies` field is unused past that check now (T034):
+ * `foldWithProvenance` derives the strategy in effect at each layer for
+ * itself, via `advanceStrategies`, rather than being handed one flat map.
  */
 export function foldConfiguration(graph: Graph, pedigree: Pedigree): FoldOutcome {
   const layers = deriveLayers(graph);
-  const { strategies, diagnostics } = resolveStrategies(layers);
+  const { diagnostics } = resolveStrategies(layers);
   if (diagnostics.length > 0) {
     return { ok: false, diagnostics: [...diagnostics] };
   }
-  const tree = freeze(fold(layers, strategies));
-  return { ok: true, configuration: { tree, provenance: new Map(), pedigree } };
+  const { tree, provenance } = foldWithProvenance(layers);
+  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree } };
 }

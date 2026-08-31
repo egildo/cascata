@@ -226,9 +226,9 @@ describe("fold() — rule 4: cascade: append (T029-T032), hand-constructed", () 
     const mid = schemaLayer("mid", 1, [providing("items", createSequence([createStringScalar("mid-a", span("mid", 1, 2))], midItemsSpan), midItemsSpan)]);
     const config = configLayer("config", 2, createMapping([["items", createSequence([createStringScalar("config-a", span("config", 1, 2))], configItemsSpan)]], span("config", 0, 1)));
 
-    const { strategies, diagnostics } = resolveStrategies([root, mid, config]);
+    const { diagnostics } = resolveStrategies([root, mid, config]);
     expect(diagnostics).toEqual([]);
-    const result = fold([root, mid, config], strategies);
+    const result = fold([root, mid, config]);
     if (result.type !== "mapping") throw new Error("unreachable");
     const items = result.entries.get("items");
     if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
@@ -244,8 +244,7 @@ describe("fold() — rule 4: cascade: append (T029-T032), hand-constructed", () 
     const silentMiddle = schemaLayer("middle", 1, []); // declares nothing about "items" at all
     const config = configLayer("config", 2, createMapping([["items", createSequence([createStringScalar("config-a", span("config", 1, 2))], span("config", 1, 3))]], span("config", 0, 1)));
 
-    const { strategies } = resolveStrategies([root, silentMiddle, config]);
-    const result = fold([root, silentMiddle, config], strategies);
+    const result = fold([root, silentMiddle, config]);
     if (result.type !== "mapping") throw new Error("unreachable");
     const items = result.entries.get("items");
     if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
@@ -258,7 +257,7 @@ describe("fold() — rule 4: cascade: append (T029-T032), hand-constructed", () 
 
     const { strategies } = resolveStrategies([schema, config]);
     expect(strategies.size).toBe(0); // nothing declared cascade at all
-    const result = fold([schema, config], strategies);
+    const result = fold([schema, config]);
     if (result.type !== "mapping") throw new Error("unreachable");
     const items = result.entries.get("items");
     if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
@@ -267,7 +266,7 @@ describe("fold() — rule 4: cascade: append (T029-T032), hand-constructed", () 
     expect(items.items[0]).toMatchObject({ kind: "string", value: "config-a" });
   });
 
-  it("tightening replace -> append (an earlier explicit replace, a later append) governs the WHOLE key, including the layer that predates the tightening (SPEC.md §5.2: 'once a key accumulates, it keeps accumulating')", () => {
+  it("tightening replace -> append at the SECOND layer includes the first (base) layer's item too — not because 'append governs the whole key uniformly' (that reading was superseded, v0.3 FR-026/T034), but because root is the fold's base case: nothing precedes it to be replaced before append ever takes effect", () => {
     const root = schemaLayer("root", 0, [declaringCascade("items", "replace", span("root", 0, 1), [createSequence([createStringScalar("root-a", span("root", 1, 2))], span("root", 1, 3)), span("root", 1, 3)])]);
     const mid = schemaLayer("mid", 1, [declaringCascade("items", "append", span("mid", 0, 1), [createSequence([createStringScalar("mid-a", span("mid", 1, 2))], span("mid", 1, 3)), span("mid", 1, 3)])]);
     const config = configLayer("config", 2, createMapping([["items", createSequence([createStringScalar("config-a", span("config", 1, 2))], span("config", 1, 3))]], span("config", 0, 1)));
@@ -275,15 +274,43 @@ describe("fold() — rule 4: cascade: append (T029-T032), hand-constructed", () 
     const { strategies, diagnostics } = resolveStrategies([root, mid, config]);
     expect(diagnostics).toEqual([]);
     expect(strategies.get("items")).toBe("append");
-    const result = fold([root, mid, config], strategies);
+    const result = fold([root, mid, config]);
     if (result.type !== "mapping") throw new Error("unreachable");
     const items = result.entries.get("items");
     if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
-    // Root's own item is included even though root itself declared
-    // "replace" — the FINAL resolved strategy (append, after mid tightens
-    // it) governs every layer's contribution, not only the layers from the
-    // declaring one onward.
+    // Root is the very first layer overall (the fold's base case — nothing
+    // to merge against yet), so its item enters the accumulated result
+    // unconditionally; mid tightens to append on its OWN turn, immediately
+    // accumulating onto root's item rather than replacing it. Contrast
+    // tasks.md T029's discriminating case (tests/corpus/merge-cases/
+    // T029-late-append-declaration.json): there, TWO no-strategy layers
+    // precede the append declaration, so the first is genuinely replaced
+    // by the second before append ever applies, and is correctly absent
+    // from the result.
     expect(items.items.map((n) => (n.type === "scalar" ? n.value : undefined))).toEqual(["root-a", "mid-a", "config-a"]);
+  });
+
+  it("T029/v0.3 FR-026: a leaf's late append declaration governs from itself downward, not back over a middle layer's settled replace — root [a], middle (no strategy) [b], leaf declares append and provides [c] folds to [b, c], not [a, b, c]", () => {
+    const root = schemaLayer("root", 0, [providing("items", createSequence([createStringScalar("root-a", span("root", 1, 2))], span("root", 1, 3)), span("root", 1, 3))]);
+    const middle = schemaLayer("mid", 1, [providing("items", createSequence([createStringScalar("mid-b", span("mid", 1, 2))], span("mid", 1, 3)), span("mid", 1, 3))]);
+    const leaf = schemaLayer("leaf", 2, [
+      declaringCascade("items", "append", span("leaf", 0, 1), [createSequence([createStringScalar("leaf-c", span("leaf", 1, 2))], span("leaf", 1, 3)), span("leaf", 1, 3)]),
+    ]);
+    const config = configLayer("config", 3, createMapping([], span("config", 0, 1))); // silent — the leaf schema's own provide is what contributes "c"
+
+    const { diagnostics } = resolveStrategies([root, middle, leaf, config]);
+    expect(diagnostics).toEqual([]);
+    const result = fold([root, middle, leaf, config]);
+    if (result.type !== "mapping") throw new Error("unreachable");
+    const items = result.entries.get("items");
+    if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
+    // Middle's own turn merges under the still-default "replace" (root
+    // declared nothing), so root's "a" is genuinely discarded there —
+    // BEFORE the leaf ever declares append. The leaf's declaration then
+    // accumulates its own "c" onto whatever the fold had already produced
+    // (middle's "b"), never reaching back over the replace that already
+    // happened.
+    expect(items.items.map((n) => (n.type === "scalar" ? n.value : undefined))).toEqual(["mid-b", "leaf-c"]);
   });
 
   it("weakening append -> replace is refused as cascade-strategy-weakened, at the descendant's own declared position (v0.3 FR-016)", () => {

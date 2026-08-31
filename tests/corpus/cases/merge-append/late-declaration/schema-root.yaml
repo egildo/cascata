@@ -1,0 +1,4 @@
+keys:
+  items:
+    provide:
+      - root-a
