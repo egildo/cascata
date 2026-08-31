@@ -1,0 +1,9 @@
+types:
+  foo: {}
+keys:
+  a:
+    demand:
+      accept: [url]
+  b:
+    demand:
+      format: date-time

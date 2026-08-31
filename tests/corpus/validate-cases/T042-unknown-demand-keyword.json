@@ -1,0 +1,20 @@
+{
+  "name": "T042: a demand keyword outside SPEC.md §9's closed list is refused at its own position (FR-005, spec.md Acceptance Scenario 1)",
+  "cites": "v0.4 FR-005",
+  "fixtureDir": "validate-vocabulary/unknown-keyword",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-demand-keyword",
+        "document": "schema.yaml",
+        "line": 4,
+        "column": 19,
+        "demand": { "pointer": "/keys/name/demand/frobnicate", "document": "schema.yaml", "line": 4, "column": 19 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

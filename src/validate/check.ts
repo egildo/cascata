@@ -30,7 +30,7 @@ import type { Node } from "../model/node.js";
 import { pointerFromPath, resolvePointer } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
-import { readDemandVocabulary, type DemandKeyword } from "./vocabulary.js";
+import { readDemandVocabulary, vocabularyProblemsForLayer, type DemandKeyword } from "./vocabulary.js";
 import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, checkType, parseTypeDemand, requiredViolationCause, type ViolationSite } from "./constraints.js";
 import { renderViolation, type Demand, type Violation } from "./violation.js";
 
@@ -209,14 +209,31 @@ function violationsForLayer(configuration: MergedConfiguration, layer: Layer): V
   return violations;
 }
 
-/** Check `configuration` against every schema layer's `demand`, root to leaf (FR-014). */
+/**
+ * Check `configuration` against every schema layer's `demand`, root to
+ * leaf (FR-014). Two independent passes run **unconditionally**, mirroring
+ * v0.3 FR-028's precedent for merge (`foldConfiguration`'s own doc
+ * comment): closed-vocabulary problems (`vocabulary.ts`'s
+ * `vocabularyProblemsForLayer` — unknown/unimplemented keywords, malformed
+ * shapes, unparseable/unresolvable `type` expressions) are found
+ * independently of whether any *value* violates anything, and a malformed
+ * demand never produces a duplicate or missing report from the other
+ * pass — `constraints.ts`'s leaf checks already treat a malformed demand
+ * value as silently not-applicable, so the vocabulary pass is the only
+ * source of a diagnostic for it.
+ */
 export function checkConfiguration(configuration: MergedConfiguration): CheckOutcome {
+  const vocabularyDiagnostics: Diagnostic[] = [];
+  for (const layer of configuration.layers) {
+    vocabularyDiagnostics.push(...vocabularyProblemsForLayer(layer));
+  }
   const violations: Violation[] = [];
   for (const layer of configuration.layers) {
     violations.push(...violationsForLayer(configuration, layer));
   }
-  if (violations.length === 0) {
+  const diagnostics = [...vocabularyDiagnostics, ...violations.map(renderViolation)];
+  if (diagnostics.length === 0) {
     return { ok: true };
   }
-  return { ok: false, diagnostics: violations.map(renderViolation) };
+  return { ok: false, diagnostics };
 }

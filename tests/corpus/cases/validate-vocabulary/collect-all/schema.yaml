@@ -1,0 +1,10 @@
+keys:
+  alpha:
+    demand:
+      bogus: true
+  beta:
+    demand:
+      min: nope
+  gamma:
+    demand:
+      type: notatype

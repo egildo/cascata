@@ -1,0 +1,32 @@
+{
+  "name": "T043: accept, format, and a top-level types: section are refused as unimplemented, naming v0.5, distinct from unknown (FR-006, FR-011a, FR-011b, spec.md Acceptance Scenario 2)",
+  "cites": "v0.4 FR-006",
+  "fixtureDir": "validate-vocabulary/unimplemented",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unimplemented-types-section",
+        "document": "schema.yaml"
+      },
+      {
+        "code": "unimplemented-demand-keyword",
+        "document": "schema.yaml",
+        "line": 6,
+        "column": 15,
+        "demand": { "pointer": "/keys/a/demand/accept", "document": "schema.yaml", "line": 6, "column": 15 },
+        "pedigreePosition": 0
+      },
+      {
+        "code": "unimplemented-demand-keyword",
+        "document": "schema.yaml",
+        "line": 9,
+        "column": 15,
+        "demand": { "pointer": "/keys/b/demand/format", "document": "schema.yaml", "line": 9, "column": 15 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

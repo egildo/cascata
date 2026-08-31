@@ -1,0 +1,10 @@
+keys:
+  a:
+    demand:
+      min: ten
+  b:
+    demand:
+      enum: 3
+  c:
+    demand:
+      required: yes

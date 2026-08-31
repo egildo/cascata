@@ -1,0 +1,8 @@
+{
+  "name": "T047: seal, final, and delegate alongside demand have no effect -- demand is enforced, the other three are inert (spec.md Acceptance Scenario 6, v0.3 FR-002's rule carried forward)",
+  "cites": "v0.4 FR-002",
+  "fixtureDir": "validate-vocabulary/inert-vocabulary",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

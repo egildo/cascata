@@ -1,0 +1,36 @@
+{
+  "name": "T044: a constraint value of the wrong shape (min: \"ten\", enum: 3, required: \"yes\") is refused at the value's position, naming the expected shape (FR-007, spec.md Acceptance Scenario 3)",
+  "cites": "v0.4 FR-007",
+  "fixtureDir": "validate-vocabulary/malformed-value",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "malformed-demand-value",
+        "document": "schema.yaml",
+        "line": 4,
+        "column": 12,
+        "demand": { "pointer": "/keys/a/demand/min", "document": "schema.yaml", "line": 4, "column": 12 },
+        "pedigreePosition": 0
+      },
+      {
+        "code": "malformed-demand-value",
+        "document": "schema.yaml",
+        "line": 7,
+        "column": 13,
+        "demand": { "pointer": "/keys/b/demand/enum", "document": "schema.yaml", "line": 7, "column": 13 },
+        "pedigreePosition": 0
+      },
+      {
+        "code": "malformed-demand-value",
+        "document": "schema.yaml",
+        "line": 10,
+        "column": 17,
+        "demand": { "pointer": "/keys/c/demand/required", "document": "schema.yaml", "line": 10, "column": 17 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

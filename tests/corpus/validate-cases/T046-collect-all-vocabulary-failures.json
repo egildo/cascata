@@ -1,0 +1,36 @@
+{
+  "name": "T046: several independent vocabulary failures across a schema (unknown keyword, malformed value, unresolvable type) are all reported from one validate() call, not merely the first or the first category (FR-017, spec.md Acceptance Scenario 5)",
+  "cites": "v0.4 FR-017",
+  "fixtureDir": "validate-vocabulary/collect-all",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-demand-keyword",
+        "document": "schema.yaml",
+        "line": 4,
+        "column": 14,
+        "demand": { "pointer": "/keys/alpha/demand/bogus", "document": "schema.yaml", "line": 4, "column": 14 },
+        "pedigreePosition": 0
+      },
+      {
+        "code": "malformed-demand-value",
+        "document": "schema.yaml",
+        "line": 7,
+        "column": 12,
+        "demand": { "pointer": "/keys/beta/demand/min", "document": "schema.yaml", "line": 7, "column": 12 },
+        "pedigreePosition": 0
+      },
+      {
+        "code": "unknown-type-name",
+        "document": "schema.yaml",
+        "line": 10,
+        "column": 13,
+        "demand": { "pointer": "/keys/gamma/demand/type", "document": "schema.yaml", "line": 10, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

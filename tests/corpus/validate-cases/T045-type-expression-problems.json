@@ -1,0 +1,28 @@
+{
+  "name": "T045: an unparseable type expression and an unresolvable type name are refused with distinct codes, at the expression's position (FR-009, FR-012, spec.md Acceptance Scenario 4)",
+  "cites": "v0.4 FR-009",
+  "fixtureDir": "validate-vocabulary/type-expression",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "malformed-type-expression",
+        "document": "schema.yaml",
+        "line": 4,
+        "column": 13,
+        "demand": { "pointer": "/keys/x/demand/type", "document": "schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      },
+      {
+        "code": "unknown-type-name",
+        "document": "schema.yaml",
+        "line": 7,
+        "column": 13,
+        "demand": { "pointer": "/keys/y/demand/type", "document": "schema.yaml", "line": 7, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}
