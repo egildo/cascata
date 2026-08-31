@@ -1,0 +1,13 @@
+{
+  "name": "T038: a delegation cycle (a fragment whose own nested delegation points back at itself while still being resolved) is refused rather than followed (spec.md US4 Acceptance Scenario 6, FR-015)",
+  "cites": "v0.6 FR-015",
+  "fixtureDir": "validate-delegation/delegation-cycle",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      { "code": "reference-cycle", "document": "a.yaml", "line": 1, "column": 10 }
+    ]
+  }
+}

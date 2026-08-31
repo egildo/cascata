@@ -19,6 +19,15 @@ export interface ValidateCaseResult {
   readonly failures: readonly string[];
 }
 
+/**
+ * v0.6: callers pass `origin.label`, not `origin.id` — a fragment's own
+ * `Origin.id` is a synthesized per-graft string (research.md D3,
+ * FR-013a's independent-provenance requirement), never a real path, so
+ * comparing it against a fixture's own file path would always fail for
+ * a delegation-sourced diagnostic. `origin.label` stays the real file
+ * path for every kind of document, delegated or not — exactly what this
+ * comparison has always wanted.
+ */
 function relativeLocation(fixtureDir: string, absoluteLocation: string): string {
   return relative(fixtureDir, absoluteLocation).split("\\").join("/");
 }
@@ -37,7 +46,7 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
     if (actualDiagnostic.code !== expectedDiagnostic.code) {
       failures.push(`${label}: expected code '${expectedDiagnostic.code}', got '${actualDiagnostic.code}'`);
     }
-    const actualDocument = relativeLocation(fixtureDir, actualDiagnostic.primary.origin.id);
+    const actualDocument = relativeLocation(fixtureDir, actualDiagnostic.primary.origin.label);
     if (actualDocument !== expectedDiagnostic.document) {
       failures.push(`${label}: expected document '${expectedDiagnostic.document}', got '${actualDocument}'`);
     }
@@ -65,7 +74,7 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
         if (actualDemand.pointer !== expectedDiagnostic.demand.pointer) {
           failures.push(`${label}.demand: expected pointer '${expectedDiagnostic.demand.pointer}', got '${actualDemand.pointer}'`);
         }
-        const actualDemandDocument = relativeLocation(fixtureDir, actualDemand.span.origin.id);
+        const actualDemandDocument = relativeLocation(fixtureDir, actualDemand.span.origin.label);
         if (actualDemandDocument !== expectedDiagnostic.demand.document) {
           failures.push(`${label}.demand: expected document '${expectedDiagnostic.demand.document}', got '${actualDemandDocument}'`);
         }

@@ -1,0 +1,13 @@
+{
+  "name": "T033: a delegated path containing .. that escapes the sandbox root is refused (spec.md US4 Acceptance Scenario 1, FR-022)",
+  "cites": "v0.6 FR-022",
+  "fixtureDir": "validate-delegation/sandbox-escape",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      { "code": "sandbox-escape", "document": "config.yaml", "line": 2, "column": 10 }
+    ]
+  }
+}

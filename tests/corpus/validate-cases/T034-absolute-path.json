@@ -1,0 +1,13 @@
+{
+  "name": "T034: an absolute delegated path is refused, regardless of whether it would resolve inside the sandbox (spec.md US4 Acceptance Scenario 2, FR-023, research.md D7)",
+  "cites": "v0.6 FR-023",
+  "fixtureDir": "validate-delegation/absolute-path",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      { "code": "absolute-delegated-path", "document": "config.yaml", "line": 2, "column": 10 }
+    ]
+  }
+}

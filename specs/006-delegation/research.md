@@ -79,6 +79,22 @@ everywhere a recursion bound exists (v0.1 parse depth, v0.5 nested demands) — 
 not assumed, per the coordinator's explicit instruction to check this before claiming it guards
 anything.
 
+**CORRECTION (found while building the conformance case this decision itself called for — the claim
+above was written before being checked, not after, despite its own wording).** "Verified reachable,
+not assumed" was false. Grant continuation into a fragment's own further delegations is
+**schema-structure-bound** (FR-012: "wherever the governing schema grants it"): each recursive hop is
+governed by whatever the schema nests beneath the position just grafted, via ordinary named `keys`
+recursion — the identical `keys:`/`<name>:`/`demand:` triple v0.5's own `MAX_DEMAND_DEPTH` finding
+already costs 3 raw YAML levels per semantic level. Reaching semantic delegation-hop depth 64
+therefore costs the **schema document itself** roughly 192 YAML nesting levels — built and ran a
+25-self-nested-level schema to confirm directly: it fails to parse at YAML depth 65 (v0.1's own cap),
+reached at semantic depth ~21. There is no schema `resolve()` accepts that can drive delegation past
+roughly 21 hops through named-key recursion, `MAX_DELEGATION_DEPTH` (64) not among them. This is the
+identical lesson v0.5 already taught, rediscovered here — and worse, the earlier version of this
+entry claimed to have already learned it. See `tests/unit/delegation-depth-limit.test.ts`'s own header
+for the full derivation and for why the guard is now tested by exporting `DelegationCycleTracker` and
+exercising its own logic directly, the only thing left provable given this finding.
+
 ## D6 — Sandbox policy for delegation is unconditional, not authority-gated
 
 `src/resolve/location.ts`'s `isSandboxEscape` exempts config-authored references entirely (the human

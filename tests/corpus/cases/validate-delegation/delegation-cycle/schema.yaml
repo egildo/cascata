@@ -1,0 +1,10 @@
+keys:
+  network:
+    demand:
+      type: mapping
+      keys:
+        network:
+          demand:
+            type: mapping
+          delegate: allow
+    delegate: allow

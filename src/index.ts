@@ -577,7 +577,7 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
 // --- Delegation (v0.6, SPEC.md §8) -----------------------------------------
 
 /** Same hazard class as v0.1's parse depth and v0.5's `MAX_DEMAND_DEPTH` — a resource limit against a hostile fragment chain, not an unbounded promise (v0.6 FR-012a, research.md D5). Verified reachable through the real pipeline (unlike v0.5's own depth guard): each hop needs a distinct real file, never bounded by any single parse call's own depth cap. */
-const MAX_DELEGATION_DEPTH = 64;
+export const MAX_DELEGATION_DEPTH = 64;
 
 /**
  * Cycle/depth tracking for delegation, deliberately **not**
@@ -593,7 +593,7 @@ const MAX_DELEGATION_DEPTH = 64;
  * checked before any byte is read, so a cycle is caught even though the
  * document that would complete it can never be produced.
  */
-class DelegationCycleTracker {
+export class DelegationCycleTracker {
   private readonly stack: string[] = [];
   private readonly maxDepth: number;
   constructor(maxDepth: number) {
@@ -793,7 +793,16 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   const newChain = [...breadcrumbChain, hop];
   state.breadcrumbs.set(graftId, newChain);
 
-  state.tracker.exit();
+  // Deliberately **not** `state.tracker.exit()` here — `location` must
+  // stay on the active stack until the caller has finished recursing
+  // into this fragment's own further delegations (`walkForDelegation`
+  // calls `exit()` itself, after that recursion returns). Popping here
+  // would be the identical mistake `src/graph/build.ts`'s own module
+  // doc records as a defect this codebase already hit once for
+  // `$adopts` (T030's trap): a fragment whose own content delegates back
+  // to itself would be read as a fresh "new" visit instead of a "cycle",
+  // because the stack would already be empty by the time the
+  // self-reference is checked.
   return { ok: true, node: fragmentRoot, fragmentLocation: location, breadcrumbChain: newChain };
 }
 
@@ -824,7 +833,14 @@ async function walkForDelegation(node: Node, grantNode: DelegationGrantNode, doc
       if (!grafted.ok) {
         return { ok: false, failures: grafted.diagnostics };
       }
+      // `performGraft`'s own success path deliberately leaves
+      // `grafted.fragmentLocation` on the tracker's active stack — it
+      // must stay there for this recursion, so a self-reference inside
+      // the fragment is still seen as a cycle. Popped here, once this
+      // fragment's own further delegations have been fully resolved,
+      // success or failure alike.
       const inner = await walkForDelegation(grafted.node, childGrant, grafted.fragmentLocation, grafted.breadcrumbChain, state);
+      state.tracker.exit();
       if (!inner.ok) {
         return { ok: false, failures: inner.diagnostics };
       }

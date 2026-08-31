@@ -1,0 +1,18 @@
+{
+  "name": "T024: a fragment containing any $-prefixed key is refused -- fragments carry no $schema, start no pedigree, and $-keys in fragments are forbidden in v1 (spec.md US2 Acceptance Scenario 4, FR-009)",
+  "cites": "v0.6 FR-009",
+  "fixtureDir": "validate-delegation/fragment-dollar-key",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "fragment-reserved-key",
+        "document": "network.yaml",
+        "line": 1,
+        "column": 6
+      }
+    ]
+  }
+}

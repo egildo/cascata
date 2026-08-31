@@ -1,0 +1,21 @@
+{
+  "name": "T028: a violation inside a fragment carries the delegating document and position, and Sec10's canonical sentence renders the (delegated from ...) clause (spec.md US3 Acceptance Scenario 1, FR-017, FR-019)",
+  "cites": "v0.6 FR-017",
+  "fixtureDir": "validate-delegation/violation-in-fragment",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "network.yaml",
+        "line": 1,
+        "column": 7,
+        "pointer": "/network/host",
+        "demand": { "pointer": "/keys/network/demand/keys/host/demand/minLength", "document": "schema.yaml", "line": 9, "column": 24 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}
