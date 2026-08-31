@@ -36,8 +36,8 @@ binds, because merge touches provisions.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the `src/merge/` directory skeleton per plan.md's Structure Decision
-- [ ] T002 [P] Create the corpus case directories tests/corpus/cases/merge-fold/, merge-append/, merge-provenance/, and merge-policy/
+- [x] T001 Create the `src/merge/` directory skeleton per plan.md's Structure Decision
+- [x] T002 [P] Create the corpus case directories tests/corpus/cases/merge-fold/, merge-append/, merge-provenance/, and merge-policy/
 
 ---
 
@@ -47,15 +47,15 @@ binds, because merge touches provisions.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Promote RFC 6901 escape, unescape, and resolution from tests/corpus/runner.ts into src/model/pointer.ts, and make the runner import it rather than keep a copy — depends on T001
-- [ ] T004 Add pointer **generation** — a node path to its RFC 6901 pointer — in src/model/pointer.ts, since provenance is keyed by pointer and only resolution existed before — depends on T003
-- [ ] T005 [P] Unit-test pointer round-trips on adversarial keys — `~0`, `~1`, `a~1b`, `a//b`, the empty key, and an astral key — in tests/unit/pointer.test.ts, asserting the unescape ordering that makes `~01` decode to `~1` rather than `/` — depends on T004
-- [ ] T006 [P] Add the v0.3 diagnostic codes from contracts/diagnostics.md to src/diagnostics/codes.ts, leaving v0.1's and v0.2's untouched
-- [ ] T007 [P] Define `Layer`, `ProvenanceEntry`, `ProvenanceRecord`, and `MergedConfiguration` in src/merge/provenance.ts per data-model.md
-- [ ] T008 Read `keys.<name>.provide` and `keys.<name>.cascade` from a schema tree in src/merge/strategy.ts, ignoring `demand`, `seal`, `final`, and `delegate` entirely (FR-001, FR-002) — depends on T006
-- [ ] T009 Treat an absent, empty, or non-mapping `keys:` section as contributing nothing rather than as an error, in src/merge/strategy.ts (FR-003) — depends on T008
-- [ ] T010 Derive the ranked `Layer` list from a resolved pedigree — root schema lowest, config highest — in src/merge/fold.ts (FR-005) — depends on T007
-- [ ] T011 Extend the policed set in tests/unit/layering.test.ts: `src/merge/` may import `model/`, `diagnostics/`, and `graph/`, and may import neither `adapters/` nor `resolve/` — depends on T001
+- [x] T003 Promote RFC 6901 escape, unescape, and resolution from tests/corpus/runner.ts into src/model/pointer.ts, and make the runner import it rather than keep a copy — depends on T001
+- [x] T004 Add pointer **generation** — a node path to its RFC 6901 pointer — in src/model/pointer.ts, since provenance is keyed by pointer and only resolution existed before — depends on T003
+- [x] T005 [P] Unit-test pointer round-trips on adversarial keys — `~0`, `~1`, `a~1b`, `a//b`, the empty key, and an astral key — in tests/unit/pointer.test.ts, asserting the unescape ordering that makes `~01` decode to `~1` rather than `/` — depends on T004
+- [x] T006 [P] Add the v0.3 diagnostic codes from contracts/diagnostics.md to src/diagnostics/codes.ts, leaving v0.1's and v0.2's untouched
+- [x] T007 [P] Define `Layer`, `ProvenanceEntry`, `ProvenanceRecord`, and `MergedConfiguration` in src/merge/provenance.ts per data-model.md
+- [x] T008 Read `keys.<name>.provide` and `keys.<name>.cascade` from a schema tree in src/merge/strategy.ts, ignoring `demand`, `seal`, `final`, and `delegate` entirely (FR-001, FR-002) — depends on T006
+- [x] T009 Treat an absent, empty, or non-mapping `keys:` section as contributing nothing rather than as an error, in src/merge/strategy.ts (FR-003) — depends on T008
+- [x] T010 Derive the ranked `Layer` list from a resolved pedigree — root schema lowest, config highest — in src/merge/fold.ts (FR-005) — depends on T007
+- [x] T011 Extend the policed set in tests/unit/layering.test.ts: `src/merge/` may import `model/`, `diagnostics/`, and `graph/`, and may import neither `adapters/` nor `resolve/` — depends on T001
 
 **Checkpoint**: Pointers, vocabulary, entities, and ranking exist. Story work can begin.
 
@@ -71,22 +71,22 @@ and confirm each key holds what contracts/precedence.md predicts.
 
 ### Conformance cases for User Story 1 (write first)
 
-- [ ] T012 [P] [US1] Cases for a provide filling a silent key, and a config value beating a provide, in tests/corpus/cases/merge-fold/
-- [ ] T013 [P] [US1] Cases for deep mapping merge — keys present in one layer surviving, keys in both taking the nearer layer's value — in tests/corpus/cases/merge-fold/deep/
-- [ ] T014 [P] [US1] Cases asserting **non**-mapping pairings replace wholesale: sequence over sequence, scalar over mapping, mapping over scalar, in tests/corpus/cases/merge-fold/replace/
-- [ ] T015 [P] [US1] Case asserting an explicit null replaces a provided value rather than yielding to it (FR-008), in tests/corpus/cases/merge-fold/nullability/
-- [ ] T016 [P] [US1] Case asserting a config with no schema folds to its own tree unchanged (FR-009), in tests/corpus/cases/merge-fold/identity/
-- [ ] T017 [P] [US1] Cases asserting a schema declaring `demand`, `seal`, `final`, or `delegate` merges normally with those keywords inert (FR-002), and that an absent or empty `keys:` section contributes nothing (FR-003), in tests/corpus/cases/merge-fold/inert-vocabulary/
+- [x] T012 [P] [US1] Cases for a provide filling a silent key, and a config value beating a provide, in tests/corpus/cases/merge-fold/
+- [x] T013 [P] [US1] Cases for deep mapping merge — keys present in one layer surviving, keys in both taking the nearer layer's value — in tests/corpus/cases/merge-fold/deep/
+- [x] T014 [P] [US1] Cases asserting **non**-mapping pairings replace wholesale: sequence over sequence, scalar over mapping, mapping over scalar, in tests/corpus/cases/merge-fold/replace/
+- [x] T015 [P] [US1] Case asserting an explicit null replaces a provided value rather than yielding to it (FR-008), in tests/corpus/cases/merge-fold/nullability/
+- [x] T016 [P] [US1] Case asserting a config with no schema folds to its own tree unchanged (FR-009), in tests/corpus/cases/merge-fold/identity/
+- [x] T017 [P] [US1] Cases asserting a schema declaring `demand`, `seal`, `final`, or `delegate` merges normally with those keywords inert (FR-002), and that an absent or empty `keys:` section contributes nothing (FR-003), in tests/corpus/cases/merge-fold/inert-vocabulary/
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Implement the fold over ranked layers, applying contracts/precedence.md's numbered list in order, in src/merge/fold.ts (FR-004, FR-005) — depends on T010
-- [ ] T019 [US1] Deep-merge mappings and replace every other pairing, recursing only where both sides are mappings, in src/merge/fold.ts (FR-006) — depends on T018
-- [ ] T020 [US1] Inject `provide` values where the merged result is silent, losing to any nearer layer's value, in src/merge/fold.ts (FR-007) — depends on T018, T008
-- [ ] T021 [US1] Treat an explicit null as a replacing value rather than an absence, in src/merge/fold.ts (FR-008) — depends on T019
-- [ ] T022 [US1] Give each merged node the span of the nearest layer contributing it, per research D4, in src/merge/fold.ts — depends on T019
-- [ ] T023 [US1] Freeze the merged tree and assert v0.1's invariants hold of it — positioned, canonically ordered, deeply frozen — in src/merge/fold.ts (FR-010) — depends on T019
-- [ ] T024 [US1] Add `merge()` to src/index.ts returning a configuration or diagnostics, never both — depends on T023
+- [x] T018 [US1] Implement the fold over ranked layers, applying contracts/precedence.md's numbered list in order, in src/merge/fold.ts (FR-004, FR-005) — depends on T010
+- [x] T019 [US1] Deep-merge mappings and replace every other pairing, recursing only where both sides are mappings, in src/merge/fold.ts (FR-006) — depends on T018
+- [x] T020 [US1] Inject `provide` values where the merged result is silent, losing to any nearer layer's value, in src/merge/fold.ts (FR-007) — depends on T018, T008
+- [x] T021 [US1] Treat an explicit null as a replacing value rather than an absence, in src/merge/fold.ts (FR-008) — depends on T019
+- [x] T022 [US1] Give each merged node the span of the nearest layer contributing it, per research D4, in src/merge/fold.ts — depends on T019
+- [x] T023 [US1] Freeze the merged tree and assert v0.1's invariants hold of it — positioned, canonically ordered, deeply frozen — in src/merge/fold.ts (FR-010) — depends on T019
+- [x] T024 [US1] Add `merge()` to src/index.ts returning a configuration or diagnostics, never both — depends on T023
 
 **Checkpoint**: A cascade becomes a configuration. MVP complete.
 
