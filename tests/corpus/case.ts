@@ -168,7 +168,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseExpectedNode(raw: unknown, source: string, at: string): ExpectedNode {
+/**
+ * Parse one `ExpectedNode` from raw JSON data. Exported (v0.3) so
+ * `tests/corpus/merge-case.ts` can parse a merge case's expected tree using
+ * the same shape/parser v0.1 already defined, rather than duplicating this
+ * logic — the same reasoning research D2 applies to the pointer resolver.
+ */
+export function parseExpectedNode(raw: unknown, source: string, at: string): ExpectedNode {
   if (!isPlainObject(raw)) {
     fail(source, `expected an object describing a node at '${at}', got ${JSON.stringify(raw)}`);
   }

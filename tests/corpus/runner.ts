@@ -27,6 +27,7 @@ import { join } from "node:path";
 import type { Diagnostic, RelatedSpan } from "../../src/diagnostics/diagnostic.js";
 import { nodesEqual } from "../../src/model/equality.js";
 import type { Node } from "../../src/model/node.js";
+import { escapePointerSegment, resolvePointer } from "../../src/model/pointer.js";
 import type { Origin } from "../../src/model/span.js";
 import { createOrigin } from "../../src/model/span.js";
 import type { ConformanceCase, ExpectedDiagnostic, ExpectedLimits, ExpectedNode, ExpectedRelatedSpan } from "./case.js";
@@ -81,39 +82,10 @@ export function loadCases(rootDir: string): ConformanceCase[] {
 }
 
 // --- RFC 6901 JSON Pointer resolution, for selective span assertions ---
-
-function unescapePointerSegment(segment: string): string {
-  return segment.replace(/~1/g, "/").replace(/~0/g, "~");
-}
-
-/** Resolve an RFC 6901 pointer against a Node tree. `""` (or `"/"`... no, exactly `""`) selects the root. */
-function resolvePointer(root: Node, pointer: string): Node | undefined {
-  if (pointer === "") {
-    return root;
-  }
-  if (!pointer.startsWith("/")) {
-    throw new Error(`Malformed JSON Pointer '${pointer}': must be empty or start with '/'`);
-  }
-  const segments = pointer.slice(1).split("/").map(unescapePointerSegment);
-
-  let current: Node | undefined = root;
-  for (const segment of segments) {
-    if (current === undefined) {
-      return undefined;
-    }
-    if (current.type === "mapping") {
-      current = current.entries.get(segment);
-    } else if (current.type === "sequence") {
-      if (!/^\d+$/.test(segment)) {
-        return undefined;
-      }
-      current = current.items[Number(segment)];
-    } else {
-      return undefined;
-    }
-  }
-  return current;
-}
+//
+// Escaping, unescaping, and resolution now live in src/model/pointer.ts
+// (research D2, tasks.md T003) — this module imports them rather than
+// keeping its own copy, which is what it did until v0.3.
 
 // --- Tree comparison -----------------------------------------------------
 
@@ -135,7 +107,14 @@ function describeActual(actual: Node): string {
   return actual.type === "mapping" ? "a mapping" : "a sequence";
 }
 
-function compareNode(actual: Node, expected: ExpectedNode, path: string, failures: string[]): void {
+/**
+ * Compare one parsed `Node` against an `ExpectedNode` shape, appending
+ * human-readable failures. Exported (v0.3) so `tests/corpus/merge-runner.ts`
+ * can compare a *merged* tree against the same `ExpectedNode` format rather
+ * than reimplementing tree comparison — the merge corpus's expected shapes
+ * are the same data shape v0.1 already defined, not a new one.
+ */
+export function compareNode(actual: Node, expected: ExpectedNode, path: string, failures: string[]): void {
   if ("kind" in expected) {
     if (actual.type !== "scalar") {
       failures.push(`${path || "(root)"}: expected ${describeExpected(expected)}, got ${describeActual(actual)}`);
@@ -194,7 +173,7 @@ function compareNode(actual: Node, expected: ExpectedNode, path: string, failure
     for (const [key, expectedChild] of expected.mapping) {
       const actualChild = actual.entries.get(key);
       if (actualChild !== undefined) {
-        compareNode(actualChild, expectedChild, `${path}/${escapePointer(key)}`, failures);
+        compareNode(actualChild, expectedChild, `${path}/${escapePointerSegment(key)}`, failures);
       }
     }
     return;
@@ -218,10 +197,6 @@ function compareNode(actual: Node, expected: ExpectedNode, path: string, failure
       compareNode(actualItem, expectedItem, `${path}/${index}`, failures);
     }
   }
-}
-
-function escapePointer(segment: string): string {
-  return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }
 
 /** Compares one diagnostic's `related` spans against what a case expects, in order. */
