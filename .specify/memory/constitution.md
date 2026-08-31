@@ -1,6 +1,17 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.2.0 → 1.2.1
+Bump rationale: PATCH — clarification, no obligation changed. "Provenance is
+built into the merge engine from its first commit" read as a commit-ordering
+rule, and v0.3's task decomposition builds the fold in one phase and populates
+provenance in a later one. An implementer flagged the contradiction rather than
+silently picking a side, which was correct. The obligation was always about
+design — an engine that would have to be rebuilt to carry provenance has failed
+regardless of when the recording lands — and now says so.
+
+Prior report (v1.2.0) follows.
+
 Version change: 1.1.1 → 1.2.0
 Bump rationale: MINOR — Principle III's diagnostic obligation is now phased by
 milestone rather than stated as a blanket MUST, and merge gate 5 restated to
@@ -116,8 +127,12 @@ position must be the offending construct's own.
 The canonical error sentence of §10 is a tested output format, not prose. RFC 6901 pointers are
 used verbatim; no bespoke path syntax may be invented anywhere in the codebase.
 
-Provenance is built into the merge engine from its first commit. It is nearly free there and
-nearly impossible to retrofit.
+The merge engine MUST be **designed** so provenance is recorded during the fold rather than
+reconstructed from its result — the losing values are gone once the fold completes, and nothing
+downstream can recover them. Whether the recording lands in the same commit as the fold is a
+sequencing question and not this principle's business; whether the fold is *able* to record it is.
+An engine that would have to be rebuilt to carry provenance has already failed this principle, on
+the commit that built it.
 
 ### IV. Pipeline Stages Are Isolated and Format-Blind
 
@@ -253,4 +268,4 @@ and re-runs it after. Every code review verifies the six gates above. Principles
 NON-NEGOTIABLE (I, V) admit no Complexity-Tracking exception: a change that violates them is
 rejected, not justified.
 
-**Version**: 1.2.0 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-31
+**Version**: 1.2.1 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-31

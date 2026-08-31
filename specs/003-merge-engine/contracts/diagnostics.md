@@ -27,6 +27,17 @@ wrong** — and a diagnostic that says "unknown" would teach them the opposite. 
 reasoning that made a sequence-valued `$adopts` refuse with `multiple-adoption` rather than as a
 malformed value.
 
+## When a code counts as added
+
+The constitution requires a new code to arrive with an accepting and a refusing case. A code is
+**added when it can be emitted**, not when its identifier is declared — declaring the constant ahead
+of the phase that uses it carries no obligation, because nothing can produce it yet. The cases are
+owed by the task that makes the code reachable, and that task is where Principle V bites.
+
+Recorded because a v0.3 implementer correctly noticed that four codes were declared in a Foundational
+task whose refusal behaviour lands three phases later, and that the rule as written has no phase
+carve-out.
+
 ## What does not produce a diagnostic
 
 - A **config** declaring `cascade`: ignored, not refused. A config is data; policy is contract

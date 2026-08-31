@@ -179,11 +179,12 @@ each with a position in a real document.
 ## Phase 7: Polish & Cross-Cutting Concerns
 
 - [ ] T056 [P] Publish contracts/precedence.md's numbered list in README.md alongside the merge surface and the v0.3 diagnostic codes (SC-008)
-- [ ] T057 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
-- [ ] T058 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
-- [ ] T059 Confirm all 300 pre-v0.3 tests still pass unchanged, so nothing in specs/001-information-model-yaml-adapter/ or specs/002-resolver-dag-builder/ regressed
-- [ ] T060 Run every validation scenario in specs/003-merge-engine/quickstart.md end to end, reporting any scenario that no longer matches reality and which of the two is wrong
-- [ ] T061 Verify the six merge gates in .specify/memory/constitution.md — noting that gate 3, Monotonicity, is **applicable for the first time** and discharged by T033 and T034 rather than declared not-applicable
+- [ ] T057 [P] Restore the byte-precise `end` assertion dropped from the T014 replace-wholesale case: an independently derived offset disagreed with the adapter by one on a block mapping's trailing newline, and the implementer kept `start`/`line`/`column` rather than copy the implementation's number — settle which is right, in tests/corpus/merge-cases/ (research.md's open block-collection extent question)
+- [ ] T058 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
+- [ ] T059 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
+- [ ] T060 Confirm all 300 pre-v0.3 tests still pass unchanged, so nothing in specs/001-information-model-yaml-adapter/ or specs/002-resolver-dag-builder/ regressed
+- [ ] T061 Run every validation scenario in specs/003-merge-engine/quickstart.md end to end, reporting any scenario that no longer matches reality and which of the two is wrong
+- [ ] T062 Verify the six merge gates in .specify/memory/constitution.md — noting that gate 3, Monotonicity, is **applicable for the first time** and discharged by T033 and T034 rather than declared not-applicable
 
 ---
 
@@ -216,7 +217,7 @@ story still has its own checkpoint and separately testable value.
 - T002 in Setup; T005, T006, T007 in Foundational
 - **All of T012–T017** (US1 cases), **T025–T027** (US2), **T035–T040** (US3), **T047–T050** (US4) —
   each group is separate directories with no shared state
-- T056, T057, T058 in Polish
+- T056, T058, T059 in Polish
 
 ---
 
@@ -269,5 +270,5 @@ landing before append, provenance, or policy refusal.
   or borrowed span passes every structural assertion and quietly breaks "open the file and see the
   line", which is the whole point of Principle III.
 
-**Also**: 300 existing tests stay green (T059), and v0.1's invariants apply to merged trees — merge
-does not get an exemption for being downstream (T023, T058).
+**Also**: 300 existing tests stay green (T060), and v0.1's invariants apply to merged trees — merge
+does not get an exemption for being downstream (T023, T059).

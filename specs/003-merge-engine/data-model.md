@@ -15,6 +15,7 @@ One document participating in the fold, with its place in precedence order.
 | `identity` | Which document — v0.2's `DocumentIdentity` |
 | `role` | `schema` (from the pedigree) or `config` (the entry) |
 | `rank` | Position in precedence order; 0 is the root schema, highest is the config |
+| `tree` | The layer's parsed tree — what it actually contributes. Omitted from an earlier draft of this table, which listed only identity, role and rank; the fold cannot merge without it, and v0.2's `Pedigree` deliberately does not carry it |
 
 **Invariant**: ranks are dense, total, and derived from the pedigree — never assigned ad hoc. The
 config always ranks last, because it is the document the author is holding.

@@ -63,6 +63,8 @@ other, with no trace of the layering in the tree's shape.
 9. **Given** a schema whose `keys:` section is absent, empty, or not a mapping, **When** merged,
    **Then** it contributes nothing and the fold succeeds — a schema that provides nothing is not a
    broken schema.
+10. **Given** a config carrying `$schema` and a schema carrying `$id`, **When** merged, **Then**
+    neither appears in the merged configuration — reserved keys are directives, not data.
 
 ---
 
@@ -192,7 +194,11 @@ and a config attempting to declare `cascade`.
   and MUST lose to any value a nearer layer supplies.
 - **FR-008**: An explicit null MUST be treated as a value that replaces, not as an absence that
   yields.
-- **FR-009**: A single-layer fold MUST be the identity — the config's own tree, unchanged.
+- **FR-009**: A single-layer fold MUST be the identity — the config's own tree, minus its reserved keys.
+- **FR-025**: Reserved document keys (`$id`, `$version`, `$adopts`, `$pin`, `$schema`) MUST NOT appear in
+  the merged configuration. They are directives governing how documents are found and what governs them,
+  not data the configuration describes (`SPEC.md` §9, amended). A consumer receives the configuration,
+  not the plumbing that assembled it.
 - **FR-010**: The merged tree MUST satisfy every invariant v0.1 established: every node positioned,
   mappings in canonical key order, the result deeply frozen.
 

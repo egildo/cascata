@@ -253,6 +253,8 @@ Ident    := [A-Za-z_] [A-Za-z0-9_-]*
 
 Reserved document keys: `$id`, `$version`, `$adopts`, `$pin`, `$schema` (config-side pointer), later `$extends`.
 
+**Reserved keys are directives, not data.** They govern how a document is found and what governs it, and they do **not** appear in a merged configuration: a consumer receives the configuration the documents describe, not the plumbing that assembled it. This was silent until v0.3, where a fold's first conformance case surfaced `$schema` sitting in the merged tree as an ordinary key.
+
 **`$adopts` and `$schema` are single string scalars.** A sequence value is refused — not as a malformed value, but with a diagnostic saying v1 adopts exactly one parent (§6.1), because that is the shape multi-adoption will take when C3 linearization lands and an author writing it early deserves to be told which version they are ahead of. Two `$adopts` keys in one mapping are already impossible: duplicate keys are refused (§4.2).
 
 Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, plus JSON-Schema-named leaf constraints: `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`, `format`), `provide`, `cascade: replace | append`, `seal: open | closed`, `final`, `delegate: allow`.
@@ -385,6 +387,11 @@ All initial open questions are resolved; amendments are integrated into the arti
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
 - **`required` × `provide`** → settled: guaranteed-key pattern is a feature (non-optional TS property); vacuous only under `final provide` (info lint); retraction monotone-legal but parked. See §5.5.
 - **Naming** → settled: **Cascata**.
+- **Reserved keys in merged output** → settled: **directives, never data.** §9 named `$id`, `$version`,
+  `$adopts`, `$pin` and `$schema` as reserved without saying what becomes of them once documents are
+  folded, so nothing forbade `$schema` appearing in a merged configuration as an ordinary key — which is
+  what a v0.3 implementer's first conformance case actually produced. They are stripped from the fold's
+  output. See §9.
 - **Cascade-strategy mutation** → settled: **a strategy may tighten toward accumulation and never away
   from it.** The table had a row forbidding the removal of inherited items under `append`, and no row at
   all for changing the strategy — so nothing forbade a descendant declaring `replace` for a key its
