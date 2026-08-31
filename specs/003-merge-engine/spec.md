@@ -313,6 +313,12 @@ and a config attempting to declare `cascade`.
   and the wrong one for policy, because policy decides whether earlier values survive at all. A
   descendant switching `append` back to `replace` would remove every inherited item, which §5.2
   forbids. `SPEC.md` §5.2 gained the row that was missing and now settles it (logged in §15).
+- **An offending value is flagged once, not re-flagged on every later silent layer.** FR-013's letter could
+  be read to demand re-validating an already-accumulated value on each subsequent pass. It is not, and the
+  implementer who raised it chose correctly: that reading emits duplicate diagnostics for one position whose
+  count depends on how many later layers happen to stay silent, which is a worse bug than the one it
+  prevents. Each offending value is checked at the two moments it can first become offending — when a layer
+  contributes it, and when a key's strategy transitions to `append` over a value an earlier layer left.
 - **A config's `cascade` is ignored rather than refused.** A config is data; policy is contract. This
   is the more forgiving of the two readings FR-015 permits and is recorded so a future reviewer knows
   it was chosen rather than overlooked.

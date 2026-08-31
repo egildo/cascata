@@ -166,14 +166,15 @@ each with a position in a real document.
 - [x] T051 [P] [US4] Case for `cascade: merge-by-key` asserting `unimplemented-cascade-strategy` — **not** `unknown` — since §5.3 reserves the name and the author is early rather than wrong, in tests/corpus/cases/merge-policy/reserved/
 - [x] T052 [P] [US4] Case for `append` over a scalar and over a mapping, asserting `append-over-non-sequence` in the layer that supplied the offending value, in tests/corpus/cases/merge-policy/append-misuse/
 - [x] T053 [P] [US4] Case asserting a **config** declaring `cascade` is ignored and the fold proceeds as though it were not written (FR-015), in tests/corpus/cases/merge-policy/config-policy/
+- [x] T054 [P] [US4] Case with **two independent** policy failures in different keys, asserting both are reported from one merge, in tests/corpus/cases/merge-policy/multiple-failures/ (v0.3 FR-025). **Added by the implementer**: the collect-all requirement had an implementation task and no case, and the four named fixtures are all single-failure — each stays green against a fold that returns after the first diagnostic
 
 ### Implementation for User Story 4
 
-- [x] T054 [US4] Refuse an unknown or non-string `cascade` value, naming the supported strategies, in src/merge/strategy.ts (FR-014) — depends on T008, T006
-- [x] T055 [US4] Refuse `merge-by-key` distinctly as unimplemented rather than unknown, in src/merge/strategy.ts (FR-014) — depends on T054
-- [x] T056 [US4] Refuse `append` over a non-sequence at the offending value's position, in src/merge/strategy.ts (FR-013) — depends on T030
-- [x] T057 [US4] Ignore a config's `cascade` declaration so policy comes from schemas only, in src/merge/strategy.ts (FR-015) — depends on T008
-- [x] T058 [US4] Report every policy failure the fold can determine independently rather than only the first, in src/merge/fold.ts — depends on T054, T056
+- [x] T055 [US4] Refuse an unknown or non-string `cascade` value, naming the supported strategies, in src/merge/strategy.ts (FR-014) — depends on T008, T006
+- [x] T056 [US4] Refuse `merge-by-key` distinctly as unimplemented rather than unknown, in src/merge/strategy.ts (FR-014) — depends on T055
+- [x] T057 [US4] Refuse `append` over a non-sequence at the offending value's position, in src/merge/strategy.ts (FR-013) — depends on T030
+- [x] T058 [US4] Confirm a config's `cascade` declaration is ignored so policy comes from schemas only, in src/merge/strategy.ts (v0.3 FR-015). **Required no new code** — User Story 2's strategy reader already skipped non-schema layers; the implementer verified it by sabotage rather than inventing code to satisfy the task's wording — depends on T008
+- [x] T059 [US4] Report every policy failure the fold can determine independently rather than only the first, in src/merge/fold.ts — depends on T055, T057
 
 **Checkpoint**: Merge policy belongs to the contract, and the boundary is enforced.
 
@@ -181,13 +182,13 @@ each with a position in a real document.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T059 [P] Publish contracts/precedence.md's numbered list in README.md alongside the merge surface and the v0.3 diagnostic codes (SC-008)
-- [ ] T060 [P] Restore the byte-precise `end` assertion dropped from the T014 replace-wholesale case: an independently derived offset disagreed with the adapter by one on a block mapping's trailing newline, and the implementer kept `start`/`line`/`column` rather than copy the implementation's number — settle which is right, in tests/corpus/merge-cases/ (research.md's open block-collection extent question)
-- [ ] T061 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
-- [ ] T062 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
-- [ ] T063 Confirm every pre-existing test still passes unchanged — the baseline is whatever the previous slice left green, not a fixed number; it was 300 when this list was written and 358 by the end of User Story 1, so nothing in specs/001-information-model-yaml-adapter/ or specs/002-resolver-dag-builder/ regressed
-- [ ] T064 Run every validation scenario in specs/003-merge-engine/quickstart.md end to end, reporting any scenario that no longer matches reality and which of the two is wrong
-- [ ] T065 Verify the six merge gates in .specify/memory/constitution.md — noting that gate 3, Monotonicity, is **applicable for the first time** and discharged by T036 and T037 rather than declared not-applicable
+- [ ] T060 [P] Publish contracts/precedence.md's numbered list in README.md alongside the merge surface and the v0.3 diagnostic codes (SC-008)
+- [ ] T061 [P] Restore the byte-precise `end` assertion dropped from the T014 replace-wholesale case: an independently derived offset disagreed with the adapter by one on a block mapping's trailing newline, and the implementer kept `start`/`line`/`column` rather than copy the implementation's number — settle which is right, in tests/corpus/merge-cases/ (research.md's open block-collection extent question)
+- [ ] T062 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
+- [ ] T063 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
+- [ ] T064 Confirm every pre-existing test still passes unchanged — the baseline is whatever the previous slice left green, not a fixed number; it was 300 when this list was written and 358 by the end of User Story 1, so nothing in specs/001-information-model-yaml-adapter/ or specs/002-resolver-dag-builder/ regressed
+- [ ] T065 Run every validation scenario in specs/003-merge-engine/quickstart.md end to end, reporting any scenario that no longer matches reality and which of the two is wrong
+- [ ] T066 Verify the six merge gates in .specify/memory/constitution.md — noting that gate 3, Monotonicity, is **applicable for the first time** and discharged by T036 and T037 rather than declared not-applicable
 
 ---
 
@@ -220,7 +221,7 @@ story still has its own checkpoint and separately testable value.
 - T002 in Setup; T005, T006, T007 in Foundational
 - **All of T012–T017** (US1 cases), **T025–T027** (US2), **T038–T043** (US3), **T050–T053** (US4) —
   each group is separate directories with no shared state
-- T059, T061, T062 in Polish
+- T060, T062, T063 in Polish
 
 ---
 
@@ -273,5 +274,5 @@ landing before append, provenance, or policy refusal.
   or borrowed span passes every structural assertion and quietly breaks "open the file and see the
   line", which is the whole point of Principle III.
 
-**Also**: 300 existing tests stay green (T063), and v0.1's invariants apply to merged trees — merge
-does not get an exemption for being downstream (T023, T062).
+**Also**: 300 existing tests stay green (T064), and v0.1's invariants apply to merged trees — merge
+does not get an exemption for being downstream (T023, T063).
