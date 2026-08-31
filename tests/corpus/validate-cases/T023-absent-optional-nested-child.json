@@ -1,0 +1,8 @@
+{
+  "name": "T023: keys naming an absent, non-required child produces nothing (spec.md Acceptance Scenario 4)",
+  "cites": "v0.5 FR-021",
+  "fixtureDir": "validate-nested/absent-optional-child",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

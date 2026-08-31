@@ -458,10 +458,27 @@ function checkNestedKeys(keysDeclaration: Node, value: Node, demandPointerPath: 
   return violations;
 }
 
-/** v0.5 FR-025, research.md D4: nesting past `MAX_DEMAND_DEPTH` is refused rather than recursed into further — reuses v0.1's `depth-limit-exceeded` code (the identical hazard), anchored at the demand node whose recursion would cross the limit. */
+/**
+ * v0.5 FR-025, research.md D4: nesting past `MAX_DEMAND_DEPTH` is refused
+ * rather than recursed into further — reuses v0.1's `depth-limit-exceeded`
+ * code (the identical hazard), anchored at the demand node whose
+ * recursion would cross the limit.
+ *
+ * **Bug found and fixed during US2's own conformance testing**
+ * (`tests/unit/validate-depth-limit.test.ts`'s probe): this used to build
+ * a `{kind: "type-mismatch", ...}` reason — there was no dedicated
+ * `ViolationReason` variant for a depth-limit refusal when this was
+ * first written, so it borrowed `type-mismatch`'s shape to describe one
+ * in prose. `CODE_FOR_REASON` (`violation.ts`) then rendered it as a
+ * `type-mismatch` *diagnostic code* — the wrong code, catchable only by
+ * a case where the runtime (`check.ts`) walk, not just the schema-shape
+ * (`vocabulary.ts`) pass, actually reaches the boundary against a real
+ * value. Fixed by adding a genuine `"depth-limit-exceeded"` reason kind
+ * to `violation.ts` instead of overloading `type-mismatch`.
+ */
 function depthLimitViolation(node: Node, ctx: WalkContext, pointerPath: readonly (string | number)[], mergedPointer: string): Violation {
   const demand = buildDemand({ layer: ctx.usageLayer, layerRank: ctx.usageLayer.rank, pointerPath }, node.span);
-  return { demand, mergedPointer, valueSpan: node.span, valueLayer: layerForSpanOrigin(ctx.configuration, node.span.origin.id), reason: { kind: "type-mismatch", expectedDescription: `nesting within the ${MAX_DEMAND_DEPTH}-level limit`, actualDescription: "deeper nesting" } };
+  return { demand, mergedPointer, valueSpan: node.span, valueLayer: layerForSpanOrigin(ctx.configuration, node.span.origin.id), reason: { kind: "depth-limit-exceeded", maxDepth: MAX_DEMAND_DEPTH } };
 }
 
 /** Check one schema layer's own top-level `keys.<name>.demand` against `configuration.tree`. */

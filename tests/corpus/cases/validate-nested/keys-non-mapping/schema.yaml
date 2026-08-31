@@ -1,0 +1,7 @@
+keys:
+  a:
+    demand:
+      keys:
+        b:
+          demand:
+            type: string

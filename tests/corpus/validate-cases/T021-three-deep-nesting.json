@@ -1,0 +1,21 @@
+{
+  "name": "T021: keys inside items inside keys, three levels down, violated at depth (spec.md Acceptance Scenario 2, SC-004)",
+  "cites": "v0.5 FR-023",
+  "fixtureDir": "validate-nested/three-deep",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 4,
+        "column": 13,
+        "pointer": "/list/0/inner/deep",
+        "demand": { "pointer": "/keys/list/demand/items/keys/inner/demand/keys/deep/demand/minLength", "document": "schema.yaml", "line": 12, "column": 32 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

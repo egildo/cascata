@@ -1,0 +1,8 @@
+{
+  "name": "T022: keys against a non-mapping value contributes no violation of its own (spec.md Acceptance Scenario 3, FR-024)",
+  "cites": "v0.5 FR-024",
+  "fixtureDir": "validate-nested/keys-non-mapping",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

@@ -1,0 +1,8 @@
+keys:
+  profile:
+    demand:
+      keys:
+        email:
+          demand:
+            type: string
+            minLength: 3

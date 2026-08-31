@@ -78,18 +78,18 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 
 ### Conformance cases for User Story 2 (write first)
 
-- [ ] T020 [P] [US2] Case: a `keys` demand on a mapping, a violating child reported at its own position (Acceptance Scenario 1) — `tests/corpus/cases/validate-nested/keys-child/`
-- [ ] T021 [P] [US2] Case: `keys` inside `keys` inside `items`, three levels down, violated at depth (Acceptance Scenario 2, SC-004) — `tests/corpus/cases/validate-nested/three-deep/`
-- [ ] T022 [P] [US2] Case: `keys` against a non-mapping value contributes no violation of its own (Acceptance Scenario 3, FR-024) — `tests/corpus/cases/validate-nested/keys-non-mapping/`
-- [ ] T023 [P] [US2] Case: `keys` naming an absent, non-required child produces nothing (Acceptance Scenario 4) — `tests/corpus/cases/validate-nested/absent-optional-child/`
-- [ ] T024 [P] [US2] Case: `required` inside a nested `keys`, the child absent (Acceptance Scenario 5 — v0.4's own recorded-unconstructible scenario) — `tests/corpus/cases/validate-nested/required-nested/`
-- [ ] T025 [P] [US2] Case: recursion past the depth limit is refused, not a stack overflow (Acceptance Scenario 6, FR-025) — `tests/corpus/cases/validate-nested/depth-limit/`
+- [x] T020 [P] [US2] Case: a `keys` demand on a mapping, a violating child reported at its own position (Acceptance Scenario 1) — `tests/corpus/cases/validate-nested/keys-child/`
+- [x] T021 [P] [US2] Case: `keys` inside `keys` inside `items`, three levels down, violated at depth (Acceptance Scenario 2, SC-004) — `tests/corpus/cases/validate-nested/three-deep/`
+- [x] T022 [P] [US2] Case: `keys` against a non-mapping value contributes no violation of its own (Acceptance Scenario 3, FR-024) — `tests/corpus/cases/validate-nested/keys-non-mapping/`
+- [x] T023 [P] [US2] Case: `keys` naming an absent, non-required child produces nothing (Acceptance Scenario 4) — `tests/corpus/cases/validate-nested/absent-optional-child/`
+- [x] T024 [P] [US2] Case: `required` inside a nested `keys`, the child absent (Acceptance Scenario 5 — v0.4's own recorded-unconstructible scenario) — `tests/corpus/cases/validate-nested/required-nested/`
+- [x] T025 [P] [US2] Case: recursion past the depth limit is refused, not a stack overflow (Acceptance Scenario 6, FR-025) — **not** a `tests/corpus/` fixture: `resolve()` parses every document with v0.1's own `ParseLimits.maxDepth` (also 64, but counting raw YAML nesting, ~1-3x coarser than semantic `keys`/`items` depth) with no public option to raise it, so a real document deep enough to trip `MAX_DEMAND_DEPTH` always trips the *parser's* identical-valued cap first — confirmed by direct trial, not assumption. Written instead as `tests/unit/validate-depth-limit.test.ts`, hand-building a `MergedConfiguration` (the established `validate-monotonicity.test.ts` precedent) to bypass `resolve()`/parse entirely. Flagged in full in the milestone report.
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] `src/validate/vocabulary.ts`: remove `keys` from `UNIMPLEMENTED_DEMAND_KEYWORDS`; add its shape check (mapping) to `refuseMalformedShapes` — depends on T017
-- [ ] T027 [US2] `src/validate/check.ts`: generalize the one-level `items` walk into a recursive `checkDemand` handling `keys`/`items` at arbitrary depth, threading a depth counter — `depth-limit-exceeded` once crossed (FR-025) — depends on T019, T026
-- [ ] T028 [US2] `src/validate/check.ts`: generalize `required`'s absent-anchor from "document root" to "nearest enclosing mapping's own merged pointer" at any nesting level — depends on T027
+- [x] T026 [US2] `src/validate/vocabulary.ts`: remove `keys` from `UNIMPLEMENTED_DEMAND_KEYWORDS`; add its shape check (mapping) to `refuseMalformedShapes` — depends on T017
+- [x] T027 [US2] `src/validate/check.ts`: generalize the one-level `items` walk into a recursive `checkDemand` handling `keys`/`items` at arbitrary depth, threading a depth counter — `depth-limit-exceeded` once crossed (FR-025) — depends on T019, T026
+- [x] T028 [US2] `src/validate/check.ts`: generalize `required`'s absent-anchor from "document root" to "nearest enclosing mapping's own merged pointer" at any nesting level — depends on T027
 
 **Checkpoint**: Nesting reaches arbitrary depth, bounded.
 

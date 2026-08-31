@@ -1,0 +1,3 @@
+$schema: ./schema.yaml
+a:
+  c: hello

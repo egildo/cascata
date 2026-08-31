@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+list:
+  - inner:
+      deep: ab

@@ -1,0 +1,21 @@
+{
+  "name": "T020: a keys demand on a mapping reports a violating child at its own position (spec.md Acceptance Scenario 1)",
+  "cites": "v0.5 FR-021",
+  "fixtureDir": "validate-nested/keys-child",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 3,
+        "column": 10,
+        "pointer": "/profile/email",
+        "demand": { "pointer": "/keys/profile/demand/keys/email/demand/minLength", "document": "schema.yaml", "line": 8, "column": 24 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

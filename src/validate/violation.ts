@@ -43,7 +43,8 @@ export type ViolationReason =
   | { readonly kind: "length-violated"; readonly bound: "minLength" | "maxLength"; readonly boundValue: bigint; readonly actualLength: number }
   | { readonly kind: "pattern-mismatch"; readonly pattern: string }
   | { readonly kind: "enum-violated"; readonly allowedDescription: string }
-  | { readonly kind: "required-violated"; readonly cause: "absent" | "null" };
+  | { readonly kind: "required-violated"; readonly cause: "absent" | "null" }
+  | { readonly kind: "depth-limit-exceeded"; readonly maxDepth: number };
 
 /**
  * The pairing of one violated `Demand` with the value that broke it, at
@@ -70,6 +71,7 @@ const CODE_FOR_REASON: { readonly [K in ViolationReason["kind"]]: DiagnosticCode
   "pattern-mismatch": "pattern-mismatch",
   "enum-violated": "enum-violated",
   "required-violated": "required-violated",
+  "depth-limit-exceeded": "depth-limit-exceeded",
 };
 
 /** One human sentence describing `reason` — the `Diagnostic.message`, distinct from `canonicalSentence` below (§10's own, separately specified, machine-checked format). */
@@ -87,6 +89,8 @@ function describeReason(reason: ViolationReason): string {
       return `value is not one of ${reason.allowedDescription}`;
     case "required-violated":
       return reason.cause === "absent" ? "required key is absent" : "required key is explicitly null, which required forbids (SPEC.md §5.5)";
+    case "depth-limit-exceeded":
+      return `nested demand exceeds the ${reason.maxDepth}-level limit (v0.5 FR-025)`;
   }
 }
 

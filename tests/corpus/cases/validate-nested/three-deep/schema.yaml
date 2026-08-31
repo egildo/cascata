@@ -1,0 +1,12 @@
+keys:
+  list:
+    demand:
+      items:
+        keys:
+          inner:
+            demand:
+              keys:
+                deep:
+                  demand:
+                    type: string
+                    minLength: 3
