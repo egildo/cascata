@@ -94,6 +94,10 @@ the result contains both layers' items, in root-to-leaf order, with neither laye
    would remove inherited items (§5.2).
 6. **Given** an ancestor declaring `replace` and a descendant declaring `append`, **When** merged,
    **Then** it is permitted: tightening toward accumulation removes nothing.
+7. **Given** a root providing `[a]` with no strategy, a middle layer providing `[b]`, and a leaf
+   declaring `append` and providing `[c]`, **When** merged, **Then** the result is `[b, c]` — the
+   leaf's declaration governs from itself downward and does not reach back over the middle layer's
+   settled `replace`.
 
 ---
 
@@ -216,7 +220,15 @@ and a config attempting to declare `cascade`.
 - **FR-016**: A strategy MAY tighten toward accumulation and MUST NOT weaken away from it. A
   descendant declaring `replace` for a key an ancestor declared `append` MUST be refused: it discards
   every ancestor's contribution, which §5.2 forbids absolutely. `replace` → `append` is legal, since
-  it removes nothing. Once a key accumulates, it keeps accumulating.
+  it removes nothing.
+- **FR-026**: A strategy MUST take effect **from the layer that declares it, downward**. Declaring
+  `append` accumulates that layer's contribution and every later one onto whatever the fold has
+  already produced; it MUST NOT reach back and re-combine ancestors that already settled under
+  `replace`. Authority flows one way (`SPEC.md` §2.3): a declaration binds descendants, never
+  ancestors.
+- **FR-027**: `cascade` and `provide` are declared for **top-level** keys only. No syntax exists for
+  declaring either on a nested key, and none is invented here — a `keys:` entry governs the key of
+  that name in the merged configuration's root mapping.
 
 **Provenance** (§10)
 

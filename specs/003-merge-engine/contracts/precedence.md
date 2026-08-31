@@ -17,7 +17,9 @@ For any key, the value is decided by the first rule that applies:
 3. **Any other pairing replaces**, wholesale — a scalar over a mapping, a sequence over a sequence, a
    mapping over a scalar. Deep merge is for mappings only.
 4. **Unless the key is declared `cascade: append`**, in which case sequences accumulate root-first
-   instead of replacing, and no contribution is ever removed.
+   instead of replacing, and no contribution is ever removed — **from the declaring layer downward**.
+   A layer that settled under `replace` before the declaration stays settled; `append` binds
+   descendants, never ancestors (§2.3, §5.2).
 5. **An explicit null is a value**, and replaces by rule 1. It is not an absence that yields to a
    provide.
 6. **Absence contributes nothing.** A layer silent on a key neither overrides nor clears it.

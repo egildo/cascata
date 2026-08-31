@@ -115,7 +115,7 @@ The model discards comments, quoting style, indentation, anchor names, and autho
 | Struct openness | Open → closed | Closed → open |
 | Defaults (`provide`) | Replace with any value satisfying accumulated demands | Provide a value violating any ancestor demand |
 | `cascade: append` arrays | Append provisions | Remove inherited items (not an operation in v1) |
-| `cascade` strategy itself | Tighten toward accumulation (`replace` → `append`) | Weaken away from it (`append` → `replace`): a descendant declaring `replace` for a key an ancestor made `append` discards every ancestor's contribution, which the row above forbids absolutely. Once a key accumulates, it keeps accumulating. |
+| `cascade` strategy itself | Tighten toward accumulation (`replace` → `append`) | Weaken away from it (`append` → `replace`): a descendant declaring `replace` for a key an ancestor made `append` discards every ancestor's contribution, which the row above forbids absolutely. **A strategy governs from the layer that declares it, downward** — authority flows one way (§2.3), so declaring `append` accumulates the declaring layer's contribution and every later one onto whatever the fold had already produced, and does not reach back to re-combine layers that had already settled under `replace`. Once a key accumulates, it keeps accumulating from that point on. |
 | Types (named) | Narrow inherited type (tightens every usage) | Widen or redefine under `adopts` |
 
 ### 5.3 Merge strategies
@@ -387,6 +387,14 @@ All initial open questions are resolved; amendments are integrated into the arti
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
 - **`required` × `provide`** → settled: guaranteed-key pattern is a feature (non-optional TS property); vacuous only under `final provide` (info lint); retraction monotone-legal but parked. See §5.5.
 - **Naming** → settled: **Cascata**.
+- **When a cascade strategy takes effect** → settled: **from the layer that declares it, downward.** The
+  row added earlier in this milestone said "once a key accumulates, it keeps accumulating" without saying
+  whether a late `append` reaches back over ancestors that had already combined under `replace`. A v0.3
+  implementer read it as governing the whole key uniformly and said so; the discriminating case — root
+  provides `[a]`, a middle layer `[b]`, a leaf declares `append` and provides `[c]` — yields `[a,b,c]`
+  under that reading and `[b,c]` under this one. Settled downward, because §2.3 has authority flowing
+  one way: a layer's declaration binds its descendants, never its ancestors, and a leaf retroactively
+  changing what a middle layer's `replace` did is a layer reaching backwards. See §5.2.
 - **Reserved keys in merged output** → settled: **directives, never data.** §9 named `$id`, `$version`,
   `$adopts`, `$pin` and `$schema` as reserved without saying what becomes of them once documents are
   folded, so nothing forbade `$schema` appearing in a merged configuration as an ordinary key — which is
