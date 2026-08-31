@@ -183,7 +183,7 @@ each with a position in a real document.
 ## Phase 7: Polish & Cross-Cutting Concerns
 
 - [ ] T060 [P] Publish contracts/precedence.md's numbered list in README.md alongside the merge surface and the v0.3 diagnostic codes (SC-008)
-- [ ] T061 [P] Restore the byte-precise `end` assertion dropped from the T014 replace-wholesale case: an independently derived offset disagreed with the adapter by one on a block mapping's trailing newline, and the implementer kept `start`/`line`/`column` rather than copy the implementation's number — settle which is right, in tests/corpus/merge-cases/ (research.md's open block-collection extent question)
+- [x] T061 [P] Restore the byte-precise `end` assertion dropped from the T014 replace-wholesale case: an independently derived offset disagreed with the adapter by one on a block mapping's trailing newline, and the implementer kept `start`/`line`/`column` rather than copy the implementation's number — settle which is right, in tests/corpus/merge-cases/ (research.md's open block-collection extent question)
 - [ ] T062 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
 - [ ] T063 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
 - [ ] T064 Confirm every pre-existing test still passes unchanged — the baseline is whatever the previous slice left green, not a fixed number; it was 300 when this list was written and 358 by the end of User Story 1, so nothing in specs/001-information-model-yaml-adapter/ or specs/002-resolver-dag-builder/ regressed

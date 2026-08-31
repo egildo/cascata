@@ -146,17 +146,68 @@ function byteOffsetAt(ctx: SpanContext, utf16Index: number): number {
   return ctx.byteOffsetTable[utf16Index] ?? ctx.documentByteLength;
 }
 
-/** Convert a `yaml` `[start, valueEnd, nodeEnd]` range into a `SourceSpan`. `valueEnd` (not `nodeEnd`) is used as the tight upper bound — see research D1/probe notes above for why `nodeEnd` over-includes trailing content for scalars. */
-function toSourceSpan(range: Range, ctx: SpanContext): SourceSpan {
-  const [startIndex, valueEndIndex] = range;
+function buildSourceSpan(ctx: SpanContext, startIndex: number, endIndex: number): SourceSpan {
   return createSourceSpan({
     origin: ctx.origin,
     start: byteOffsetAt(ctx, startIndex),
-    end: byteOffsetAt(ctx, valueEndIndex),
+    end: byteOffsetAt(ctx, endIndex),
     line: ctx.lineCounter.linePos(startIndex).line,
     column: codePointColumn(ctx.text, lineStartIndex(ctx, startIndex), startIndex),
     documentLength: ctx.documentByteLength,
   });
+}
+
+/** Convert a `yaml` `[start, valueEnd, nodeEnd]` range into a `SourceSpan`. `valueEnd` (not `nodeEnd`) is used as the tight upper bound — see research D1/probe notes above for why `nodeEnd` over-includes trailing content for scalars. */
+function toSourceSpan(range: Range, ctx: SpanContext): SourceSpan {
+  const [startIndex, valueEndIndex] = range;
+  return buildSourceSpan(ctx, startIndex, valueEndIndex);
+}
+
+/**
+ * Walk `index` left from `endIndex` (never past `startIndex`) while the
+ * preceding UTF-16 code unit is ASCII space, tab, CR, or LF.
+ */
+function trimTrailingWhitespaceIndex(text: string, startIndex: number, endIndex: number): number {
+  let index = endIndex;
+  while (index > startIndex) {
+    const unit = text.charCodeAt(index - 1);
+    if (unit === 0x20 || unit === 0x09 || unit === 0x0d || unit === 0x0a) {
+      index -= 1;
+    } else {
+      break;
+    }
+  }
+  return index;
+}
+
+/**
+ * Convert a **block mapping or sequence's own** range into a `SourceSpan`
+ * with a genuinely tight `end` — unlike `toSourceSpan`, which is correct
+ * for scalars and flow collections but not for these.
+ *
+ * `data-model.md` defines `SourceSpan.end` as "one past the last byte";
+ * for a scalar and a flow collection (`{}`/`[]`), `yaml`'s own `valueEnd`
+ * already lands there (verified: the code unit immediately before it is
+ * always real content — a closing `}`/`]`, never whitespace). For a
+ * *block* mapping or sequence, `valueEnd` coincides with `nodeEnd` and
+ * additionally swallows the line terminator (and any trailing spaces
+ * before it) ending the block's final line — `research.md`'s "Open
+ * question: block-collection range extents" (v0.1), left unresolved
+ * there. That swallowed whitespace is not a byte belonging to the
+ * collection; it separates the collection from whatever follows, or from
+ * EOF. Trimmed here by walking the raw text backward from the reported
+ * end while the preceding unit is ASCII space/tab/CR/LF, which is a
+ * no-op for scalars and flow collections and the fix for block ones.
+ *
+ * Deliberately **not** applied to `toSourceSpan` in general: a `keep`
+ * (`|+`) block scalar's trailing newlines are part of its *value*, not
+ * separator whitespace (verified empirically — `yaml` reports them
+ * inside `Scalar.value` and `valueEnd` accordingly), and trimming those
+ * would silently corrupt a span this adapter already gets right.
+ */
+function toTightCollectionSpan(range: Range, ctx: SpanContext): SourceSpan {
+  const [startIndex, valueEndIndex] = range;
+  return buildSourceSpan(ctx, startIndex, trimTrailingWhitespaceIndex(ctx.text, startIndex, valueEndIndex));
 }
 
 function requireRange(node: { range?: Range | null }): Range {
@@ -360,7 +411,7 @@ function convertMapping(mapAst: MapNode, ctx: WalkContext, depth: number): Node 
   if (tagUnsupported) {
     return undefined;
   }
-  const span = toSourceSpan(requireRange(mapAst), ctx);
+  const span = toTightCollectionSpan(requireRange(mapAst), ctx);
   return createMapping(entries, span);
 }
 
@@ -387,7 +438,7 @@ function convertSequence(seqAst: SeqNode, ctx: WalkContext, depth: number): Node
   if (tagUnsupported) {
     return undefined;
   }
-  const span = toSourceSpan(requireRange(seqAst), ctx);
+  const span = toTightCollectionSpan(requireRange(seqAst), ctx);
   return createSequence(items, span);
 }
 

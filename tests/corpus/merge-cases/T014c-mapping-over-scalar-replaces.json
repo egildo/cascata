@@ -9,6 +9,6 @@
     "tree": {
       "mapping": [["setting", { "mapping": [["a", { "kind": "int", "value": "1" }]] }]]
     },
-    "spans": [{ "pointer": "/setting", "document": "config.yaml", "line": 3, "column": 3, "start": 34 }]
+    "spans": [{ "pointer": "/setting", "document": "config.yaml", "line": 3, "column": 3, "start": 34, "end": 38 }]
   }
 }
