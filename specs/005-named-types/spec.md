@@ -130,30 +130,43 @@ the accepted alternative passes and a value of a declared-but-unselected alterna
 
 ---
 
-### User Story 4 - Names collide loudly, and qualification is the way out (Priority: P4)
+### User Story 4 - A descendant narrows an inherited type, and qualification pins a specific one (Priority: P4)
 
-Two schemas in one pedigree each declare a type called `resource`. Rather than one silently shadowing
-the other, the collision is reported, and an author who genuinely wants both reaches for a qualified
-name.
+A house layer redeclares the root's `resource` with fewer alternatives — "our `resource` never allows
+globs" — and that narrowing governs the house and everything beneath it. An author who needs the
+root's original meaning specifically names it with a qualified name.
 
-**Why this priority**: §7's law is "no silent shadowing", and silent shadowing is the failure mode
-that would make every other guarantee in this milestone unreliable — a demand naming `resource` would
-mean different things in different layers with nothing to say so.
+**Why this priority**: `SPEC.md` §15 settled this against the first draft of this story, which had it
+exactly backwards. Redeclaring a name **is** how narrowing is written, so treating every
+redeclaration as a collision makes §7's cascade law unreachable and reduces `types:` to an
+abbreviation. Under §6.1's single-parent chain every pair of layers is related, so a genuine
+collision — two *unrelated* declarations — cannot arise in v1 at all.
 
-**Independent Test**: A two-schema pedigree where both declare the same type name; confirm the
-collision is reported naming both declarations, and that qualified names resolve unambiguously.
+**Independent Test**: A two-layer pedigree where the descendant redeclares the root's type with a
+narrower `accept`; confirm a value the root would have allowed and the descendant would not is
+rejected for a demand the descendant governs, and that a qualified name still reaches the root's.
 
 **Acceptance Scenarios**:
 
-1. **Given** two layers declaring the same type name, **When** validated, **Then** the collision is
-   reported, carrying **both** declaring positions — the same both-occurrences obligation v0.1's
-   duplicate-key diagnostic already meets.
-2. **Given** a layer redeclaring a built-in type name (`url`, `string`), **When** validated, **Then**
-   it is refused as a collision — the built-in namespace is not open for redefinition.
-3. **Given** a qualified name, **When** resolved, **Then** it names exactly one declaration and never
+1. **Given** a descendant redeclaring an inherited type name, **When** validated, **Then** it is
+   **not** an error — it is a narrowing, governing that layer and every layer below it.
+2. **Given** such a narrowing and a demand **the descendant itself declares**, **When** a value
+   allowed by the ancestor's version but not the descendant's is validated, **Then** it is rejected.
+3. **Given** such a narrowing and a demand **only an ancestor declares**, **When** that same value is
+   validated, **Then** it is accepted — the ancestor's demand resolves the ancestor's own
+   declaration. This is the surprising half of §7's worked narrowing and MUST have its own case.
+4. **Given** a descendant redeclaring a type more permissively, **When** a value violating the
+   ancestor's version is validated against a demand the ancestor declares, **Then** it is still
+   rejected — a widening is inert where it would do harm, refused by nothing and effective nowhere
+   it matters.
+5. **Given** an unqualified name reachable from two layers, **When** resolved, **Then** it resolves to
+   the **nearest** declaration at or above the layer that names it — never to an error, and never to
+   an arbitrary one of the two.
+6. **Given** a qualified name, **When** resolved, **Then** it names exactly one declaration and never
    depends on which layer is asking.
-4. **Given** one layer declaring a type and no other layer declaring that name, **When** a descendant
-   uses it unqualified, **Then** it resolves — inheritance is not collision.
+7. **Given** a layer redeclaring a built-in type name (`url`, `string`), **When** validated, **Then**
+   it is refused — the built-in namespace is not open for redefinition. This is a separate rule from
+   collision and remains reachable in v1.
 
 ### Edge Cases
 
@@ -223,8 +236,17 @@ collision is reported naming both declarations, and that qualified names resolve
 
 **The namespace** (§7)
 
-- **FR-016**: Type names MUST occupy one flat namespace per pedigree.
-- **FR-017**: A collision MUST be an error carrying **both** declaring positions, and MUST be detected
+- **FR-016**: Type names MUST occupy one flat namespace per pedigree. An unqualified name MUST resolve
+  to the **nearest** declaration at or above the layer that names it — never to an error merely
+  because more than one layer declares it (`SPEC.md` §7, §15).
+- **FR-016a**: A descendant redeclaring an inherited type name MUST NOT be an error. It is the
+  narrowing §7's cascade law describes, and it governs from its declaring layer downward (FR-008).
+- **FR-016b**: A collision — two declarations of one name **not** standing in an ancestor/descendant
+  relation — MUST remain an error carrying both declaring positions. Under §6.1's single-parent
+  restriction the pedigree is a chain, so this is **unreachable in v1** and is reserved for future
+  multi-adoption. Being unreachable, it MUST be documented as such wherever it is implemented rather
+  than left to look like live protection (the lesson v0.5's own depth-limit guard taught).
+- **FR-017**: A collision, when reachable, MUST be detected
   in the **validate** stage, alongside the existing vocabulary readers — not in graph build. §7 calls
   it "a graph-build error", which is true of its *nature* (it is a property of the assembled chain,
   detectable with no configuration data present) but not of its *stage*: `src/graph/` is deliberately
@@ -263,9 +285,12 @@ collision is reported naming both declarations, and that qualified names resolve
 
 - **FR-027**: A descendant MUST be able to narrow an inherited type, tightening every usage of it
   **that the narrowing governs** — the declaring layer's own usages and every layer below it, per
-  FR-008. It does not reach back and tighten an ancestor's own usage of the same name. See the
-  Assumptions section: §7's wording is broader than this, and the gap is flagged rather than papered
-  over.
+  FR-008. It does not reach back and tighten an ancestor's own usage of the same name; an author who
+  needs that restates the key's demand, which is one line and says what it means (`SPEC.md` §7's
+  worked narrowing).
+- **FR-027a**: FR-027 MUST have conformance coverage, both halves. The first draft of this milestone
+  asserted it while FR-016 made it impossible, and **no conformance case cited it at all**, which is
+  exactly why the contradiction shipped. A requirement with no case is a requirement nobody checked.
 - **FR-028**: A descendant MUST NOT be able to widen or redefine an inherited type in a way that makes
   a value valid that an ancestor's version rejects. The mechanism follows FR-008's answer.
 - **FR-029**: Every §5.2 row this milestone's vocabulary newly makes constructible MUST be discharged
@@ -324,21 +349,20 @@ collision is reported naming both declarations, and that qualified names resolve
 - **Static subsumption remains out of scope.** §5.4 assigns schema-vs-schema proof to v1.x. This
   milestone enforces the §5.2 named-types row by the same dynamic mechanism v0.4 FR-033 established
   for demands, via FR-008's declaring-layer resolution.
-- **§7's "tightening every usage" is broader than FR-008 permits — flagged as a governance question,
-  not resolved here.** §7's second law reads: "Descendants may narrow inherited types (tightening
-  every usage — house-defaults ergonomics: 'our `resource` never allows globs')." Under FR-008 a
-  house layer's narrowing governs the house's own usages and everything below, but **not** an
-  ancestor's usage of the same name: a root key demanding `resource[]` keeps resolving the root's
-  `resource`, so the house's narrowing alone does not tighten it unless the house also restates that
-  key's demand. The parenthetical therefore overstates what the resolution rule delivers.
-
-  Both halves of the tension are load-bearing and only `SPEC.md` can settle which yields. Resolving
-  it the other way — letting a descendant's narrowing reach an ancestor's usage — is precisely what
-  lets a descendant's *widening* reach it too, which is the failure §2.1 exists to forbid. This is
-  the same shape as the ambiguity v0.3 surfaced about when a cascade strategy takes effect, which
-  stayed hidden through a spec, a plan, a task list and a full implementation until §5.3 gained a
-  worked cascade. §7 has no worked example of a descendant narrowing an inherited type, and this is
-  what that absence costs. **Flagged for the owner; an implementer must not amend §7 (Principle I).**
+- **§7's cascade law and its namespace law contradicted each other, and `SPEC.md` §15 has now settled
+  it in favour of narrowing.** Redeclaring a name *is* how a narrowing is written, so treating every
+  redeclaration as a collision made §7's "descendants may narrow inherited types" unreachable — and
+  because §6.1 makes the v1 pedigree a chain, every same-name pair is ancestor/descendant, so the
+  collision rule could only ever fire on the very case it was not written for. It was written for the
+  multi-adoption world §6.1 pre-commits C3 linearization for. §7 now carries a **worked narrowing**,
+  added for the same reason §5.3 gained a worked cascade: prose alone let this be read two ways, and
+  it was implemented the wrong way with nothing to catch it.
+- **What survives of the "tightening every usage" question.** §7's ergonomic promise is still narrower
+  than it sounds, and the amendment now says so plainly rather than leaving it implied: a house layer
+  narrowing `resource` **without** restating the key it governs does not tighten an ancestor's usage
+  of that key. That is the price of FR-008's declaring-layer resolution, and it is the same property
+  that makes a descendant's *widening* inert — which is why it is worth paying. US4's Acceptance
+  Scenario 3 exists to pin exactly this behaviour, because it is the half a reader will not predict.
 
 ## Out of Scope
 
