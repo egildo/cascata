@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+styles:
+  - x
+  - y

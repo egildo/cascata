@@ -1,0 +1,8 @@
+name: standalone-config
+count: 5
+nested:
+  a: 1
+  b: 2
+list:
+  - one
+  - two

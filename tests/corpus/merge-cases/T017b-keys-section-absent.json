@@ -1,0 +1,11 @@
+{
+  "name": "T017b: a schema with no keys: section at all contributes nothing, and the fold still succeeds",
+  "cites": "v0.3 FR-003",
+  "fixtureDir": "merge-fold/inert-vocabulary/keys-absent",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": { "mapping": [["value", { "kind": "string", "value": "hello" }]] }
+  }
+}

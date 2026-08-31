@@ -1,0 +1,20 @@
+{
+  "name": "T012: a provide fills a silent key, and a config value beats a provide",
+  "cites": "v0.3 FR-007",
+  "fixtureDir": "merge-fold/provide-and-override",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        ["farewell", { "kind": "string", "value": "bye" }],
+        ["greeting", { "kind": "string", "value": "hello" }]
+      ]
+    },
+    "spans": [
+      { "pointer": "/farewell", "document": "schema.yaml", "line": 5, "column": 14, "start": 59, "end": 62 },
+      { "pointer": "/greeting", "document": "config.yaml", "line": 2, "column": 11, "start": 33, "end": 38 }
+    ]
+  }
+}

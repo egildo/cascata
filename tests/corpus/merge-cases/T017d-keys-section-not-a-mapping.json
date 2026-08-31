@@ -1,0 +1,11 @@
+{
+  "name": "T017d: a keys: section that is not a mapping contributes nothing, and the fold still succeeds",
+  "cites": "v0.3 FR-003",
+  "fixtureDir": "merge-fold/inert-vocabulary/keys-not-a-mapping",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": { "mapping": [["value", { "kind": "string", "value": "hello" }]] }
+  }
+}

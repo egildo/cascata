@@ -34,6 +34,8 @@ import { createNetworkTransport, resolveFetchLimits, resolveRemoteDocument, type
 import type { Transport } from "./resolve/transport.js";
 import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
+import { foldConfiguration } from "./merge/fold.js";
+import type { MergedConfiguration } from "./merge/provenance.js";
 
 export type { Diagnostic, RelatedSpan } from "./diagnostics/diagnostic.js";
 export type { DiagnosticCode } from "./diagnostics/codes.js";
@@ -47,6 +49,7 @@ export type { Graph, GraphDocument, GraphDocumentIdentity, GraphReference } from
 export type { Pedigree, PedigreeEntry } from "./graph/pedigree.js";
 export type { FetchLimits } from "./resolve/fetch.js";
 export type { Recording, RecordedFailure, RecordedFailureKind, RecordedResponse, RecordingOutcome, Transport } from "./resolve/transport.js";
+export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord } from "./merge/provenance.js";
 
 /** The result of one `parse()`/`parseText()` call. Never both a tree and diagnostics. */
 export type ParseResult = { readonly ok: true; readonly tree: Node } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -632,4 +635,42 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
 
   const graph = buildGraph(canonicalEntry, chainResult.documentsLeafToRoot);
   return { ok: true, graph, pedigree: buildPedigree(graph) };
+}
+
+// --- merge() — User Story 1 (v0.3, tasks.md T024) ------------------------
+//
+// Fold a resolved graph and its pedigree into one configuration
+// (contracts/merge-api.md: `merge(resolved) -> MergeResult`). Unlike
+// `resolve()`, this crosses no boundary that needs an orchestrator: the
+// fold itself lives entirely in `src/merge/`, which may see `graph/` but
+// neither `adapters/` nor `resolve/` (`tests/unit/layering.test.ts`, T011)
+// — merge is the first stage that is both format-blind *and*
+// location-blind, so there is nothing here for this file to bridge.
+
+/** What `merge()` takes: exactly the `ok: true` shape `resolve()` produces. */
+export interface MergeInput {
+  readonly graph: Graph;
+  readonly pedigree: Pedigree;
+}
+
+export type MergeResult = { readonly ok: true; readonly configuration: MergedConfiguration } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+
+/**
+ * Fold `resolved.graph` and `resolved.pedigree` into a `MergedConfiguration`
+ * — never both a configuration and diagnostics (contracts/merge-api.md
+ * point 1). A schema's `provide` fills what the config leaves silent;
+ * mappings merge deeply; everything else replaces
+ * (contracts/precedence.md).
+ *
+ * **Scope, as of User Story 1 (Phase 3's checkpoint)**: this milestone's
+ * merge policy validation (an unknown or non-string `cascade`, `append`
+ * over a non-sequence, `merge-by-key`) is Phase 6 (User Story 4), not yet
+ * implemented — so this function cannot yet produce the `ok: false` branch
+ * contracts/merge-api.md describes; it always folds successfully. `why()`
+ * (Phase 5, User Story 3) is not exported here either — see
+ * `src/merge/provenance.ts`'s module doc.
+ */
+export function merge(resolved: MergeInput): MergeResult {
+  const configuration = foldConfiguration(resolved.graph, resolved.pedigree);
+  return { ok: true, configuration };
 }

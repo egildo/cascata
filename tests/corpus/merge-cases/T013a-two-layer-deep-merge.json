@@ -1,0 +1,29 @@
+{
+  "name": "T013a: two layers each providing a mapping under one key merge deeply — nearer layer wins shared keys",
+  "cites": "v0.3 FR-006",
+  "fixtureDir": "merge-fold/deep/two-layer-mapping",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "network",
+          {
+            "mapping": [
+              ["host", { "kind": "string", "value": "schema-host" }],
+              ["retries", { "kind": "int", "value": "3" }],
+              ["timeout", { "kind": "int", "value": "60" }]
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      { "pointer": "/network/host", "document": "schema.yaml", "line": 4, "column": 13, "start": 42, "end": 53 },
+      { "pointer": "/network/timeout", "document": "config.yaml", "line": 3, "column": 12, "start": 43, "end": 45 },
+      { "pointer": "/network/retries", "document": "config.yaml", "line": 4, "column": 12, "start": 57, "end": 58 }
+    ]
+  }
+}

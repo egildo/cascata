@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+network:
+  timeout: 60
+  retries: 3

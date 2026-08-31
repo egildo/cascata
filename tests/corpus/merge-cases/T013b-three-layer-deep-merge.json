@@ -1,0 +1,29 @@
+{
+  "name": "T013b: a three-layer chain deep-merges a nested mapping across the whole pedigree",
+  "cites": "v0.3 FR-006",
+  "fixtureDir": "merge-fold/deep/three-layer-nested",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "app",
+          {
+            "mapping": [
+              ["debug", { "kind": "bool", "value": false }],
+              ["name", { "kind": "string", "value": "My App" }],
+              ["version", { "kind": "int", "value": "2" }]
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      { "pointer": "/app/debug", "document": "schema-mid.yaml", "line": 6, "column": 14, "start": 84, "end": 89 },
+      { "pointer": "/app/version", "document": "schema-mid.yaml", "line": 5, "column": 16, "start": 69, "end": 70 },
+      { "pointer": "/app/name", "document": "config.yaml", "line": 3, "column": 9, "start": 40, "end": 46 }
+    ]
+  }
+}

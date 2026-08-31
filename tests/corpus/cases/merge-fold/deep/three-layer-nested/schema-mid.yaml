@@ -1,0 +1,6 @@
+$adopts: ./schema-root.yaml
+keys:
+  app:
+    provide:
+      version: 2
+      debug: false

@@ -1,0 +1,13 @@
+{
+  "name": "T014b: a scalar over a mapping replaces wholesale — deep merge applies only when both sides are mappings",
+  "cites": "v0.3 FR-006",
+  "fixtureDir": "merge-fold/replace/scalar-over-mapping",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [["setting", { "kind": "string", "value": "just-a-string" }]]
+    }
+  }
+}

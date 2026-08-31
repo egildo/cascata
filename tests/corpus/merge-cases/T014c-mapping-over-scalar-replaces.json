@@ -1,0 +1,14 @@
+{
+  "name": "T014c: a mapping over a scalar replaces wholesale — the other direction of T014b",
+  "cites": "v0.3 FR-006",
+  "fixtureDir": "merge-fold/replace/mapping-over-scalar",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [["setting", { "mapping": [["a", { "kind": "int", "value": "1" }]] }]]
+    },
+    "spans": [{ "pointer": "/setting", "document": "config.yaml", "line": 3, "column": 3, "start": 34 }]
+  }
+}

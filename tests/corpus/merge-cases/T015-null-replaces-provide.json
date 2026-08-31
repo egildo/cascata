@@ -1,0 +1,13 @@
+{
+  "name": "T015: an explicit null over a schema's provide replaces it — null is a value, not an absence",
+  "cites": "v0.3 FR-008",
+  "fixtureDir": "merge-fold/nullability/null-replaces-provide",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [["title", { "kind": "null" }]]
+    }
+  }
+}

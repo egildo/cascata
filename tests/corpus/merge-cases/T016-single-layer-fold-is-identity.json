@@ -1,0 +1,18 @@
+{
+  "name": "T016: a config with no schema at all folds to its own tree unchanged",
+  "cites": "v0.3 FR-009",
+  "fixtureDir": "merge-fold/identity/single-layer-fold",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        ["count", { "kind": "int", "value": "5" }],
+        ["list", { "sequence": [{ "kind": "string", "value": "one" }, { "kind": "string", "value": "two" }] }],
+        ["name", { "kind": "string", "value": "standalone-config" }],
+        ["nested", { "mapping": [["a", { "kind": "int", "value": "1" }], ["b", { "kind": "int", "value": "2" }]] }]
+      ]
+    }
+  }
+}

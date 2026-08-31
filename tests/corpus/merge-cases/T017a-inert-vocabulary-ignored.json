@@ -1,0 +1,13 @@
+{
+  "name": "T017a: demand, seal, final, and delegate on a key have no effect — the key still merges via provide alone",
+  "cites": "v0.3 FR-002",
+  "fixtureDir": "merge-fold/inert-vocabulary/vocabulary-ignored",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [["network", { "mapping": [["host", { "kind": "string", "value": "default-host" }]] }]]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+keys:
+  styles:
+    provide:
+      - a
+      - b
+      - c

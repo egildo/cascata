@@ -1,0 +1,5 @@
+keys:
+  network:
+    provide:
+      host: schema-host
+      timeout: 30

@@ -1,0 +1,5 @@
+keys:
+  greeting:
+    provide: hi
+  farewell:
+    provide: bye
