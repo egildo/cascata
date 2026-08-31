@@ -225,8 +225,39 @@ keys:
 Laws:
 
 - **Parameters are constraint selectors, never computation.** A parameter may only choose among or tighten the type's declared alternatives. Selecting a subset of a union is narrowing, so parameterization is itself monotone and statically checkable. No template language.
-- **Types cascade.** Descendants may narrow inherited types (tightening every usage — house-defaults ergonomics: "our `resource` never allows globs"). Widening/redefining is illegal under `adopts`.
-- **One flat namespace per pedigree; collision is a graph-build error.** Qualified names (`core/resource`) are the escape hatch. No silent shadowing.
+- **Types cascade.** A descendant may redeclare an inherited type name, and doing so **narrows that type from the declaring layer downward** — the declaring layer's own usages and every layer below it, never an ancestor's. Authority flows one way (§2.3); this is the identical rule §5.2 states for cascade strategies, for the identical reason. House-defaults ergonomics — "our `resource` never allows globs" — therefore bind the house and everything beneath it, while an ancestor's own usage of the name keeps meaning what that ancestor declared. Widening or redefining remains illegal under `adopts` and needs no separate refusal: an ancestor's demand resolves the *ancestor's* declaration, and whole-chain validation (§5.4) applies it regardless, so a widening is inert exactly where it would otherwise do harm. Proving that a redeclaration narrows, with no data present, is static subsumption (§5.4 item 2, v1.x).
+- **One flat namespace per pedigree; a collision between *unrelated* declarations is an error.** Two declarations of one name standing in an ancestor/descendant relation are **not** a collision — they are the narrowing the law above describes. Because v1 `$adopts` takes exactly one parent (§6.1), every pedigree is a chain and every pair of layers is related, so **collision is unreachable in v1** and is reserved for future multi-adoption, where two unrelated ancestors may each declare a name. Qualified names (`core/resource` — the qualifier being the last segment of the declaring document's `$id`) pin one specific declaration and are the escape hatch. No silent shadowing: an unqualified name always resolves to the **nearest** declaration at or above the layer that names it.
+
+#### Worked narrowing
+
+§5.3 gained a worked cascade because prose alone let the *timing* of a strategy declaration be read two ways. The same was true here, and cost the same: with no example of a descendant narrowing an inherited type, "descendants may narrow" and "collision is an error" were implemented as contradicting each other (§15).
+
+```yaml
+# https://site-builder.dev/schema/core.yaml   (root)
+$id: site-builder/core
+types:
+  resource:
+    demand: { type: string }
+    accept: [url, path, glob]
+keys:
+  styles:
+    demand: { type: resource[] }
+```
+
+```yaml
+# ~/.config/house.yaml   (house layer)
+$adopts: https://site-builder.dev/schema/core.yaml
+types:
+  resource:
+    accept: [url, path]         # narrowing — legal, and it takes effect HERE
+keys:
+  styles:
+    demand: { type: resource[] }   # the house restates the key, so its own narrower resource governs
+```
+
+A config under the house supplying `["assets/*.css"]` — a glob — is **rejected**: the house's own `styles` demand resolves the house's `resource`, which no longer accepts globs.
+
+Had the house narrowed `resource` **without** restating `styles`, that same glob would be **accepted**. The root's `styles` demand resolves the *root's* `resource`, which still accepts globs, and no other demand applies. This is the cost of resolving in the declaring layer's scope, and it is deliberate: the property that makes it so — an ancestor's demand always means what the ancestor wrote — is exactly what stops a descendant's *widening* from voiding an ancestor's constraint. A narrowing that must reach an ancestor's usage is written by restating that key's demand, which is one line and says what it means.
 - **Primitives are predefined types** in the meta-schema's own `types` section. `url`, `path`, `glob` are built-in refinements of `string` — the semantics JSON Schema's `format` registry names, reached here as ordinary type names rather than a second keyword (§15); `resource` is an ordinary union of them.
 - **Path/glob relativity:** resolved relative to the **declaring file's directory**.
 
@@ -505,6 +536,24 @@ All initial open questions are resolved; amendments are integrated into the arti
   generalization. `keys` ships in v0.4 as `unimplemented-demand-keyword` naming v0.5 — the posture
   `accept` already holds — with the nesting itself, and `items`'s generalization from one level to
   arbitrary depth, arriving in v0.5. See §8, §9, §14.
+
+- **Narrowing an inherited type vs. name collision** → settled: **narrowing wins; collision is
+  reserved for unrelated declarations, which v1 cannot produce.** §7 carried two laws that prescribed
+  opposite responses to one syntactic act. "Descendants may narrow inherited types" requires
+  redeclaring the name; "one flat namespace per pedigree, collision is an error" forbids exactly that.
+  They are not two situations needing to be told apart — under §6.1's single-parent restriction the
+  pedigree is a *chain*, so every pair of layers stands in an ancestor/descendant relation, and every
+  same-name pair collision could ever see is precisely the shape a narrowing takes. The collision law
+  was written for the multi-adoption world §6.1 pre-commits C3 linearization for, where two unrelated
+  ancestors may each declare a name; in v1 it only ever fired on the case it was not written for. A
+  v0.5 implementation therefore made narrowing impossible — a descendant redeclaring a type was
+  refused as a collision, and the requirement asserting narrowing must work had no conformance case at
+  all, which is why nothing caught it. Resolved in favour of the cascade law, since types that cannot
+  be narrowed reduce `types:` to an abbreviation and forfeit most of Article IV's point. A
+  redeclaration narrows **from its declaring layer downward**, matching §5.2's rule for cascade
+  strategies; a widening needs no refusal because an ancestor's demand resolves the ancestor's own
+  declaration and §5.4's whole-chain validation still applies it. §7 gains the worked narrowing whose
+  absence caused this, the way §5.3 gained a worked cascade for the same reason. See §7, §6.1, §5.4.
 
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
 
