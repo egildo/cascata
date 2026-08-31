@@ -1,0 +1,21 @@
+{
+  "name": "T027: a root demand no descendant restates is still enforced, and the diagnostic names the root, not the nearest layer (FR-016, spec.md Acceptance Scenario 2)",
+  "cites": "v0.4 FR-016",
+  "fixtureDir": "validate-whole-chain/root-only",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 9,
+        "pointer": "/styles",
+        "demand": { "pointer": "/keys/styles/demand/type", "document": "root-schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+$adopts: ./root-schema.yaml
+keys:
+  count:
+    demand:
+      max: 100

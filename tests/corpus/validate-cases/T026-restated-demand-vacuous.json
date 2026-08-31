@@ -1,0 +1,8 @@
+{
+  "name": "T026: a root demand restated identically by a nearer layer, satisfied, produces zero diagnostics (FR-015, spec.md Acceptance Scenario 1)",
+  "cites": "v0.4 FR-015",
+  "fixtureDir": "validate-whole-chain/restated",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

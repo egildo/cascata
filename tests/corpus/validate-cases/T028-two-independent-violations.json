@@ -1,0 +1,30 @@
+{
+  "name": "T028: a value violating demands in two different layers produces two diagnostics, each layer-precise (FR-016, spec.md Acceptance Scenario 3)",
+  "cites": "v0.4 FR-016",
+  "fixtureDir": "validate-whole-chain/two-violations",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "range-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 8,
+        "pointer": "/count",
+        "demand": { "pointer": "/keys/count/demand/min", "document": "root-schema.yaml", "line": 4, "column": 12 },
+        "pedigreePosition": 0
+      },
+      {
+        "code": "range-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 8,
+        "pointer": "/count",
+        "demand": { "pointer": "/keys/count/demand/max", "document": "house-schema.yaml", "line": 5, "column": 12 },
+        "pedigreePosition": 1
+      }
+    ]
+  }
+}

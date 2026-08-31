@@ -113,17 +113,17 @@ root's document and position, not the descendant's.
 
 ### Conformance cases for User Story 2 (write first)
 
-- [ ] T026 [P] [US2] Case for a root demanding a constraint a nearer layer restates identically, on a conforming value — asserting **zero** diagnostics, not a suppressed one (FR-015, spec.md Acceptance Scenario 1) — in `tests/corpus/cases/validate-whole-chain/restated/`
-- [ ] T027 [P] [US2] Case for a root demanding a constraint no descendant restates, violated by a value the nearest layer would have accepted — asserting the diagnostic names the **root** (FR-016, spec.md Acceptance Scenario 2) — in `tests/corpus/cases/validate-whole-chain/root-only/`
-- [ ] T028 [P] [US2] Case for a value violating demands in two different layers — asserting **two** diagnostics, each layer-precise (FR-016, spec.md Acceptance Scenario 3) — in `tests/corpus/cases/validate-whole-chain/two-violations/`
-- [ ] T029 [P] [US2] Case for demands in several layers all satisfied — asserting a valid result (spec.md Acceptance Scenario 4) — in `tests/corpus/cases/validate-whole-chain/all-satisfied/`
-- [ ] T030 [P] [US2] Case asserting identical inputs (configuration + pedigree) validated twice produce identical diagnostics in identical order (FR-018, spec.md Acceptance Scenario 5) — in `tests/corpus/cases/validate-whole-chain/determinism/`
+- [x] T026 [P] [US2] Case for a root demanding a constraint a nearer layer restates identically, on a conforming value — asserting **zero** diagnostics, not a suppressed one (FR-015, spec.md Acceptance Scenario 1) — in `tests/corpus/cases/validate-whole-chain/restated/`
+- [x] T027 [P] [US2] Case for a root demanding a constraint no descendant restates, violated by a value the nearest layer would have accepted — asserting the diagnostic names the **root** (FR-016, spec.md Acceptance Scenario 2) — in `tests/corpus/cases/validate-whole-chain/root-only/`
+- [x] T028 [P] [US2] Case for a value violating demands in two different layers — asserting **two** diagnostics, each layer-precise (FR-016, spec.md Acceptance Scenario 3) — in `tests/corpus/cases/validate-whole-chain/two-violations/`
+- [x] T029 [P] [US2] Case for demands in several layers all satisfied — asserting a valid result (spec.md Acceptance Scenario 4) — in `tests/corpus/cases/validate-whole-chain/all-satisfied/`
+- [x] T030 [P] [US2] Case asserting identical inputs (configuration + pedigree) validated twice produce identical diagnostics in identical order (FR-018, spec.md Acceptance Scenario 5) — in `tests/corpus/cases/validate-whole-chain/determinism/`
 
 ### Implementation for User Story 2
 
-- [ ] T031 [US2] Extend `check.ts`'s walk to iterate every layer in `configuration.layers`, root to leaf, checking each layer's own demands against the same merged tree (FR-014, §5.4) — depends on T023
-- [ ] T032 [US2] Order diagnostics deterministically — by pedigree position, then by the demand's own pointer, then by the merged pointer (contracts/validate-api.md's ordering rule, FR-018) — depends on T031
-- [ ] T033 [US2] Confirm restating an ancestor's demand produces no duplicate diagnostic for a conforming value — this needs no special-case code beyond T031's own per-layer independence (each layer's check either finds a violation or does not; nothing suppresses a second identical pass because there is nothing to suppress) — verify by test, not by new logic (FR-015) — depends on T031
+- [x] T031 [US2] Extend `check.ts`'s walk to iterate every layer in `configuration.layers`, root to leaf, checking each layer's own demands against the same merged tree (FR-014, §5.4) — depends on T023
+- [x] T032 [US2] Order diagnostics deterministically — by pedigree position, then by the demand's own pointer, then by the merged pointer (contracts/validate-api.md's ordering rule, FR-018) — depends on T031
+- [x] T033 [US2] Confirm restating an ancestor's demand produces no duplicate diagnostic for a conforming value — this needs no special-case code beyond T031's own per-layer independence (each layer's check either finds a violation or does not; nothing suppresses a second identical pass because there is nothing to suppress) — verify by test, not by new logic (FR-015) — depends on T031
 
 **Checkpoint**: The chain is judged whole, not just the leaf. §5.4's belt and suspenders is real.
 

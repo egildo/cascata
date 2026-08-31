@@ -1,0 +1,8 @@
+{
+  "name": "T029: demands in several layers all satisfied validate cleanly (spec.md Acceptance Scenario 4)",
+  "cites": "v0.4 FR-014",
+  "fixtureDir": "validate-whole-chain/all-satisfied",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

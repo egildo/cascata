@@ -1,0 +1,5 @@
+$adopts: ./root-schema.yaml
+keys:
+  styles:
+    demand:
+      type: string
