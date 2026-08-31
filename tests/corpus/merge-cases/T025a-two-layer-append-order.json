@@ -1,0 +1,23 @@
+{
+  "name": "T025a: two layers under cascade: append accumulate root-first — item labels chosen so an alphabetical sort would get the order wrong",
+  "cites": "v0.3 FR-012",
+  "fixtureDir": "merge-append/two-layer",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "items",
+          {
+            "sequence": [
+              { "kind": "string", "value": "zulu-root" },
+              { "kind": "string", "value": "alpha-config" }
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

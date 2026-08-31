@@ -1,0 +1,5 @@
+keys:
+  items:
+    cascade: replace
+    provide:
+      - root-item

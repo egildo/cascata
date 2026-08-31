@@ -1,0 +1,23 @@
+{
+  "name": "T026: an empty contribution to an append key removes nothing — the middle layer's empty provide neither erases the root's item nor the config's",
+  "cites": "v0.3 FR-012",
+  "fixtureDir": "merge-append/empty",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "items",
+          {
+            "sequence": [
+              { "kind": "string", "value": "root-item" },
+              { "kind": "string", "value": "config-item" }
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -13,13 +13,21 @@
  * 3. Any other pairing replaces wholesale (scalar over mapping, sequence
  *    over sequence, mapping over scalar). **This is where T019's risk
  *    lives**: merging sequences element-wise here would look plausible and
- *    pass every mapping test — `cascade: append` (Phase 4, out of this
- *    slice's scope) exists precisely so that never has to happen. This
- *    file recurses on nothing but a mapping-vs-mapping pairing; every other
- *    pairing falls straight through to "replace".
- * 4. `cascade: append` is out of scope for this slice (User Story 2,
- *    Phase 4) — every key folds as `replace`, which is FR-011's default
- *    anyway, so this file never consults `strategy.ts`'s `cascade` field.
+ *    pass every mapping test — `cascade: append` exists precisely so that
+ *    never has to happen. This file recurses on nothing but a
+ *    mapping-vs-mapping pairing; every other pairing falls straight
+ *    through to "replace" *unless* rule 4 below applies to that key.
+ * 4. `cascade: append` (User Story 2, Phase 4): a top-level key resolved to
+ *    `"append"` by `strategy.ts`'s `resolveStrategies` accumulates
+ *    root-first instead of replacing — `strategy.ts`'s `accumulateAppend`
+ *    does the accumulating; this file only decides, per top-level key,
+ *    whether to call it (`effectiveStrategy`) instead of the ordinary rule
+ *    1-3 pairing. Confined to **top-level keys only**: `keys:` in a schema
+ *    names a key of the config's own top level (`SPEC.md` §9's worked
+ *    chain — `keys.styles` governs a top-level `styles:`), never a nested
+ *    key of the same name buried inside another key's value, so strategies
+ *    are threaded into the outermost `mergeMappings` call alone; every
+ *    recursive call for nested structure passes `NO_STRATEGIES`.
  * 5. An explicit null is a value, not an absence — this needs **no special
  *    case** below: a `null` scalar `Node` is an ordinary `Node`, and this
  *    file never treats "the node at this position" as absent unless the
@@ -39,8 +47,12 @@ import { createMapping, type Mapping, type Node } from "../model/node.js";
 import { freeze } from "../model/freeze.js";
 import type { Graph } from "../graph/build.js";
 import type { Pedigree } from "../graph/pedigree.js";
-import { readKeysVocabulary } from "./strategy.js";
-import type { Layer, MergedConfiguration } from "./provenance.js";
+import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import { accumulateAppend, effectiveStrategy, readKeysVocabulary, resolveStrategies } from "./strategy.js";
+import type { Layer, MergedConfiguration, MergeStrategy } from "./provenance.js";
+
+/** No key has a declared strategy — used for every merge below the top level, where `cascade` never applies (rule 4's own doc comment above). */
+const NO_STRATEGIES: ReadonlyMap<string, MergeStrategy> = new Map();
 
 /**
  * Derive the ranked `Layer` list from a resolved `Graph` — root schema
@@ -165,15 +177,30 @@ function contributionOf(layer: Layer): Node | undefined {
  * contributing to that mapping"), since `incoming` genuinely does
  * contribute *a mapping* at this position, whatever keys it does or does
  * not set within it.
+ *
+ * `strategies` governs rule 4 for the keys of *this* mapping only —
+ * `mergeValue`'s own recursive call below always passes `NO_STRATEGIES`
+ * for nested structure, which is what confines `cascade` to top-level
+ * keys (this function's module-doc rule 4).
  */
-function mergeMappings(current: Mapping, incoming: Mapping): Mapping {
+function mergeMappings(current: Mapping, incoming: Mapping, strategies: ReadonlyMap<string, MergeStrategy>): Mapping {
   const keys = new Set<string>([...current.entries.keys(), ...incoming.entries.keys()]);
   const merged: [string, Node][] = [];
   for (const key of keys) {
     const currentValue = current.entries.get(key);
     const incomingValue = incoming.entries.get(key);
+    if (effectiveStrategy(key, strategies) === "append") {
+      const accumulated = accumulateAppend(currentValue, incomingValue);
+      if (accumulated !== undefined) {
+        merged.push([key, accumulated]);
+      }
+      // else unreachable: same reasoning as the comment below — `key` came
+      // from the union of both maps, so `accumulateAppend` always has at
+      // least one defined side to return.
+      continue;
+    }
     if (currentValue !== undefined && incomingValue !== undefined) {
-      merged.push([key, mergeValue(currentValue, incomingValue)]);
+      merged.push([key, mergeValue(currentValue, incomingValue, NO_STRATEGIES)]);
     } else if (incomingValue !== undefined) {
       merged.push([key, incomingValue]);
     } else if (currentValue !== undefined) {
@@ -191,14 +218,17 @@ function mergeMappings(current: Mapping, incoming: Mapping): Mapping {
  * are mappings (rule 2); every other pairing replaces wholesale with
  * `incoming` (rule 3) — which is also where rule 5 (null replaces) falls
  * out for free, since a `null` scalar is just another `Node` that "replaces
- * wholesale" like any other.
+ * wholesale" like any other. `strategies` is threaded straight through to
+ * `mergeMappings` unchanged — it is this function's caller (`fold`, at the
+ * top level) that decides whether `strategies` carries real entries or is
+ * `NO_STRATEGIES`.
  */
-function mergeValue(current: Node | undefined, incoming: Node): Node {
+function mergeValue(current: Node | undefined, incoming: Node, strategies: ReadonlyMap<string, MergeStrategy>): Node {
   if (current === undefined) {
     return incoming;
   }
   if (current.type === "mapping" && incoming.type === "mapping") {
-    return mergeMappings(current, incoming);
+    return mergeMappings(current, incoming, strategies);
   }
   return incoming;
 }
@@ -208,15 +238,24 @@ function mergeValue(current: Node | undefined, incoming: Node): Node {
  * single-layer fold (just the config, no schema at all) is the identity —
  * FR-009 — because the loop below never calls `mergeValue` at all in that
  * case: there is only ever one contribution, taken as-is.
+ *
+ * `strategies` (default `NO_STRATEGIES`, so every existing caller that
+ * predates User Story 2 — including this file's own hand-constructed unit
+ * tests — is unaffected and every key still folds as `replace`) is
+ * `strategy.ts`'s `resolveStrategies` output: one resolved `MergeStrategy`
+ * per top-level key, already reconciled across the whole layer stack
+ * (rule 4). Threaded only into the top-level `mergeValue` call below —
+ * every nested merge confines itself to `NO_STRATEGIES` (`mergeMappings`'s
+ * own doc comment).
  */
-export function fold(layers: readonly Layer[]): Node {
+export function fold(layers: readonly Layer[], strategies: ReadonlyMap<string, MergeStrategy> = NO_STRATEGIES): Node {
   let result: Node | undefined;
   for (const layer of layers) {
     const contribution = contributionOf(layer);
     if (contribution === undefined) {
       continue;
     }
-    result = result === undefined ? contribution : mergeValue(result, contribution);
+    result = result === undefined ? contribution : mergeValue(result, contribution, strategies);
   }
   if (result === undefined) {
     // Unreachable: `deriveLayers` always appends the config layer last, and
@@ -227,22 +266,36 @@ export function fold(layers: readonly Layer[]): Node {
   return result;
 }
 
+/** `foldConfiguration`'s result — never both a configuration and diagnostics (mirrors `MergeResult` in `src/index.ts`, which this shape feeds directly). */
+export type FoldOutcome = { readonly ok: true; readonly configuration: MergedConfiguration } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+
 /**
- * Fold a resolved graph and its pedigree into a `MergedConfiguration`
- * (FR-004, FR-010). The tree is deeply frozen before being returned, so it
- * satisfies every v0.1 invariant merge inherits rather than is exempted
- * from: every node positioned (true throughout — no node here is ever
- * constructed without a span, by the model's own construction invariant),
- * mappings in canonical key order (`createMapping` always sorts), and
- * deeply frozen (`freeze`, called once here, exactly as v0.1's own `parse`
- * does at its own boundary).
+ * Fold a resolved graph and its pedigree into a `MergedConfiguration`, or
+ * refuse with diagnostics (FR-004, FR-010, FR-016). The tree is deeply
+ * frozen before being returned, so it satisfies every v0.1 invariant merge
+ * inherits rather than is exempted from: every node positioned (true
+ * throughout — no node here is ever constructed without a span, by the
+ * model's own construction invariant), mappings in canonical key order
+ * (`createMapping` always sorts), and deeply frozen (`freeze`, called once
+ * here, exactly as v0.1's own `parse` does at its own boundary).
+ *
+ * `resolveStrategies` runs **before** the fold itself: a `cascade-strategy
+ * -weakened` refusal (T032) is a fact about the pedigree's own vocabulary,
+ * independent of any data, so there is no reason to build a tree first and
+ * discover it cannot be trusted — this mirrors User Story 4's later
+ * refusals (Phase 6, not yet implemented), which will extend the same
+ * `diagnostics.length > 0` branch rather than add a second one.
  *
  * `provenance` is the empty record in this slice — see
  * `src/merge/provenance.ts`'s module doc for why populating it is Phase 5
  * work (T041) rather than part of this fold.
  */
-export function foldConfiguration(graph: Graph, pedigree: Pedigree): MergedConfiguration {
+export function foldConfiguration(graph: Graph, pedigree: Pedigree): FoldOutcome {
   const layers = deriveLayers(graph);
-  const tree = freeze(fold(layers));
-  return { tree, provenance: new Map(), pedigree };
+  const { strategies, diagnostics } = resolveStrategies(layers);
+  if (diagnostics.length > 0) {
+    return { ok: false, diagnostics: [...diagnostics] };
+  }
+  const tree = freeze(fold(layers, strategies));
+  return { ok: true, configuration: { tree, provenance: new Map(), pedigree } };
 }

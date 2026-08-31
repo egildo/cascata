@@ -1,0 +1,6 @@
+$adopts: ./schema-root.yaml
+keys:
+  items:
+    cascade: append
+    provide:
+      - mid-item

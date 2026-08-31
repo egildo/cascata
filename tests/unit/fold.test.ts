@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import { createBoolScalar, createIntScalar, createMapping, createNullScalar, createSequence, createStringScalar, type Node } from "../../src/model/node.js";
 import { createOrigin, createSourceSpan, type SourceSpan } from "../../src/model/span.js";
 import { deriveLayers, fold } from "../../src/merge/fold.js";
+import { resolveStrategies } from "../../src/merge/strategy.js";
 import type { Layer } from "../../src/merge/provenance.js";
 import type { Graph, GraphDocument } from "../../src/graph/build.js";
 
@@ -41,6 +42,15 @@ function configLayer(id: string, rank: number, tree: Node): Layer {
 /** A `keys.<name>: { provide: <value> }` entry, for building a schema's `keys:` mapping. */
 function providing(name: string, value: Node, declSpan: SourceSpan): [string, Node] {
   return [name, createMapping([["provide", value]], declSpan)];
+}
+
+/** A `keys.<name>: { cascade: <strategy>[, provide: <value>] }` entry. `cascadeSpan` is the position asserted by `cascade-strategy-weakened` (contracts/diagnostics.md: "the descendant's declaration"). */
+function declaringCascade(name: string, strategy: "append" | "replace", cascadeSpan: SourceSpan, provide?: readonly [Node, SourceSpan]): [string, Node] {
+  const entries: [string, Node][] = [["cascade", createStringScalar(strategy, cascadeSpan)]];
+  if (provide !== undefined) {
+    entries.push(["provide", provide[0]]);
+  }
+  return [name, createMapping(entries, provide === undefined ? cascadeSpan : provide[1])];
 }
 
 describe("fold() — precedence rules (contracts/precedence.md), hand-constructed", () => {
@@ -202,6 +212,112 @@ describe("fold() — span rule (research D4): the nearest contributing layer's o
     const result = fold([schema, config]);
     if (result.type !== "mapping") throw new Error("unreachable");
     expect(result.entries.get("k")?.span).toBe(configSpan);
+  });
+});
+
+describe("fold() — rule 4: cascade: append (T029-T032), hand-constructed", () => {
+  it("accumulates root-first across three layers, and the appended sequence's own span is the nearest contributor's (research D4)", () => {
+    const rootItemsSpan = span("root", 10, 20, 2, 3);
+    const midItemsSpan = span("mid", 10, 20, 2, 3);
+    const configItemsSpan = span("config", 10, 20, 2, 3);
+    const root = schemaLayer("root", 0, [
+      declaringCascade("items", "append", span("root", 0, 1), [createSequence([createStringScalar("root-a", span("root", 1, 2))], rootItemsSpan), rootItemsSpan]),
+    ]);
+    const mid = schemaLayer("mid", 1, [providing("items", createSequence([createStringScalar("mid-a", span("mid", 1, 2))], midItemsSpan), midItemsSpan)]);
+    const config = configLayer("config", 2, createMapping([["items", createSequence([createStringScalar("config-a", span("config", 1, 2))], configItemsSpan)]], span("config", 0, 1)));
+
+    const { strategies, diagnostics } = resolveStrategies([root, mid, config]);
+    expect(diagnostics).toEqual([]);
+    const result = fold([root, mid, config], strategies);
+    if (result.type !== "mapping") throw new Error("unreachable");
+    const items = result.entries.get("items");
+    if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
+    expect(items.items.map((n) => (n.type === "scalar" ? n.value : undefined))).toEqual(["root-a", "mid-a", "config-a"]);
+    // D4: "for an appended sequence, the nearest contributor's" span — the
+    // nearest (last) contributor here is config, not root and not some
+    // synthetic combination.
+    expect(items.span).toBe(configItemsSpan);
+  });
+
+  it("a layer contributing nothing to an append key removes nothing, and does not appear as a gap (FR-012)", () => {
+    const root = schemaLayer("root", 0, [declaringCascade("items", "append", span("root", 0, 1), [createSequence([createStringScalar("root-a", span("root", 1, 2))], span("root", 1, 3)), span("root", 1, 3)])]);
+    const silentMiddle = schemaLayer("middle", 1, []); // declares nothing about "items" at all
+    const config = configLayer("config", 2, createMapping([["items", createSequence([createStringScalar("config-a", span("config", 1, 2))], span("config", 1, 3))]], span("config", 0, 1)));
+
+    const { strategies } = resolveStrategies([root, silentMiddle, config]);
+    const result = fold([root, silentMiddle, config], strategies);
+    if (result.type !== "mapping") throw new Error("unreachable");
+    const items = result.entries.get("items");
+    if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
+    expect(items.items.map((n) => (n.type === "scalar" ? n.value : undefined))).toEqual(["root-a", "config-a"]);
+  });
+
+  it("a key with no declared strategy defaults to replace, even for sequence values (FR-011)", () => {
+    const schema = schemaLayer("schema", 0, [providing("items", createSequence([createStringScalar("schema-a", span("schema", 1, 2))], span("schema", 1, 3)), span("schema", 1, 3))]);
+    const config = configLayer("config", 1, createMapping([["items", createSequence([createStringScalar("config-a", span("config", 1, 2))], span("config", 1, 3))]], span("config", 0, 1)));
+
+    const { strategies } = resolveStrategies([schema, config]);
+    expect(strategies.size).toBe(0); // nothing declared cascade at all
+    const result = fold([schema, config], strategies);
+    if (result.type !== "mapping") throw new Error("unreachable");
+    const items = result.entries.get("items");
+    if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
+    // Replace-wholesale: config's alone, length 1 — NOT accumulated to length 2.
+    expect(items.items).toHaveLength(1);
+    expect(items.items[0]).toMatchObject({ kind: "string", value: "config-a" });
+  });
+
+  it("tightening replace -> append (an earlier explicit replace, a later append) governs the WHOLE key, including the layer that predates the tightening (SPEC.md §5.2: 'once a key accumulates, it keeps accumulating')", () => {
+    const root = schemaLayer("root", 0, [declaringCascade("items", "replace", span("root", 0, 1), [createSequence([createStringScalar("root-a", span("root", 1, 2))], span("root", 1, 3)), span("root", 1, 3)])]);
+    const mid = schemaLayer("mid", 1, [declaringCascade("items", "append", span("mid", 0, 1), [createSequence([createStringScalar("mid-a", span("mid", 1, 2))], span("mid", 1, 3)), span("mid", 1, 3)])]);
+    const config = configLayer("config", 2, createMapping([["items", createSequence([createStringScalar("config-a", span("config", 1, 2))], span("config", 1, 3))]], span("config", 0, 1)));
+
+    const { strategies, diagnostics } = resolveStrategies([root, mid, config]);
+    expect(diagnostics).toEqual([]);
+    expect(strategies.get("items")).toBe("append");
+    const result = fold([root, mid, config], strategies);
+    if (result.type !== "mapping") throw new Error("unreachable");
+    const items = result.entries.get("items");
+    if (items === undefined || items.type !== "sequence") throw new Error("expected /items to be a sequence");
+    // Root's own item is included even though root itself declared
+    // "replace" — the FINAL resolved strategy (append, after mid tightens
+    // it) governs every layer's contribution, not only the layers from the
+    // declaring one onward.
+    expect(items.items.map((n) => (n.type === "scalar" ? n.value : undefined))).toEqual(["root-a", "mid-a", "config-a"]);
+  });
+
+  it("weakening append -> replace is refused as cascade-strategy-weakened, at the descendant's own declared position (v0.3 FR-016)", () => {
+    const declSpan = span("mid", 5, 12, 3, 5);
+    const root = schemaLayer("root", 0, [declaringCascade("items", "append", span("root", 0, 1), [createSequence([createStringScalar("root-a", span("root", 1, 2))], span("root", 1, 3)), span("root", 1, 3)])]);
+    const mid = schemaLayer("mid", 1, [declaringCascade("items", "replace", declSpan)]);
+
+    const { strategies, diagnostics } = resolveStrategies([root, mid]);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.code).toBe("cascade-strategy-weakened");
+    expect(diagnostics[0]?.primary).toBe(declSpan);
+    // strategies still resolves to "append" — the refusal does not silently
+    // let the weakening declaration win.
+    expect(strategies.get("items")).toBe("append");
+  });
+
+  it("restating the same strategy twice is legal and vacuous — no diagnostic, no change", () => {
+    const root = schemaLayer("root", 0, [declaringCascade("items", "append", span("root", 0, 1))]);
+    const mid = schemaLayer("mid", 1, [declaringCascade("items", "append", span("mid", 0, 1))]);
+    const { strategies, diagnostics } = resolveStrategies([root, mid]);
+    expect(diagnostics).toEqual([]);
+    expect(strategies.get("items")).toBe("append");
+  });
+
+  it("a config's own cascade declaration is never read (FR-015) — even a config declaring append cannot make a key accumulate", () => {
+    const schema = schemaLayer("schema", 0, [providing("items", createSequence([createStringScalar("schema-a", span("schema", 1, 2))], span("schema", 1, 3)), span("schema", 1, 3))]);
+    const configTree = createMapping(
+      [["keys", createMapping([declaringCascade("items", "append", span("config", 0, 1))], span("config", 0, 2))], ["items", createSequence([createStringScalar("config-a", span("config", 1, 2))], span("config", 1, 3))]],
+      span("config", 0, 3),
+    );
+    const config = configLayer("config", 1, configTree);
+    const { strategies, diagnostics } = resolveStrategies([schema, config]);
+    expect(diagnostics).toEqual([]);
+    expect(strategies.size).toBe(0); // the config's "keys.items.cascade: append" was never even read
   });
 });
 

@@ -1,0 +1,13 @@
+{
+  "name": "T027: a key with no declared cascade strategy behaves as replace, even though its values are sequences",
+  "cites": "v0.3 FR-011",
+  "fixtureDir": "merge-append/default",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [["items", { "sequence": [{ "kind": "string", "value": "config-item" }] }]]
+    }
+  }
+}

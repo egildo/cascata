@@ -1,0 +1,11 @@
+{
+  "name": "T028a: a descendant declaring cascade: replace for a key an ancestor made append is refused as cascade-strategy-weakened",
+  "cites": "v0.3 FR-016",
+  "fixtureDir": "merge-append/strategy-mutation/weakened",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [{ "code": "cascade-strategy-weakened", "document": "schema-mid.yaml", "line": 4, "column": 14 }]
+  }
+}

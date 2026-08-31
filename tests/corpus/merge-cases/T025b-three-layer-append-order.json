@@ -1,0 +1,24 @@
+{
+  "name": "T025b: three layers under cascade: append accumulate root-first, every item present",
+  "cites": "v0.3 FR-012",
+  "fixtureDir": "merge-append/three-layer",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "items",
+          {
+            "sequence": [
+              { "kind": "string", "value": "root-item" },
+              { "kind": "string", "value": "mid-item" },
+              { "kind": "string", "value": "config-item" }
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

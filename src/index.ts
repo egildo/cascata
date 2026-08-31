@@ -659,18 +659,19 @@ export type MergeResult = { readonly ok: true; readonly configuration: MergedCon
  * Fold `resolved.graph` and `resolved.pedigree` into a `MergedConfiguration`
  * — never both a configuration and diagnostics (contracts/merge-api.md
  * point 1). A schema's `provide` fills what the config leaves silent;
- * mappings merge deeply; everything else replaces
+ * mappings merge deeply; everything else replaces, unless a key resolves
+ * to `cascade: append`, which accumulates root-first instead
  * (contracts/precedence.md).
  *
- * **Scope, as of User Story 1 (Phase 3's checkpoint)**: this milestone's
- * merge policy validation (an unknown or non-string `cascade`, `append`
- * over a non-sequence, `merge-by-key`) is Phase 6 (User Story 4), not yet
- * implemented — so this function cannot yet produce the `ok: false` branch
- * contracts/merge-api.md describes; it always folds successfully. `why()`
- * (Phase 5, User Story 3) is not exported here either — see
- * `src/merge/provenance.ts`'s module doc.
+ * **Scope, as of User Story 2 (Phase 4's checkpoint)**: `foldConfiguration`
+ * can now produce the `ok: false` branch — `cascade-strategy-weakened`
+ * (v0.3 FR-016), when a descendant schema declares `replace` for a key an
+ * ancestor made `append`. The rest of this milestone's merge policy
+ * validation (an unknown or non-string `cascade`, `append` over a
+ * non-sequence, `merge-by-key`) is still Phase 6 (User Story 4), not yet
+ * implemented. `why()` (Phase 5, User Story 3) is not exported here
+ * either — see `src/merge/provenance.ts`'s module doc.
  */
 export function merge(resolved: MergeInput): MergeResult {
-  const configuration = foldConfiguration(resolved.graph, resolved.pedigree);
-  return { ok: true, configuration };
+  return foldConfiguration(resolved.graph, resolved.pedigree);
 }

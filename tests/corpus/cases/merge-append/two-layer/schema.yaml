@@ -1,0 +1,5 @@
+keys:
+  items:
+    cascade: append
+    provide:
+      - zulu-root

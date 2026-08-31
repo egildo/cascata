@@ -1,0 +1,24 @@
+{
+  "name": "T028b: a descendant tightening cascade: replace to append is permitted, and applies to every layer's contribution including the ancestor's that predates it",
+  "cites": "v0.3 FR-016",
+  "fixtureDir": "merge-append/strategy-mutation/tightened",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "items",
+          {
+            "sequence": [
+              { "kind": "string", "value": "root-item" },
+              { "kind": "string", "value": "mid-item" },
+              { "kind": "string", "value": "config-item" }
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

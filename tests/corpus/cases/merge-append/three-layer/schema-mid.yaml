@@ -1,0 +1,5 @@
+$adopts: ./schema-root.yaml
+keys:
+  items:
+    provide:
+      - mid-item

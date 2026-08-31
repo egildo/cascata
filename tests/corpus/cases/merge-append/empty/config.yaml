@@ -1,0 +1,3 @@
+$schema: ./schema-mid.yaml
+items:
+  - config-item
