@@ -8,9 +8,13 @@ to arbitrary depth — D2 scopes this to `keys`, not `items`).
 | Field | Type | Notes |
 |---|---|---|
 | `pointer` | `readonly (string)[]` | Path segments from the schema's own `keys:` root, e.g. `["network","subnet"]` |
-| `layer` | declaring schema `Layer` | Which layer granted it (for `FR-002`'s own-position refusal) |
-| `layerRank` | `number` | |
+| `declaringDocument` | `string` | Which schema document granted it (for `FR-002`'s own-position refusal) — a document location, not a `Layer`: `src/resolve/` may not import `src/merge/`, where `Layer` is defined (Principle IV), so the grant is carried in primitives |
+| `declaringRank` | `number` | |
 | `span` | `SourceSpan` | The `delegate: allow` value's own span |
+
+(Named `DelegationGrant` in `src/resolve/delegate.ts`; the table above originally called these fields
+`layer`/`layerRank`, which would have required a layering violation to construct — corrected to match
+the actual, layering-clean shape.)
 
 `DelegationGrantTree` is the recursive structure built from every schema layer's own grants, unioned
 across the pedigree (any layer granting a position makes it delegable — `delegate` does not narrow or
@@ -30,10 +34,15 @@ target reference, and the resolved fragment.
 
 | Field | Type | Notes |
 |---|---|---|
-| `reference` | `Reference` (kind `"delegate"`) | The string value itself, as a reference |
-| `fragmentTree` | `Node` | The fragment's root, re-spanned with a per-graft `Origin` (D3) |
-| `hopIndex` | `number` | 0 for a top-level delegation, incrementing per recursive hop (FR-012a) |
-| `breadcrumb` | `readonly DelegationHop[]` | Outermost-inward, this graft's own chain (FR-012b) |
+| `node` | `Node` | The fragment's root, re-spanned with a per-graft `Origin` (D3) |
+| `fragmentLocation` | `string` | The fragment's own resolved location — becomes `documentLocation` for a further recursive hop |
+| `breadcrumbChain` | `readonly DelegationHop[]` | Outermost-inward, this graft's own chain (FR-012b) |
+
+(Named `GraftOutcome`'s `ok: true` case in `src/index.ts`. No standalone `reference`/`hopIndex`
+fields were needed at runtime: a `Reference` is constructed transiently inside `performGraft` purely
+to reuse `classifyReferenceLocation`, and hop depth is tracked by `DelegationCycleTracker`'s own
+active-stack size, not carried as a field on this entity — `breadcrumbChain`'s own length already
+tells a caller how deep a given graft is.)
 
 ## Fragment
 

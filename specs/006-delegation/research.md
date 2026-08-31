@@ -26,6 +26,18 @@ violates Principle IV and v0.5 FR-017's precedent, and is exactly what FR-008a f
 transclusion until merge time (rejected — FR-007 requires it invisible *by* merge time, which means
 strictly before).
 
+**CORRECTION (post-implementation)**: this decision's own text above says cycle detection reuses "a
+dedicated `GraphBuilder` instance". That did not survive implementation. `GraphBuilder`'s dedup is
+keyed by *location* — correct for `$adopts`/`$schema`, where reading the same document twice must
+yield the same node — which is exactly wrong for D3/FR-013a below: one fragment grafted twice must
+be read once but carry two *independent* breadcrumbs, never share a graph node. A separate,
+purpose-built `DelegationCycleTracker` (`src/index.ts`) was built instead — a plain active-stack of
+in-flight locations, `enter()`/`exit()`/`chain()` — reusing only the active-stack cycle/depth-check
+*technique* `GraphBuilder` also uses, not the class itself. `resolveAllBranches` (also named above)
+*is* still the genuine, unmodified reuse this decision predicted. See
+`contracts/delegation-resolution.md`'s own correction, made at the same time, for the algorithm-level
+consequence.
+
 ## D2 — Grant scope: `keys` only, not `items`
 
 No Acceptance Scenario, FR, or worked example in `SPEC.md` §8 or `specs/006-delegation/spec.md`

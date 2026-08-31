@@ -9,10 +9,13 @@
 A schema grants one key `delegate: allow`; a config supplying a string there gets that file's
 contents grafted in as the subtree at that position, before merge and validation, indistinguishable
 from having been written inline. `src/index.ts` (the orchestrator) reads the grants and the config's
-own tree and performs the graft, reusing `src/graph/build.ts`'s `resolveAllBranches`/`GraphBuilder`
+own tree and performs the graft, reusing `src/graph/build.ts`'s `resolveAllBranches`
 and `src/resolve/location.ts`'s sandbox/scheme primitives; `src/graph/` and `src/resolve/` gain no
 new knowledge of `delegate` (Principle IV, FR-008a). A per-value delegation breadcrumb — the last of
-Principle III's phased diagnostic fields — becomes real.
+Principle III's phased diagnostic fields — becomes real. **SETTLED**: `GraphBuilder` itself turned
+out not to be reusable for cycle detection (its dedup is location-keyed, wrong for FR-013a's
+independent-per-graft-provenance requirement); a separate `DelegationCycleTracker` was built
+instead. See `research.md` D1's own correction.
 
 ## Technical Context
 
@@ -77,7 +80,7 @@ src/
 ├── resolve/
 │   ├── delegate.ts          # NEW — grant-tree reading, transclusion algorithm
 │   └── location.ts          # unchanged, reused (isWithinSandbox, classifyReferenceLocation)
-├── graph/build.ts           # unchanged — resolveAllBranches/GraphBuilder get their first real caller
+├── graph/build.ts           # unchanged — resolveAllBranches gets its first real caller (GraphBuilder itself was not reused — see research.md D1's correction)
 ├── index.ts                 # resolve() orchestrates the new delegation step
 ├── merge/provenance.ts      # MergedConfiguration.delegationBreadcrumbs
 ├── diagnostics/diagnostic.ts # Diagnostic.delegatedFrom
