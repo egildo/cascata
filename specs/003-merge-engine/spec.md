@@ -124,9 +124,10 @@ for that key's pointer and confirm the chain names all three in order, winner fi
    chain has exactly one entry.
 3. **Given** a pointer that names nothing in the merged result, **When** `why` is asked, **Then** it
    says so distinctly, rather than returning an empty chain.
-4. **Given** the pointer of a mapping that exists only because two layers each supplied a different
-   key beneath it, **When** `why` is asked, **Then** it answers *synthesized* and names both
-   contributors — distinct from a container one layer wrote, which answers with a chain.
+4. **Given** the pointer of a mapping two layers both contributed to, **When** `why` is asked,
+   **Then** it answers *synthesized* and names both contributors — distinct from a mapping only one
+   layer supplied, which answers with a chain. The distinction is whether the merge assembled the
+   contents or a single layer wrote them.
 5. **Given** a key under `cascade: append`, **When** `why` is asked, **Then** the chain names every
    layer that contributed items — accumulation has no single winner, and the answer must not pretend
    otherwise.
