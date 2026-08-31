@@ -8,11 +8,15 @@
 
 ## 1. Motivation & Scope
 
-Applications need configuration that is: human-readable and file-based; composable across layers (published defaults → organization/house defaults → project → local); validated against explicit contracts; and traceable ("where did this value come from?").
+**Cascata is a library a tool embeds to turn a folder of human-readable documents into one validated configuration object.** The tool names a **launching point**; the library walks the cascade from it, enforces every schema it finds along the way, resolves the resources those schemas describe, and returns an object that knows where each value came from — or refuses, naming the document, the line, and the rule that was broken.
 
-Cascata provides a single language in which **everything is simultaneously data and contract**. A document can provide values, impose rules on descendants, and govern how descendants may extend it — all with the same vocabulary. Schema documents are just configs whose pedigree terminates in a meta-schema shipped with the library.
+Three consumers, each owed something different. The **tool developer** embeds it, and wants one call, a clean seam to the outside world (Article VI), and no surprises. The **organization** publishes a root schema, and wants its house standards to still be standards five layers down — a guarantee, not a convention. The **config author** writes two lines of YAML, and wants to be told, in their own file at their own line, exactly which rule they broke.
 
-Non-goals for v1: write-back/editing of config files, arbitrary computation in schemas (no template language, no user callbacks), remote delegation targets, the `extends` (fork) mode.
+The mechanism is a cascade of ordinary documents, each **simultaneously data and contract**: a document can provide values, impose rules on descendants, and govern how descendants may extend it, all with the same vocabulary. Schema documents are just configs whose pedigree terminates in a meta-schema shipped with the library. The distinguishing property is **monotonicity** (§2.1): constraints only ever accumulate downward, so a descendant may refine what an ancestor demanded and can never weaken it. Every configuration library merges; that last clause is the one none of them offer, and it is what turns an organization's house standard from a convention into something enforced.
+
+The ceremony is meant to stay small. `$schema:` in a config and `$adopts:` in a schema are the whole of it, and they buy the chain, the enforcement, and the answer to "where did this value come from".
+
+Non-goals for v1: write-back/editing of config files, arbitrary computation in schemas (no template language, no user callbacks), the `extends` (fork) mode. **Remote delegation is not a non-goal** — it is gated: available only where the *host* supplies it and the *user* has opted in, never where a schema asks (§8.4, §11, Article VI). An earlier draft of this list called it a non-goal outright, which the delegation article and the security model had already contradicted.
 
 ---
 
@@ -45,7 +49,7 @@ text → [format adapter] → positioned information model → resolve/graph →
 | **Validate** | Check merged tree against every layer's demands, root→leaf | Redundant with by-construction narrowing; keep the redundancy in v1 |
 | **Freeze** | Immutable, typed output | Optionally derive/emit TypeScript types |
 
-Each stage is independently testable and consumes only the output of the previous one. Everything from graph-build onward is format-blind.
+Each stage is independently testable and consumes only the output of the previous one. Everything from graph-build onward is format-blind — and **world-blind**: only Resolve touches anything outside the call, and it does so by *asking its host* rather than by reading. See Article VI.
 
 ---
 
@@ -380,7 +384,7 @@ styles:
 ## 11. Security Model (summary)
 
 - **Remote schemas: HTTPS, always.** Pinning by content hash (`$pin`, SHA-256 over the exact bytes, §6.1) is **verified whenever a pin is present**, and verification is absolute: mismatched bytes are refused and never enter the graph. Whether a pin is *required* is not the library's decision but the pedigree's — authority flows downward (§2.3), and a published root legislates what its descendants must do, here as everywhere. v1 ships the mechanism; the legislation (a root demanding pinned adoption) belongs with sealing and authority (§6.3). An unpinned reference is therefore fetched on TLS alone, and **an unpinned remote link MUST be reportable**, so a root's demand is auditable and an author can see what they are trusting unverified. One limit is inherent rather than chosen: a root's demand can only be read after that root has been fetched, so it hardens every subsequent resolution but not the first — which is what a lockfile closes. Immutable content-addressed cache per RFC 9111 semantics; lockfile-friendly.
-- A remote schema can never trigger local file reads outside the sandbox (delegation rules, §8.4) nor remote delegation without user opt-in.
+- A remote schema can never trigger local file reads outside the sandbox (delegation rules, §8.4) nor remote delegation without user opt-in. **This is structural, not self-policed**: the library performs no I/O of its own and can read only what its host answers (Article VI), so a host that declines has denied it and no schema can appeal. The sandbox rules below remain in force as defence in depth, so that a permissive host still gets every guarantee.
 - YAML custom tags rejected; parse depth/size capped; duplicate keys rejected.
 - The schema language itself is versioned via the meta-schema's own pedigree.
 
@@ -442,7 +446,7 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 4. **v0.4** — Constraint checker (closed vocabulary), whole-chain validation, error contract; `tool certify`.
 5. **v0.5** — Types (`types` section, selector parameters, namespace collision errors); nested demands (`keys` implemented, `items` generalized from one level to arbitrary depth, per §9's amendment).
 6. **v0.6** — Delegation (transclusion, sandbox, positional validation, breadcrumbs).
-7. **v0.7** — Sealing/governance (`seal`, `final`, cascade limits) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer).
+7. **v0.7** — Sealing/governance (`seal`, `final`, cascade limits) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer) + **the embedding surface**: the host seam of Article VI, the one-call `load()`, and `resource` values resolved against their declaring document rather than merely shape-checked. The embedding surface belongs *here* rather than at v1.0 because the meta-schema bootstrap is its first real consumer — self-hosting means the library loads its own meta-schema through its own seam, which is the embedding story exercising itself.
 8. **v1.0** — Freeze the constitution; typed TS output surface.
 9. **v1.x** — JSON Schema 2020-12 exporter; static subsumption lint; JSON adapter; TOML adapter (run against `toml-test`).
 10. **Future** — `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
@@ -577,7 +581,40 @@ All initial open questions are resolved; amendments are integrated into the arti
   shows. Supersedes, for `glob` only, the `format`-vs-`type` entry above, which had `url`/`path`/`glob`
   all staying as built-in types. See §7, §12, §14.
 
+- **What Cascata is, and where the outside world stops** → settled: **it is a library a tool embeds,
+  and it performs no I/O.** §1 framed the project as a *language* for six milestones, which is true
+  and is the wrong first sentence for something a tool developer embeds. Rewritten around the
+  launching point and the three consumers it owes different things to. The seam that framing implies
+  is now **Article VI**: the library asks its host for bytes and never reads anything itself, which
+  makes §8.4's remote opt-in and §11's sandbox promises structural instead of self-policed — a host
+  that does not answer has denied the request. Half of that seam already existed: remote reads have
+  gone through an injectable transport since v0.2, built so tests could be hermetic; local reads
+  never did. Unifying them is what v0.7 adds, alongside `load()` and `resource` values resolved
+  against their declaring document rather than merely shape-checked. Those land at v0.7 rather than
+  v1.0 because the meta-schema bootstrap is `load()`'s first real consumer — self-hosting is the
+  embedding story exercising itself. Also corrected in passing: §1 listed remote delegation as a v1
+  non-goal, which §8.4 and §11 had already contradicted by gating it behind a user opt-in rather than
+  forbidding it. See §1, §3, §11, §14, Article VI.
+
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
+
+---
+
+## 16. Article VI — The Host Boundary
+
+*Numbered out of article sequence deliberately.* This article belongs after Article V, but inserting it there would renumber §9–§15, and those are cited throughout the implementation, every milestone spec, the tests, and the README. Renumbering would turn hundreds of **currently correct** citations into wrong ones, which is worse than the untidiness. The Roman numeral records where it belongs; the section number records where it could safely go.
+
+Cascata is **embedded, not run**. Everything the library needs from outside the call it was given, it **asks for**. The **host** is whatever embeds it — a CLI, an editor, a build tool, a test harness.
+
+Laws:
+
+- **The library performs no I/O.** It never opens a file or a socket. It requests a document by location and receives bytes or a refusal. Where those bytes come from is the host's problem, and deliberately not the library's.
+- **The host boundary is the capability boundary.** A library that cannot read except by asking cannot exceed what its host grants. §8.4's remote-delegation opt-in and §11's sandbox promises are therefore *structural* rather than self-policed: a host that does not answer has denied the request, and no schema can appeal. The library's own sandbox rules remain in force as defence in depth, so a permissive host still gets every guarantee. This is §2.3 and Principle VI's "capabilities are granted, never ambient" made load-bearing rather than aspirational.
+- **A refusal is data, not an exception.** A host declining to supply a document yields a diagnostic like any other refusal, carrying the position of the reference that asked for it. **Programmer errors throw** — a caller omitting a required option is a bug in the calling code, not a fact about the world. Nothing about the state of the world throws.
+- **Everything above resolution is world-blind.** §3's pipeline is format-blind from graph-build onward; it is world-blind from the same point. Merge, validation, and provenance are pure functions of documents already in hand. That is what lets them be tested without a filesystem, and what makes §5.4's whole-chain validation "trivially correct even under merge-engine bugs" true rather than hopeful.
+- **The host supplies bytes, never meaning.** It answers *what is at this location* — never *is this allowed*, *what format is this*, or *does this satisfy the schema*. Policy stays in the library; supply stays in the host. Two hosts must never be able to disagree about what one configuration means.
+- **One call.** The ordinary embedding is a single `load()` from a launching point to a validated configuration or a set of diagnostics, never both. The staged functions stay public for tools that need to step through the pipeline, but no tool should have to assemble the ordinary path itself, and none should have to rediscover how a path relates to the document that declared it.
+- **Determinism across hosts.** Given the same documents, every host gets the same tree, the same provenance, and the same diagnostics in the same order. A host may decide *whether* the library sees a document; it may never influence what that document means.
 
 ---
 
