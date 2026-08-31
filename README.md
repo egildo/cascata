@@ -1,8 +1,9 @@
 # Cascata
 
-A format-blind, positioned information model with a YAML adapter, plus the resolver and DAG builder
-that follow a config's `$schema`/`$adopts` chain into a graph and a pedigree — v0.1 and v0.2 of the
-Cascata configuration cascade (see `SPEC.md` for the full product vision; these are the first two
+A format-blind, positioned information model with a YAML adapter, the resolver and DAG builder that
+follow a config's `$schema`/`$adopts` chain into a graph and a pedigree, and the merge engine that
+folds that chain into one configuration with full provenance — v0.1, v0.2, and v0.3 of the Cascata
+configuration cascade (see `SPEC.md` for the full product vision; these are the first three
 milestones of its §14 roadmap).
 
 v0.1 turns a document's bytes into a tree of mappings, sequences, and scalars in which **every node
@@ -10,12 +11,15 @@ reports exactly where it came from**, or — when the document leans on construc
 portability floor (§4.2) — into a complete, position-ordered list of diagnostics. v0.2 finds the
 *documents*: it follows `$schema` and `$adopts` through local files and HTTPS references, verifies
 pins, caches fetches, and assembles the result into an acyclic graph with a queryable, root-to-leaf
-pedigree. Merging, constraint checking, and validation are still ahead — v0.3 and v0.4 per `SPEC.md`
-§14.
+pedigree. v0.3 is where the chain finally does something: `merge()` folds the pedigree and the config
+into **one** node tree — a schema's `provide` fills what the config leaves silent, mappings merge
+deeply, everything else replaces unless a key is declared `cascade: append` — while recording, for
+every value, an ordered provenance chain `why()` can answer. Constraint checking and validation are
+still ahead — v0.4 per `SPEC.md` §14.
 
-Full detail lives in `specs/001-information-model-yaml-adapter/` (v0.1) and
-`specs/002-resolver-dag-builder/` (v0.2) — each has its own `spec.md`, `plan.md`, `data-model.md`, and
-`contracts/`. This file is the shorter, code-facing version of the same surface.
+Full detail lives in `specs/001-information-model-yaml-adapter/` (v0.1), `specs/002-resolver-dag-builder/`
+(v0.2), and `specs/003-merge-engine/` (v0.3) — each has its own `spec.md`, `plan.md`, `data-model.md`,
+and `contracts/`. This file is the shorter, code-facing version of the same surface.
 
 ## Install
 
@@ -246,6 +250,156 @@ that failed** (v0.2 FR-023).
 | `insecure-redirect` | A redirect hop leaving HTTPS — checked hop by hop, not just at the final destination |
 | `too-many-redirects` | More redirect hops than `maxRedirects` |
 | `document-not-cached` | A remote document neither reachable nor already cached |
+
+### `merge(resolved)`
+
+**v0.3.** Folds a resolved `Graph`/`Pedigree` — exactly `resolve()`'s `ok: true` shape — into one
+`MergedConfiguration`: a single node tree plus a provenance record (contracts/merge-api.md). A
+schema's `keys.<name>.provide` fills whatever the config leaves silent; mappings merge deeply; every
+other pairing replaces, unless a schema declares `cascade: append`, in which case sequences accumulate
+instead. `demand`, `seal`, `final`, and `delegate` are read by nothing in this milestone and MUST be
+ignored, not guessed at (`SPEC.md` §9, v0.3 FR-002).
+
+```typescript
+import { resolve, merge, why } from "cascata";
+
+// core.yaml:   "$id: core" with `keys: { timeout: { provide: 30 }, styles: { cascade: append, provide: [reset.css] } }`
+// house.yaml:  "$adopts: ./core.yaml" with `keys: { styles: { provide: [house.css] } }`
+// config.yaml: "$schema: ./house.yaml" with `styles: [project.css]`
+
+const resolved = await resolve("./config.yaml", { sandboxRoot: process.cwd() });
+if (!resolved.ok) throw new Error("resolve failed");
+
+const result = merge({ graph: resolved.graph, pedigree: resolved.pedigree });
+if (result.ok) {
+  result.configuration.tree; // { timeout: 30, styles: [reset.css, house.css, project.css] } — a frozen Node
+  result.configuration.provenance; // RFC 6901 pointer -> ordered ProvenanceEntry[]
+} else {
+  result.diagnostics; // malformed merge policy — non-empty, position-ordered
+}
+```
+
+- **`resolved: { graph: Graph; pedigree: Pedigree }`** — exactly what a successful `resolve()` call
+  produces; `merge()` performs no I/O of its own and reads no file (contracts/merge-api.md point 5).
+- **`MergeResult`** is `{ ok: true, configuration: MergedConfiguration } | { ok: false, diagnostics: Diagnostic[] }`
+  — never both. `ok: false` is reached only by malformed merge policy (see "v0.3 diagnostic codes"
+  below) — never by anything about the config's own data, since values themselves cannot be malformed.
+
+**Behavioral contract** (contracts/merge-api.md):
+
+1. Never throws for malformed merge policy — it is a diagnostic. Exceptions remain for programmer
+   error.
+2. Total: the fold visits each node once per contributing layer.
+3. Deterministic: the same pedigree and config produce a byte-identical tree, the same provenance
+   chains in the same order, and the same diagnostics, on every run (v0.3 SC-005).
+4. The merged tree satisfies every v0.1 invariant — positioned, canonically ordered, deeply frozen
+   (v0.3 FR-010). Merge does not get an exemption for being downstream.
+5. No I/O. Merge reads no file and opens no socket.
+6. Provenance is complete: every value in the tree has a chain, and every chain names every
+   contributing layer — including those overridden (v0.3 FR-019, FR-022).
+
+#### Precedence (contracts/precedence.md, `SPEC.md` §5.3)
+
+For any key, the value is decided by the first rule that applies:
+
+1. **A nearer layer beats a further one.** Layers rank root-first: the root schema is lowest, each
+   `$adopts` descendant higher, and the config highest of all.
+2. **Mappings on both sides merge deeply**, rule 1 applying independently to each key inside. This is
+   the only rule that recurses.
+3. **Any other pairing replaces**, wholesale — a scalar over a mapping, a sequence over a sequence, a
+   mapping over a scalar. Deep merge is for mappings only.
+4. **Unless the key is declared `cascade: append`**, in which case sequences accumulate root-first
+   instead of replacing, and no contribution is ever removed — **from the declaring layer downward**.
+   A layer that settled under `replace` before the declaration stays settled; `append` binds
+   descendants, never ancestors (`SPEC.md` §2.3, §5.2).
+5. **An explicit null is a value**, and replaces by rule 1. It is not an absence that yields to a
+   provide.
+6. **Absence contributes nothing.** A layer silent on a key neither overrides nor clears it.
+
+The list is total: for any two layers and any key, exactly one rule decides — there is no
+tie-breaking, because there are no ties.
+
+### `why(configuration, pointer)`
+
+**v0.3.** Answers where a merged value came from — the `git config --show-origin` question — for an
+RFC 6901 `pointer` into `configuration.tree`. A library function, not a command: `SPEC.md` §10 writes
+`tool why`, but no CLI ships before v1.0's typed output surface (v0.3 research D3).
+
+```typescript
+const timeout = why(result.configuration, "/timeout");
+// { kind: "chain", entries: [{ layer, span, outcome: "won" }] } — core.yaml alone supplied it
+
+const styles = why(result.configuration, "/styles");
+// { kind: "chain", entries: [
+//   { layer: <core.yaml>,   outcome: "accumulated" },
+//   { layer: <house.yaml>,  outcome: "accumulated" },
+//   { layer: <config.yaml>, outcome: "accumulated" },
+// ] } — root-first, cascade: append has no single winner
+```
+
+**`WhyResult`** is one of three outcomes, all reachable and deliberately distinct:
+
+- **`{ kind: "chain", entries: ProvenanceEntry[] }`** — a value or a container exactly one layer
+  wrote, ordered winner-first for a `replace`-terminated chain, or chronologically root-first for one
+  ending in accumulation. Each `ProvenanceEntry` carries its contributing `layer`, its `span` in that
+  layer's real document, and its `outcome`: `"won"`, `"overridden"`, or `"accumulated"`.
+- **`{ kind: "synthesized", contributors: ProvenanceEntry[] }`** — a mapping **two or more layers
+  independently contributed to** (whether or not their own keys overlap), so no single layer wrote
+  what is actually there; `contributors` names each one rather than being empty.
+- **`{ kind: "unknown-pointer" }`** — the pointer names nothing in the merged tree, distinct from
+  both of the above, since provenance lives beside the tree rather than on the node (v0.3 research D1)
+  and this is where the two structures disagreeing becomes observable rather than silent.
+
+For a key under `cascade: append`, every entry is `"accumulated"` and `why()` never nominates a
+winner — reporting the last contributor as though it had won would misdescribe the one strategy where
+nothing is overridden. A pointer into a sequence *item* answers for the nearest enclosing recorded
+pointer (mapping-key granularity — items have no contribution history distinct from their sequence's).
+
+### Merge and provenance types
+
+```typescript
+interface Layer {
+  identity: DocumentIdentity; // v0.2's DocumentIdentity — which document
+  role: "schema" | "config";
+  rank: number; // precedence order: 0 is the root schema; highest is the config
+  tree: Node; // this layer's own parsed tree
+}
+
+type MergeStrategy = "replace" | "append"; // "merge-by-key" is reserved, not a member (v0.3 FR-014)
+
+interface ProvenanceEntry {
+  layer: Layer;
+  span: SourceSpan; // where in that layer's real document
+  outcome: "won" | "overridden" | "accumulated";
+}
+
+type ProvenanceRecord = ReadonlyMap<string, readonly ProvenanceEntry[]>; // RFC 6901 pointer -> chain
+
+interface MergedConfiguration {
+  tree: Node; // the folded tree — frozen, canonically ordered, every node positioned
+  provenance: ProvenanceRecord;
+  pedigree: Pedigree; // carried through from resolve(), unchanged
+}
+```
+
+### v0.3 diagnostic codes
+
+Extends v0.1's and v0.2's catalogues above, unchanged (contracts/diagnostics.md). Every code below
+refuses **malformed merge policy** — data in a schema, never a config's own values, which cannot be
+malformed the way policy can (`SPEC.md` §5.3: policy belongs to the contract, not to individual
+documents).
+
+| Code | Refuses |
+|---|---|
+| `unknown-cascade-strategy` | A `cascade` value that is not a strategy this version implements — including a non-string value |
+| `unimplemented-cascade-strategy` | `cascade: merge-by-key` — reserved by `SPEC.md` §5.3 but not built; the author is early, not wrong, so this is distinct from `unknown-cascade-strategy` |
+| `append-over-non-sequence` | `cascade: append` on a key whose value in some layer is not a sequence — positioned at the offending value, in the layer that supplied it, not at the `cascade` declaration |
+| `cascade-strategy-weakened` | A descendant declaring `replace` for a key an ancestor declared `append` — refused because it would discard every ancestor's accumulated contribution (`SPEC.md` §5.2), not because the declaration is malformed on its own |
+
+A **config** declaring its own `cascade` produces no diagnostic — it is ignored, never honoured, since
+policy comes from schemas only (v0.3 FR-015). A schema using `demand`, `seal`, `final`, or `delegate`
+likewise produces nothing — this milestone reads neither meaning nor error into vocabulary it does not
+implement (v0.3 FR-002).
 
 ## Scripts
 

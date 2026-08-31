@@ -182,7 +182,7 @@ each with a position in a real document.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T060 [P] Publish contracts/precedence.md's numbered list in README.md alongside the merge surface and the v0.3 diagnostic codes (SC-008)
+- [x] T060 [P] Publish contracts/precedence.md's numbered list in README.md alongside the merge surface and the v0.3 diagnostic codes (SC-008)
 - [x] T061 [P] Restore the byte-precise `end` assertion dropped from the T014 replace-wholesale case: an independently derived offset disagreed with the adapter by one on a block mapping's trailing newline, and the implementer kept `start`/`line`/`column` rather than copy the implementation's number — settle which is right, in tests/corpus/merge-cases/ (research.md's open block-collection extent question)
 - [x] T062 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
 - [x] T063 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
