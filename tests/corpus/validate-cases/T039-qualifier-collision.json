@@ -1,0 +1,19 @@
+{
+  "name": "T039: two documents whose $id share a last segment collide on that qualifier, independent of the unqualified-name namespace (FR-019a)",
+  "cites": "v0.5 FR-019a",
+  "fixtureDir": "validate-types/qualifier-collision",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-qualifier-collision",
+        "document": "house-schema.yaml",
+        "line": 2,
+        "column": 6,
+        "pedigreePosition": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "T034: two layers declaring the same type name collide, carrying the later declaration's position (spec.md Acceptance Scenario 1, SC-005)",
+  "cites": "v0.5 FR-017",
+  "fixtureDir": "validate-types/collision",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-name-collision",
+        "document": "house-schema.yaml",
+        "line": 4,
+        "column": 5,
+        "demand": { "pointer": "/types/resource", "document": "house-schema.yaml", "line": 4, "column": 5 },
+        "pedigreePosition": 1
+      }
+    ]
+  }
+}

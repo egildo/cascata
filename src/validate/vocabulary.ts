@@ -58,6 +58,33 @@ const UNIMPLEMENTED_DEMAND_KEYWORDS: ReadonlySet<string> = new Set<string>([]);
 /** Nesting bound for `keys`/`items` recursion (v0.5 FR-025, research.md D4) — reused from v0.1's `maxDepth` default, the identical hazard (adversarially deep nesting exhausting the stack), not a new constant. */
 export const MAX_DEMAND_DEPTH = 64;
 
+/**
+ * The unqualified local name inside a possibly-qualified `type:`
+ * alternative (`core/resource` -> `resource`; `resource` -> `resource`
+ * unchanged) — `TypeDeclaration.name` and `knownDeclaredNames`
+ * (`types.ts`) are always local names, never qualified strings, so any
+ * "is this name declared *anywhere* in the pedigree" check must compare
+ * against the local part of a qualified reference, not the qualified
+ * string itself.
+ *
+ * **Bug found and fixed while writing v0.5 US4's T036 conformance case**:
+ * both `refuseTypeExpressionProblems` below and `check.ts`'s
+ * `checkAlternativeReachability` used to test
+ * `knownDeclaredNames.has(alt.name)` directly. For a qualified reference
+ * like `root/resource`, that string is never a member of
+ * `knownDeclaredNames` (which only ever holds `"resource"`), so *every*
+ * qualified reference — valid or not — was refused as globally unknown
+ * before `resolveTypeName`'s own, correct qualifier-matching logic ever
+ * ran. FR-019's "qualification is the way out" of a collision did not
+ * work at all until this fix; T036 (a genuinely valid qualified
+ * reference) is what caught it, going from an unexpected
+ * `unknown-type-name` to the correct outcome.
+ */
+export function localNameOf(name: string): string {
+  const slashIndex = name.indexOf("/");
+  return slashIndex === -1 ? name : name.slice(slashIndex + 1);
+}
+
 /** One raw `demand:` declaration for one key — every keyword present, unvalidated. */
 export type RawDemand = ReadonlyMap<string, Node>;
 
@@ -288,7 +315,7 @@ export function refuseTypeExpressionProblems(demandPointerPath: readonly (string
       },
     ];
   }
-  const unresolved = unresolvedAlternatives(parsed.value).filter((alt) => !knownDeclaredNames.has(alt.name));
+  const unresolved = unresolvedAlternatives(parsed.value).filter((alt) => !knownDeclaredNames.has(localNameOf(alt.name)));
   if (unresolved.length > 0) {
     const names = [...new Set(unresolved.map((alt) => alt.name))].join(", ");
     return [

@@ -1,0 +1,5 @@
+$id: https://a.example.com/shared
+types:
+  widget:
+    accept:
+      - url

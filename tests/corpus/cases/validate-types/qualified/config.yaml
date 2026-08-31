@@ -1,0 +1,3 @@
+$schema: ./house-schema.yaml
+a: longvalue
+b: hi

@@ -1,0 +1,4 @@
+keys:
+  a:
+    demand:
+      type: resource

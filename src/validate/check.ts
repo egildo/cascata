@@ -38,7 +38,7 @@ import type { Node } from "../model/node.js";
 import { pointerFromPath, resolvePointer } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
-import { readDemandVocabulary, readNestedKeysMapping, vocabularyProblemsForLayer, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
+import { readDemandVocabulary, readNestedKeysMapping, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
 import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, requiredViolationCause, type ViolationSite } from "./constraints.js";
 import { renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
 import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
@@ -523,7 +523,11 @@ function typeUsageProblems(configuration: MergedConfiguration, allDecls: readonl
   const problems: Diagnostic[] = [];
 
   function checkAlternativeReachability(alt: Alternative, layer: Layer, pointerPath: readonly (string | number)[], span: Node["span"]): void {
-    if (!knownDeclaredNames.has(alt.name)) {
+    // `knownDeclaredNames` holds only unqualified local names
+    // (`TypeDeclaration.name`, `types.ts`); a qualified alternative like
+    // `root/resource` must be compared by its local part, or every
+    // qualified reference — valid or not — looks globally unknown here.
+    if (!knownDeclaredNames.has(localNameOf(alt.name))) {
       return; // globally unknown — vocabulary.ts's own pass already refused it.
     }
     if (resolveTypeName(alt.name, layer.rank, allDecls) !== undefined) {

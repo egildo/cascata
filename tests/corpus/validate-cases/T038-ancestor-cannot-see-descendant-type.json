@@ -1,0 +1,20 @@
+{
+  "name": "T038: an ancestor's own usage cannot resolve a type name only a descendant declares -- authority flows one way (research.md D2; the mandated sabotage target: resolving against a single pedigree-wide merged type graph instead of per-layer scope would wrongly admit this)",
+  "cites": "v0.5 FR-008",
+  "fixtureDir": "validate-types/ancestor-cannot-see-descendant",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-type-name",
+        "document": "root-schema.yaml",
+        "line": 4,
+        "column": 13,
+        "demand": { "pointer": "/keys/a/demand/type", "document": "root-schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

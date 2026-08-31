@@ -120,12 +120,12 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 
 ### Conformance cases for User Story 4 (write first)
 
-- [ ] T034 [P] [US4] Case: two layers declaring the same type name — `type-name-collision`, both positions (Acceptance Scenario 1, SC-005) — `tests/corpus/cases/validate-types/collision/`
-- [ ] T035 [P] [US4] Case: a layer redeclaring a built-in name — `builtin-type-redeclared` (Acceptance Scenario 2) — `tests/corpus/cases/validate-types/builtin-collision/`
-- [ ] T036 [P] [US4] Case: a qualified name resolves unambiguously across layers (Acceptance Scenario 3) — `tests/corpus/cases/validate-types/qualified/`
-- [ ] T037 [P] [US4] Case: one layer declaring, a descendant using unqualified — resolves, not a collision (Acceptance Scenario 4, FR-020) — `tests/corpus/cases/validate-types/inherited-use/`
-- [ ] T038 [P] [US4] Case: **the mandated sabotage target** — an ancestor's own usage cannot resolve a name only a descendant declares (research.md D2, replacing the coordinating brief's unconstructible "descendant redefines a type" wording) — `tests/corpus/cases/validate-types/ancestor-cannot-see-descendant/`
-- [ ] T039 [P] [US4] Case: two documents whose `$id`s share a last segment — `type-qualifier-collision` (FR-019a) — `tests/corpus/cases/validate-types/qualifier-collision/`
+- [x] T034 [P] [US4] Case: two layers declaring the same type name — `type-name-collision`, both positions (Acceptance Scenario 1, SC-005) — `tests/corpus/cases/validate-types/collision/`
+- [x] T035 [P] [US4] Case: a layer redeclaring a built-in name — `builtin-type-redeclared` (Acceptance Scenario 2) — `tests/corpus/cases/validate-types/builtin-collision/`
+- [x] T036 [P] [US4] Case: a qualified name resolves unambiguously across layers (Acceptance Scenario 3) — `tests/corpus/cases/validate-types/qualified/`
+- [x] T037 [P] [US4] Case: one layer declaring, a descendant using unqualified — resolves, not a collision (Acceptance Scenario 4, FR-020) — `tests/corpus/cases/validate-types/inherited-use/`
+- [x] T038 [P] [US4] Case: **the mandated sabotage target** — an ancestor's own usage cannot resolve a name only a descendant declares (research.md D2, replacing the coordinating brief's unconstructible "descendant redefines a type" wording) — `tests/corpus/cases/validate-types/ancestor-cannot-see-descendant/`
+- [x] T039 [P] [US4] Case: two documents whose `$id`s share a last segment — `type-qualifier-collision` (FR-019a) — `tests/corpus/cases/validate-types/qualifier-collision/`
 
 **Checkpoint**: No collision resolves by silent shadowing; qualification is a real escape hatch.
 

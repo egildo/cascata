@@ -1,0 +1,8 @@
+{
+  "name": "T037: one layer declaring a type and no other layer declaring that name -- a descendant's unqualified use resolves, inheritance is not collision (spec.md Acceptance Scenario 4, FR-020)",
+  "cites": "v0.5 FR-020",
+  "fixtureDir": "validate-types/inherited-use",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

@@ -1,0 +1,14 @@
+$adopts: ./root-schema.yaml
+$id: https://example.com/schemas/house
+types:
+  resource:
+    demand:
+      type: string
+      maxLength: 3
+keys:
+  a:
+    demand:
+      type: root/resource
+  b:
+    demand:
+      type: house/resource

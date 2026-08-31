@@ -1,0 +1,20 @@
+{
+  "name": "T035: a layer redeclaring a built-in type name is refused -- the built-in namespace is not open for redefinition (spec.md Acceptance Scenario 2)",
+  "cites": "v0.5 FR-018",
+  "fixtureDir": "validate-types/builtin-collision",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "builtin-type-redeclared",
+        "document": "schema.yaml",
+        "line": 3,
+        "column": 5,
+        "demand": { "pointer": "/types/string", "document": "schema.yaml", "line": 3, "column": 5 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

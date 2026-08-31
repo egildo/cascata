@@ -1,0 +1,6 @@
+$id: https://example.com/schemas/root
+types:
+  resource:
+    demand:
+      type: string
+      minLength: 5

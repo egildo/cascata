@@ -1,0 +1,4 @@
+types:
+  resource:
+    accept:
+      - url
