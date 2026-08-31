@@ -45,13 +45,24 @@ export const REFERENCE_RESOLUTION_CODES = [
 /** Fetching and integrity (v0.2, SPEC.md §6.1, §11) — contracts/diagnostics.md (002). */
 export const FETCH_INTEGRITY_CODES = ["pin-mismatch", "malformed-pin", "insecure-redirect", "too-many-redirects", "document-not-cached"] as const;
 
-/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's codes are unchanged; v0.2 only appends. */
+/**
+ * Merge policy (v0.3, SPEC.md §5.2, §5.3) — specs/003-merge-engine/contracts/diagnostics.md.
+ * `unknown-cascade-strategy` and `unimplemented-cascade-strategy` are
+ * deliberately distinct codes (not one code with two messages): `merge-by-key`
+ * is named in SPEC.md §5.3 as reserved, so an author writing it is early,
+ * not wrong, and a diagnostic saying "unknown" would teach them the
+ * opposite (the same reasoning v0.2 applied to `multiple-adoption`).
+ */
+export const MERGE_POLICY_CODES = ["unknown-cascade-strategy", "unimplemented-cascade-strategy", "append-over-non-sequence", "cascade-strategy-weakened"] as const;
+
+/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's and v0.2's codes are unchanged; v0.3 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
   ...SYNTAX_CODES,
   ...REFERENCE_RESOLUTION_CODES,
   ...FETCH_INTEGRITY_CODES,
+  ...MERGE_POLICY_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

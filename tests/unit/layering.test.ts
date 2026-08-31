@@ -20,6 +20,14 @@
  * even preserve the directory itself across a fresh clone until Phase 4
  * adds one; this test tolerates the directory being absent on disk for
  * exactly that reason.
+ *
+ * **v0.3 (tasks.md T011)**: `src/merge/` joins the policed set — the first
+ * module that is both format-blind *and* location-blind
+ * (plan.md's Structure Decision). `src/merge/` may import `model/`,
+ * `diagnostics/`, and `graph/`; it may import neither `adapters/` nor
+ * `resolve/`. It is therefore added to `NO_ADAPTER_IMPORT_DIRS` (already
+ * policed against `adapters/`) *and* to a new resolve-boundary check
+ * alongside `src/graph/`'s existing one.
  */
 
 import { readdirSync, readFileSync, type Dirent } from "node:fs";
@@ -30,8 +38,8 @@ import { describe, expect, it } from "vitest";
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // Every directory that may not import an adapter. v0.1 policed the first
-// two; v0.2 (plan.md) extends the set to resolve/ and graph/.
-const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph"];
+// two; v0.2 (plan.md) extends the set to resolve/ and graph/; v0.3 adds merge/.
+const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge"];
 
 // Matches the module specifier of any `import ... from "spec"` or
 // `export ... from "spec"` statement, static or type-only.
@@ -99,21 +107,28 @@ describe("Principle IV: format-blindness boundary — no import of src/adapters"
   }
 });
 
-describe("Principle IV (v0.2): src/graph/ does not import src/resolve/", () => {
-  const graphDir = join(REPO_ROOT, "src", "graph");
-  const files = listTsFiles(graphDir);
+// Every directory that may not import src/resolve/. v0.2 (plan.md) policed
+// graph/ alone; v0.3 (T011, plan.md's Structure Decision) adds merge/ — the
+// first module that is both format-blind *and* location-blind.
+const NO_RESOLVE_IMPORT_DIRS = ["src/graph", "src/merge"];
 
-  if (files.length === 0) {
-    it("src/graph has no files yet — an explicit, currently-vacuous fact, not a skip", () => {
-      expect(files).toEqual([]);
-    });
-  } else {
-    for (const file of files) {
-      const relativeFile = file.slice(REPO_ROOT.length + 1);
-      it(`${relativeFile} does not import from src/resolve`, () => {
-        const offending = importSpecifiersOf(file).filter((specifier) => CROSSES_RESOLVE_BOUNDARY.test(specifier));
-        expect(offending).toEqual([]);
+for (const relativeDir of NO_RESOLVE_IMPORT_DIRS) {
+  describe(`Principle IV: ${relativeDir}/ does not import src/resolve/`, () => {
+    const absoluteDir = join(REPO_ROOT, ...relativeDir.split("/"));
+    const files = listTsFiles(absoluteDir);
+
+    if (files.length === 0) {
+      it(`${relativeDir} has no files yet — an explicit, currently-vacuous fact, not a skip`, () => {
+        expect(files).toEqual([]);
       });
+    } else {
+      for (const file of files) {
+        const relativeFile = file.slice(REPO_ROOT.length + 1);
+        it(`${relativeFile} does not import from src/resolve`, () => {
+          const offending = importSpecifiersOf(file).filter((specifier) => CROSSES_RESOLVE_BOUNDARY.test(specifier));
+          expect(offending).toEqual([]);
+        });
+      }
     }
-  }
-});
+  });
+}
