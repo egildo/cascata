@@ -131,6 +131,16 @@ export interface ProvenanceEntry {
   /** Where in that layer's real document — so an author can open the file and see the line (FR-018). */
   readonly span: SourceSpan;
   readonly outcome: "won" | "overridden" | "accumulated";
+  /**
+   * v0.6 FR-020: the delegation chain that reached `span`, if any —
+   * **absent** for a value that was never delegated. Never set by the
+   * fold itself (which does not know `delegate` exists, v0.6 FR-008a) —
+   * `why()` below attaches it lazily, at answer time, by checking
+   * `configuration.delegationBreadcrumbs` against `span.origin.id`. A
+   * stored `ProvenanceRecord` entry therefore never carries this field;
+   * only `why()`'s own returned entries do.
+   */
+  readonly delegatedFrom?: readonly DelegationHop[];
 }
 
 /**
@@ -385,6 +395,12 @@ function ancestorPointer(pointer: string): string {
  * `git config --show-origin` question (SPEC.md §10). A library function in
  * v0.3 (research D3); no CLI ships here.
  */
+/** v0.6 FR-020: attach `entry`'s own delegation breadcrumb, if `configuration.delegationBreadcrumbs` has one for `entry.span.origin.id` — a plain lookup, never a fold-time decision (`why()`'s own doc, `ProvenanceEntry.delegatedFrom`'s own doc). */
+function withBreadcrumb(configuration: MergedConfiguration, entry: ProvenanceEntry): ProvenanceEntry {
+  const breadcrumb = configuration.delegationBreadcrumbs.get(entry.span.origin.id);
+  return breadcrumb === undefined ? entry : { ...entry, delegatedFrom: breadcrumb };
+}
+
 export function why(configuration: MergedConfiguration, pointer: string): WhyResult {
   const node = resolvePointer(configuration.tree, pointer);
   if (node === undefined) {
@@ -392,10 +408,11 @@ export function why(configuration: MergedConfiguration, pointer: string): WhyRes
   }
   const chain = configuration.provenance.get(pointer);
   if (chain !== undefined) {
-    return { kind: "chain", entries: chain };
+    return { kind: "chain", entries: chain.map((entry) => withBreadcrumb(configuration, entry)) };
   }
   if (node.type === "mapping") {
-    return { kind: "synthesized", contributors: synthesizedContributors(configuration.provenance, pointer, node) };
+    const contributors = synthesizedContributors(configuration.provenance, pointer, node).map((entry) => withBreadcrumb(configuration, entry));
+    return { kind: "synthesized", contributors };
   }
   // `pointer` resolves, but to a position this module's own recording
   // never addresses directly: the builder records at mapping-key

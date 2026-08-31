@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+network:
+  host: ab
+other: fine

@@ -1,0 +1,18 @@
+{
+  "name": "T023: a fragment grafted under a cascade: append key accumulates exactly as inline -- delegation creates no merge boundary (spec.md US2 Acceptance Scenario 3, Sec8.3)",
+  "cites": "v0.6 FR-014",
+  "fixtureDir": "validate-delegation/fragment-under-append",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        ["items", { "sequence": [
+          { "kind": "string", "value": "root-item" },
+          { "kind": "string", "value": "frag-item" }
+        ] }]
+      ]
+    }
+  }
+}

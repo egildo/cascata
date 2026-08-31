@@ -1,0 +1,15 @@
+{
+  "name": "T026: a fragment whose root is a scalar grafts as written, exactly like the sequence-rooted fragment.yaml already exercised by T023 -- nothing restricts a fragment's root to a mapping (spec.md US2 Acceptance Scenario 6, FR-011)",
+  "cites": "v0.6 FR-011",
+  "fixtureDir": "validate-delegation/fragment-scalar-root",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        ["name", { "kind": "string", "value": "hello-fragment" }]
+      ]
+    }
+  }
+}

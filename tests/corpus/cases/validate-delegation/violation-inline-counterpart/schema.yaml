@@ -1,0 +1,13 @@
+keys:
+  network:
+    demand:
+      type: mapping
+      keys:
+        host:
+          demand:
+            type: string
+            minLength: 5
+    delegate: allow
+  other:
+    demand:
+      type: string

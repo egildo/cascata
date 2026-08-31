@@ -1,0 +1,6 @@
+keys:
+  items:
+    cascade: append
+    provide:
+      - root-item
+    delegate: allow
