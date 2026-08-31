@@ -115,8 +115,8 @@ sequence; every item present, root-first, nothing removed.
 
 ### Property tests for User Story 2 (Principle II — the first milestone it binds)
 
-- [ ] T033 [US2] Encode the §5.2 `cascade: append` row as a property test in tests/unit/monotonicity.test.ts: over randomly generated layer stacks, no ancestor's contribution is ever absent from the result, appending never removes an inherited item, and no stack in which a strategy weakens from `append` to `replace` is ever accepted (FR-023, FR-016) — depends on T029
-- [ ] T034 [US2] Encode the constructible half of the `Defaults (provide)` row in tests/unit/monotonicity.test.ts — a nearer layer may replace a provided value — and record in that file's own doc comment that the demand-satisfaction clause is **deferred to v0.4, not stubbed**, per research D5 (FR-024) — depends on T020
+- [x] T033 [US2] Encode the §5.2 `cascade: append` row as a property test in tests/unit/monotonicity.test.ts: over randomly generated layer stacks, no ancestor's contribution is ever absent from the result, appending never removes an inherited item, and no stack in which a strategy weakens from `append` to `replace` is ever accepted (FR-023, FR-016) — depends on T029
+- [x] T034 [US2] Encode the constructible half of the `Defaults (provide)` row in tests/unit/monotonicity.test.ts — a nearer layer may replace a provided value — and record in that file's own doc comment that the demand-satisfaction clause is **deferred to v0.4, not stubbed**, per research D5 (FR-024) — depends on T020
 
 **Checkpoint**: The one §5.2 row this vocabulary can construct is discharged executably.
 
