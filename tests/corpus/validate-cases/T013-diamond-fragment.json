@@ -1,0 +1,19 @@
+{
+  "name": "T013: one fragment grafted at two points is read once but grafted independently, each with its own breadcrumb -- FR-013a's own case, since a shared graph node could carry only one breadcrumb (spec.md Key Entities, FR-013, FR-013a)",
+  "cites": "v0.6 FR-013a",
+  "fixtureDir": "validate-delegation/diamond-fragment",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "shared.yaml",
+        "line": 1,
+        "column": 7,
+        "pointer": "/backup/host"
+      }
+    ]
+  }
+}

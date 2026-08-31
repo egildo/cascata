@@ -67,10 +67,10 @@ has somewhere to live end to end. Nothing yet exercises it through `resolve()`.
 
 ### Conformance cases (write first)
 
-- [ ] T021 [P] [US2] Case: inline vs. split configs produce identical merged trees (Acceptance Scenario 1, FR-014, SC-001) — `tests/corpus/cases/validate-delegation/inline-identity-{inline,split}/`
+- [x] T021 [P] [US2] Case: inline vs. split configs produce identical merged trees (Acceptance Scenario 1, FR-014, SC-001) — `tests/corpus/cases/validate-delegation/inline-identity-{inline,split}/`
 - [ ] T022 [P] [US2] Case: the same pair validated produces the same outcome, a violation in a fragment identical to inline (Acceptance Scenario 2) — `tests/corpus/cases/validate-delegation/fragment-violation-identical-to-inline/`
 - [ ] T023 [P] [US2] Case: a fragment under `cascade: append` accumulates exactly as inline (Acceptance Scenario 3) — `tests/corpus/cases/validate-delegation/fragment-under-append/`
-- [ ] T024 [P] [US2] Case: a `$`-key inside a fragment is refused (Acceptance Scenario 4, FR-009) — `tests/corpus/cases/validate-delegation/fragment-dollar-key/`
+- [x] T024 [P] [US2] Case: a `$`-key inside a fragment is refused (Acceptance Scenario 4, FR-009) — `tests/corpus/cases/validate-delegation/fragment-dollar-key/`
 - [ ] T025 [P] [US2] Case: a fragment in a different format from its parent grafts normally (Acceptance Scenario 5, FR-016) — `tests/corpus/cases/validate-delegation/fragment-different-format/` (a TOML or JSON fragment — check `src/adapters/registry.ts` for what's actually registered; YAML-only is fine if no other adapter exists, recorded as a scope note rather than invented)
 - [ ] T026 [P] [US2] Case: a fragment whose root is a scalar, and one whose root is a sequence, both graft as written (Acceptance Scenario 6, FR-011) — `tests/corpus/cases/validate-delegation/fragment-scalar-root/`, `.../fragment-sequence-root/`
 
@@ -86,7 +86,7 @@ has somewhere to live end to end. Nothing yet exercises it through `resolve()`.
 
 ### Conformance cases (write first)
 
-- [ ] T028 [P] [US3] Case: a violation inside a fragment carries the delegating document and position (Acceptance Scenario 1, FR-017) — `tests/corpus/cases/validate-delegation/violation-in-fragment/`
+- [x] T028 [P] [US3] Case: a violation inside a fragment carries the delegating document and position (Acceptance Scenario 1, FR-017) — `tests/corpus/cases/validate-delegation/violation-in-fragment/`
 - [ ] T029 [P] [US3] Case: a violation in a non-delegated value carries no breadcrumb (Acceptance Scenario 2, FR-018) — reuse an existing non-delegated fixture; assert `delegatedFrom` absent
 - [ ] T030 [P] [US3] Case: `why()` on a pointer inside a fragment carries the breadcrumb (Acceptance Scenario 3, FR-020) — `tests/unit/delegation-why.test.ts`
 - [ ] T031 [P] [US3] Case: a fragment reached through two delegation hops carries a two-hop breadcrumb, outermost first (Acceptance Scenario 4, FR-012b) — `tests/corpus/cases/validate-delegation/two-hop-breadcrumb/`
@@ -103,12 +103,12 @@ has somewhere to live end to end. Nothing yet exercises it through `resolve()`.
 
 ### Conformance cases (write first)
 
-- [ ] T033 [P] [US4] Case: a delegated `..` escape is refused (Acceptance Scenario 1, FR-022) — `tests/corpus/cases/validate-delegation/sandbox-escape/`
-- [ ] T034 [P] [US4] Case: an absolute delegated path is refused (Acceptance Scenario 2, FR-023) — `tests/corpus/cases/validate-delegation/absolute-path/`
+- [x] T033 [P] [US4] Case: a delegated `..` escape is refused (Acceptance Scenario 1, FR-022) — `tests/corpus/cases/validate-delegation/sandbox-escape/`
+- [x] T034 [P] [US4] Case: an absolute delegated path is refused (Acceptance Scenario 2, FR-023) — `tests/corpus/cases/validate-delegation/absolute-path/`
 - [ ] T035 [P] [US4] Case: a remote delegation target with no opt-in is refused, naming the user's own opt-in as what's missing (Acceptance Scenario 3, FR-024) — `tests/corpus/cases/validate-delegation/remote-no-opt-in/`
 - [ ] T036 [P] [US4] Case: the same with opt-in succeeds under v0.2's remote rules — `tests/unit/delegation-remote.test.ts` (recorded transport, no network — constitution)
 - [ ] T037 [P] [US4] Case: a delegated path resolves relative to the delegating config's own directory, not the schema's (Acceptance Scenario 5, FR-021) — `tests/corpus/cases/validate-delegation/relative-to-config/`
-- [ ] T038 [P] [US4] Case: a delegation cycle (including a fragment naming itself, and a two-fragment cycle) is refused (Acceptance Scenario 6, FR-015) — `tests/corpus/cases/validate-delegation/delegation-cycle/`
+- [x] T038 [P] [US4] Case: a delegation cycle (including a fragment naming itself, and a two-fragment cycle) is refused (Acceptance Scenario 6, FR-015) — `tests/corpus/cases/validate-delegation/delegation-cycle/`
 
 ### Implementation for User Story 4
 
@@ -123,14 +123,23 @@ has somewhere to live end to end. Nothing yet exercises it through `resolve()`.
 - [ ] T040 [P] Property test: inline-vs-split identity (FR-014, SC-001) — random configs, randomly split at random granted positions, merged trees compared structurally — `tests/unit/delegation-monotonicity.test.ts`
 - [ ] T041 [P] Property test: sandbox confinement (SC-004) — random delegated paths, some escaping, confirm exactly the escaping ones refused
 - [ ] T042 Publish `contracts/delegation-resolution.md`'s rules and the new diagnostic codes in `README.md`
-- [ ] T043 Confirm all 532 pre-v0.6 tests still pass unchanged
+- [x] T043 Confirm all 532 pre-v0.6 tests still pass unchanged
 - [ ] T044 Run every quickstart.md scenario end to end
 - [ ] T045 Verify the six constitution gates, gate 5 (the breadcrumb, Principle III's last phased field) in particular
-- [ ] T046 **The depth-limit case, verified genuinely reachable (D5)**: a generated chain of `MAX_DELEGATION_DEPTH + 1` fragment files, each delegating to the next, via real `resolve()` — `tests/corpus/cases/validate-delegation/depth-limit/` (generated) — confirm `depth-limit-exceeded`, not a stack overflow, and confirm (unlike v0.5's own depth guard) this is reachable through the public pipeline
-- [ ] T047 **Sabotage**: make delegation fire on any string that looks like a path, ignoring the grant — confirm every granted case stays green; only T015 (the razor) catches it
-- [ ] T048 **Sabotage**: drop the per-graft breadcrumb, sharing one `Origin`/provenance record across both grafts of one fragment (FR-013a) — confirm only a diamond case (the same fragment grafted twice) catches it — `tests/corpus/cases/validate-delegation/diamond-fragment/` (new case if T021-T038 didn't already need one)
+- [x] T046 **The depth-limit case, verified genuinely reachable (D5)**: a generated chain of `MAX_DELEGATION_DEPTH + 1` fragment files, each delegating to the next, via real `resolve()` — `tests/corpus/cases/validate-delegation/depth-limit/` (generated) — confirm `depth-limit-exceeded`, not a stack overflow, and confirm (unlike v0.5's own depth guard) this is reachable through the public pipeline
+- [x] T047 **Sabotage**: make delegation fire on any string that looks like a path, ignoring the grant — confirm every granted case stays green; only T015 (the razor) catches it
+- [x] T048 **Sabotage**: drop the per-graft breadcrumb, sharing one `Origin`/provenance record across both grafts of one fragment (FR-013a) — confirm only a diamond case (the same fragment grafted twice) catches it — `tests/corpus/cases/validate-delegation/diamond-fragment/` (new case if T021-T038 didn't already need one)
 
 ---
+
+## Incomplete at session end — reported, not silently dropped
+
+T022, T023, T025, T026, T029, T030, T031, T035, T036, T037, T040, T041, T042, T044, T045 were not
+reached before this session's time ran out. `allowRemoteDelegation` and the remote-delegation code
+path (`performGraft`'s `https` branch) exist and typecheck but have **no conformance case at all** —
+the single largest gap, since it is untested code on the milestone's own security-critical path. See
+the milestone report for the full list and why each was deprioritized in favor of the two mandated
+sabotages and the depth-limit finding.
 
 ## Notes
 

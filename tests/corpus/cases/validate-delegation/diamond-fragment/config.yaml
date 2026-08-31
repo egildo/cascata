@@ -1,0 +1,3 @@
+$schema: ./schema.yaml
+primary: ./shared.yaml
+backup: ./shared.yaml

@@ -1,0 +1,18 @@
+keys:
+  backup:
+    demand:
+      type: mapping
+      keys:
+        host:
+          demand:
+            type: string
+            minLength: 5
+    delegate: allow
+  primary:
+    demand:
+      type: mapping
+      keys:
+        host:
+          demand:
+            type: string
+    delegate: allow
