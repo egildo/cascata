@@ -1,0 +1,11 @@
+{
+  "name": "T052a: cascade: append over a scalar is refused as append-over-non-sequence, positioned in the layer that supplied the scalar (schema-root) rather than the layer that declared append (schema-mid)",
+  "cites": "v0.3 FR-013",
+  "fixtureDir": "merge-policy/append-misuse/scalar",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [{ "code": "append-over-non-sequence", "document": "schema-root.yaml", "line": 3, "column": 14 }]
+  }
+}

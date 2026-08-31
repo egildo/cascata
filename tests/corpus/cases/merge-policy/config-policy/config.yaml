@@ -1,0 +1,6 @@
+$schema: ./schema.yaml
+keys:
+  items:
+    cascade: replace
+items:
+  - config-item

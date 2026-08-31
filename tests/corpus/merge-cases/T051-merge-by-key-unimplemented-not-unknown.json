@@ -1,0 +1,11 @@
+{
+  "name": "T051: cascade: merge-by-key is refused as unimplemented-cascade-strategy, not unknown-cascade-strategy — SPEC.md §5.3 reserves the name, so the author is early, not wrong",
+  "cites": "v0.3 FR-014",
+  "fixtureDir": "merge-policy/reserved",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [{ "code": "unimplemented-cascade-strategy", "document": "schema.yaml", "line": 3, "column": 14 }]
+  }
+}

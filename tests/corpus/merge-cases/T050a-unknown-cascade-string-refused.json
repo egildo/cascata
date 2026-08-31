@@ -1,0 +1,11 @@
+{
+  "name": "T050a: cascade: bogus-strategy (an unrecognized string) is refused as unknown-cascade-strategy at the declared value's position",
+  "cites": "v0.3 FR-014",
+  "fixtureDir": "merge-policy/unknown/bad-string",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [{ "code": "unknown-cascade-strategy", "document": "schema.yaml", "line": 3, "column": 14 }]
+  }
+}

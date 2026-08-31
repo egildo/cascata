@@ -1,0 +1,7 @@
+keys:
+  alpha:
+    cascade: append
+    provide: not-a-list
+  beta:
+    cascade: append
+    provide: also-not-a-list

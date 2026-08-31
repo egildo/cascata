@@ -1,0 +1,11 @@
+{
+  "name": "T052b: cascade: append over a mapping is refused as append-over-non-sequence, at the provided mapping's own position",
+  "cites": "v0.3 FR-013",
+  "fixtureDir": "merge-policy/append-misuse/mapping",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [{ "code": "append-over-non-sequence", "document": "schema.yaml", "line": 5, "column": 7 }]
+  }
+}

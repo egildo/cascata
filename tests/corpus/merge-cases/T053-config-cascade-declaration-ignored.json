@@ -1,0 +1,17 @@
+{
+  "name": "T053: a config's own cascade declaration is ignored — policy comes from schemas only (FR-015), and the config's literal 'keys' key survives into the merged tree as ordinary data, not vocabulary",
+  "cites": "v0.3 FR-015",
+  "fixtureDir": "merge-policy/config-policy",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        ["items", { "sequence": [{ "kind": "string", "value": "schema-item" }, { "kind": "string", "value": "config-item" }] }],
+        ["keys", { "mapping": [["items", { "mapping": [["cascade", { "kind": "string", "value": "replace" }]] }]] }]
+      ]
+    },
+    "spans": [{ "pointer": "/keys", "document": "config.yaml", "line": 3, "column": 3 }]
+  }
+}

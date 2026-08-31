@@ -1,0 +1,14 @@
+{
+  "name": "T058: two independent append-over-non-sequence failures, in different top-level keys, are BOTH reported from one merge() call — not only the first",
+  "cites": "v0.3 FR-013",
+  "fixtureDir": "merge-policy/multiple-failures",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      { "code": "append-over-non-sequence", "document": "schema.yaml", "line": 4, "column": 14 },
+      { "code": "append-over-non-sequence", "document": "schema.yaml", "line": 7, "column": 14 }
+    ]
+  }
+}
