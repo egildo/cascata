@@ -55,7 +55,33 @@ export const FETCH_INTEGRITY_CODES = ["pin-mismatch", "malformed-pin", "insecure
  */
 export const MERGE_POLICY_CODES = ["unknown-cascade-strategy", "unimplemented-cascade-strategy", "append-over-non-sequence", "cascade-strategy-weakened"] as const;
 
-/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's and v0.2's codes are unchanged; v0.3 only appends. */
+/**
+ * `demand` vocabulary problems (v0.4, `SPEC.md` §9) —
+ * specs/004-constraint-checker/contracts/diagnostics.md. Found reading
+ * `keys.<name>.demand`, before any value is checked against it.
+ * `unimplemented-demand-keyword` and `unimplemented-types-section` are
+ * deliberately distinct from `unknown-demand-keyword`, mirroring
+ * `unimplemented-cascade-strategy` vs. `unknown-cascade-strategy` in v0.3:
+ * `accept`, `format`, and `types:` are named by §7/§9 and arrive in v0.5,
+ * so an author writing them is early, not wrong.
+ */
+export const VALIDATE_VOCABULARY_CODES = [
+  "unknown-demand-keyword",
+  "unimplemented-demand-keyword",
+  "unimplemented-types-section",
+  "malformed-demand-value",
+  "malformed-type-expression",
+  "unknown-type-name",
+] as const;
+
+/**
+ * Constraint violations (v0.4, `SPEC.md` §5.4, §10) —
+ * specs/004-constraint-checker/contracts/diagnostics.md. Found checking
+ * the merged tree against a well-formed demand.
+ */
+export const VALIDATE_VIOLATION_CODES = ["type-mismatch", "range-violated", "length-violated", "pattern-mismatch", "enum-violated", "required-violated"] as const;
+
+/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's, v0.2's, and v0.3's codes are unchanged; v0.4 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
@@ -63,6 +89,8 @@ export const DIAGNOSTIC_CODES = [
   ...REFERENCE_RESOLUTION_CODES,
   ...FETCH_INTEGRITY_CODES,
   ...MERGE_POLICY_CODES,
+  ...VALIDATE_VOCABULARY_CODES,
+  ...VALIDATE_VIOLATION_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

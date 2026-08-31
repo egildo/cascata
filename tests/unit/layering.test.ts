@@ -28,6 +28,12 @@
  * `resolve/`. It is therefore added to `NO_ADAPTER_IMPORT_DIRS` (already
  * policed against `adapters/`) *and* to a new resolve-boundary check
  * alongside `src/graph/`'s existing one.
+ *
+ * **v0.4 (specs/004-constraint-checker/tasks.md T008)**: `src/validate/`
+ * joins both policed sets, before it has any code in it — the same
+ * precedent this file's own v0.2/v0.3 additions set. `src/validate/` may
+ * import `model/`, `diagnostics/`, `graph/`, and `merge/`; it may import
+ * neither `adapters/` nor `resolve/`.
  */
 
 import { readdirSync, readFileSync, type Dirent } from "node:fs";
@@ -39,7 +45,7 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // Every directory that may not import an adapter. v0.1 policed the first
 // two; v0.2 (plan.md) extends the set to resolve/ and graph/; v0.3 adds merge/.
-const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge"];
+const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge", "src/validate"];
 
 // Matches the module specifier of any `import ... from "spec"` or
 // `export ... from "spec"` statement, static or type-only.
@@ -109,8 +115,9 @@ describe("Principle IV: format-blindness boundary — no import of src/adapters"
 
 // Every directory that may not import src/resolve/. v0.2 (plan.md) policed
 // graph/ alone; v0.3 (T011, plan.md's Structure Decision) adds merge/ — the
-// first module that is both format-blind *and* location-blind.
-const NO_RESOLVE_IMPORT_DIRS = ["src/graph", "src/merge"];
+// first module that is both format-blind *and* location-blind. v0.4
+// (specs/004-constraint-checker/tasks.md T008) adds validate/.
+const NO_RESOLVE_IMPORT_DIRS = ["src/graph", "src/merge", "src/validate"];
 
 for (const relativeDir of NO_RESOLVE_IMPORT_DIRS) {
   describe(`Principle IV: ${relativeDir}/ does not import src/resolve/`, () => {

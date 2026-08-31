@@ -158,6 +158,16 @@ export interface MergedConfiguration {
   readonly provenance: ProvenanceRecord;
   /** Carried through from v0.2, so a consumer can still ask what it is bound by. */
   readonly pedigree: Pedigree;
+  /**
+   * **v0.4 additive field** (specs/004-constraint-checker/data-model.md
+   * "MergedConfiguration — additive field"). Root-to-leaf, exactly what
+   * `foldConfiguration` (`src/merge/fold.ts`) already computes internally
+   * via `deriveLayers(graph)` — stashed onto the result rather than
+   * recomputed, so `validate()` can read each schema layer's own `tree`
+   * (where `demand` lives) while still consuming only the previous
+   * stage's output (Principle IV), with no `Graph` passed alongside.
+   */
+  readonly layers: readonly Layer[];
 }
 
 // --- Building the record during the fold — User Story 3 (T044–T046) -------

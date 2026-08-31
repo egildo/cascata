@@ -535,5 +535,9 @@ export function foldConfiguration(graph: Graph, pedigree: Pedigree): FoldOutcome
   if (diagnostics.length > 0) {
     return { ok: false, diagnostics };
   }
-  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree } };
+  // v0.4 additive field (specs/004-constraint-checker/data-model.md):
+  // `layers` is exactly what this function already computed above via
+  // `deriveLayers(graph)` — stashed onto the result, not recomputed by a
+  // later stage, so `validate()` needs no `Graph` of its own.
+  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree, layers } };
 }

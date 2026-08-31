@@ -37,6 +37,7 @@ import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 import { foldConfiguration } from "./merge/fold.js";
 import { why as whyImpl } from "./merge/provenance.js";
 import type { MergedConfiguration } from "./merge/provenance.js";
+import { checkConfiguration } from "./validate/check.js";
 
 export type { Diagnostic, RelatedSpan } from "./diagnostics/diagnostic.js";
 export type { DiagnosticCode } from "./diagnostics/codes.js";
@@ -689,3 +690,29 @@ export function merge(resolved: MergeInput): MergeResult {
  * `SPEC.md` §10 writes `tool why`, but no CLI ships in this milestone.
  */
 export const why = whyImpl;
+
+// --- validate() — User Story 1 (v0.4, specs/004-constraint-checker/tasks.md T012) --------
+//
+// Judges a merged configuration against every schema layer's `demand`,
+// root to leaf (§5.4, contracts/validate-api.md). A distinct pipeline
+// stage consuming only `merge()`'s own output (FR-019) — no second
+// `pedigree` argument, since `MergedConfiguration.layers` (v0.4's
+// additive field) already carries what this stage needs to read each
+// schema layer's own tree.
+
+export type ValidateResult = { readonly ok: true; readonly certified: MergedConfiguration } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+
+/**
+ * Certify `configuration` against every layer's `demand`, or refuse with
+ * diagnostics — never both (contracts/validate-api.md point-by-point
+ * behavioral contract). Never mutates `configuration` (FR-034); never
+ * performs I/O or reference resolution (FR-035) — every document it needs
+ * is already on `configuration.layers`.
+ */
+export function validate(configuration: MergedConfiguration): ValidateResult {
+  const outcome = checkConfiguration(configuration);
+  if (!outcome.ok) {
+    return { ok: false, diagnostics: outcome.diagnostics };
+  }
+  return { ok: true, certified: configuration };
+}

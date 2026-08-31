@@ -40,8 +40,8 @@ Enums/unions, Ranges/predicates, `required`); each needs its own property test.
 ## Phase 1: Setup
 
 - [x] T001 Add `picomatch` (runtime) and `@types/picomatch` (dev) to `package.json` — already done and probed during Phase 0 research (research.md D4); this task records it as a Setup step rather than a silent side effect of research
-- [ ] T002 Create the `src/validate/` directory skeleton per plan.md's Structure Decision
-- [ ] T003 [P] Create the corpus case directories `tests/corpus/cases/validate-single-layer/`, `validate-whole-chain/`, `validate-required/`, `validate-vocabulary/`
+- [x] T002 Create the `src/validate/` directory skeleton per plan.md's Structure Decision
+- [x] T003 [P] Create the corpus case directories `tests/corpus/cases/validate-single-layer/`, `validate-whole-chain/`, `validate-required/`, `validate-vocabulary/`
 
 ---
 
@@ -53,15 +53,15 @@ them can check a single value.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T004 [P] Add v0.4's vocabulary and violation diagnostic codes from `contracts/diagnostics.md` to `src/diagnostics/codes.ts`, leaving v0.1's–v0.3's untouched
-- [ ] T005 [P] Add the three additive optional fields (`pointer`, `demand`, `pedigreePosition`) to `Diagnostic` and `createDiagnostic`'s parameter in `src/diagnostics/diagnostic.ts`, typed in primitives (`SourceSpan`, never `Layer`) per data-model.md — confirm every pre-v0.4 call site still compiles with no edits
-- [ ] T006 [P] Add the additive `layers: readonly Layer[]` field to `MergedConfiguration` in `src/merge/provenance.ts` — depends on T004 not required, independent file
-- [ ] T007 Populate `layers` in `foldConfiguration`'s `ok: true` result in `src/merge/fold.ts`, from the `deriveLayers(graph)` call it already makes internally — no new computation, only carrying forward what already exists (plan.md finding 2) — depends on T006
-- [ ] T008 Extend the policed sets in `tests/unit/layering.test.ts`: add `"src/validate"` to `NO_ADAPTER_IMPORT_DIRS` and to the resolve-boundary check, before any file exists under it, per the v0.2/v0.3 precedent — depends on T002
-- [ ] T009 Read `keys.<name>.demand` from a schema tree into a raw `{keyword: Node}` map per key in `src/validate/vocabulary.ts`, mirroring `src/merge/strategy.ts`'s `readKeysVocabulary` reading style (absent/empty/non-mapping `keys:` contributes nothing, v0.3 FR-003's rule) but for the field that function ignores (FR-001, FR-004) — no shape or closed-vocabulary checking yet, that is US4's job (T009 only extracts what is there) — depends on T002
-- [ ] T010 [P] Implement §9.1's leaf DSL grammar — parse, canonical set form (flatten + dedupe, `[]` binds tighter than `\|`), name resolution against FR-011's closed built-in set — in `src/validate/typeexpr.ts`. Return a structured parse failure (not yet wired to a diagnostic) for input that does not parse or names an unresolvable type — FR-008, FR-009, FR-010, FR-011, FR-012 read together; wiring the failure to `malformed-type-expression`/`unknown-type-name` diagnostics is US4's job — depends on T002
-- [ ] T011 [P] Define `Demand`, `Violation`, and `ValidationResult` per data-model.md in `src/validate/violation.ts` — types and construction helpers only, no checking logic yet — depends on T002
-- [ ] T012 Add a `validate()` stub to `src/index.ts` that takes a `MergedConfiguration` and returns `{ok: true, certified: configuration}` unconditionally, wiring the pipeline shape (FR-019) before any story fills it in — depends on T007, T011
+- [x] T004 [P] Add v0.4's vocabulary and violation diagnostic codes from `contracts/diagnostics.md` to `src/diagnostics/codes.ts`, leaving v0.1's–v0.3's untouched
+- [x] T005 [P] Add the three additive optional fields (`pointer`, `demand`, `pedigreePosition`) to `Diagnostic` and `createDiagnostic`'s parameter in `src/diagnostics/diagnostic.ts`, typed in primitives (`SourceSpan`, never `Layer`) per data-model.md — confirm every pre-v0.4 call site still compiles with no edits
+- [x] T006 [P] Add the additive `layers: readonly Layer[]` field to `MergedConfiguration` in `src/merge/provenance.ts` — depends on T004 not required, independent file
+- [x] T007 Populate `layers` in `foldConfiguration`'s `ok: true` result in `src/merge/fold.ts`, from the `deriveLayers(graph)` call it already makes internally — no new computation, only carrying forward what already exists (plan.md finding 2) — depends on T006
+- [x] T008 Extend the policed sets in `tests/unit/layering.test.ts`: add `"src/validate"` to `NO_ADAPTER_IMPORT_DIRS` and to the resolve-boundary check, before any file exists under it, per the v0.2/v0.3 precedent — depends on T002
+- [x] T009 Read `keys.<name>.demand` from a schema tree into a raw `{keyword: Node}` map per key in `src/validate/vocabulary.ts`, mirroring `src/merge/strategy.ts`'s `readKeysVocabulary` reading style (absent/empty/non-mapping `keys:` contributes nothing, v0.3 FR-003's rule) but for the field that function ignores (FR-001, FR-004) — no shape or closed-vocabulary checking yet, that is US4's job (T009 only extracts what is there) — depends on T002
+- [x] T010 [P] Implement §9.1's leaf DSL grammar — parse, canonical set form (flatten + dedupe, `[]` binds tighter than `\|`), name resolution against FR-011's closed built-in set — in `src/validate/typeexpr.ts`. Return a structured parse failure (not yet wired to a diagnostic) for input that does not parse or names an unresolvable type — FR-008, FR-009, FR-010, FR-011, FR-012 read together; wiring the failure to `malformed-type-expression`/`unknown-type-name` diagnostics is US4's job — depends on T002
+- [x] T011 [P] Define `Demand`, `Violation`, and `ValidationResult` per data-model.md in `src/validate/violation.ts` — types and construction helpers only, no checking logic yet — depends on T002
+- [x] T012 Add a `validate()` stub to `src/index.ts` that takes a `MergedConfiguration` and returns `{ok: true, certified: configuration}` unconditionally, wiring the pipeline shape (FR-019) before any story fills it in — depends on T007, T011
 
 **Checkpoint**: Vocabulary reading, the type grammar, the additive fields, and the policed boundary
 all exist. Story work can begin.
