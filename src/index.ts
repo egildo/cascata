@@ -667,9 +667,10 @@ export type MergeResult = { readonly ok: true; readonly configuration: MergedCon
  * **Scope, as of User Story 2 (Phase 4's checkpoint)**: `foldConfiguration`
  * can now produce the `ok: false` branch — `cascade-strategy-weakened`
  * (v0.3 FR-016), when a descendant schema declares `replace` for a key an
- * ancestor made `append`. The rest of this milestone's merge policy
- * validation (an unknown or non-string `cascade`, `append` over a
- * non-sequence, `merge-by-key`) is still Phase 6 (User Story 4), not yet
+   * All of this milestone's merge-policy validation is implemented: an
+   * unknown or non-string `cascade`, the reserved `merge-by-key`, `append`
+   * over a non-sequence, and a strategy weakened away from accumulation.
+   * Vocabulary and data-shape failures are reported together (v0.3 FR-028).
  * implemented.
  */
 export function merge(resolved: MergeInput): MergeResult {
