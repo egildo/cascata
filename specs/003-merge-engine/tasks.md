@@ -187,8 +187,8 @@ each with a position in a real document.
 - [x] T062 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
 - [x] T063 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
 - [x] T064 Confirm every pre-existing test still passes unchanged — the baseline is whatever the previous slice left green, not a fixed number; it was 300 when this list was written and 358 by the end of User Story 1, so nothing in specs/001-information-model-yaml-adapter/ or specs/002-resolver-dag-builder/ regressed
-- [ ] T065 Run every validation scenario in specs/003-merge-engine/quickstart.md end to end, reporting any scenario that no longer matches reality and which of the two is wrong
-- [ ] T066 Verify the six merge gates in .specify/memory/constitution.md — noting that gate 3, Monotonicity, is **applicable for the first time** and discharged by T036 and T037 rather than declared not-applicable
+- [x] T065 Run every validation scenario in specs/003-merge-engine/quickstart.md end to end, reporting any scenario that no longer matches reality and which of the two is wrong
+- [x] T066 Verify the six merge gates in .specify/memory/constitution.md — noting that gate 3, Monotonicity, is **applicable for the first time** and discharged by T036 and T037 rather than declared not-applicable
 
 ---
 
