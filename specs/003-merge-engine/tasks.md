@@ -162,18 +162,18 @@ each with a position in a real document.
 
 ### Conformance cases for User Story 4 (write first)
 
-- [ ] T050 [P] [US4] Cases for an unknown `cascade` value and a non-string `cascade` value, asserting `unknown-cascade-strategy` at the value's position, in tests/corpus/cases/merge-policy/unknown/
-- [ ] T051 [P] [US4] Case for `cascade: merge-by-key` asserting `unimplemented-cascade-strategy` — **not** `unknown` — since §5.3 reserves the name and the author is early rather than wrong, in tests/corpus/cases/merge-policy/reserved/
-- [ ] T052 [P] [US4] Case for `append` over a scalar and over a mapping, asserting `append-over-non-sequence` in the layer that supplied the offending value, in tests/corpus/cases/merge-policy/append-misuse/
-- [ ] T053 [P] [US4] Case asserting a **config** declaring `cascade` is ignored and the fold proceeds as though it were not written (FR-015), in tests/corpus/cases/merge-policy/config-policy/
+- [x] T050 [P] [US4] Cases for an unknown `cascade` value and a non-string `cascade` value, asserting `unknown-cascade-strategy` at the value's position, in tests/corpus/cases/merge-policy/unknown/
+- [x] T051 [P] [US4] Case for `cascade: merge-by-key` asserting `unimplemented-cascade-strategy` — **not** `unknown` — since §5.3 reserves the name and the author is early rather than wrong, in tests/corpus/cases/merge-policy/reserved/
+- [x] T052 [P] [US4] Case for `append` over a scalar and over a mapping, asserting `append-over-non-sequence` in the layer that supplied the offending value, in tests/corpus/cases/merge-policy/append-misuse/
+- [x] T053 [P] [US4] Case asserting a **config** declaring `cascade` is ignored and the fold proceeds as though it were not written (FR-015), in tests/corpus/cases/merge-policy/config-policy/
 
 ### Implementation for User Story 4
 
-- [ ] T054 [US4] Refuse an unknown or non-string `cascade` value, naming the supported strategies, in src/merge/strategy.ts (FR-014) — depends on T008, T006
-- [ ] T055 [US4] Refuse `merge-by-key` distinctly as unimplemented rather than unknown, in src/merge/strategy.ts (FR-014) — depends on T054
-- [ ] T056 [US4] Refuse `append` over a non-sequence at the offending value's position, in src/merge/strategy.ts (FR-013) — depends on T030
-- [ ] T057 [US4] Ignore a config's `cascade` declaration so policy comes from schemas only, in src/merge/strategy.ts (FR-015) — depends on T008
-- [ ] T058 [US4] Report every policy failure the fold can determine independently rather than only the first, in src/merge/fold.ts — depends on T054, T056
+- [x] T054 [US4] Refuse an unknown or non-string `cascade` value, naming the supported strategies, in src/merge/strategy.ts (FR-014) — depends on T008, T006
+- [x] T055 [US4] Refuse `merge-by-key` distinctly as unimplemented rather than unknown, in src/merge/strategy.ts (FR-014) — depends on T054
+- [x] T056 [US4] Refuse `append` over a non-sequence at the offending value's position, in src/merge/strategy.ts (FR-013) — depends on T030
+- [x] T057 [US4] Ignore a config's `cascade` declaration so policy comes from schemas only, in src/merge/strategy.ts (FR-015) — depends on T008
+- [x] T058 [US4] Report every policy failure the fold can determine independently rather than only the first, in src/merge/fold.ts — depends on T054, T056
 
 **Checkpoint**: Merge policy belongs to the contract, and the boundary is enforced.
 
