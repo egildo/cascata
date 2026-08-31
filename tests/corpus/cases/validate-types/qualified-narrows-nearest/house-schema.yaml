@@ -1,0 +1,10 @@
+$adopts: ./root-schema.yaml
+$id: https://b.example.com/shared
+types:
+  resource:
+    accept:
+      - url
+keys:
+  houseUse:
+    demand:
+      type: shared/resource

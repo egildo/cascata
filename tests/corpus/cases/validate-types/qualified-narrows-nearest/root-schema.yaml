@@ -1,0 +1,11 @@
+$id: https://a.example.com/shared
+types:
+  resource:
+    accept:
+      - url
+      - path
+      - glob
+keys:
+  rootUse:
+    demand:
+      type: shared/resource

@@ -1,0 +1,21 @@
+{
+  "name": "T051: a descendant widening a type more permissively is inert where it would do harm -- the root's own styles demand keeps resolving the root's own (narrower) resource, so the same value the root's version would reject is still rejected, regardless of the house's wider redeclaration (spec.md Acceptance Scenario 4, FR-028)",
+  "cites": "v0.5 FR-028",
+  "fixtureDir": "validate-types/widens-inert",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 3,
+        "column": 5,
+        "pointer": "/styles/0",
+        "demand": { "pointer": "/types/resource/accept", "document": "root-schema.yaml", "line": 3, "column": 5 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

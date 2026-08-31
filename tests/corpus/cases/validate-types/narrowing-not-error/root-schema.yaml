@@ -1,5 +1,6 @@
-$adopts: ./root-schema.yaml
 types:
   resource:
     accept:
+      - url
       - path
+      - glob

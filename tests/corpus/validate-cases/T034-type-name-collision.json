@@ -1,20 +1,8 @@
 {
-  "name": "T034: two layers declaring the same type name collide, carrying the later declaration's position (spec.md Acceptance Scenario 1, SC-005)",
-  "cites": "v0.5 FR-017",
-  "fixtureDir": "validate-types/collision",
+  "name": "T034 (reworked, SPEC.md §15 — narrowing wins): a descendant redeclaring an inherited type name is NOT an error, it is a narrowing (spec.md Acceptance Scenario 1, FR-016a). Superseded the pre-amendment behaviour this file used to assert (unconditional type-name-collision) -- kept under the same task id per the coordinator's own instruction to rework rather than delete quietly.",
+  "cites": "v0.5 FR-016a",
+  "fixtureDir": "validate-types/narrowing-not-error",
   "entry": "config.yaml",
   "sandboxRoot": ".",
-  "expect": {
-    "ok": false,
-    "diagnostics": [
-      {
-        "code": "type-name-collision",
-        "document": "house-schema.yaml",
-        "line": 4,
-        "column": 5,
-        "demand": { "pointer": "/types/resource", "document": "house-schema.yaml", "line": 4, "column": 5 },
-        "pedigreePosition": 1
-      }
-    ]
-  }
+  "expect": { "ok": true }
 }

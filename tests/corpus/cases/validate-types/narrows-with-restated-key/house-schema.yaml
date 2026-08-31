@@ -1,0 +1,9 @@
+$adopts: ./root-schema.yaml
+types:
+  resource:
+    accept:
+      - url
+keys:
+  styles:
+    demand:
+      type: resource[]

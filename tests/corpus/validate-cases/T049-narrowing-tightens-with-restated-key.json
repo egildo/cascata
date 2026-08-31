@@ -1,0 +1,21 @@
+{
+  "name": "T049: a narrowing that RESTATES the key it governs tightens that usage -- a value the root would have allowed and the house's narrower resource would not is rejected (spec.md Acceptance Scenario 2, SPEC.md §7's worked narrowing, first half). Value 'assets/main.css' is chosen over the worked example's own literal value for the same shape because isValidPath is permissive enough that it would ALSO satisfy accept:[url,path] -- narrowing to accept:[url] only is what actually distinguishes the two accept sets under the real matchers; see the milestone report.",
+  "cites": "v0.5 FR-027",
+  "fixtureDir": "validate-types/narrows-with-restated-key",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 3,
+        "column": 5,
+        "pointer": "/styles/0",
+        "demand": { "pointer": "/types/resource/accept", "document": "house-schema.yaml", "line": 4, "column": 5 },
+        "pedigreePosition": 1
+      }
+    ]
+  }
+}

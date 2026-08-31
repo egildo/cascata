@@ -1,17 +1,19 @@
 {
-  "name": "T039: two documents whose $id share a last segment collide on that qualifier, independent of the unqualified-name namespace (FR-019a)",
+  "name": "T039 (reworked, SPEC.md §15): two documents sharing both an $id qualifier and a local type name is a narrowing chain restated in the qualified namespace -- 'shared/resource' resolves to the NEAREST reachable declaration, not an error, and (the coordinator's own flagged consequence) the SAME qualified reference resolves differently depending on which layer asks: root's own usage still resolves root's own declaration, house's own usage resolves house's narrower one",
   "cites": "v0.5 FR-019a",
-  "fixtureDir": "validate-types/qualifier-collision",
+  "fixtureDir": "validate-types/qualified-narrows-nearest",
   "entry": "config.yaml",
   "sandboxRoot": ".",
   "expect": {
     "ok": false,
     "diagnostics": [
       {
-        "code": "type-qualifier-collision",
-        "document": "house-schema.yaml",
-        "line": 2,
-        "column": 6,
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 3,
+        "column": 11,
+        "pointer": "/houseUse",
+        "demand": { "pointer": "/types/resource/accept", "document": "house-schema.yaml", "line": 5, "column": 5 },
         "pedigreePosition": 1
       }
     ]

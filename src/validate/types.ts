@@ -2,34 +2,42 @@
  * Named types — SPEC.md §7 (Article IV), §9.1; v0.5 FR-001 through
  * FR-020; specs/005-named-types/contracts/type-resolution.md.
  *
- * **research.md D1 is load-bearing for this whole file.** Collision is
- * unconditional: two or more schema layers declaring a type under the
- * same unqualified name always collide, including when the later
- * declaration would, read alone, look like a legitimate narrowing of the
- * earlier one. There is no mechanism here for "a descendant redeclares an
- * inherited type to narrow it" — narrowing is `accept` at the point of
- * use only (`src/validate/constraints.ts`). This follows spec.md §5.2's
- * own unconditional "Widen or redefine: Never" cell for the named-types
- * row and User Story 4's own unconditional collision Acceptance
- * Scenarios, over §7's more discursive "descendants may narrow inherited
- * types" prose — see research.md D1 for the full argument and for why
- * this makes the coordinating brief's own suggested FR-008 sabotage
- * ("a descendant redefines a type") unconstructible as a green-path case.
+ * **SPEC.md §15 (commit 0b63d67) settled a contradiction §7 shipped
+ * with, overriding this file's original research.md D1 decision below.**
+ * §7 carried two laws prescribing opposite responses to one syntactic
+ * act: "descendants may narrow inherited types" is performed BY
+ * redeclaring a name; "collision is an error" forbade exactly that. v1's
+ * `$adopts` is single-parent and chain-only (§6.1), so every pedigree is
+ * one linear chain and every pair of layers is ancestor/descendant —
+ * meaning every same-name pair a v1 pedigree could ever produce is
+ * precisely the shape a narrowing takes, never the unrelated-declarations
+ * case the collision law was written for (the multi-adoption future
+ * §6.1 pre-commits C3 linearization for). Settled in favour of narrowing
+ * (FR-016, FR-016a): **an unqualified name resolves to the *nearest*
+ * declaration at or above the usage layer — never to an error merely
+ * because more than one layer declares it.** A redeclaration narrows
+ * from its declaring layer downward (FR-008, the identical rule §5.2
+ * states for cascade strategies); a widening needs no refusal, since an
+ * ancestor's own usage keeps resolving the ancestor's own declaration
+ * regardless (FR-028).
  *
- * Given collision makes an unqualified name globally unique (or entirely
- * unresolvable, if it collided), `resolveTypeName` below does not need to
- * *choose* among candidates — a layer's own "scope" (FR-008) only ever
- * has at most one non-built-in candidate to find. What scope actually
- * governs is *reachability*: a layer ranked before a type's declaring
- * layer cannot resolve it at all (research.md D2) — the property this
- * milestone's most important sabotage targets.
+ * `collisionDiagnostics` (FR-016b) and `qualifierCollisionDiagnostics`
+ * (FR-019a, extended by the same reasoning) are kept, correctly
+ * generalized, for the multi-adoption future — but are **structurally
+ * unreachable in v1**: `declarations` and `configuration.layers` can
+ * only ever hold layers from one chain, so there is no way, at this
+ * milestone, to construct two "unrelated" declarations for either
+ * function to find. See each function's own doc comment — the lesson
+ * this milestone's own depth-limit guard already taught once (a guard
+ * identical in shape to a real one, but never reachable from any input
+ * the surrounding pipeline can produce) applies here too, and must not
+ * be repeated silently.
  */
 
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import type { Node } from "../model/node.js";
 import { pointerFromPath } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
-import { compareByCodePoint } from "../model/node.js";
 import { BUILTIN_TYPE_NAMES, parseTypeExpression, type BuiltinTypeName } from "./typeexpr.js";
 import type { RawDemand } from "./vocabulary.js";
 
@@ -167,46 +175,29 @@ export function allTypeVocabularyProblems(configuration: MergedConfiguration): r
 }
 
 /**
- * Unconditional collision detection (FR-017, research.md D1): group
- * `declarations` by unqualified name; two or more for the same name
- * collide. Mirrors v0.1's duplicate-key precedent — the diagnostic
- * anchors to each declaration beyond the first (sorted by rank, so the
- * report is deterministic), naming the very first as `related`.
+ * FR-016b: a collision — two declarations of one unqualified name whose
+ * layers do **not** stand in an ancestor/descendant relation. Reserved
+ * for the multi-adoption future §6.1 pre-commits a door for.
+ *
+ * **Structurally unreachable in v1.** `$adopts` is single-parent and
+ * chain-only (§6.1): every layer `validate()` ever sees for one
+ * `MergedConfiguration` comes from one linear chain, so any two
+ * `declarations` differ in `layerRank`, and in a strict chain rank order
+ * *is* ancestor/descendant order — there is no structural way, at this
+ * milestone, for two declarations of one name to be "unrelated". Two
+ * declarations sharing a name is `FR-016a`'s narrowing, not this. This
+ * function is kept — same name, same signature, same diagnostic code —
+ * so the call site in `check.ts` needs no restructuring once
+ * multi-adoption gives it real work to do; until then it returns `[]`
+ * unconditionally, on purpose, not by omission. Do not read its
+ * emptiness as "this pedigree has no collisions" the way a caller might
+ * read any other guard's silence — read it as "this guard cannot fire
+ * yet", the distinction `tests/unit/validate-depth-limit.test.ts`'s own
+ * finding exists to keep visible.
  */
 export function collisionDiagnostics(declarations: readonly TypeDeclaration[]): readonly Diagnostic[] {
-  const byName = new Map<string, TypeDeclaration[]>();
-  for (const decl of declarations) {
-    const group = byName.get(decl.name);
-    if (group === undefined) {
-      byName.set(decl.name, [decl]);
-    } else {
-      group.push(decl);
-    }
-  }
-  const diagnostics: Diagnostic[] = [];
-  for (const [name, group] of [...byName.entries()].sort((a, b) => compareByCodePoint(a[0], b[0]))) {
-    if (group.length < 2) {
-      continue;
-    }
-    const sorted = [...group].sort((a, b) => a.layerRank - b.layerRank);
-    const first = sorted[0];
-    if (first === undefined) {
-      continue;
-    }
-    for (const later of sorted.slice(1)) {
-      diagnostics.push(
-        createDiagnostic({
-          code: "type-name-collision",
-          message: `type '${name}' is declared by more than one layer in the pedigree — every declaration but the first is a collision (SPEC.md §7, §15)`,
-          primary: later.span,
-          related: [{ label: "first declared", span: first.span }],
-          demand: { pointer: later.pointer, span: later.span },
-          pedigreePosition: later.layerRank,
-        }),
-      );
-    }
-  }
-  return diagnostics;
+  void declarations;
+  return [];
 }
 
 /** FR-018: a schema declaring a type whose name is one of the built-ins. Checked independently of multi-layer collision — a single schema alone naming a type `string` collides against the built-in "declaration". */
@@ -224,71 +215,69 @@ export function builtinCollisionDiagnostics(declarations: readonly TypeDeclarati
     );
 }
 
-/** FR-019a: two documents in one pedigree whose qualifiers (research.md D5) match. Independent of the unqualified-name namespace. */
+/**
+ * FR-019a: two documents whose `$id`s share a qualifier (research.md
+ * D5), where those documents do **not** stand in an ancestor/descendant
+ * relation. This extends `collisionDiagnostics`'s own FR-016b reasoning
+ * to the qualified namespace by the identical structural argument:
+ * **not literally stated in `SPEC.md`'s §15 amendment**, which settled
+ * only the unqualified case — this is the implementer's own inference
+ * from FR-016's now-settled philosophy, flagged for the owner in the
+ * milestone report rather than asserted quietly.
+ *
+ * The reasoning: two documents sharing a qualifier *and* the same local
+ * type name is exactly `FR-016a`'s narrowing chain, restated in the
+ * qualified namespace (`resolveTypeName`'s qualified branch below is
+ * nearest-wins for this reason, mirroring the unqualified branch
+ * exactly). Two documents sharing a qualifier with **no** overlapping
+ * local name have nothing to disambiguate at all — no qualified
+ * reference is ever ambiguous between them, since at most one of them
+ * declares any given name. Either way, under v1's single-chain topology
+ * (§6.1), there is no reachable case left for this function to refuse,
+ * for the same structural reason `collisionDiagnostics` gives: any two
+ * documents in one pedigree are ancestor/descendant, never unrelated.
+ * Kept — same name, same signature, same diagnostic code — for the
+ * multi-adoption future; unreachable in v1, on purpose, documented here
+ * rather than left to look like live protection.
+ */
 export function qualifierCollisionDiagnostics(configuration: MergedConfiguration): readonly Diagnostic[] {
-  const byQualifier = new Map<string, Layer[]>();
-  for (const layer of configuration.layers) {
-    if (layer.role !== "schema") {
-      continue;
-    }
-    const qualifier = qualifierOfLayer(layer);
-    if (qualifier === undefined) {
-      continue;
-    }
-    const group = byQualifier.get(qualifier);
-    if (group === undefined) {
-      byQualifier.set(qualifier, [layer]);
-    } else {
-      group.push(layer);
-    }
-  }
-  const diagnostics: Diagnostic[] = [];
-  for (const [qualifier, group] of [...byQualifier.entries()].sort((a, b) => compareByCodePoint(a[0], b[0]))) {
-    if (group.length < 2) {
-      continue;
-    }
-    const sorted = [...group].sort((a, b) => a.rank - b.rank);
-    const first = sorted[0];
-    if (first === undefined) {
-      continue;
-    }
-    const firstId = idNodeOf(first);
-    if (firstId === undefined) {
-      continue; // unreachable: qualifierOfLayer already required an id node.
-    }
-    for (const later of sorted.slice(1)) {
-      const laterId = idNodeOf(later);
-      if (laterId === undefined) {
-        continue;
-      }
-      diagnostics.push(
-        createDiagnostic({
-          code: "type-qualifier-collision",
-          message: `document's '$id' ends in the same qualifier ('${qualifier}') as an earlier layer's — the escape hatch needs its own escape hatch to be an error, not a coin toss (SPEC.md §7, v0.5 FR-019a)`,
-          primary: laterId.span,
-          related: [{ label: "first declared", span: firstId.span }],
-          pedigreePosition: later.rank,
-        }),
-      );
-    }
-  }
-  return diagnostics;
-}
-
-/** The set of unqualified names that collide anywhere in the pedigree (research.md D1) — unresolvable everywhere, since which declaration is "right" is exactly what the collision refuses to guess. */
-function collidingNames(declarations: readonly TypeDeclaration[]): ReadonlySet<string> {
-  const counts = new Map<string, number>();
-  for (const decl of declarations) {
-    counts.set(decl.name, (counts.get(decl.name) ?? 0) + 1);
-  }
-  return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([name]) => name));
+  void configuration;
+  return [];
 }
 
 /**
- * Resolve one name (built-in, unqualified, or qualified) from `usageLayerRank`'s
- * own scope (FR-008, research.md D2): declarations from layers `0..usageLayerRank`
- * plus the built-in set. A colliding unqualified name, or a name only a
- * later (descendant) layer declares, is unresolvable — `undefined`.
+ * Among `candidates`, the **nearest** one reachable from `usageLayerRank`
+ * (FR-016, FR-008): the greatest `layerRank` at or below the usage's own
+ * — i.e. the most-recently-narrowing declaration the usage can see.
+ * `undefined` if none is reachable at all. Two candidates can never tie
+ * on `layerRank` in v1: `configuration.layers` has exactly one layer per
+ * rank (a chain, §6.1), and one layer's own `types:` mapping cannot
+ * declare the same name twice (a YAML document cannot have a duplicate
+ * key at all — refused at parse time, §4.2 — long before this file ever
+ * sees it).
+ */
+function nearestReachable(candidates: readonly TypeDeclaration[], usageLayerRank: number): TypeDeclaration | undefined {
+  let nearest: TypeDeclaration | undefined;
+  for (const decl of candidates) {
+    if (decl.layerRank > usageLayerRank) {
+      continue;
+    }
+    if (nearest === undefined || decl.layerRank > nearest.layerRank) {
+      nearest = decl;
+    }
+  }
+  return nearest;
+}
+
+/**
+ * Resolve one name (built-in, unqualified, or qualified) from
+ * `usageLayerRank`'s own scope (FR-008, FR-016): the **nearest**
+ * declaration among layers `0..usageLayerRank` plus the built-in set. A
+ * name declared only by a later (descendant) layer, or not declared
+ * anywhere reachable, is unresolvable — `undefined`. A name declared by
+ * more than one reachable layer is **not** an error (FR-016a) — it
+ * resolves to whichever of them is nearest, exactly like an ordinary
+ * value's own merge precedence.
  */
 export function resolveTypeName(name: string, usageLayerRank: number, declarations: readonly TypeDeclaration[]): TypeDeclaration | BuiltinTypeName | undefined {
   const slashIndex = name.indexOf("/");
@@ -296,17 +285,21 @@ export function resolveTypeName(name: string, usageLayerRank: number, declaratio
     if (BUILTIN_TYPE_NAME_SET.has(name)) {
       return name as BuiltinTypeName;
     }
-    if (collidingNames(declarations).has(name)) {
-      return undefined;
-    }
-    const reachable = declarations.filter((decl) => decl.name === name && decl.layerRank <= usageLayerRank);
-    return reachable.length === 1 ? reachable[0] : undefined;
+    return nearestReachable(
+      declarations.filter((decl) => decl.name === name),
+      usageLayerRank,
+    );
   }
-  // Qualified: <qualifier>/<localName> (FR-019).
+  // Qualified: <qualifier>/<localName> (FR-019). Nearest-wins here too
+  // (FR-019a's own doc comment above): a shared qualifier plus a shared
+  // local name is FR-016a's narrowing chain restated in the qualified
+  // namespace, not a second ambiguity to refuse.
   const qualifier = name.slice(0, slashIndex);
   const localName = name.slice(slashIndex + 1);
-  const reachableQualifying = declarations.filter((decl) => decl.layerRank <= usageLayerRank && decl.name === localName && qualifierOfLayer(decl.layer) === qualifier);
-  return reachableQualifying.length === 1 ? reachableQualifying[0] : undefined;
+  return nearestReachable(
+    declarations.filter((decl) => decl.name === localName && qualifierOfLayer(decl.layer) === qualifier),
+    usageLayerRank,
+  );
 }
 
 /**

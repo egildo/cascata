@@ -1,0 +1,8 @@
+{
+  "name": "T050: THE surprising half -- a narrowing that does NOT restate the key it governs leaves an ancestor's usage untightened. The house narrows 'resource' but never restates 'styles', so the root's own styles demand keeps resolving the root's own (wider) resource, and the same value T049 rejects is accepted here (spec.md Acceptance Scenario 3, SPEC.md §7's worked narrowing, second half -- 'the property that makes it so... is exactly what stops a descendant's widening from voiding an ancestor's constraint')",
+  "cites": "v0.5 FR-027",
+  "fixtureDir": "validate-types/narrows-without-restated-key",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

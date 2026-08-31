@@ -1,0 +1,12 @@
+types:
+  resource:
+    demand:
+      type: string
+    accept:
+      - url
+      - path
+      - glob
+keys:
+  styles:
+    demand:
+      type: resource[]

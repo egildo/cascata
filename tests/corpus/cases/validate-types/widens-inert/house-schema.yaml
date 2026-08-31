@@ -1,6 +1,7 @@
 $adopts: ./root-schema.yaml
-$id: https://b.example.com/shared
 types:
-  gadget:
+  resource:
     accept:
+      - url
       - path
+      - glob

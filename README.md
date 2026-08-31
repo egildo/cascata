@@ -498,36 +498,57 @@ A `types:` section (schema-only — a config's own `types:` is ignored, FR-004) 
 demand bundles, resolved by `type: <name>` exactly like a built-in kind:
 
 ```typescript
+# root.yaml
 types:
   resource:
-    demand: { type: string, minLength: 1 }
-    accept: [url, path, glob]   # the type's own declared alternatives
+    demand: { type: string }
+    accept: [url, path, glob]
 keys:
-  homepage:
-    demand:
-      type: resource
-      accept: [url]              # a usage MAY narrow to a subset — never widen
+  styles:
+    demand: { type: resource[] }
+
+# house.yaml ($adopts root.yaml)
+types:
+  resource:
+    accept: [url]              # a descendant redeclaring an inherited name NARROWS it —
+                                # not an error (FR-016a) — governing from here downward
+keys:
+  styles:
+    demand: { type: resource[] }   # restated, so the house's narrower resource governs it
 ```
 
-- **Resolution is scope-bound, not graph-wide** (FR-008): a name resolves against declarations from
-  the usage's own layer and its ancestors, never a descendant's. An ancestor's own usage of a name
-  only a descendant declares is `unknown-type-name` — the identical rule v0.3 FR-026 settled for
-  cascade strategies.
-- **Collision is unconditional, not conditional on redeclaration** (FR-017, research.md D1): the
-  moment two layers anywhere in the pedigree declare a type under the same *unqualified* name, both
-  are `type-name-collision` — even if the later one reads like legitimate narrowing. There is no
-  redeclaration-as-narrowing mechanism; narrowing an inherited type is `accept` at the point of use,
-  never a second `types:` entry under the same name.
-- **A qualified name (`<qualifier>/<name>`) is the escape hatch** (FR-019): `<qualifier>` is the last
-  non-empty `/`-segment of the declaring document's own `$id`. Two documents whose `$id`s share a
-  qualifier collide too (`type-qualifier-collision`, FR-019a).
+- **A descendant redeclaring an inherited type name narrows it — this is not a collision**
+  (FR-016, FR-016a, `SPEC.md` §7's "Worked narrowing"). An unqualified name resolves to the
+  **nearest** declaration at or above the usage's own layer, exactly like ordinary merge precedence —
+  never to an error merely because more than one layer declares it. **Resolution is scope-bound, not
+  graph-wide** (FR-008): a usage in a layer above the narrowing has no way to see it at all, and an
+  ancestor's own usage of a name only a descendant declares is `unknown-type-name` — the identical
+  rule v0.3 FR-026 settled for cascade strategies.
+- **The surprising half: narrowing a type does not, by itself, tighten an ancestor's usage of it.**
+  A house narrowing `resource` governs the house's own usages and everything below (FR-027) — but a
+  root-level key demanding `resource[]` keeps resolving the *root's* `resource`, wider alternatives
+  and all, unless the house also **restates** that key's own demand. This is the cost of resolving in
+  the declaring layer's own scope, and it is deliberate: the same property stops a descendant's
+  *widening* from voiding an ancestor's constraint (FR-028) — an ancestor's demand always means what
+  the ancestor wrote, regardless of what any descendant later declares under the same name.
+- **A collision — two declarations of one name in layers that are *not* ancestor/descendant — remains
+  an error** (FR-016b), reserved for a future multi-adoption world. `$adopts` is single-parent and
+  chain-only in v1 (§6.1), so every pedigree is one linear chain and every pair of layers is related:
+  this collision path is implemented, correctly generalized, and **structurally unreachable at this
+  milestone** — documented as such in `src/validate/types.ts` rather than left to look like live
+  protection. Redefining a *built-in* name (`string`, `url`, ...) is a separate rule and stays
+  reachable: `builtin-type-redeclared` (FR-018), since there is no "narrowing chain" for a name no
+  layer itself declares.
+- **A qualified name (`<qualifier>/<name>`) still pins a specific document's own declaration**
+  (FR-019): `<qualifier>` is the last non-empty `/`-segment of the declaring document's own `$id`.
+  Two documents sharing a qualifier *and* the same local name is FR-016a's narrowing chain restated in
+  the qualified namespace — nearest-wins, not an error; `type-qualifier-collision` (FR-019a) is
+  reserved for unrelated documents the same way FR-016b is, and is equally unreachable in v1.
 - **`accept` composes with `demand` by AND** (research.md D3): a value must satisfy the type's own
   `demand` *and* match at least one narrowed alternative. Selecting every declared alternative behaves
-  as no selector (FR-015); selecting one the type never declared is refused as widening
-  (`type-accept-widened`, FR-013) — widening is forbidden absolutely, the identical posture §5.2 takes
-  for every other row.
-- Redefining a built-in name (`string`, `url`, ...) is refused as `builtin-type-redeclared` (FR-018)
-  — the built-in namespace is not open for redefinition.
+  as no selector (FR-015); a *usage's* `accept` naming an alternative the resolved type never declared
+  is refused as widening (`type-accept-widened`, FR-013) — usage-level widening is forbidden
+  absolutely, the identical posture §5.2 takes for every other row.
 - A cycle through `type`/`accept` references is refused as `unresolvable-type-cycle` (FR-009) rather
   than followed.
 
@@ -551,9 +572,9 @@ violations (found checking the merged tree against a well-formed demand).
 | `enum-violated` | A value not `nodesEqual` to any member of an `enum` demand |
 | `required-violated` | A `required` key absent, or present with an explicit `null`, after merge — constructible at any `keys` nesting depth as of v0.5 |
 | `unknown-type-entry-keyword` (v0.5) | A `types:` entry keyword other than `demand`/`accept` |
-| `type-name-collision` (v0.5) | Two or more layers declaring the same unqualified type name — unconditional (FR-017) |
+| `type-name-collision` (v0.5) | Two *unrelated* declarations of one unqualified type name (FR-016b) — reserved for multi-adoption; structurally unreachable in v1, since every pedigree is one chain |
 | `builtin-type-redeclared` (v0.5) | A `types:` entry naming a built-in kind (FR-018) |
-| `type-qualifier-collision` (v0.5) | Two documents in one pedigree whose `$id` shares a last segment (FR-019a) |
+| `type-qualifier-collision` (v0.5) | Two *unrelated* documents whose `$id` shares a last segment (FR-019a) — likewise reserved and unreachable in v1 |
 | `unresolvable-type-cycle` (v0.5) | A `type`/`accept` reference cycle among declared types (FR-009) |
 | `type-accept-widened` (v0.5) | A usage's `accept` naming an alternative the referenced type never declared (FR-013) |
 

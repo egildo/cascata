@@ -114,20 +114,42 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 
 ---
 
-## Phase 6: User Story 4 — Names collide loudly (Priority: P4)
+## Phase 6: User Story 4 — A descendant narrows an inherited type (Priority: P4)
 
-**Goal**: Confirm, with conformance cases, the collision/qualification machinery Phase 2 already built.
+**Goal (rewritten, `SPEC.md` §15 / spec.md commit 9c6c0d7)**: originally "Names collide loudly" —
+Phase 2's collision machinery, implemented as unconditional, made every redeclaration an error and
+therefore made narrowing (FR-027) unimplementable. `SPEC.md` §15 settled a real contradiction §7
+shipped with (its cascade law and its namespace law prescribed opposite responses to one syntactic
+act) in favour of narrowing. See `src/validate/types.ts`'s header comment and
+`specs/005-named-types/research.md`'s D1/D2 settled-notes for the full history — an implementer must
+not re-litigate this here, only build to it.
 
-### Conformance cases for User Story 4 (write first)
+### Conformance cases for User Story 4, reworked in place rather than deleted quietly
 
-- [x] T034 [P] [US4] Case: two layers declaring the same type name — `type-name-collision`, both positions (Acceptance Scenario 1, SC-005) — `tests/corpus/cases/validate-types/collision/`
-- [x] T035 [P] [US4] Case: a layer redeclaring a built-in name — `builtin-type-redeclared` (Acceptance Scenario 2) — `tests/corpus/cases/validate-types/builtin-collision/`
-- [x] T036 [P] [US4] Case: a qualified name resolves unambiguously across layers (Acceptance Scenario 3) — `tests/corpus/cases/validate-types/qualified/`
-- [x] T037 [P] [US4] Case: one layer declaring, a descendant using unqualified — resolves, not a collision (Acceptance Scenario 4, FR-020) — `tests/corpus/cases/validate-types/inherited-use/`
-- [x] T038 [P] [US4] Case: **the mandated sabotage target** — an ancestor's own usage cannot resolve a name only a descendant declares (research.md D2, replacing the coordinating brief's unconstructible "descendant redefines a type" wording) — `tests/corpus/cases/validate-types/ancestor-cannot-see-descendant/`
-- [x] T039 [P] [US4] Case: two documents whose `$id`s share a last segment — `type-qualifier-collision` (FR-019a) — `tests/corpus/cases/validate-types/qualifier-collision/`
+- [x] T034 [P] [US4] **Reworked**: a descendant redeclaring an inherited type name is NOT an error — it is a narrowing (Acceptance Scenario 1, FR-016a). Previously asserted the pre-amendment `type-name-collision` behaviour this exact redeclaration used to trigger — `tests/corpus/cases/validate-types/narrowing-not-error/`
+- [x] T035 [P] [US4] Unchanged: a layer redeclaring a *built-in* name — `builtin-type-redeclared` (Acceptance Scenario 7 — renumbered, not reworded; FR-018 was never part of the contradiction) — `tests/corpus/cases/validate-types/builtin-collision/`
+- [x] T036 [P] [US4] **Reworked**: a qualified name still resolves to exactly one declaration per usage layer, now with no collision diagnostic riding along — redeclaring under two different qualifiers is ordinary narrowing (Acceptance Scenario 6) — `tests/corpus/cases/validate-types/qualified/`
+- [x] T037 [P] [US4] Unchanged: one layer declaring, a descendant using unqualified — resolves (FR-020) — `tests/corpus/cases/validate-types/inherited-use/`
+- [x] T038 [P] [US4] Unchanged, still the FR-008 sabotage target: an ancestor's own usage cannot resolve a name only a descendant declares (research.md D2) — `tests/corpus/cases/validate-types/ancestor-cannot-see-descendant/`
+- [x] T039 [P] [US4] **Reworked**: two documents sharing both an `$id` qualifier and a local type name is a narrowing chain restated in the qualified namespace — `shared/resource` resolves to the *nearest*, and the coordinator's own flagged consequence (derived from FR-016, not cited from §7) holds: the same qualified reference resolves differently depending on which layer asks — `tests/corpus/cases/validate-types/qualified-narrows-nearest/`
+- [x] T049 [P] [US4] New: a narrowing that **restates** the key it governs tightens that usage — a value the root's wider `resource` would admit and the house's narrower one would not is rejected (Acceptance Scenario 2, `SPEC.md` §7's worked narrowing, first half) — `tests/corpus/cases/validate-types/narrows-with-restated-key/`
+- [x] T050 [P] [US4] New, **the case that matters most**: a narrowing that does **not** restate the key it governs leaves an ancestor's usage untightened — the same value T049 rejects is accepted here, because the root's own usage keeps resolving the root's own (wider) declaration (Acceptance Scenario 3, the counter-intuitive half someone would later "fix" into a bug without this case pinning it) — `tests/corpus/cases/validate-types/narrows-without-restated-key/`
+- [x] T051 [P] [US4] New: a descendant widening a type more permissively is inert where it would do harm — the root's own demand keeps resolving the root's own (narrower) declaration regardless (Acceptance Scenario 4, FR-028) — `tests/corpus/cases/validate-types/widens-inert/`
 
-**Checkpoint**: No collision resolves by silent shadowing; qualification is a real escape hatch.
+### Implementation — the correction itself
+
+- [x] T052 `src/validate/types.ts`: `resolveTypeName` — remove the `collidingNames` bail; both the unqualified and qualified branches resolve **nearest-wins** (greatest reachable `layerRank`) via a shared `nearestReachable` helper, never `.length === 1 ? ... : undefined` — depends on nothing (Phase 2's own foundation, corrected)
+- [x] T053 `src/validate/types.ts`: `collisionDiagnostics` (FR-016b) rewritten to detect only *unrelated* declarations — returns `[]` unconditionally, documented in its own doc comment as structurally unreachable in v1 (single-parent chain, §6.1), not left to look like live protection (the depth-limit guard's own lesson, restated)
+- [x] T054 `src/validate/types.ts`: `qualifierCollisionDiagnostics` (FR-019a) — same treatment, extended by the implementer's own inference (flagged in the milestone report, not asserted as literally cited): a shared qualifier is exactly as unreachable-in-v1 as a shared unqualified name, for the identical structural reason
+- [x] T055 `tests/unit/validate-type-monotonicity.test.ts`: replace the "collision is unconditional" property (asserting the exact behaviour §15 overturned) with a nearest-wins property — 300 random trials, independent oracle, grouped by usage-key pointer rather than `pedigreePosition` (a real bug this rewrite's own first run caught: `pedigreePosition` names the *declaring* layer for a value violation, not the usage's)
+- [x] T056 `README.md`, `specs/005-named-types/research.md`: realign the "Named types" section and D1/D2 (settled-notes appended, not rewritten, matching the earlier v0.4 governance-settlement precedent) to narrowing-wins
+- [x] T057 **Sabotage**: resolve to the *ancestor's* declaration instead of the nearest — confirmed: every single-declaring-layer case (T034, T035, T037, T038, T050, T051 — the latter two have 2 declarations but only ONE usage, at root's own rank, so they see only root's own candidate either way) stays green; only the genuinely multi-candidate-*reachable*-from-one-usage cases (T039, T049) plus the nearest-wins property go red
+- [x] T058 **Sabotage**: an ancestor's demand resolves the *leaf-most* declaration instead of its own (2+ candidates anywhere → pick the greatest rank regardless of reachability; a single-declarer name keeps ordinary reachability, isolating this from T046/T057's own already-run sabotages) — **the coordinator's own prediction ("only T050 goes red") did not hold**: T039, T049, T050, *and* T051 all go red together, while T034/T035/T037/T038 and the reachability property stay green. Flagged in the milestone report — T050 and T051 are structurally symmetric (2 candidates, one usage, at the ancestor's own rank; they differ only in whether the descendant's redeclaration is narrower or wider), so no "leaf-most" bug can catch one without the other: they are the same resolution guarantee (an ancestor's usage always resolves the ancestor's own declaration) viewed from its two directions, not two independently-breakable properties.
+
+**Checkpoint**: A descendant can narrow an inherited type; an ancestor's own usage is never reached by
+a narrowing that does not restate it; a widening is inert where it would do harm; qualification still
+pins one specific declaration. No collision resolves by silent shadowing (the FR-016b/FR-019a
+mechanism remains implemented, correctly generalized, and honestly documented as unreachable at v1).
 
 ---
 

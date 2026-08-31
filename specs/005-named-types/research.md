@@ -66,6 +66,39 @@ single hardest interpretive call of the milestone and recommends the same fix th
 v0.3 cascade-timing ambiguity: a worked example in `SPEC.md` showing one concrete case through to its
 answer.
 
+**SETTLED-NOTE (added after `SPEC.md` §15, commit 0b63d67 / `specs/005-named-types/spec.md`
+commit 9c6c0d7 — not a rewrite of D1 above, which is left exactly as it was reasoned and decided
+at the time): the owner overturned this decision.** D1's own "Why not the other way" section
+searched for a structural condition that would make two same-name declarations *sibling* rather
+than *ancestor/descendant*, found none reachable in v1, and concluded from that absence that every
+same-name pair must therefore be the unconditional-collision case User Story 4's Acceptance
+Scenario 1 and §5.2's "redefine: Never" cell both describe. **That reasoning had the conclusion
+backwards**: the correct inference from "every pair is ancestor/descendant, never sibling" is that
+every same-name pair is the narrowing §7's cascade law describes, and the *collision* law — which
+exists specifically for the *sibling* (unrelated-declarations) case — can therefore never fire in
+v1 at all. D1 noticed the same structural fact this settlement is built on and drew the opposite
+conclusion from it.
+
+Also wrong in hindsight: weighing User Story 4's Acceptance Scenario 1 and §5.2's table cell as
+"the more authoritative, non-discursive source" over §7's cascade law. Both were amended (§15) —
+the Acceptance Scenario was rewritten outright (it now describes narrowing, not collision) and the
+table cell's own prose was corrected in the same commit. Citation count and discursiveness are not
+the same thing as correctness; a contradiction between a spec's terse table and its prose law does
+not resolve itself by picking whichever reads more like a rule.
+
+**What this means for the "why not the other way" alternatives-considered paragraph**: the
+rejected alternative ("making redeclaration legal — governs downward, nearest-wins, like ordinary
+value precedence") is *exactly* what shipped after the amendment. It was rejected here for
+contradicting Acceptance Scenario 1's old wording and §5.2's old table cell — both since corrected.
+Nothing about the alternative's own mechanics was wrong; only the citations weighed against it were
+stale.
+
+**The mandated sabotage this file originally described ("a descendant redefines a type" is
+unconstructible) is retracted along with the decision that made it unconstructible.** It is now
+directly constructible — see `specs/005-named-types/tasks.md`'s narrowing conformance cases
+(T049-T051) and the correction's own two mandated sabotage runs (resolving to the ancestor's
+declaration instead of the nearest; an ancestor's demand resolving the leaf-most declaration).
+
 ## D2 — FR-008's scope rule is still real and testable: reachability, not disambiguation
 
 Given D1 (names are globally unique once collision-checked), per-layer scoping cannot matter for
@@ -86,6 +119,17 @@ ancestor's own `type:` expression resolve a descendant-only name. A second, comp
 own usage can see both; the root's own usage can see only its own. Both are real, constructible,
 green/red-distinguishing cases under D1, so FR-008 is not vacated by D1 — it is narrowed to exactly
 the reachability half of what its own text describes.
+
+**SETTLED-NOTE (same amendment as D1's own note above).** This decision's opening sentence —
+"Given D1 (names are globally unique once collision-checked), per-layer scoping cannot matter for
+*choosing among candidates* — there is at most one non-built-in candidate" — no longer holds: a
+name can now have several reachable candidates (an ordinary narrowing chain), and scope now governs
+*both* reachability (unchanged, this decision's own load-bearing claim, still correct) *and*, for
+the first time, an actual choice among candidates — nearest-wins (FR-016), the identical rule
+`src/validate/types.ts`'s `nearestReachable` implements. The reachability claim this decision makes
+— "an ancestor cannot resolve a name only a descendant declares" — is untouched by the amendment
+and remains exactly as reasoned below; only the premise that resolution never has to *choose*
+changed.
 
 ## D3 — `accept`'s two positions, and what a type's own `demand` + `accept` compose to
 
