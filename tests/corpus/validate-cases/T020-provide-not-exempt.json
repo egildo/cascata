@@ -1,0 +1,21 @@
+{
+  "name": "T020: a schema's own provide is checked exactly like a config-written value, at the provide's own position (FR-020, spec.md Acceptance Scenario 8)",
+  "cites": "v0.4 FR-020",
+  "fixtureDir": "validate-single-layer/provide-not-exempt",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "schema.yaml",
+        "line": 5,
+        "column": 14,
+        "pointer": "/greeting",
+        "demand": { "pointer": "/keys/greeting/demand/type", "document": "schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

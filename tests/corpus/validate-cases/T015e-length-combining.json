@@ -1,0 +1,8 @@
+{
+  "name": "T015e: a combining-character sequence (e + U+0301) counts as two code points under minLength, with no normalization applied (SPEC.md §4.2)",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/length-combining",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

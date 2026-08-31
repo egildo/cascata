@@ -1,0 +1,4 @@
+keys:
+  color:
+    demand:
+      enum: [a, b, c]

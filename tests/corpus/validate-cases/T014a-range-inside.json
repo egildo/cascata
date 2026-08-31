@@ -1,0 +1,8 @@
+{
+  "name": "T014a: a value strictly inside min/max satisfies both",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/range-inside",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

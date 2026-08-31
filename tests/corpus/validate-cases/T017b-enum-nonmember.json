@@ -1,0 +1,21 @@
+{
+  "name": "T017b: a value that is not a member of the enum is rejected",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/enum-nonmember",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "enum-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 8,
+        "pointer": "/color",
+        "demand": { "pointer": "/keys/color/demand/enum", "document": "schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

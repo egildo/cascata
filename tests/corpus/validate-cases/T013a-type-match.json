@@ -1,0 +1,8 @@
+{
+  "name": "T013a: a string value satisfies type: string",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/type-match",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

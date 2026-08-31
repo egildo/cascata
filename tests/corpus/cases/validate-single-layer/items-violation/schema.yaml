@@ -1,0 +1,6 @@
+keys:
+  tags:
+    demand:
+      type: sequence
+      items:
+        minLength: 2

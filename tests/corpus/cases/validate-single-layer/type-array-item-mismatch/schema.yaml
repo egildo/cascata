@@ -1,0 +1,4 @@
+keys:
+  tags:
+    demand:
+      type: string[]

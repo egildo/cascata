@@ -1,0 +1,3 @@
+$schema: ./schema.yaml
+name: ok
+stray: 12345

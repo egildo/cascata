@@ -1,25 +1,173 @@
 /**
- * The root→leaf walk — SPEC.md §5.4, §10; v0.4 FR-013 through FR-021,
- * FR-027 through FR-031; specs/004-constraint-checker/contracts/
- * validate-api.md.
+ * The root→leaf walk — SPEC.md §5.4, §10; v0.4 FR-013 through FR-021;
+ * specs/004-constraint-checker/contracts/validate-api.md.
  *
- * **Foundational-phase stub** (tasks.md T012): checks nothing yet. Every
- * user story phase fills this in — User Story 1 adds single-layer leaf
- * checking, User Story 2 extends it to every layer root-to-leaf, User
- * Story 3 adds `required`'s post-merge timing, User Story 4 adds
- * closed-vocabulary refusal. Kept as its own file from the start (rather
- * than inlined into `src/index.ts`) so `validate()` stays a thin
- * orchestrator, matching `merge()`'s own relationship to
- * `foldConfiguration`.
+ * Iterates every layer in `configuration.layers` (root to leaf) and, for
+ * each schema layer's own `demand` vocabulary, checks the **same merged
+ * tree** — never a per-layer snapshot, never the nearest layer alone.
+ * This is whole-chain validation from its very first version: the walk
+ * was never written to check only the nearest layer and later widened,
+ * because iterating every layer costs nothing extra over iterating one —
+ * `configuration.layers` is already the full root-to-leaf list, and
+ * checking fewer of them would have been the *extra* code. See the
+ * milestone report for why this makes User Story 1 and User Story 2 the
+ * same code path rather than two, and how that was verified (the leaf-only
+ * sabotage, tasks.md T064, run against this file specifically).
+ *
+ * Determinism (FR-018) falls out of iteration order rather than a
+ * separate sort: `configuration.layers` is already rank-ordered, and every
+ * `Mapping` this walk reads (`vocabulary`, one key's `RawDemand`, an
+ * `items` nested demand) is canonically key-sorted by construction
+ * (`createMapping`) — so the same configuration always produces violations
+ * in the same order without this file sorting anything itself.
+ *
+ * Collect-all (FR-017) is likewise structural: nothing here returns early
+ * on the first violation found, at any of the three loop levels (layers,
+ * keys, keywords).
  */
 
+import type { Node } from "../model/node.js";
+import { pointerFromPath, resolvePointer } from "../model/pointer.js";
+import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
-import type { MergedConfiguration } from "../merge/provenance.js";
+import { readDemandVocabulary, type DemandKeyword } from "./vocabulary.js";
+import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, checkType, parseTypeDemand, type ViolationSite } from "./constraints.js";
+import { renderViolation, type Demand, type Violation } from "./violation.js";
 
 export type CheckOutcome = { readonly ok: true } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
-/** Check `configuration` against every schema layer's `demand`. Stub: always succeeds. */
+/** The keywords this file's own leaf-check dispatch handles directly. `required` is User Story 3's post-merge check (a different shape — it must reason about *absence*, which no `ViolationSite` can anchor to a value); `items` is handled by its own one-level recursion below, not this table; `accept`/`format` are refused as unimplemented by `vocabulary.ts` (User Story 4) and never reach here as values to check. */
+const LEAF_KEYWORDS: ReadonlySet<string> = new Set(["type", "min", "max", "minLength", "maxLength", "pattern", "enum"]);
+
+function runLeafCheck(keyword: DemandKeyword, keywordValue: Node, target: Node): ViolationSite[] {
+  switch (keyword) {
+    case "type": {
+      const expr = parseTypeDemand(keywordValue);
+      return expr === undefined ? [] : checkType(expr, target);
+    }
+    case "min":
+      return checkMin(keywordValue, target);
+    case "max":
+      return checkMax(keywordValue, target);
+    case "minLength":
+      return checkMinLength(keywordValue, target);
+    case "maxLength":
+      return checkMaxLength(keywordValue, target);
+    case "pattern":
+      return checkPattern(keywordValue, target);
+    case "enum":
+      return checkEnum(keywordValue, target);
+    default:
+      // items/required/accept/format — not this function's job (see LEAF_KEYWORDS's own doc).
+      return [];
+  }
+}
+
+/**
+ * The layer that wrote `originId` (a `span.origin.id`, which is a
+ * document location — `src/index.ts`'s `createOrigin(location, location)`)
+ * — v0.4 FR-023, plan.md's finding 3. Every value node this walk ever
+ * inspects came from some layer's own real parsed tree (directly, or via
+ * `provide`, which retains its own schema document's real span —
+ * `src/merge/fold.ts`'s `schemaContribution`), so this always finds
+ * exactly one match; failing to would be an invariant violation elsewhere
+ * in the pipeline, not a bad-document outcome, hence the throw.
+ */
+function layerForSpanOrigin(configuration: MergedConfiguration, originId: string): Layer {
+  const found = configuration.layers.find((layer) => layer.identity.location === originId);
+  if (found === undefined) {
+    throw new Error(`Internal error: no layer in configuration.layers matches span.origin.id '${originId}' — every merged-tree node's span should trace back to a real layer`);
+  }
+  return found;
+}
+
+/** Build one `Demand` — `keywordPath` is `[keyword]` for a top-level constraint or `["items", nestedKeyword]` for one nested under `items:` (contracts/demand-vocabulary.md's "Nested demand under `items`"). */
+function buildDemand(layer: Layer, keyName: string, keywordPath: readonly string[], demandValueNode: Node): Demand {
+  const topKeyword = keywordPath[0];
+  if (topKeyword === undefined) {
+    throw new Error("Internal error: buildDemand called with an empty keywordPath");
+  }
+  return {
+    keyword: topKeyword as DemandKeyword,
+    value: demandValueNode,
+    layer,
+    layerRank: layer.rank,
+    pointer: pointerFromPath(["keys", keyName, "demand", ...keywordPath]),
+    span: demandValueNode.span,
+  };
+}
+
+/** Turn one `ViolationSite` into a full `Violation`, resolving the offending value's writing layer from its own span (FR-023). `anchorPointer` is the merged pointer the site's own `pointerSuffix` is relative to — a demanded key's own pointer, or one sequence item's pointer under `items:`. */
+function toViolation(configuration: MergedConfiguration, demand: Demand, anchorPointer: string, site: ViolationSite): Violation {
+  const mergedPointer = site.pointerSuffix.length === 0 ? anchorPointer : `${anchorPointer}${pointerFromPath(site.pointerSuffix)}`;
+  const valueLayer = layerForSpanOrigin(configuration, site.node.span.origin.id);
+  return { demand, mergedPointer, valueSpan: site.node.span, valueLayer, reason: site.reason };
+}
+
+/** Check one key's `items:` nested demand against each element of a `Sequence` value — contracts/demand-vocabulary.md's "Nested demand under `items`". A non-`Sequence` value or a non-mapping `items:` declaration is simply not checked by this keyword (`type` is what refuses a non-sequence). One level of recursion only: nested keywords are the same closed leaf set, `items`/`required` excluded (no citation for deeper recursion — see contracts/demand-vocabulary.md). */
+function violationsForItems(layer: Layer, keyName: string, itemsDeclaration: Node, value: Node, configuration: MergedConfiguration): Violation[] {
+  if (itemsDeclaration.type !== "mapping" || value.type !== "sequence") {
+    return [];
+  }
+  const violations: Violation[] = [];
+  value.items.forEach((item, index) => {
+    const itemPointer = pointerFromPath([keyName, index]);
+    for (const [nestedKeyword, nestedValue] of itemsDeclaration.entries) {
+      if (!LEAF_KEYWORDS.has(nestedKeyword)) {
+        continue;
+      }
+      const sites = runLeafCheck(nestedKeyword as DemandKeyword, nestedValue, item);
+      for (const site of sites) {
+        const demand = buildDemand(layer, keyName, ["items", nestedKeyword], nestedValue);
+        violations.push(toViolation(configuration, demand, itemPointer, site));
+      }
+    }
+  });
+  return violations;
+}
+
+/** Check one schema layer's own `demand` vocabulary against `configuration.tree`. A `role !== "schema"` layer (the config) contributes nothing (v0.4 FR-003, mirroring v0.3 FR-015's posture for `cascade`). */
+function violationsForLayer(configuration: MergedConfiguration, layer: Layer): Violation[] {
+  if (layer.role !== "schema") {
+    return [];
+  }
+  const vocabulary = readDemandVocabulary(layer.tree);
+  const violations: Violation[] = [];
+  for (const [keyName, raw] of vocabulary) {
+    const keyPointer = pointerFromPath([keyName]);
+    const value = resolvePointer(configuration.tree, keyPointer);
+    if (value === undefined) {
+      // FR-021's converse: a demand constrains a value if one exists.
+      // `required`'s own absence-handling (User Story 3) is a different
+      // check, not this one.
+      continue;
+    }
+    for (const [keyword, keywordValue] of raw) {
+      if (LEAF_KEYWORDS.has(keyword)) {
+        const sites = runLeafCheck(keyword as DemandKeyword, keywordValue, value);
+        for (const site of sites) {
+          const demand = buildDemand(layer, keyName, [keyword], keywordValue);
+          violations.push(toViolation(configuration, demand, keyPointer, site));
+        }
+        continue;
+      }
+      if (keyword === "items") {
+        violations.push(...violationsForItems(layer, keyName, keywordValue, value, configuration));
+      }
+      // "required" (US3), "accept"/"format" (never reach here as values — US4 refuses them at the vocabulary level) — no other case.
+    }
+  }
+  return violations;
+}
+
+/** Check `configuration` against every schema layer's `demand`, root to leaf (FR-014). */
 export function checkConfiguration(configuration: MergedConfiguration): CheckOutcome {
-  void configuration;
-  return { ok: true };
+  const violations: Violation[] = [];
+  for (const layer of configuration.layers) {
+    violations.push(...violationsForLayer(configuration, layer));
+  }
+  if (violations.length === 0) {
+    return { ok: true };
+  }
+  return { ok: false, diagnostics: violations.map(renderViolation) };
 }

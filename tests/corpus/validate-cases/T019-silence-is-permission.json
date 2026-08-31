@@ -1,0 +1,8 @@
+{
+  "name": "T019: a key no demand mentions accepts any value (FR-021)",
+  "cites": "v0.4 FR-021",
+  "fixtureDir": "validate-single-layer/silence",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

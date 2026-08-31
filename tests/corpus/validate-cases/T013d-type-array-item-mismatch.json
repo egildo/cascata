@@ -1,0 +1,21 @@
+{
+  "name": "T013d: one non-string item in a string[] sequence is blamed by index, not the sequence (spec.md Acceptance Scenario 6)",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/type-array-item-mismatch",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 14,
+        "pointer": "/tags/2",
+        "demand": { "pointer": "/keys/tags/demand/type", "document": "schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

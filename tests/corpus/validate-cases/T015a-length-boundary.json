@@ -1,0 +1,8 @@
+{
+  "name": "T015a: a string at both minLength/maxLength boundaries (inclusive) satisfies both",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/length-boundary",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

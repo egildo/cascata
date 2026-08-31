@@ -1,0 +1,21 @@
+{
+  "name": "T014b: a value below min is rejected",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/range-below-min",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "range-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 8,
+        "pointer": "/count",
+        "demand": { "pointer": "/keys/count/demand/min", "document": "schema.yaml", "line": 4, "column": 12 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

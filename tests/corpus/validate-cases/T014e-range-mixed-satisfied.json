@@ -1,0 +1,8 @@
+{
+  "name": "T014e: a float value equal to an int max bound satisfies it (inclusive, cross-kind comparison)",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/range-mixed-satisfied",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

@@ -1,0 +1,5 @@
+keys:
+  code:
+    demand:
+      minLength: 3
+      maxLength: 5

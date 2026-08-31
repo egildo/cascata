@@ -1,0 +1,8 @@
+{
+  "name": "T017a: a value that is a member of the enum satisfies it",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/enum-member",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

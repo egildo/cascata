@@ -1,0 +1,5 @@
+keys:
+  count:
+    demand:
+      min: 1
+      max: 10

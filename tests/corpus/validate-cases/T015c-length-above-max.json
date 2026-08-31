@@ -1,0 +1,21 @@
+{
+  "name": "T015c: a string longer than maxLength is rejected",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/length-above-max",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 7,
+        "pointer": "/code",
+        "demand": { "pointer": "/keys/code/demand/maxLength", "document": "schema.yaml", "line": 4, "column": 18 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

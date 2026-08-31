@@ -1,0 +1,4 @@
+keys:
+  code:
+    demand:
+      pattern: ^[a-z]+$

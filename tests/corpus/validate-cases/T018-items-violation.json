@@ -1,0 +1,21 @@
+{
+  "name": "T018: an items: nested demand is applied to each element of a sequence, blaming the offending element by index",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/items-violation",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 12,
+        "pointer": "/tags/1",
+        "demand": { "pointer": "/keys/tags/demand/items/minLength", "document": "schema.yaml", "line": 6, "column": 20 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

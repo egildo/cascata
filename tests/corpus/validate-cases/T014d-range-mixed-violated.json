@@ -1,0 +1,21 @@
+{
+  "name": "T014d: an int value compares correctly against a float max bound (research.md D5) and is rejected when it exceeds it",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/range-mixed-violated",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "range-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 8,
+        "pointer": "/count",
+        "demand": { "pointer": "/keys/count/demand/max", "document": "schema.yaml", "line": 4, "column": 12 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

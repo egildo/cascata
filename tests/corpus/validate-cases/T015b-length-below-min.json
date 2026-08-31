@@ -1,0 +1,21 @@
+{
+  "name": "T015b: a string shorter than minLength is rejected",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/length-below-min",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 7,
+        "pointer": "/code",
+        "demand": { "pointer": "/keys/code/demand/minLength", "document": "schema.yaml", "line": 4, "column": 18 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

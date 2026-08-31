@@ -1,0 +1,8 @@
+{
+  "name": "T016a: a string matching an ECMA-262 pattern satisfies it (§7)",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/pattern-match",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

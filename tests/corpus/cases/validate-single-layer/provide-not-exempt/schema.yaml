@@ -1,0 +1,5 @@
+keys:
+  greeting:
+    demand:
+      type: string
+    provide: 42

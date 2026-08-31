@@ -1,0 +1,8 @@
+{
+  "name": "T015d: a single astral-plane emoji counts as one code point under maxLength, not two UTF-16 units (research.md's probe)",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/length-astral",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

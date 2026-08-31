@@ -1,0 +1,2 @@
+$schema: ./schema.yaml
+tags: [ab, x, cde]

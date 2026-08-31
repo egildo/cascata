@@ -1,0 +1,4 @@
+keys:
+  code:
+    demand:
+      maxLength: 1

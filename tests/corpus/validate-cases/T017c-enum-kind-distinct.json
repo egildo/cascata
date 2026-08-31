@@ -1,0 +1,21 @@
+{
+  "name": "T017c: enum: [1] (int) does not admit a float 1.0 -- kind is part of model equality (SPEC.md §4.2), via nodesEqual",
+  "cites": "v0.4 FR-013",
+  "fixtureDir": "validate-single-layer/enum-kind-distinct",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "enum-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 8,
+        "pointer": "/count",
+        "demand": { "pointer": "/keys/count/demand/enum", "document": "schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

@@ -80,22 +80,22 @@ demand's own position and the value's own position.
 
 ### Conformance cases for User Story 1 (write first)
 
-- [ ] T013 [P] [US1] Cases for `type` — a matching scalar, a mismatched scalar, a matching `T[]` sequence, and a sequence with one mismatched item pointing at that item specifically (spec.md Acceptance Scenario 6) — in `tests/corpus/cases/validate-single-layer/type/`
-- [ ] T014 [P] [US1] Cases for `min`/`max` — a value inside the range, one at each boundary (inclusive), one outside each direction, and one mixing an `int` value against a `float` bound (research.md D5) — in `tests/corpus/cases/validate-single-layer/range/`
-- [ ] T015 [P] [US1] Cases for `minLength`/`maxLength` — a boundary-exact string, a string one code point over/under, and a non-ASCII case (an astral-plane emoji, and a combining-character sequence) asserting code-point counting per research.md's probe — in `tests/corpus/cases/validate-single-layer/length/`
-- [ ] T016 [P] [US1] Cases for `pattern` — a matching string, a non-matching string, naming ECMA-262 as the dialect (§7) — in `tests/corpus/cases/validate-single-layer/pattern/`
-- [ ] T017 [P] [US1] Cases for `enum` — a member value, a non-member value, and a case distinguishing `int 1`/`float 1.0`/`string "1"` as three distinct members via `nodesEqual` (contracts/demand-vocabulary.md) — in `tests/corpus/cases/validate-single-layer/enum/`
-- [ ] T018 [P] [US1] Case for `items` — a nested demand under `items:` applied to each element of a sequence, one element violating it, pointed at by index — in `tests/corpus/cases/validate-single-layer/items/`
-- [ ] T019 [P] [US1] Case asserting a key no demand mentions accepts any value (FR-021) — in `tests/corpus/cases/validate-single-layer/silence/`
-- [ ] T020 [P] [US1] Case asserting a schema's own `provide` is checked exactly like a config-written value, at the `provide`'s own position (FR-020, spec.md Acceptance Scenario 8) — in `tests/corpus/cases/validate-single-layer/provide-not-exempt/`
+- [x] T013 [P] [US1] Cases for `type` — a matching scalar, a mismatched scalar, a matching `T[]` sequence, and a sequence with one mismatched item pointing at that item specifically (spec.md Acceptance Scenario 6) — in `tests/corpus/cases/validate-single-layer/type/`
+- [x] T014 [P] [US1] Cases for `min`/`max` — a value inside the range, one at each boundary (inclusive), one outside each direction, and one mixing an `int` value against a `float` bound (research.md D5) — in `tests/corpus/cases/validate-single-layer/range/`
+- [x] T015 [P] [US1] Cases for `minLength`/`maxLength` — a boundary-exact string, a string one code point over/under, and a non-ASCII case (an astral-plane emoji, and a combining-character sequence) asserting code-point counting per research.md's probe — in `tests/corpus/cases/validate-single-layer/length/`
+- [x] T016 [P] [US1] Cases for `pattern` — a matching string, a non-matching string, naming ECMA-262 as the dialect (§7) — in `tests/corpus/cases/validate-single-layer/pattern/`
+- [x] T017 [P] [US1] Cases for `enum` — a member value, a non-member value, and a case distinguishing `int 1`/`float 1.0`/`string "1"` as three distinct members via `nodesEqual` (contracts/demand-vocabulary.md) — in `tests/corpus/cases/validate-single-layer/enum/`
+- [x] T018 [P] [US1] Case for `items` — a nested demand under `items:` applied to each element of a sequence, one element violating it, pointed at by index — in `tests/corpus/cases/validate-single-layer/items/`
+- [x] T019 [P] [US1] Case asserting a key no demand mentions accepts any value (FR-021) — in `tests/corpus/cases/validate-single-layer/silence/`
+- [x] T020 [P] [US1] Case asserting a schema's own `provide` is checked exactly like a config-written value, at the `provide`'s own position (FR-020, spec.md Acceptance Scenario 8) — in `tests/corpus/cases/validate-single-layer/provide-not-exempt/`
 
 ### Implementation for User Story 1
 
-- [ ] T021 [US1] Implement the leaf checks — `type`, `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum` — as pure `(demand value, target Node) -> Violation | undefined` functions in `src/validate/constraints.ts`, per contracts/demand-vocabulary.md's semantics table (FR-013) — depends on T010, T011
-- [ ] T022 [US1] Implement `items`, recursing into the same leaf-check table for each `Sequence` item, pointing at `<sequencePointer>/<index>` (contracts/demand-vocabulary.md's "Nested demand under `items`") — depends on T021
-- [ ] T023 [US1] Implement the single-layer walk: for each demanded key, `resolvePointer` the merged tree, run every declared demand's check, collect violations — in `src/validate/check.ts` (FR-013) — depends on T021, T022, T009
-- [ ] T024 [US1] Implement `Violation`'s rendering into a `Diagnostic` — `pointer`, `demand` (pointer+span into the declaring document), `pedigreePosition`, and §10's canonical sentence built from structured fields alone — in `src/validate/violation.ts` (FR-022, FR-023, FR-024, FR-025) — depends on T011, T005
-- [ ] T025 [US1] Wire `check.ts`'s walk into `validate()` in `src/index.ts`, replacing the T012 stub for the single-layer case — depends on T023, T024, T012
+- [x] T021 [US1] Implement the leaf checks — `type`, `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum` — as pure `(demand value, target Node) -> Violation | undefined` functions in `src/validate/constraints.ts`, per contracts/demand-vocabulary.md's semantics table (FR-013) — depends on T010, T011
+- [x] T022 [US1] Implement `items`, recursing into the same leaf-check table for each `Sequence` item, pointing at `<sequencePointer>/<index>` (contracts/demand-vocabulary.md's "Nested demand under `items`") — depends on T021
+- [x] T023 [US1] Implement the single-layer walk: for each demanded key, `resolvePointer` the merged tree, run every declared demand's check, collect violations — in `src/validate/check.ts` (FR-013) — depends on T021, T022, T009. **Turned out to iterate every layer in `configuration.layers` from this first version, not a deliberately leaf-only pass** — `configuration.layers` is already root-to-leaf, and checking fewer of them would have been the *extra* code, not less. T031 (US2) therefore adds no loop-structure change, only the conformance/property/sabotage cases that prove the whole-chain property holds — see the milestone report
+- [x] T024 [US1] Implement `Violation`'s rendering into a `Diagnostic` — `pointer`, `demand` (pointer+span into the declaring document), `pedigreePosition`, and §10's canonical sentence built from structured fields alone — in `src/validate/violation.ts` (FR-022, FR-023, FR-024, FR-025) — depends on T011, T005
+- [x] T025 [US1] Wire `check.ts`'s walk into `validate()` in `src/index.ts`, replacing the T012 stub for the single-layer case — depends on T023, T024, T012
 
 **Checkpoint**: A configuration can be judged against one schema's demands. MVP complete.
 
