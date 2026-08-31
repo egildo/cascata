@@ -4,4 +4,3 @@ keys:
       type: string
     seal: closed
     final: true
-    delegate: allow

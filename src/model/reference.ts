@@ -19,8 +19,8 @@
 
 import type { SourceSpan } from "./span.js";
 
-/** Which keyword produced this reference. Every distinction costs a keyword (`SPEC.md` §2.4). */
-export type ReferenceKind = "schema" | "adopts";
+/** Which keyword produced this reference. Every distinction costs a keyword (`SPEC.md` §2.4). `"delegate"` (v0.6): a granted key's string value, resolved as a reference to a fragment (`SPEC.md` §8). */
+export type ReferenceKind = "schema" | "adopts" | "delegate";
 
 /**
  * Who wrote the reference, which decides how far it may reach (§8.1's razor).
@@ -31,6 +31,18 @@ export type ReferenceKind = "schema" | "adopts";
  * schema's may not.
  */
 export type ReferenceAuthority = "config-authored" | "schema-authored";
+
+/**
+ * One link in a delegation breadcrumb (v0.6, `SPEC.md` §10, Principle
+ * III's last phased diagnostic field) — the delegating value's own
+ * position, in its own document. A chain of these, outermost-inward
+ * (v0.6 FR-012b), describes how a fragment was reached; absent
+ * altogether for a value that was never delegated (v0.4 FR-026's "absent
+ * rather than faked", now applied to delegation).
+ */
+export interface DelegationHop {
+  readonly span: SourceSpan;
+}
 
 /** A pointer at another document, always positioned (Principle III). */
 export interface Reference {

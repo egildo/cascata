@@ -98,7 +98,21 @@ export const VALIDATE_VIOLATION_CODES = ["type-mismatch", "range-violated", "len
  */
 export const NAMED_TYPE_CODES = ["unknown-type-entry-keyword", "type-name-collision", "builtin-type-redeclared", "type-qualifier-collision", "unresolvable-type-cycle", "type-accept-widened"] as const;
 
-/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.4's codes are unchanged; v0.5 only appends. */
+/**
+ * Delegation (v0.6, `SPEC.md` §8) — specs/006-delegation/contracts/
+ * delegation-resolution.md. `document-unreachable`, `reference-cycle`,
+ * `sandbox-escape`, `unsupported-scheme` (v0.2), and `depth-limit-exceeded`
+ * (v0.1/v0.5) are reused for delegation's own identical hazards
+ * (FR-026) rather than repurposed with new codes.
+ * `delegate-value-unimplemented` mirrors `unimplemented-cascade-strategy`/
+ * `unimplemented-demand-keyword`: a `delegate:` value other than `allow`
+ * is early (a future door, §8.4), not simply wrong. `absolute-delegated-path`
+ * is a separate rule from `sandbox-escape` (research.md D7) — an absolute
+ * path is refused even when it would resolve inside the sandbox root.
+ */
+export const DELEGATION_CODES = ["delegate-value-unimplemented", "fragment-reserved-key", "remote-delegation-not-permitted", "absolute-delegated-path"] as const;
+
+/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.5's codes are unchanged; v0.6 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
@@ -109,6 +123,7 @@ export const DIAGNOSTIC_CODES = [
   ...VALIDATE_VOCABULARY_CODES,
   ...VALIDATE_VIOLATION_CODES,
   ...NAMED_TYPE_CODES,
+  ...DELEGATION_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

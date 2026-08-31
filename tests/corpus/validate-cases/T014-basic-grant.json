@@ -1,0 +1,8 @@
+{
+  "name": "T014: a granted key accepts a path and the fragment's contents are grafted at that position (spec.md US1 Acceptance Scenario 1, FR-006)",
+  "cites": "v0.6 FR-006",
+  "fixtureDir": "validate-delegation/basic-grant",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

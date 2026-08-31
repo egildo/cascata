@@ -1,0 +1,8 @@
+{
+  "name": "T018: a delegate declared by a config rather than a schema has no effect -- capabilities are granted by the schema, never self-granted (spec.md US1 Acceptance Scenario 5, FR-003)",
+  "cites": "v0.6 FR-003",
+  "fixtureDir": "validate-delegation/config-delegate-ignored",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

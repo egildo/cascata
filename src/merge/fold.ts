@@ -130,6 +130,7 @@ import type { Pedigree } from "../graph/pedigree.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { accumulateAppend, advanceStrategies, checkAppendable, effectiveStrategy, readKeysVocabulary, resolveStrategies } from "./strategy.js";
 import { createProvenanceBuilder, type Layer, type MergedConfiguration, type MergeStrategy, type ProvenanceBuilder, type ProvenanceRecord } from "./provenance.js";
+import type { DelegationHop } from "../model/reference.js";
 
 /** No key has a declared strategy — used for every merge below the top level, where `cascade` never applies (rule 4's own doc comment above). */
 const NO_STRATEGIES: ReadonlyMap<string, MergeStrategy> = new Map();
@@ -527,7 +528,7 @@ export type FoldOutcome = { readonly ok: true; readonly configuration: MergedCon
  * at each layer for itself, via `advanceStrategies`, rather than being
  * handed one flat map.
  */
-export function foldConfiguration(graph: Graph, pedigree: Pedigree): FoldOutcome {
+export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]> = new Map()): FoldOutcome {
   const layers = deriveLayers(graph);
   const { diagnostics: strategyDiagnostics } = resolveStrategies(layers);
   const { tree, provenance, diagnostics: foldDiagnostics } = foldWithProvenance(layers);
@@ -539,5 +540,9 @@ export function foldConfiguration(graph: Graph, pedigree: Pedigree): FoldOutcome
   // `layers` is exactly what this function already computed above via
   // `deriveLayers(graph)` — stashed onto the result, not recomputed by a
   // later stage, so `validate()` needs no `Graph` of its own.
-  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree, layers } };
+  // v0.6 additive field: `delegationBreadcrumbs` is computed by
+  // `resolve()`'s own delegation walk (research.md D3/D4) and threaded
+  // through here unchanged — `src/merge/` never reads `delegate`
+  // vocabulary itself, only carries the map `src/validate/` needs.
+  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs } };
 }

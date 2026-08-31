@@ -1,5 +1,5 @@
 {
-  "name": "T047: seal, final, and delegate alongside demand have no effect -- demand is enforced, the other three are inert (spec.md Acceptance Scenario 6, v0.3 FR-002's rule carried forward)",
+  "name": "T047: seal and final alongside demand have no effect -- demand is enforced, the other two are inert, still-deferred (v0.7) vocabulary (spec.md Acceptance Scenario 6, v0.3 FR-002's rule carried forward). Originally also asserted 'delegate' was inert here -- withdrawn in v0.6, which is precisely when 'delegate: allow' on a granted key stops being inert (SPEC.md Sec8); see tests/corpus/cases/validate-delegation/ for delegate's own real coverage.",
   "cites": "v0.4 FR-002",
   "fixtureDir": "validate-vocabulary/inert-vocabulary",
   "entry": "config.yaml",

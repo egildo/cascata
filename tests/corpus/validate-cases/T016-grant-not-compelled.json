@@ -1,0 +1,8 @@
+{
+  "name": "T016: a grant permits delegation without compelling it -- an inline mapping at a granted key is used as written (spec.md US1 Acceptance Scenario 3, FR-004)",
+  "cites": "v0.6 FR-004",
+  "fixtureDir": "validate-delegation/grant-not-compelled",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

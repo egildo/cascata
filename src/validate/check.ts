@@ -34,6 +34,7 @@
  */
 
 import type { Node } from "../model/node.js";
+import type { DelegationHop } from "../model/reference.js";
 import { pointerFromPath, resolvePointer } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
@@ -313,12 +314,28 @@ function checkTypeExpressionWithAccept(typeNode: Node, value: Node, usageLayerRa
 
 // --- Turning sites into diagnostics -----------------------------------
 
-function layerForSpanOrigin(configuration: MergedConfiguration, originId: string): Layer {
+/**
+ * The layer a value's own span traces back to, plus its delegation
+ * breadcrumb if any (v0.6, research.md D4). A direct match against
+ * `configuration.layers` (every pre-v0.6 case, unchanged) carries no
+ * breadcrumb. A span whose origin does not match any layer directly is
+ * checked next against `configuration.delegationBreadcrumbs` — every
+ * value reached through delegation, at any hop depth, ultimately
+ * belongs to the **config layer** (FR-010: delegation only ever resolves
+ * against the config's own tree, never a schema's `provide`), which in
+ * every pedigree is the single highest-rank layer.
+ */
+function layerForSpanOrigin(configuration: MergedConfiguration, originId: string): { readonly layer: Layer; readonly delegatedFrom?: readonly DelegationHop[] } {
   const found = configuration.layers.find((layer) => layer.identity.location === originId);
-  if (found === undefined) {
-    throw new Error(`Internal error: no layer in configuration.layers matches span.origin.id '${originId}' — every merged-tree node's span should trace back to a real layer`);
+  if (found !== undefined) {
+    return { layer: found };
   }
-  return found;
+  const breadcrumb = configuration.delegationBreadcrumbs.get(originId);
+  if (breadcrumb !== undefined) {
+    const configLayer = configuration.layers.reduce((highest, layer) => (layer.rank > highest.rank ? layer : highest));
+    return { layer: configLayer, delegatedFrom: breadcrumb };
+  }
+  throw new Error(`Internal error: no layer in configuration.layers matches span.origin.id '${originId}', and it is not a known delegation origin either — every merged-tree node's span should trace back to a real layer or a fragment`);
 }
 
 function buildDemand(declaring: DeclaringContext, span: Node["span"]): Demand {
@@ -328,8 +345,8 @@ function buildDemand(declaring: DeclaringContext, span: Node["span"]): Demand {
 function toViolation(configuration: MergedConfiguration, anchorMergedPointer: string, site: RawSite): Violation {
   const demand = buildDemand(site.declaring, site.declaringSpan);
   const mergedPointer = site.pointerSuffix.length === 0 ? anchorMergedPointer : `${anchorMergedPointer}${pointerFromPath(site.pointerSuffix)}`;
-  const valueLayer = layerForSpanOrigin(configuration, site.node.span.origin.id);
-  return { demand, mergedPointer, valueSpan: site.node.span, valueLayer, reason: site.reason };
+  const { layer: valueLayer, delegatedFrom } = layerForSpanOrigin(configuration, site.node.span.origin.id);
+  return { demand, mergedPointer, valueSpan: site.node.span, valueLayer, reason: site.reason, ...(delegatedFrom !== undefined ? { delegatedFrom } : {}) };
 }
 
 // --- The recursive keys/items walk (v0.5) ---------------------------------
@@ -365,11 +382,13 @@ function checkDemand(raw: RawDemand, value: Node | undefined, demandPointerPath:
     if (cause !== undefined) {
       const demand = buildDemand({ ...usageDeclaringBase, pointerPath: [...demandPointerPath, "required"] }, requiredNode.span);
       if (cause === "null" && value !== undefined) {
-        violations.push({ demand, mergedPointer, valueSpan: value.span, valueLayer: layerForSpanOrigin(ctx.configuration, value.span.origin.id), reason: { kind: "required-violated", cause: "null" } });
+        const { layer: valueLayer, delegatedFrom } = layerForSpanOrigin(ctx.configuration, value.span.origin.id);
+        violations.push({ demand, mergedPointer, valueSpan: value.span, valueLayer, reason: { kind: "required-violated", cause: "null" }, ...(delegatedFrom !== undefined ? { delegatedFrom } : {}) });
       } else {
         const anchorPointer = parentPointerOf(mergedPointer);
         const anchorNode = resolvePointer(ctx.configuration.tree, anchorPointer) ?? ctx.configuration.tree;
-        violations.push({ demand, mergedPointer: anchorPointer, valueSpan: anchorNode.span, valueLayer: layerForSpanOrigin(ctx.configuration, anchorNode.span.origin.id), reason: { kind: "required-violated", cause: "absent" } });
+        const { layer: valueLayer, delegatedFrom } = layerForSpanOrigin(ctx.configuration, anchorNode.span.origin.id);
+        violations.push({ demand, mergedPointer: anchorPointer, valueSpan: anchorNode.span, valueLayer, reason: { kind: "required-violated", cause: "absent" }, ...(delegatedFrom !== undefined ? { delegatedFrom } : {}) });
       }
     }
   }
@@ -463,7 +482,8 @@ function checkNestedKeys(keysDeclaration: Node, value: Node, demandPointerPath: 
  */
 function depthLimitViolation(node: Node, ctx: WalkContext, pointerPath: readonly (string | number)[], mergedPointer: string): Violation {
   const demand = buildDemand({ layer: ctx.usageLayer, layerRank: ctx.usageLayer.rank, pointerPath }, node.span);
-  return { demand, mergedPointer, valueSpan: node.span, valueLayer: layerForSpanOrigin(ctx.configuration, node.span.origin.id), reason: { kind: "depth-limit-exceeded", maxDepth: MAX_DEMAND_DEPTH } };
+  const { layer: valueLayer, delegatedFrom } = layerForSpanOrigin(ctx.configuration, node.span.origin.id);
+  return { demand, mergedPointer, valueSpan: node.span, valueLayer, reason: { kind: "depth-limit-exceeded", maxDepth: MAX_DEMAND_DEPTH }, ...(delegatedFrom !== undefined ? { delegatedFrom } : {}) };
 }
 
 /** Check one schema layer's own top-level `keys.<name>.demand` against `configuration.tree`. */

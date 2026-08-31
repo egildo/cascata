@@ -75,7 +75,7 @@ function span(id: string, at: number): SourceSpan {
 }
 
 function configurationFrom(layers: readonly Layer[]): Parameters<typeof validate>[0] {
-  return { tree: fold(layers), provenance: new Map(), pedigree: [], layers };
+  return { tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map() };
 }
 
 const TRIALS = 300;

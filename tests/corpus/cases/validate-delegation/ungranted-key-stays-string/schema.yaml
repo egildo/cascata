@@ -1,0 +1,4 @@
+keys:
+  favicon:
+    demand:
+      type: string

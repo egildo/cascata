@@ -80,6 +80,18 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
   });
 }
 
+/**
+ * v0.6: a case's own `expect.ok: false` may now legitimately originate
+ * from `resolve()` itself, not only `validate()` — delegation failures
+ * (a missing fragment, a sandbox escape, a cycle, ...) are resolve()-stage
+ * diagnostics, the same way a `document-unreachable`/`sandbox-escape` for
+ * `$schema`/`$adopts` always has been. Before v0.6 this runner treated
+ * *any* resolve()/merge() failure as an automatic test failure, since no
+ * validate-corpus case had ever needed to assert one — that assumption
+ * no longer holds, so failure-checking against `testCase.expect` is now
+ * unified across all three stages rather than special-cased at
+ * validate()'s alone.
+ */
 export async function runValidateCase(testCase: ValidateCase): Promise<ValidateCaseResult> {
   const failures: string[] = [];
   const entryPath = join(testCase.fixtureDir, testCase.entry);
@@ -87,14 +99,12 @@ export async function runValidateCase(testCase: ValidateCase): Promise<ValidateC
 
   const resolved = await resolve(entryPath, { sandboxRoot });
   if (!resolved.ok) {
-    failures.push(`resolve() failed before merge()/validate() could run: ${resolved.diagnostics.map((d) => `${d.code} @ ${d.primary.origin.label}:${d.primary.line}:${d.primary.column}`).join("; ")}`);
-    return { name: testCase.name, passed: false, failures };
+    return checkStageFailure(testCase, resolved.diagnostics, "resolve()");
   }
 
-  const merged = merge({ graph: resolved.graph, pedigree: resolved.pedigree });
+  const merged = merge({ graph: resolved.graph, pedigree: resolved.pedigree, delegationBreadcrumbs: resolved.delegationBreadcrumbs });
   if (!merged.ok) {
-    failures.push(`merge() failed before validate() could run: ${merged.diagnostics.map((d) => `${d.code} @ ${d.primary.origin.label}:${d.primary.line}:${d.primary.column}`).join("; ")}`);
-    return { name: testCase.name, passed: false, failures };
+    return checkStageFailure(testCase, merged.diagnostics, "merge()");
   }
 
   const result = validate(merged.configuration);
@@ -115,5 +125,16 @@ export async function runValidateCase(testCase: ValidateCase): Promise<ValidateC
     checkDiagnostics(failures, testCase.fixtureDir, result.diagnostics, testCase.expect.diagnostics);
   }
 
+  return { name: testCase.name, passed: failures.length === 0, failures };
+}
+
+/** Shared by every stage that can fail before `validate()` ever runs (`resolve()`, `merge()`): the case's own `expect` is checked against *this* stage's diagnostics exactly as it would be against `validate()`'s. */
+function checkStageFailure(testCase: ValidateCase, diagnostics: readonly Diagnostic[], stageName: string): ValidateCaseResult {
+  const failures: string[] = [];
+  if (testCase.expect.ok) {
+    failures.push(`expected ok:true, but ${stageName} failed before validate() could run: ${diagnostics.map((d) => `${d.code} @ ${d.primary.origin.label}:${d.primary.line}:${d.primary.column}`).join("; ")}`);
+    return { name: testCase.name, passed: false, failures };
+  }
+  checkDiagnostics(failures, testCase.fixtureDir, diagnostics, testCase.expect.diagnostics);
   return { name: testCase.name, passed: failures.length === 0, failures };
 }

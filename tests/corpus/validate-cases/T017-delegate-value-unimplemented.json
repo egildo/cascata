@@ -1,0 +1,18 @@
+{
+  "name": "T017: a delegate: value other than allow is refused at its own position, naming what is supported (spec.md US1 Acceptance Scenario 4, FR-002)",
+  "cites": "v0.6 FR-002",
+  "fixtureDir": "validate-delegation/delegate-value-unimplemented",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "delegate-value-unimplemented",
+        "document": "schema.yaml",
+        "line": 5,
+        "column": 15
+      }
+    ]
+  }
+}

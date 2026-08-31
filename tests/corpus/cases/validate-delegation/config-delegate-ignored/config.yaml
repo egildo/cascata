@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+delegate: allow
+network:
+  host: example.com

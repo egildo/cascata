@@ -100,6 +100,7 @@ import type { Mapping, Node } from "../model/node.js";
 import type { DocumentIdentity } from "../model/identity.js";
 import type { SourceSpan } from "../model/span.js";
 import type { Pedigree } from "../graph/pedigree.js";
+import type { DelegationHop } from "../model/reference.js";
 
 /**
  * One document participating in the fold, with its place in precedence
@@ -168,6 +169,16 @@ export interface MergedConfiguration {
    * stage's output (Principle IV), with no `Graph` passed alongside.
    */
   readonly layers: readonly Layer[];
+  /**
+   * **v0.6 additive field** — every value reached through delegation, at
+   * any hop depth, keyed by its own node's synthesized per-graft
+   * `Origin.id` (research.md D3/D4). A value's origin never matches any
+   * `Layer.identity.location` when it does (fragments are not layers,
+   * v0.6 FR-010); `src/validate/check.ts`'s `layerForSpanOrigin` checks
+   * this map as its fallback, attributing the value to the config layer
+   * and carrying the breadcrumb on every diagnostic built from it.
+   */
+  readonly delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]>;
 }
 
 // --- Building the record during the fold — User Story 3 (T044–T046) -------

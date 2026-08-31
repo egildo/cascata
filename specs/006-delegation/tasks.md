@@ -17,27 +17,27 @@ description: "Task list for v0.6 — Delegation (Transclusion)"
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `tests/corpus/cases/validate-delegation/` directory
+- [x] T001 Create `tests/corpus/cases/validate-delegation/` directory
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [ ] T002 [P] `src/model/reference.ts`: add `"delegate"` to `ReferenceKind`
-- [ ] T003 [P] `src/diagnostics/codes.ts`: add `DELEGATION_CODES` (`delegate-value-unimplemented`,
+- [x] T002 [P] `src/model/reference.ts`: add `"delegate"` to `ReferenceKind`
+- [x] T003 [P] `src/diagnostics/codes.ts`: add `DELEGATION_CODES` (`delegate-value-unimplemented`,
       `fragment-reserved-key`, `remote-delegation-not-permitted`, `absolute-delegated-path`) — four new;
       `document-unreachable`, `reference-cycle`, `sandbox-escape`, `unsupported-scheme`,
       `depth-limit-exceeded` reused
-- [ ] T004 `src/resolve/delegate.ts`: `collectDelegationGrants(schemaTree, layer): {tree: DelegationGrantNode, problems: Diagnostic[]}` — reads `keys.<name>.delegate` and nested `keys.<child>.delegate` to arbitrary depth (D2: `keys` only), refusing anything but `allow` as `delegate-value-unimplemented`
-- [ ] T005 `src/resolve/delegate.ts`: `mergeGrantTrees(trees)` — unions grants across every schema layer in the pedigree (a grant from any layer makes a position delegable)
-- [ ] T006 `src/resolve/delegate.ts`: delegation-specific sandbox/absolute-path checks — `isAbsoluteDelegatedPath` (raw text, `path.isAbsolute`) and unconditional `isWithinSandbox` reuse (D6) — no `~/`-expansion, no authority exemption
-- [ ] T007 `src/resolve/delegate.ts`: `resolveDelegations(configTree, grantTree, configLocation, sandboxRoot, options)` — the transclusion walk (contracts/delegation-resolution.md's algorithm): per-graft `Origin` synthesis (D3), a dedicated `GraphBuilder` shared across the whole walk for cycle detection (FR-015/FR-026), `MAX_DELEGATION_DEPTH = 64` hop counter (D5), `$`-key refusal in fragment roots (FR-009), `resolveAllBranches` for sibling delegable positions (FR-027)
-- [ ] T008 `src/index.ts`: wire `resolveDelegations` into `resolve()` between pedigree assembly and `buildGraph`/`buildPedigree` — replace `graph.entry.tree` with the grafted tree; new `ResolveOptions.allowRemoteDelegation?: boolean` (FR-024)
-- [ ] T009 `src/merge/provenance.ts`: `MergedConfiguration.delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]>`; threaded from `resolve()`'s own delegation-walk output through `merge()`
-- [ ] T010 `src/diagnostics/diagnostic.ts`: `Diagnostic.delegatedFrom?: readonly DelegationHop[]`
-- [ ] T011 `src/validate/violation.ts`: `Violation.delegatedFrom?`; `canonicalSentence` renders the `(delegated from ...)` clause when present; `renderViolation` threads it into `Diagnostic.delegatedFrom`
-- [ ] T012 `src/validate/check.ts`: `layerForSpanOrigin` gains the delegation fallback (D4) — an origin not matching any layer is checked against `configuration.delegationBreadcrumbs`; attributed to the config layer, breadcrumb attached to every violation built from that value
-- [ ] T013 `tests/unit/layering.test.ts` still green with no new boundary crossing (`src/resolve/delegate.ts` imports only `model/`, `graph/`, `diagnostics/`, and `resolve/location.ts`'s own siblings)
+- [x] T004 `src/resolve/delegate.ts`: `collectDelegationGrants(schemaTree, layer): {tree: DelegationGrantNode, problems: Diagnostic[]}` — reads `keys.<name>.delegate` and nested `keys.<child>.delegate` to arbitrary depth (D2: `keys` only), refusing anything but `allow` as `delegate-value-unimplemented`
+- [x] T005 `src/resolve/delegate.ts`: `mergeGrantTrees(trees)` — unions grants across every schema layer in the pedigree (a grant from any layer makes a position delegable)
+- [x] T006 `src/resolve/delegate.ts`: delegation-specific sandbox/absolute-path checks — `isAbsoluteDelegatedPath` (raw text, `path.isAbsolute`) and unconditional `isWithinSandbox` reuse (D6) — no `~/`-expansion, no authority exemption
+- [x] T007 `src/resolve/delegate.ts`: `resolveDelegations(configTree, grantTree, configLocation, sandboxRoot, options)` — the transclusion walk (contracts/delegation-resolution.md's algorithm): per-graft `Origin` synthesis (D3), a dedicated `GraphBuilder` shared across the whole walk for cycle detection (FR-015/FR-026), `MAX_DELEGATION_DEPTH = 64` hop counter (D5), `$`-key refusal in fragment roots (FR-009), `resolveAllBranches` for sibling delegable positions (FR-027)
+- [x] T008 `src/index.ts`: wire `resolveDelegations` into `resolve()` between pedigree assembly and `buildGraph`/`buildPedigree` — replace `graph.entry.tree` with the grafted tree; new `ResolveOptions.allowRemoteDelegation?: boolean` (FR-024)
+- [x] T009 `src/merge/provenance.ts`: `MergedConfiguration.delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]>`; threaded from `resolve()`'s own delegation-walk output through `merge()`
+- [x] T010 `src/diagnostics/diagnostic.ts`: `Diagnostic.delegatedFrom?: readonly DelegationHop[]`
+- [x] T011 `src/validate/violation.ts`: `Violation.delegatedFrom?`; `canonicalSentence` renders the `(delegated from ...)` clause when present; `renderViolation` threads it into `Diagnostic.delegatedFrom`
+- [x] T012 `src/validate/check.ts`: `layerForSpanOrigin` gains the delegation fallback (D4) — an origin not matching any layer is checked against `configuration.delegationBreadcrumbs`; attributed to the config layer, breadcrumb attached to every violation built from that value
+- [x] T013 `tests/unit/layering.test.ts` still green with no new boundary crossing (`src/resolve/delegate.ts` imports only `model/`, `graph/`, `diagnostics/`, and `resolve/location.ts`'s own siblings)
 
 **Checkpoint**: Grants can be read and unioned; a config tree can be walked and grafted; the breadcrumb
 has somewhere to live end to end. Nothing yet exercises it through `resolve()`.
@@ -48,16 +48,16 @@ has somewhere to live end to end. Nothing yet exercises it through `resolve()`.
 
 ### Conformance cases (write first)
 
-- [ ] T014 [P] [US1] Case: a granted key accepts a path, fragment grafted at that position (Acceptance Scenario 1) — `tests/corpus/cases/validate-delegation/basic-grant/`
-- [ ] T015 [P] [US1] Case: **the razor** — an ungranted key with the identical string stays a string (Acceptance Scenario 2, FR-005, SC-002) — `tests/corpus/cases/validate-delegation/ungranted-key-stays-string/`
-- [ ] T016 [P] [US1] Case: a grant never compels — an inline mapping at a granted key is used as written (Acceptance Scenario 3, FR-004) — `tests/corpus/cases/validate-delegation/grant-not-compelled/`
-- [ ] T017 [P] [US1] Case: an unrecognized `delegate:` value is refused at its own position (Acceptance Scenario 4, FR-002) — `tests/corpus/cases/validate-delegation/delegate-value-unimplemented/`
-- [ ] T018 [P] [US1] Case: a config's own `delegate:` has no effect (Acceptance Scenario 5, FR-003) — `tests/corpus/cases/validate-delegation/config-delegate-ignored/`
-- [ ] T019 [P] [US1] Case: a delegated path naming a file that does not exist is refused at the delegating value's own position (Acceptance Scenario 6) — `tests/corpus/cases/validate-delegation/missing-fragment/`
+- [x] T014 [P] [US1] Case: a granted key accepts a path, fragment grafted at that position (Acceptance Scenario 1) — `tests/corpus/cases/validate-delegation/basic-grant/`
+- [x] T015 [P] [US1] Case: **the razor** — an ungranted key with the identical string stays a string (Acceptance Scenario 2, FR-005, SC-002) — `tests/corpus/cases/validate-delegation/ungranted-key-stays-string/`
+- [x] T016 [P] [US1] Case: a grant never compels — an inline mapping at a granted key is used as written (Acceptance Scenario 3, FR-004) — `tests/corpus/cases/validate-delegation/grant-not-compelled/`
+- [x] T017 [P] [US1] Case: an unrecognized `delegate:` value is refused at its own position (Acceptance Scenario 4, FR-002) — `tests/corpus/cases/validate-delegation/delegate-value-unimplemented/`
+- [x] T018 [P] [US1] Case: a config's own `delegate:` has no effect (Acceptance Scenario 5, FR-003) — `tests/corpus/cases/validate-delegation/config-delegate-ignored/`
+- [x] T019 [P] [US1] Case: a delegated path naming a file that does not exist is refused at the delegating value's own position (Acceptance Scenario 6) — `tests/corpus/cases/validate-delegation/missing-fragment/`
 
 ### Implementation for User Story 1
 
-- [ ] T020 [US1] Wire T014-T019's shapes end to end through `resolve()`; fix whatever T004-T012 gets wrong against hand-derived expectations
+- [x] T020 [US1] Wire T014-T019's shapes end to end through `resolve()`; fix whatever T004-T012 gets wrong against hand-derived expectations
 
 **Checkpoint**: A granted key can be split into a file and grafted; an ungranted key never is.
 

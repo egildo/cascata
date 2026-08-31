@@ -11,6 +11,7 @@
  */
 
 import type { SourceSpan } from "../model/span.js";
+import type { DelegationHop } from "../model/reference.js";
 import type { Layer } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticCode } from "../diagnostics/codes.js";
@@ -62,6 +63,12 @@ export interface Violation {
   readonly valueSpan: SourceSpan;
   readonly valueLayer: Layer;
   readonly reason: ViolationReason;
+  /**
+   * v0.6: the delegation chain that reached `valueSpan`, outermost
+   * first — absent, never empty, when the value was never delegated
+   * (v0.4 FR-026's rule, v0.6 FR-018).
+   */
+  readonly delegatedFrom?: readonly DelegationHop[];
 }
 
 const CODE_FOR_REASON: { readonly [K in ViolationReason["kind"]]: DiagnosticCode } = {
@@ -107,7 +114,12 @@ export function canonicalSentence(violation: Violation): string {
   const demandLine = violation.demand.span.line;
   const valueDoc = violation.valueSpan.origin.label;
   const valueLine = violation.valueSpan.line;
-  return `constraint from ${demandDoc}:${demandLine} (${violation.demand.pointer}) rejected value from ${valueDoc}:${valueLine}`;
+  const base = `constraint from ${demandDoc}:${demandLine} (${violation.demand.pointer}) rejected value from ${valueDoc}:${valueLine}`;
+  if (violation.delegatedFrom === undefined || violation.delegatedFrom.length === 0) {
+    return base;
+  }
+  const chain = violation.delegatedFrom.map((hop) => `${hop.span.origin.label}:${hop.span.line}`).join(" -> ");
+  return `${base} (delegated from ${chain})`;
 }
 
 /** Render one `Violation` into a `Diagnostic` — every v0.4 additive field populated (gate 5 at full strength), `message` combining `describeReason` with the canonical sentence so a reader gets both the specific reason and the standard cross-reference in one place. */
@@ -119,5 +131,6 @@ export function renderViolation(violation: Violation): Diagnostic {
     pointer: violation.mergedPointer,
     demand: { pointer: violation.demand.pointer, span: violation.demand.span },
     pedigreePosition: violation.demand.layerRank,
+    ...(violation.delegatedFrom !== undefined ? { delegatedFrom: violation.delegatedFrom } : {}),
   });
 }

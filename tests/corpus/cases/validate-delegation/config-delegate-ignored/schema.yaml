@@ -1,0 +1,4 @@
+keys:
+  network:
+    demand:
+      type: mapping

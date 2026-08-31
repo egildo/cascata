@@ -24,6 +24,7 @@
  */
 
 import type { SourceSpan } from "../model/span.js";
+import type { DelegationHop } from "../model/reference.js";
 import type { DiagnosticCode } from "./codes.js";
 
 /** An additional position relevant to a diagnostic, with a label explaining why. */
@@ -62,6 +63,13 @@ export interface Diagnostic {
   readonly demand?: ViolatedDemand;
   /** The declaring layer's rank in precedence order, 0 = root schema (v0.4). Absent before v0.4. */
   readonly pedigreePosition?: number;
+  /**
+   * The delegation chain that reached the offending value, outermost
+   * document first (v0.6 FR-012b, FR-017) — **absent**, never an empty
+   * array, for a value that was never delegated (v0.4 FR-026's rule,
+   * now applied in the other direction, FR-018).
+   */
+  readonly delegatedFrom?: readonly DelegationHop[];
 }
 
 /** Construct a Diagnostic. `related` defaults to the empty list; `pointer`/`demand`/`pedigreePosition` default to absent. */
@@ -73,6 +81,7 @@ export function createDiagnostic(fields: {
   pointer?: string;
   demand?: ViolatedDemand;
   pedigreePosition?: number;
+  delegatedFrom?: readonly DelegationHop[];
 }): Diagnostic {
   return {
     code: fields.code,
@@ -82,5 +91,6 @@ export function createDiagnostic(fields: {
     ...(fields.pointer !== undefined ? { pointer: fields.pointer } : {}),
     ...(fields.demand !== undefined ? { demand: fields.demand } : {}),
     ...(fields.pedigreePosition !== undefined ? { pedigreePosition: fields.pedigreePosition } : {}),
+    ...(fields.delegatedFrom !== undefined ? { delegatedFrom: fields.delegatedFrom } : {}),
   };
 }

@@ -1,0 +1,8 @@
+{
+  "name": "T015: THE RAZOR -- a key with no delegate: allow grant keeps a string value exactly as written; nothing infers delegation from a value's shape (spec.md US1 Acceptance Scenario 2, FR-005, SC-002)",
+  "cites": "v0.6 FR-005",
+  "fixtureDir": "validate-delegation/ungranted-key-stays-string",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

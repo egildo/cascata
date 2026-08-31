@@ -26,18 +26,21 @@ import { createDiagnostic, type Diagnostic } from "./diagnostics/diagnostic.js";
 import type { Node } from "./model/node.js";
 import { freeze } from "./model/freeze.js";
 import { createOrigin, createSourceSpan, type Origin } from "./model/span.js";
-import { extractAdoptsReference, extractSchemaReference, referenceDiagnostic, type ExtractedReference, type Reference } from "./resolve/reference.js";
+import { createReference, extractAdoptsReference, extractSchemaReference, referenceDiagnostic, type ExtractedReference, type Reference } from "./resolve/reference.js";
 import { classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoot, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
 import { DocumentCache } from "./resolve/cache.js";
 import { createNetworkTransport, resolveFetchLimits, resolveRemoteDocument, type FetchLimits, type RemoteDocumentFailure } from "./resolve/fetch.js";
 import type { Transport } from "./resolve/transport.js";
-import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
+import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, resolveAllBranches, type BranchOutcome, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 import { foldConfiguration } from "./merge/fold.js";
 import { why as whyImpl } from "./merge/provenance.js";
 import type { MergedConfiguration } from "./merge/provenance.js";
 import { checkConfiguration } from "./validate/check.js";
+import type { DelegationHop } from "./model/reference.js";
+import { createMapping } from "./model/node.js";
+import { collectDelegationGrants, isAbsoluteDelegatedPath, isDelegationSandboxEscape, mergeGrantTrees, type DelegationGrantNode } from "./resolve/delegate.js";
 
 export type { Diagnostic, RelatedSpan } from "./diagnostics/diagnostic.js";
 export type { DiagnosticCode } from "./diagnostics/codes.js";
@@ -180,6 +183,15 @@ export interface ResolveOptions {
   readonly transport?: Transport;
   /** Overrides for `resolve/fetch.ts`'s `FetchLimits` (`maxRedirects`, `requestTimeoutMs`, `maxBytes`). `maxChainLength` is a top-level field on this interface, not part of `FetchLimits` — it bounds the schema chain (`src/graph/build.ts`), not any one HTTP fetch. */
   readonly limits?: Partial<FetchLimits>;
+  /**
+   * The **caller's** own opt-in to remote delegation targets (v0.6
+   * FR-024) — distinct from remote *schema* fetching, which `cacheDir`
+   * alone already permits (research.md's Assumptions: a caller who
+   * permits remote schemas has not thereby permitted remote fragments).
+   * Never expressible by any document, only by the caller. Defaults to
+   * `false`.
+   */
+  readonly allowRemoteDelegation?: boolean;
 }
 
 /**
@@ -210,7 +222,9 @@ function buildRemoteContext(options: ResolveOptions): RemoteContext | undefined 
   };
 }
 
-export type ResolveResult = { readonly ok: true; readonly graph: Graph; readonly pedigree: Pedigree } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+export type ResolveResult =
+  | { readonly ok: true; readonly graph: Graph; readonly pedigree: Pedigree; readonly delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]> }
+  | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 function requireSandboxRoot(options: ResolveOptions): void {
   if (options.sandboxRoot === undefined || options.sandboxRoot === null || options.sandboxRoot.length === 0) {
@@ -560,6 +574,326 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
  * remote reference reached with no `cacheDir` supplied, are the
  * programmer errors that still throw, matching `parse()`'s `origin`.
  */
+// --- Delegation (v0.6, SPEC.md §8) -----------------------------------------
+
+/** Same hazard class as v0.1's parse depth and v0.5's `MAX_DEMAND_DEPTH` — a resource limit against a hostile fragment chain, not an unbounded promise (v0.6 FR-012a, research.md D5). Verified reachable through the real pipeline (unlike v0.5's own depth guard): each hop needs a distinct real file, never bounded by any single parse call's own depth cap. */
+const MAX_DELEGATION_DEPTH = 64;
+
+/**
+ * Cycle/depth tracking for delegation, deliberately **not**
+ * `GraphBuilder` (research.md D1's own revision, recorded here rather
+ * than silently substituted): `GraphBuilder`'s `resolvedByLocation`
+ * dedup is exactly right for `$schema`/`$adopts` (one schema document is
+ * genuinely one shared node) but exactly wrong for delegation — v0.6
+ * FR-013a requires two grafts of *one* fragment to be independent reads
+ * with independent provenance, so a location already fully resolved by
+ * an *earlier, non-overlapping* graft must still be revisited, not
+ * shortcut to the earlier result. What *is* reused (FR-026) is the
+ * technique `GraphBuilder` itself uses: an explicit active-path stack,
+ * checked before any byte is read, so a cycle is caught even though the
+ * document that would complete it can never be produced.
+ */
+class DelegationCycleTracker {
+  private readonly stack: string[] = [];
+  private readonly maxDepth: number;
+  constructor(maxDepth: number) {
+    this.maxDepth = maxDepth;
+  }
+  enter(location: string): "ok" | "cycle" | "depth-limit-exceeded" {
+    if (this.stack.includes(location)) {
+      return "cycle";
+    }
+    if (this.stack.length >= this.maxDepth) {
+      return "depth-limit-exceeded";
+    }
+    this.stack.push(location);
+    return "ok";
+  }
+  exit(): void {
+    this.stack.pop();
+  }
+  chain(): readonly string[] {
+    return [...this.stack];
+  }
+}
+
+interface DelegationState {
+  readonly tracker: DelegationCycleTracker;
+  readonly byteCache: Map<string, Uint8Array>;
+  readonly sandboxRoot: string;
+  readonly remote: RemoteContext | undefined;
+  readonly allowRemoteDelegation: boolean;
+  readonly breadcrumbs: Map<string, DelegationHop[]>;
+  graftCounter: number;
+}
+
+/** FR-009: a fragment (at any depth within itself — nested mappings past its own root are ordinary data, never re-checked) carries no `$`-prefixed key. Checked only at a fragment's own **root** mapping, matching §8.2's "a fragment carries no `$schema`, starts no pedigree" — a fragment's own nested structure was never eligible to carry document-level directives in the first place, the same way an ordinary inline mapping never was. */
+function fragmentReservedKeyDiagnostics(root: Node): Diagnostic[] {
+  if (root.type !== "mapping") {
+    return [];
+  }
+  const problems: Diagnostic[] = [];
+  for (const [key, valueNode] of root.entries) {
+    if (key.startsWith("$")) {
+      problems.push(
+        createDiagnostic({
+          code: "fragment-reserved-key",
+          message: `Fragment contains reserved key '${key}' — fragments carry no '$'-prefixed keys in v1 (SPEC.md §8.2, v0.6 FR-009)`,
+          primary: valueNode.span,
+        }),
+      );
+    }
+  }
+  return problems;
+}
+
+type GraftOutcome =
+  | { readonly ok: true; readonly node: Node; readonly fragmentLocation: string; readonly breadcrumbChain: readonly DelegationHop[] }
+  | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] };
+
+/**
+ * Resolve one delegated string value into its fragment (v0.6 FR-006,
+ * FR-021-FR-026). `documentLocation` is the directory a *relative*
+ * reference resolves against — the delegating document's own (FR-021),
+ * whether that document is the config itself or, for a recursive hop, a
+ * fragment that itself delegated further.
+ */
+async function performGraft(valueNode: Node, documentLocation: string, breadcrumbChain: readonly DelegationHop[], state: DelegationState): Promise<GraftOutcome> {
+  if (valueNode.type !== "scalar" || valueNode.kind !== "string") {
+    throw new Error("Internal error: performGraft called on a non-string node");
+  }
+  const text = valueNode.value;
+
+  if (isAbsoluteDelegatedPath(text)) {
+    return {
+      ok: false,
+      diagnostics: [createDiagnostic({ code: "absolute-delegated-path", message: `Delegated path '${text}' is absolute — v1 opens no door for absolute delegated paths (SPEC.md §8.4, v0.6 FR-023)`, primary: valueNode.span })],
+    };
+  }
+
+  // A `Reference` purely to reuse `classifyReferenceLocation`'s scheme
+  // classification and local resolution (`~/`-expansion included, D6) —
+  // `kind: "delegate"` and `authority: "config-authored"` are both
+  // honest here: this string genuinely was written by whoever authored
+  // the delegating document (a config, or a fragment several hops
+  // in — never a schema, which only ever grants the *permission*).
+  const reference = createReference({ text, span: valueNode.span, kind: "delegate", authority: "config-authored" });
+  const target = classifyReferenceLocation(reference, documentLocation);
+
+  if (target.kind === "unsupported-scheme") {
+    return { ok: false, diagnostics: [referenceDiagnostic("unsupported-scheme", reference, `Delegated reference '${text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.6, mirroring v0.2 FR-013)`)] };
+  }
+
+  let location: string;
+  let bytes: Uint8Array;
+
+  if (target.kind === "https") {
+    if (!state.allowRemoteDelegation) {
+      return {
+        ok: false,
+        diagnostics: [
+          referenceDiagnostic(
+            "remote-delegation-not-permitted",
+            reference,
+            `Delegated reference '${text}' names a remote target — remote delegation is refused unless the caller has opted in (never a schema — v0.6 FR-024); pass 'allowRemoteDelegation: true' to resolve() if this is intended`,
+          ),
+        ],
+      };
+    }
+    location = target.url;
+    const cached = state.byteCache.get(location);
+    if (cached !== undefined) {
+      bytes = cached;
+    } else {
+      if (state.remote === undefined) {
+        throw new Error("resolve() requires 'cacheDir' to fetch a remote delegation target — the same 'granted, never ambient' posture as 'sandboxRoot'");
+      }
+      const fetched = await resolveRemoteDocument(target.url, reference.pin, state.remote);
+      if (!fetched.ok) {
+        return { ok: false, diagnostics: [remoteFailureDiagnostic(fetched.failure, reference)] };
+      }
+      bytes = fetched.bytes;
+      state.byteCache.set(location, bytes);
+    }
+  } else {
+    location = target.location;
+    if (isDelegationSandboxEscape(location, state.sandboxRoot)) {
+      return {
+        ok: false,
+        diagnostics: [referenceDiagnostic("sandbox-escape", reference, `Delegated reference '${text}' resolves outside the sandbox root '${state.sandboxRoot}' (SPEC.md §8.4, v0.6 FR-022)`)],
+      };
+    }
+    const cached = state.byteCache.get(location);
+    if (cached !== undefined) {
+      bytes = cached;
+    } else {
+      const read = readLocalDocument(location);
+      if (!read.ok) {
+        return { ok: false, diagnostics: [createDiagnostic({ code: "document-unreachable", message: `Cannot read '${location}' (delegated as '${text}'): ${read.reason}`, primary: valueNode.span })] };
+      }
+      bytes = read.bytes;
+      state.byteCache.set(location, bytes);
+    }
+  }
+
+  const entry = state.tracker.enter(location);
+  if (entry === "cycle") {
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          code: "reference-cycle",
+          message: `Delegation cycle: '${text}' reaches a fragment already being resolved (${[...state.tracker.chain(), location].join(" -> ")}) — refused rather than followed (SPEC.md §8.3, v0.6 FR-015)`,
+          primary: valueNode.span,
+        }),
+      ],
+    };
+  }
+  if (entry === "depth-limit-exceeded") {
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({ code: "depth-limit-exceeded", message: `Recursive delegation exceeds the ${MAX_DELEGATION_DEPTH}-level limit (SPEC.md §8.2, v0.6 FR-012a)`, primary: valueNode.span }),
+      ],
+    };
+  }
+
+  // Parsed fresh, with a per-graft-unique Origin (research.md D3): two
+  // grafts of the identical fragment file must never share a node tree
+  // or an Origin.id, so FR-013a's "no shared provenance" holds even
+  // though the bytes were read/cached only once.
+  state.graftCounter += 1;
+  const graftId = `${location} #graft=${state.graftCounter}`;
+  const origin = createOrigin(graftId, location);
+  const format = formatForLocation(location);
+  const reparsed = format === "yaml" ? parseYamlBytes(bytes, origin) : { ok: false as const, diagnostics: [createDiagnostic({ code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
+  if (!reparsed.ok) {
+    state.tracker.exit();
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          code: "document-unreachable",
+          message: `Fragment at '${location}' (delegated as '${text}') is not readable as a document`,
+          primary: valueNode.span,
+          related: reparsed.diagnostics.map((d) => ({ label: d.message, span: d.primary })),
+        }),
+      ],
+    };
+  }
+
+  const fragmentRoot = freeze(reparsed.tree);
+  const reservedKeyProblems = fragmentReservedKeyDiagnostics(fragmentRoot);
+  if (reservedKeyProblems.length > 0) {
+    state.tracker.exit();
+    return { ok: false, diagnostics: reservedKeyProblems };
+  }
+
+  const hop: DelegationHop = { span: valueNode.span };
+  const newChain = [...breadcrumbChain, hop];
+  state.breadcrumbs.set(graftId, newChain);
+
+  state.tracker.exit();
+  return { ok: true, node: fragmentRoot, fragmentLocation: location, breadcrumbChain: newChain };
+}
+
+type DelegationWalkOutcome = { readonly ok: true; readonly node: Node } | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] };
+
+/**
+ * Walk `node` against `grantNode` (the grant tree rooted at this exact
+ * position — the same subtree continues to govern a grafted fragment's
+ * own top level, v0.6 FR-012), grafting every granted string-valued
+ * position and recursing into what results. `resolveAllBranches`
+ * (`src/graph/build.ts`) is what lets several granted siblings in one
+ * mapping resolve independently and report every failure together
+ * (v0.6 FR-027) — its first real, multi-branch caller since v0.2 wrote
+ * it for exactly this milestone.
+ */
+async function walkForDelegation(node: Node, grantNode: DelegationGrantNode, documentLocation: string, breadcrumbChain: readonly DelegationHop[], state: DelegationState): Promise<DelegationWalkOutcome> {
+  if (node.type !== "mapping" || grantNode.keys.size === 0) {
+    return { ok: true, node };
+  }
+  const entries = [...node.entries];
+  const outcome: BranchOutcome<readonly (readonly [string, Node])[], Diagnostic> = await resolveAllBranches(entries, async ([key, childNode]): Promise<BranchOutcome<readonly [string, Node], Diagnostic>> => {
+    const childGrant = grantNode.keys.get(key);
+    if (childGrant === undefined) {
+      return { ok: true, value: [key, childNode] };
+    }
+    if (childGrant.grant !== undefined && childNode.type === "scalar" && childNode.kind === "string") {
+      const grafted = await performGraft(childNode, documentLocation, breadcrumbChain, state);
+      if (!grafted.ok) {
+        return { ok: false, failures: grafted.diagnostics };
+      }
+      const inner = await walkForDelegation(grafted.node, childGrant, grafted.fragmentLocation, grafted.breadcrumbChain, state);
+      if (!inner.ok) {
+        return { ok: false, failures: inner.diagnostics };
+      }
+      return { ok: true, value: [key, inner.node] };
+    }
+    if (childNode.type === "mapping" && childGrant.keys.size > 0) {
+      const inner = await walkForDelegation(childNode, childGrant, documentLocation, breadcrumbChain, state);
+      if (!inner.ok) {
+        return { ok: false, failures: inner.diagnostics };
+      }
+      return { ok: true, value: [key, inner.node] };
+    }
+    return { ok: true, value: [key, childNode] };
+  });
+  if (!outcome.ok) {
+    return { ok: false, diagnostics: outcome.failures };
+  }
+  return { ok: true, node: createMapping(outcome.value, node.span) };
+}
+
+/** Union every schema layer's own `delegate:` grants, root to leaf, into one tree (v0.6 FR-008, research.md D1) — a pure `Node`-walk over each schema's own `tree`, never touching `src/validate/`. */
+function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDocument[]): { readonly tree: DelegationGrantNode; readonly problems: readonly Diagnostic[] } {
+  let tree: DelegationGrantNode = { keys: new Map() };
+  const problems: Diagnostic[] = [];
+  schemaDocumentsRootToLeaf.forEach((document, rank) => {
+    const collected = collectDelegationGrants(document.tree, document.identity.location, rank);
+    tree = mergeGrantTrees(tree, collected.tree);
+    problems.push(...collected.problems);
+  });
+  return { tree, problems };
+}
+
+/**
+ * The last step of `resolve()` (v0.6, SPEC.md §8): collect every schema
+ * layer's own `delegate:` grants (root to leaf), walk the config's own
+ * tree against them, and graft every delegated string in place — so
+ * everything from `merge()` onward sees a tree indistinguishable from
+ * having been written inline (FR-007, FR-014). Grant-collection
+ * problems (e.g. an unrecognized `delegate:` value, FR-002) are reported
+ * before the config tree is ever walked, matching v0.5's own "vocabulary
+ * problems first" precedent.
+ */
+async function finalizeWithDelegation(graph: Graph, pedigree: Pedigree, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean): Promise<ResolveResult> {
+  const schemaDocumentsRootToLeaf = [...graph.documents.slice(1)].reverse();
+  const { tree: grantTree, problems } = collectAllDelegationGrants(schemaDocumentsRootToLeaf);
+  if (problems.length > 0) {
+    return { ok: false, diagnostics: [...problems] };
+  }
+
+  const state: DelegationState = {
+    tracker: new DelegationCycleTracker(MAX_DELEGATION_DEPTH),
+    byteCache: new Map(),
+    sandboxRoot,
+    remote,
+    allowRemoteDelegation,
+    breadcrumbs: new Map(),
+    graftCounter: 0,
+  };
+
+  const walked = await walkForDelegation(graph.entry.tree, grantTree, graph.entry.identity.location, [], state);
+  if (!walked.ok) {
+    return { ok: false, diagnostics: [...walked.diagnostics] };
+  }
+
+  const graftedEntry: GraphDocument = { ...graph.entry, tree: walked.node };
+  const graftedGraph: Graph = { entry: graftedEntry, documents: [graftedEntry, ...graph.documents.slice(1)] };
+  return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs };
+}
+
 export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
   requireSandboxRoot(options);
   const remote = buildRemoteContext(options);
@@ -622,7 +956,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     // single-document graph and an empty pedigree.
     builder.finishVisit(entryLocation, canonicalEntry);
     const graph = buildGraph(canonicalEntry, []);
-    return { ok: true, graph, pedigree: buildPedigree(graph) };
+    return finalizeWithDelegation(graph, buildPedigree(graph), sandboxRoot, remote, options.allowRemoteDelegation ?? false);
   }
 
   const chainResult = await walkAdoptsChain(schemaExtraction.reference, entryLocation, builder, remote, sandboxRoot);
@@ -636,7 +970,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
   builder.finishVisit(entryLocation, canonicalEntry);
 
   const graph = buildGraph(canonicalEntry, chainResult.documentsLeafToRoot);
-  return { ok: true, graph, pedigree: buildPedigree(graph) };
+  return finalizeWithDelegation(graph, buildPedigree(graph), sandboxRoot, remote, options.allowRemoteDelegation ?? false);
 }
 
 // --- merge() — User Story 1 (v0.3, tasks.md T024) ------------------------
@@ -653,6 +987,16 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
 export interface MergeInput {
   readonly graph: Graph;
   readonly pedigree: Pedigree;
+  /**
+   * v0.6 additive field — every existing call site (`merge({graph,
+   * pedigree})`, dropping this field explicitly, is unchanged and still
+   * compiles) gets an empty map, exactly as if delegation had never
+   * touched this configuration. `resolve()`'s own `ok: true` result
+   * already carries the real map when delegation occurred; a caller
+   * passing `resolved` through in full (rather than picking two fields
+   * out of it) gets it threaded automatically.
+   */
+  readonly delegationBreadcrumbs?: ReadonlyMap<string, readonly DelegationHop[]>;
 }
 
 export type MergeResult = { readonly ok: true; readonly configuration: MergedConfiguration } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -677,7 +1021,7 @@ export type MergeResult = { readonly ok: true; readonly configuration: MergedCon
  * a real gap, closed in T061.
  */
 export function merge(resolved: MergeInput): MergeResult {
-  return foldConfiguration(resolved.graph, resolved.pedigree);
+  return foldConfiguration(resolved.graph, resolved.pedigree, resolved.delegationBreadcrumbs);
 }
 
 // --- why() — User Story 3 (v0.3, tasks.md T049) --------------------------
