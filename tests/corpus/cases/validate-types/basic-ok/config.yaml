@@ -1,3 +1,2 @@
 $schema: ./schema.yaml
-a: x
-b: y
+homepage: longenough

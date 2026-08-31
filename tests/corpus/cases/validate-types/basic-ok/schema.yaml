@@ -1,0 +1,9 @@
+types:
+  resource:
+    demand:
+      type: string
+      minLength: 5
+keys:
+  homepage:
+    demand:
+      type: resource

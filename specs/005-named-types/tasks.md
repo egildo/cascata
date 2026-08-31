@@ -29,20 +29,20 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `tests/corpus/cases/validate-types/` and `tests/corpus/cases/validate-nested/` directories
+- [x] T001 Create `tests/corpus/cases/validate-types/` and `tests/corpus/cases/validate-nested/` directories
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [ ] T002 [P] Add v0.5's six new diagnostic codes to `src/diagnostics/codes.ts` (contracts/diagnostics.md)
-- [ ] T003 Create `src/validate/types.ts`: read one schema layer's `types:` section into raw `TypeDeclaration`s (name, raw `demand`, raw `accept` list, layer, pointer, span) — mirrors `vocabulary.ts`'s `readDemandVocabulary` reading style (absent/empty/non-mapping contributes nothing)
-- [ ] T004 [P] In `src/validate/types.ts`, implement `$id` qualifier extraction (research.md D5) — last non-empty `/`-segment, `undefined` if none
-- [ ] T005 `src/validate/types.ts`: implement unconditional unqualified-name collision detection across the whole pedigree (research.md D1) — `type-name-collision`, primary at the later-ranked declaration, `related` naming the first (v0.1 duplicate-key precedent) — depends on T003
-- [ ] T006 [P] `src/validate/types.ts`: implement built-in redeclaration refusal — `builtin-type-redeclared` — depends on T003
-- [ ] T007 [P] `src/validate/types.ts`: implement qualifier collision detection — `type-qualifier-collision` — depends on T004
-- [ ] T008 `src/validate/types.ts`: implement per-layer scope resolution (research.md D2) — a name resolves against declarations from layers `0..L` plus built-ins; a colliding name resolves to nothing — depends on T005, T006
-- [ ] T009 `src/validate/types.ts`: implement cycle detection over the resolved type graph — `unresolvable-type-cycle` (FR-009) — depends on T008
+- [x] T002 [P] Add v0.5's six new diagnostic codes to `src/diagnostics/codes.ts` (contracts/diagnostics.md)
+- [x] T003 Create `src/validate/types.ts`: read one schema layer's `types:` section into raw `TypeDeclaration`s (name, raw `demand`, raw `accept` list, layer, pointer, span) — mirrors `vocabulary.ts`'s `readDemandVocabulary` reading style (absent/empty/non-mapping contributes nothing)
+- [x] T004 [P] In `src/validate/types.ts`, implement `$id` qualifier extraction (research.md D5) — last non-empty `/`-segment, `undefined` if none
+- [x] T005 `src/validate/types.ts`: implement unconditional unqualified-name collision detection across the whole pedigree (research.md D1) — `type-name-collision`, primary at the later-ranked declaration, `related` naming the first (v0.1 duplicate-key precedent) — depends on T003
+- [x] T006 [P] `src/validate/types.ts`: implement built-in redeclaration refusal — `builtin-type-redeclared` — depends on T003
+- [x] T007 [P] `src/validate/types.ts`: implement qualifier collision detection — `type-qualifier-collision` — depends on T004
+- [x] T008 `src/validate/types.ts`: implement per-layer scope resolution (research.md D2) — a name resolves against declarations from layers `0..L` plus built-ins; a colliding name resolves to nothing — depends on T005, T006
+- [x] T009 `src/validate/types.ts`: implement cycle detection over the resolved type graph — `unresolvable-type-cycle` (FR-009) — depends on T008
 
 **Checkpoint**: Types can be read, collided, qualified, and resolved (not yet checked against values).
 
@@ -64,9 +64,9 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] `src/validate/vocabulary.ts`: read+refuse a type entry's own closed vocabulary (`demand`, `accept` only) — `unknown-type-entry-keyword` (FR-002) — depends on T003
-- [ ] T018 [US1] `src/validate/constraints.ts`: generalize `matchesLeaf`/`matchesAlternative`/`checkType` to accept a resolution context; a name that resolves to a `TypeDeclaration` recursively checks the type's own `demand` against the value, attributing violations to the type's own declaring position (FR-007) — depends on T008
-- [ ] T019 [US1] `src/validate/check.ts`: thread the usage layer's resolution scope through the walk; wire `types.ts`'s collision/qualifier/cycle diagnostics into the vocabulary pass — depends on T009, T018
+- [x] T017 [US1] `src/validate/vocabulary.ts`: read+refuse a type entry's own closed vocabulary (`demand`, `accept` only) — `unknown-type-entry-keyword` (FR-002) — depends on T003
+- [x] T018 [US1] `src/validate/constraints.ts`: generalize `matchesLeaf`/`matchesAlternative`/`checkType` to accept a resolution context; a name that resolves to a `TypeDeclaration` recursively checks the type's own `demand` against the value, attributing violations to the type's own declaring position (FR-007) — depends on T008
+- [x] T019 [US1] `src/validate/check.ts`: thread the usage layer's resolution scope through the walk; wire `types.ts`'s collision/qualifier/cycle diagnostics into the vocabulary pass — depends on T009, T018
 
 **Checkpoint**: A type is named once and enforced everywhere it is used. MVP complete.
 

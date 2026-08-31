@@ -10,22 +10,27 @@
  * below is the one place that assembly happens.
  */
 
-import type { Node } from "../model/node.js";
 import type { SourceSpan } from "../model/span.js";
 import type { Layer } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticCode } from "../diagnostics/codes.js";
-import type { DemandKeyword } from "./vocabulary.js";
 
 /**
  * One constraint declared on one key by one schema layer
  * (data-model.md "Demand"). `pointer` is into the **declaring** document —
  * e.g. `/keys/styles/demand/type` — distinct from a `Violation`'s
  * `mergedPointer`, which is into the merged configuration.
+ *
+ * **v0.5**: dropped the v0.4-era `keyword`/`value` fields — neither was
+ * ever read by anything downstream (`renderViolation`/`canonicalSentence`
+ * consume only `layer`/`layerRank`/`pointer`/`span`), and both became
+ * awkward to populate honestly once a violation could be attributed to a
+ * *resolved named type's own* demand rather than only a usage's — every
+ * caller that built one was fabricating a placeholder `value` no reader
+ * ever looked at. `pointer`'s own last segment already names the keyword
+ * for anyone who wants it, so nothing is lost.
  */
 export interface Demand {
-  readonly keyword: DemandKeyword;
-  readonly value: Node;
   readonly layer: Layer;
   readonly layerRank: number;
   readonly pointer: string;

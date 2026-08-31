@@ -1,0 +1,21 @@
+{
+  "name": "T010b: a violating value is reported naming the type declaration's own position, not the usage's (v0.5 FR-007, spec.md Acceptance Scenario 2)",
+  "cites": "v0.5 FR-007",
+  "fixtureDir": "validate-types/basic-violating",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 11,
+        "pointer": "/homepage",
+        "demand": { "pointer": "/types/resource/demand/minLength", "document": "schema.yaml", "line": 5, "column": 18 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

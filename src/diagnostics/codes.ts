@@ -81,7 +81,24 @@ export const VALIDATE_VOCABULARY_CODES = [
  */
 export const VALIDATE_VIOLATION_CODES = ["type-mismatch", "range-violated", "length-violated", "pattern-mismatch", "enum-violated", "required-violated"] as const;
 
-/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's, v0.2's, and v0.3's codes are unchanged; v0.4 only appends. */
+/**
+ * Named types and nested demands (v0.5, `SPEC.md` §7, §9 amended) —
+ * specs/005-named-types/contracts/{type-resolution,nested-demands,diagnostics}.md.
+ * `unknown-type-entry-keyword` is a `types.<name>` entry's own closed
+ * vocabulary (`demand`/`accept` only) — distinct from `unknown-demand-keyword`,
+ * which polices `keys.<name>.demand` instead. `type-name-collision` and
+ * `type-qualifier-collision` are two independent namespaces (unqualified
+ * names; `$id`-derived qualifiers) — see research.md D1 for why collision
+ * is unconditional, including a redeclaration that would look like
+ * narrowing read in isolation. `depth-limit-exceeded` (v0.1) and
+ * `unknown-type-name` (v0.4) are reused for this milestone's own new
+ * hazards/unresolvable-name reasons rather than repurposed with new codes
+ * — see contracts/diagnostics.md for why each reuse is the identical
+ * hazard, not a new one wearing an old name.
+ */
+export const NAMED_TYPE_CODES = ["unknown-type-entry-keyword", "type-name-collision", "builtin-type-redeclared", "type-qualifier-collision", "unresolvable-type-cycle", "type-accept-widened"] as const;
+
+/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.4's codes are unchanged; v0.5 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
@@ -91,6 +108,7 @@ export const DIAGNOSTIC_CODES = [
   ...MERGE_POLICY_CODES,
   ...VALIDATE_VOCABULARY_CODES,
   ...VALIDATE_VIOLATION_CODES,
+  ...NAMED_TYPE_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

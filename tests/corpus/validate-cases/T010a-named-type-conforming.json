@@ -1,0 +1,8 @@
+{
+  "name": "T010a: a conforming value satisfies a named type's own demand (v0.5 FR-007, spec.md Acceptance Scenario 1)",
+  "cites": "v0.5 FR-007",
+  "fixtureDir": "validate-types/basic-ok",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

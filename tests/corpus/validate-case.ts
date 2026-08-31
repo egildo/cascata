@@ -175,7 +175,7 @@ function parseExpect(raw: unknown, source: string): ValidateExpect {
   fail(source, "'expect.ok' must be true or false");
 }
 
-const CITES_PATTERN = /^v0\.4 FR-\d+[a-z]?$/;
+const CITES_PATTERN = /^v0\.[45] FR-\d+[a-z]?$/;
 
 /** Load and validate one validate-conformance case from `file`. `fixtureDir` resolves relative to `file`'s directory, mirroring `merge-case.ts`. */
 export function loadValidateCase(file: string): ValidateCase {
