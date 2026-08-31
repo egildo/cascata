@@ -60,6 +60,63 @@
  *    that conflation a type error, not just a discipline.
  * 6. Absence contributes nothing — a layer with nothing to say about a
  *    position is skipped, never treated as clearing it.
+ *
+ * ## `append-over-non-sequence` (User Story 4, T056, T058; FR-013)
+ *
+ * `strategy.ts`'s `checkAppendable` is the predicate; this file decides
+ * *when* to call it, at exactly two moments in `foldWithProvenance`'s own
+ * loop — both needed, neither redundant with the other, and each firing
+ * **at most once** per offending value (no `Set`-based deduplication is
+ * needed, because each moment is itself a one-shot event):
+ *
+ * 1. **A layer's own fresh contribution.** Before merging `contribution`
+ *    (this layer's raw, unmerged value) into `result`, every top-level key
+ *    of `contribution` that is *currently* under `"append"` is checked.
+ *    This covers every layer's own `provide` (schema) or literal value
+ *    (config) the moment it is supplied — including the very first layer
+ *    of the whole fold, which bypasses `mergeMappings` entirely (rule 6's
+ *    "base case" below) and so would otherwise never be checked at all.
+ * 2. **A key's strategy transitioning to `"append"`.** Immediately after
+ *    `advanceStrategies` runs for a layer, any key that just became
+ *    `"append"` for the first time (it was not already, per the previous
+ *    layer's strategy map) has `result`'s *existing* value at that key
+ *    checked — the value some **earlier** layer supplied under ordinary
+ *    `"replace"`, before `cascade: append` was ever declared for it. This
+ *    is the case contracts/diagnostics.md's "in the layer that supplied
+ *    it" note is really about: the declaring layer and the offending
+ *    layer can be different documents, because a schema may declare
+ *    `cascade: append` on a key **without also (re-)supplying it** — the
+ *    value being accumulated onto is whatever an ancestor already left
+ *    there. `checkAppendable`'s own primary span is that value's real
+ *    span, so the diagnostic always names the document that actually
+ *    wrote it, never the layer that merely declared the strategy.
+ *
+ * Together these two moments cover every value that is ever asked to
+ * participate in an `append` accumulation, each checked exactly once: (1)
+ * catches every layer's own contribution as it arrives, and (2) catches
+ * whatever pre-existed the moment accumulation starts. Neither moment
+ * re-checks a value the other already covered — (1) never re-examines
+ * `result` (only `contribution`, this layer's own new value), and (2)
+ * only fires on a transition, which — because `resolveStrategies` has
+ * already confirmed the stack does not weaken (FR-016) — happens **at
+ * most once** per key across the whole fold.
+ *
+ * Both moments push onto one shared `diagnostics` array for the whole
+ * fold rather than returning on the first hit (T058): a schema
+ * mis-declaring two unrelated top-level keys under `append` is two
+ * independent mistakes in two different places, and a reader fixing the
+ * first should not have to re-run the fold to discover the second — the
+ * same "collect every failure it can determine independently" property
+ * v0.2's `resolveAllBranches` established for reference resolution. This
+ * is intentionally **not** merged with `resolveStrategies`' own
+ * diagnostics: that function's refusals (`unknown-cascade-strategy`,
+ * `unimplemented-cascade-strategy`, `cascade-strategy-weakened`) are pure
+ * vocabulary, checkable with no data at all, and `foldConfiguration` still
+ * aborts before ever folding when any of those are found — `advanceStrategies`
+ * is documented as unspecified on a stack `resolveStrategies` has refused,
+ * so this file must not call it, or the checks above, on one. Only once
+ * `resolveStrategies` finds nothing does folding — and this file's own
+ * collect-all — run at all.
  */
 
 import { createMapping, type Mapping, type Node } from "../model/node.js";
@@ -67,7 +124,7 @@ import { freeze } from "../model/freeze.js";
 import type { Graph } from "../graph/build.js";
 import type { Pedigree } from "../graph/pedigree.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
-import { accumulateAppend, advanceStrategies, effectiveStrategy, readKeysVocabulary, resolveStrategies } from "./strategy.js";
+import { accumulateAppend, advanceStrategies, checkAppendable, effectiveStrategy, readKeysVocabulary, resolveStrategies } from "./strategy.js";
 import { createProvenanceBuilder, type Layer, type MergedConfiguration, type MergeStrategy, type ProvenanceBuilder, type ProvenanceRecord } from "./provenance.js";
 
 /** No key has a declared strategy — used for every merge below the top level, where `cascade` never applies (rule 4's own doc comment above). */
@@ -300,17 +357,72 @@ export function fold(layers: readonly Layer[]): Node {
   return foldWithProvenance(layers).tree;
 }
 
-/** `fold()`'s full result — the tree plus the provenance record built alongside it. `foldConfiguration` is `fold()`'s only caller that needs the provenance half; every other caller (this file's own hand-constructed unit tests among them) just wants the tree, which is what `fold()` itself returns. */
-export function foldWithProvenance(layers: readonly Layer[]): { readonly tree: Node; readonly provenance: ProvenanceRecord } {
+/**
+ * Check every top-level key of `contribution` that is *currently* under
+ * `"append"` (this file's module doc, moment 1: "a layer's own fresh
+ * contribution") — pushes onto `diagnostics` for each that is not a
+ * `Sequence`, never stopping at the first (T058).
+ */
+function checkFreshAppendContributions(contribution: Node, strategies: ReadonlyMap<string, MergeStrategy>, diagnostics: Diagnostic[]): void {
+  if (contribution.type !== "mapping") {
+    return;
+  }
+  for (const [key, value] of contribution.entries) {
+    if (effectiveStrategy(key, strategies) !== "append") {
+      continue;
+    }
+    const violation = checkAppendable(key, value);
+    if (violation !== undefined) {
+      diagnostics.push(violation);
+    }
+  }
+}
+
+/**
+ * Check `result`'s existing value at every key that just transitioned to
+ * `"append"` between `previousStrategies` and `strategies` (this file's
+ * module doc, moment 2) — pushes onto `diagnostics` for each that is not a
+ * `Sequence`, never stopping at the first (T058). A no-op before `result`
+ * exists (the fold's bootstrap layer — nothing could have been supplied
+ * yet) and for any key that was already `"append"` before this layer, so
+ * this fires **at most once** per key across the whole fold: transitions
+ * are one-way (`resolveStrategies` already refuses weakening, FR-016), so
+ * a key can move from `"replace"` to `"append"` only once.
+ */
+function checkTransitionedAppendKeys(previousStrategies: ReadonlyMap<string, MergeStrategy>, strategies: ReadonlyMap<string, MergeStrategy>, result: Node | undefined, diagnostics: Diagnostic[]): void {
+  if (result === undefined || result.type !== "mapping") {
+    return;
+  }
+  for (const [key, strategy] of strategies) {
+    if (strategy !== "append" || previousStrategies.get(key) === "append") {
+      continue;
+    }
+    const existing = result.entries.get(key);
+    if (existing === undefined) {
+      continue;
+    }
+    const violation = checkAppendable(key, existing);
+    if (violation !== undefined) {
+      diagnostics.push(violation);
+    }
+  }
+}
+
+/** `fold()`'s full result — the tree, the provenance record built alongside it, and any `append-over-non-sequence` diagnostics found along the way (FR-013, T056, T058). `foldConfiguration` is `fold()`'s only caller that needs the provenance and diagnostics halves; every other caller (this file's own hand-constructed unit tests among them) just wants the tree, which is what `fold()` itself returns — those callers only ever build well-formed layers, so `diagnostics` is always empty for them. */
+export function foldWithProvenance(layers: readonly Layer[]): { readonly tree: Node; readonly provenance: ProvenanceRecord; readonly diagnostics: readonly Diagnostic[] } {
   const builder = createProvenanceBuilder();
+  const diagnostics: Diagnostic[] = [];
   let result: Node | undefined;
   let strategies: ReadonlyMap<string, MergeStrategy> = NO_STRATEGIES;
   for (const layer of layers) {
+    const previousStrategies = strategies;
     strategies = advanceStrategies(strategies, layer);
+    checkTransitionedAppendKeys(previousStrategies, strategies, result, diagnostics);
     const contribution = contributionOf(layer);
     if (contribution === undefined) {
       continue;
     }
+    checkFreshAppendContributions(contribution, strategies, diagnostics);
     if (result === undefined) {
       builder.recordFreshContribution([], contribution, layer);
       result = contribution;
@@ -324,7 +436,7 @@ export function foldWithProvenance(layers: readonly Layer[]): { readonly tree: N
     // `undefined` — `GraphDocument.tree` is non-optional).
     throw new Error("Internal error: fold() produced no result — deriveLayers should always include a config layer");
   }
-  return { tree: result, provenance: builder.finish() };
+  return { tree: result, provenance: builder.finish(), diagnostics };
 }
 
 /** `foldConfiguration`'s result — never both a configuration and diagnostics (mirrors `MergeResult` in `src/index.ts`, which this shape feeds directly). */
@@ -345,22 +457,36 @@ export type FoldOutcome = { readonly ok: true; readonly configuration: MergedCon
  * same objects the frozen tree ends up holding — the two structures never
  * diverge over freezing.
  *
- * `resolveStrategies` runs **before** the fold itself: a `cascade-strategy
- * -weakened` refusal (T032) is a fact about the pedigree's own vocabulary,
- * independent of any data, so there is no reason to build a tree first and
- * discover it cannot be trusted — this mirrors User Story 4's later
- * refusals (Phase 6, not yet implemented), which will extend the same
- * `diagnostics.length > 0` branch rather than add a second one. Its own
- * `strategies` field is unused past that check now (T034):
- * `foldWithProvenance` derives the strategy in effect at each layer for
- * itself, via `advanceStrategies`, rather than being handed one flat map.
+ * `resolveStrategies` runs **before** the fold itself: `cascade-strategy
+ * -weakened`, `unknown-cascade-strategy`, and `unimplemented-cascade
+ * -strategy` (T032, T054, T055) are all facts about the pedigree's own
+ * *vocabulary*, independent of any data, so there is no reason to build a
+ * tree first and discover it cannot be trusted — and `advanceStrategies`
+ * is documented as unspecified on a stack `resolveStrategies` has refused,
+ * so folding must not even attempt to run on one. `append-over-non
+ * -sequence` (T056) is different in kind: it is data-dependent (a value's
+ * actual shape, possibly only knowable after earlier layers have already
+ * settled what "the value so far" even is — see `foldWithProvenance`'s own
+ * module-doc section), so it cannot be found by `resolveStrategies` and is
+ * instead collected by the fold itself, exhaustively (T058), once
+ * `resolveStrategies` has confirmed the vocabulary is trustworthy enough
+ * to fold at all. The two diagnostic sources are therefore sequential, not
+ * merged: this function returns immediately on the first if it finds
+ * anything, and only consults the second when the first found nothing.
+ * `resolveStrategies`' own `strategies` field is unused past that check
+ * (T034): `foldWithProvenance` derives the strategy in effect at each
+ * layer for itself, via `advanceStrategies`, rather than being handed one
+ * flat map.
  */
 export function foldConfiguration(graph: Graph, pedigree: Pedigree): FoldOutcome {
   const layers = deriveLayers(graph);
-  const { diagnostics } = resolveStrategies(layers);
-  if (diagnostics.length > 0) {
-    return { ok: false, diagnostics: [...diagnostics] };
+  const { diagnostics: strategyDiagnostics } = resolveStrategies(layers);
+  if (strategyDiagnostics.length > 0) {
+    return { ok: false, diagnostics: [...strategyDiagnostics] };
   }
-  const { tree, provenance } = foldWithProvenance(layers);
+  const { tree, provenance, diagnostics: foldDiagnostics } = foldWithProvenance(layers);
+  if (foldDiagnostics.length > 0) {
+    return { ok: false, diagnostics: [...foldDiagnostics] };
+  }
   return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree } };
 }

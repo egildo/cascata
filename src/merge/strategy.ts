@@ -2,8 +2,8 @@
  * Reading a schema's `keys:` vocabulary — SPEC.md §9 ("Schema vocabulary
  * per key: `demand`..., `provide`, `cascade: replace | append`, `seal:
  * open | closed`, `final`, `delegate: allow`"), §5.1, §5.2, §5.3; v0.3
- * FR-001, FR-002, FR-003, FR-011, FR-012, FR-015, FR-016; tasks.md T008,
- * T009, T029-T032.
+ * FR-001, FR-002, FR-003, FR-011, FR-012, FR-013, FR-014, FR-015, FR-016;
+ * tasks.md T008, T009, T029-T032, T054-T056.
  *
  * This is the first module in Cascata that reads schema **vocabulary**
  * rather than only the `$`-prefixed document keys v0.1/v0.2 read. It reads
@@ -13,19 +13,40 @@
  * that inspects them, so there is nothing to guess a meaning for.
  *
  * **Scope as of Phase 4 (User Story 2, T025-T034)**: `resolveStrategies`
- * now *acts* on `cascade` — tightening `replace` → `append` silently
- * (§5.2), refusing the reverse as `cascade-strategy-weakened` (FR-016),
- * and `accumulateAppend` performs the root-first accumulation itself
- * (FR-012), consumed by `src/merge/fold.ts`. **Still out of scope**
- * (Phase 6, User Story 4): refusing an unknown or non-string `cascade`
- * value (`unknown-cascade-strategy`/`unimplemented-cascade-strategy`,
- * T051-T052) and refusing `append` over a non-sequence
- * (`append-over-non-sequence`, T053) — `interpretCascade` below silently
- * ignores any value it does not recognize as `"append"`/`"replace"`
- * rather than refusing it, and `accumulateAppend` falls back to
- * replace-wholesale for a non-sequence contribution, precisely so neither
- * of those still-missing refusals is *simulated* ahead of the task that
- * actually implements them.
+ * *acts* on `cascade` — tightening `replace` → `append` silently (§5.2),
+ * refusing the reverse as `cascade-strategy-weakened` (FR-016) — and
+ * `accumulateAppend` performs the root-first accumulation itself (FR-012),
+ * consumed by `src/merge/fold.ts`.
+ *
+ * **Scope as of Phase 6 (User Story 4, T054-T056)**: `resolveStrategies`
+ * also refuses a `cascade` value it cannot interpret — `unknown-cascade
+ * -strategy` for anything that is not `"replace"`/`"append"`, and the
+ * distinct `unimplemented-cascade-strategy` for the reserved
+ * `"merge-by-key"` (FR-014, `classifyUnrecognizedCascade` below). Refusing
+ * `append` over a non-sequence value (FR-013, `append-over-non-sequence`)
+ * is `checkAppendable` below — but *finding* every such refusal, across
+ * every top-level key a single fold touches, without stopping at the
+ * first, is `src/merge/fold.ts`'s job (T058), since it is that file's
+ * `foldWithProvenance` loop that owns the only two moments a value's
+ * shape needs checking: when a layer freshly supplies it, and when a
+ * key's strategy first transitions to `append` over whatever the fold had
+ * already produced (see that file's own module doc). `checkAppendable`
+ * here is the shared predicate both moments call, so the position is
+ * always the offending `Node`'s own span — the document that actually
+ * supplied it, not necessarily the one that declared `cascade: append`
+ * (contracts/diagnostics.md).
+ *
+ * **Ignoring a config's own `cascade` (FR-015, T057) needed no new code**
+ * here: `resolveStrategies` and `advanceStrategies` already skip every
+ * `role !== "schema"` layer before reading its vocabulary at all (the
+ * guard predates Phase 6, from User Story 2's own FR-015 reading) — a
+ * config's `keys:` section, cascade included, was already inert as
+ * *policy*. What Phase 6 confirms with a conformance case
+ * (`tests/corpus/cases/merge-policy/config-policy/`) is the other half of
+ * FR-015: that a config writing a top-level key literally named `keys` is
+ * writing ordinary *data*, which `src/merge/fold.ts` was already treating
+ * as such (nothing in `contributionOf` for a `role: "config"` layer ever
+ * special-cases a key named `keys`) — see the milestone report.
  */
 
 import { createSequence, type Node } from "../model/node.js";
@@ -124,21 +145,91 @@ export function effectiveStrategy(key: string, strategies: ReadonlyMap<string, M
 }
 
 /**
- * Interpret a raw `cascade` value node as a `MergeStrategy` this phase
- * acts on, or `undefined` for anything else — a non-string scalar, a
- * string that is not `"append"` or `"replace"` (including the reserved
- * `"merge-by-key"`), a mapping, or a sequence. `undefined` here is not a
- * refusal: T051/T052 (Phase 6, User Story 4) are what turn an
- * unrecognized value into `unknown-cascade-strategy` or
- * `unimplemented-cascade-strategy`. Until then, this phase treats a
- * `cascade` declaration it cannot interpret exactly as it treats no
- * declaration at all, per this file's own module doc.
+ * Interpret a raw `cascade` value node as a `MergeStrategy`, or `undefined`
+ * for anything else — a non-string scalar, a string that is not
+ * `"append"` or `"replace"` (including the reserved `"merge-by-key"`), a
+ * mapping, or a sequence. `undefined` is never itself a refusal — it only
+ * tells the caller "not a recognized strategy, decide what that means":
+ * `resolveStrategies` below is the caller that turns it into
+ * `unknown-cascade-strategy` or `unimplemented-cascade-strategy`
+ * (`classifyUnrecognizedCascade`, FR-014), via `readKeysVocabulary`.
+ * `advanceStrategies` is the *other* caller, and deliberately does not —
+ * per its own doc comment, it only ever runs on a stack `resolveStrategies`
+ * has already accepted, where an unrecognized value can no longer occur.
  */
 export function interpretCascade(node: Node): MergeStrategy | undefined {
   if (node.type === "scalar" && node.kind === "string" && (node.value === "append" || node.value === "replace")) {
     return node.value;
   }
   return undefined;
+}
+
+/** SPEC.md §5.3's reserved-but-unbuilt strategy name — refused distinctly (FR-014, contracts/diagnostics.md). */
+const RESERVED_STRATEGY_NAME = "merge-by-key";
+
+/**
+ * Render a `cascade` value `interpretCascade` could not read, for a
+ * diagnostic's message text. Scalars show their own literal value (a
+ * `bigint` `int` needs `String`, not `JSON.stringify`, which throws on
+ * one); a mapping or sequence just names its shape, since a diagnostic
+ * message is not required to dump a whole structure.
+ */
+function describeCascadeValue(node: Node): string {
+  if (node.type === "scalar") {
+    return node.kind === "string" ? JSON.stringify(node.value) : String(node.value);
+  }
+  return `a ${node.type}`;
+}
+
+/**
+ * Classify a `cascade` value `interpretCascade` could not read into the
+ * two distinct refusals FR-014 and contracts/diagnostics.md require:
+ * `unimplemented-cascade-strategy` for exactly the reserved
+ * `"merge-by-key"` string (SPEC.md §5.3 names it, so the author is early,
+ * not wrong — the same reasoning that made a sequence-valued `$adopts`
+ * refuse as `multiple-adoption` rather than as malformed, v0.2), and
+ * `unknown-cascade-strategy` for every other unrecognized value — a
+ * different string, a non-string scalar, a mapping, or a sequence. Both
+ * share the same primary span: the declared value's own
+ * (contracts/diagnostics.md: "The declared value").
+ *
+ * Callers must only reach this for a value `interpretCascade` returned
+ * `undefined` for — it does not re-check `"replace"`/`"append"` itself.
+ */
+function classifyUnrecognizedCascade(key: string, node: Node): Diagnostic {
+  if (node.type === "scalar" && node.kind === "string" && node.value === RESERVED_STRATEGY_NAME) {
+    return createDiagnostic({
+      code: "unimplemented-cascade-strategy",
+      message: `key '${key}' declares 'cascade: merge-by-key' — reserved by SPEC.md §5.3 but not built in this version; supported strategies are 'replace' and 'append'`,
+      primary: node.span,
+    });
+  }
+  return createDiagnostic({
+    code: "unknown-cascade-strategy",
+    message: `key '${key}' declares 'cascade: ${describeCascadeValue(node)}', which is not a strategy this version implements; supported strategies are 'replace' and 'append'`,
+    primary: node.span,
+  });
+}
+
+/**
+ * Refuse `node` as an `append` contribution if it is not a `Sequence`
+ * (FR-013, `append-over-non-sequence`). The primary span is `node`'s own
+ * — whichever real document actually supplied it — never a span
+ * synthesized from the key's declaration, because the layer that declared
+ * `cascade: append` and the layer that supplied the offending value can be
+ * different documents (contracts/diagnostics.md: "the offending value, in
+ * the layer that supplied it"; see `src/merge/fold.ts`'s module doc for
+ * the two moments this is called from).
+ */
+export function checkAppendable(key: string, node: Node): Diagnostic | undefined {
+  if (node.type === "sequence") {
+    return undefined;
+  }
+  return createDiagnostic({
+    code: "append-over-non-sequence",
+    message: `key '${key}' is under 'cascade: append' but this value is not a sequence (got ${node.type === "scalar" ? `a ${node.kind} scalar` : `a ${node.type}`})`,
+    primary: node.span,
+  });
 }
 
 /** `resolveStrategies`'s result: the effective strategy per top-level key, and any `cascade-strategy-weakened` refusals found along the way. */
@@ -173,12 +264,20 @@ export interface StrategyResolution {
  *   weakened`, primary span the descendant's own declared value (the
  *   `cascade` value node itself — contracts/diagnostics.md: "The
  *   descendant's declaration"). Every violation found is recorded, not
- *   only the first (T055's "report every failure independently" applies
- *   here too, even though T055 itself is Phase 6 work).
- *
- * A `cascade` value `interpretCascade` cannot read (Phase 6's job to
- * refuse) is treated as no declaration at all for that layer — it neither
- * advances nor is checked against the running strategy.
+ *   only the first — the loop below never returns early, so every key's
+ *   declarations are checked regardless of what an earlier key found.
+ * - A `cascade` value `interpretCascade` cannot read (T054, T055; FR-014)
+ *   is refused too, via `classifyUnrecognizedCascade` — the reserved
+ *   `"merge-by-key"` distinctly, as `unimplemented-cascade-strategy`
+ *   rather than `unknown-cascade-strategy` — and, like weakening,
+ *   collected without aborting the loop: this same pass already had to
+ *   visit every schema layer's every declared key, so refusing here too
+ *   costs nothing extra and is what makes `foldConfiguration`'s single
+ *   `diagnostics.length > 0` check downstream see every vocabulary-level
+ *   refusal a stack has, not just whichever key happened to be checked
+ *   first. It neither advances the running strategy for that key nor is
+ *   checked against it — exactly as if nothing had been declared, since
+ *   what "declared" would even mean here is precisely what is unclear.
  */
 export function resolveStrategies(layers: readonly Layer[]): StrategyResolution {
   const strategies = new Map<string, MergeStrategy>();
@@ -195,7 +294,8 @@ export function resolveStrategies(layers: readonly Layer[]): StrategyResolution 
       }
       const declared = interpretCascade(declaration.cascade);
       if (declared === undefined) {
-        continue; // Unrecognized value — Phase 6's refusal, not this phase's.
+        diagnostics.push(classifyUnrecognizedCascade(key, declaration.cascade));
+        continue;
       }
       const current = effectiveStrategy(key, strategies);
       if (declared === current) {
@@ -291,12 +391,19 @@ export function advanceStrategies(running: ReadonlyMap<string, MergeStrategy>, l
  * - The result's own span is the nearest contributor's (`incoming`'s) —
  *   research D4, "for an appended sequence, the nearest contributor's".
  *
- * If either side is present but is not a `Sequence`, this phase has no
- * way to refuse it (`append-over-non-sequence` is T053, Phase 6, not yet
- * implemented) — falling through to replace-wholesale (`incoming` wins)
- * is the same behaviour an undeclared key would get, never a silent data
- * loss and never a crash, and is exactly the behaviour T053 will replace
- * with a refusal.
+ * If either side is present but is not a `Sequence`, this function itself
+ * still does not refuse it (`append-over-non-sequence`, T056, lives in
+ * `checkAppendable` above) — it falls through to replace-wholesale
+ * (`incoming` wins), same as an undeclared key would get. This is
+ * deliberate, not a leftover gap: by the time `src/merge/fold.ts` calls
+ * this function, it has already called `checkAppendable` on the relevant
+ * value(s) and recorded a diagnostic if either failed (T058's collect-all
+ * — the fold keeps going after finding one, rather than stopping, so a
+ * later key's own violation is never missed), and `foldConfiguration`
+ * discards the tree entirely whenever any diagnostic was found. What this
+ * function returns when a value fails validation is therefore never
+ * observed by a caller — it only has to not crash, so the tree-building
+ * pass can keep running long enough to finish checking every other key.
  */
 export function accumulateAppend(current: Node | undefined, incoming: Node | undefined): Node | undefined {
   if (incoming === undefined) {
