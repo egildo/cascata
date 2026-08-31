@@ -62,13 +62,16 @@ A three-layer chain where all three provide the same key. Ask `why` for that poi
 losing entries are the point — they exist nowhere in the merged tree, and a provenance record built
 by inspecting the result rather than the fold could not produce them.
 
-### 6. `why` distinguishes its two negatives (US3, SC-004)
+### 6. `why` distinguishes all three of its answers (US3, SC-004)
 
-Ask `why` for a pointer that resolves to a value no layer supplied, then for a pointer that names
-nothing at all.
+Ask `why` for a mapping one layer wrote, then for a mapping that exists only because two layers each
+supplied a different key beneath it, then for a pointer that names nothing at all.
 
-**Expected**: `no-value` and `unknown-pointer`, distinctly. Collapsing them hides the one failure
-mode that keeping provenance beside the tree can produce — the two structures disagreeing.
+**Expected**: a `chain`, then `synthesized` naming both contributors, then `unknown-pointer`. The
+middle case is the one worth constructing deliberately — an earlier draft called it `no-value` and
+never said when it could occur, which is how an outcome nobody can reach gets into a contract.
+Collapsing the third into either of the others hides the one failure mode that keeping provenance
+beside the tree can produce: the two structures disagreeing.
 
 ### 7. Merge policy belongs to the contract (US4, SC-007)
 
