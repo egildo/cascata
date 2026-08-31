@@ -7,20 +7,27 @@ promise before v1.0
 
 1. **Collect.** For every schema layer in the pedigree, read its own `types:` section (FR-001,
    FR-003) into `Type Declaration`s (data-model.md).
-2. **Collide, unconditionally.** Group declarations by unqualified name across the **whole**
-   pedigree. Two or more declarations for the same name is `type-name-collision` (FR-017),
-   regardless of whether the later declaration would, read in isolation, look like a narrowing of the
-   earlier one (research.md D1 — there is no redeclaration-as-narrowing mechanism in v0.5). A name
-   matching a built-in is `builtin-type-redeclared` (FR-018), checked independently of the
-   multi-layer case (a single schema naming a type `string` collides even alone, against the
-   built-in "declaration"). A colliding name is **not available for resolution** anywhere in the
-   pedigree — every usage that would have named it resolves as `unknown-type-name` instead, since
-   which of several colliding declarations is "right" is exactly the question the collision
-   diagnostic already refuses to guess at.
+2. **Redeclaration is narrowing, not collision** (`SPEC.md` §15, commit `0b63d67`). Two or more
+   declarations of one name across the pedigree are **not** an error: redeclaring a name is how a
+   narrowing is written, and it governs from its declaring layer downward (FR-008, FR-016a). Every
+   such name stays available for resolution — step 4 picks the nearest. `type-name-collision`
+   (FR-016b) survives only for declarations that are **not** in an ancestor/descendant relation, and
+   because §6.1 makes the v1 pedigree a single-parent chain, every pair of layers is related, so it
+   is **structurally unreachable in v1** and reserved for future multi-adoption. It is documented as
+   unreachable where it is implemented rather than left looking like live protection.
+
+   A name matching a built-in remains `builtin-type-redeclared` (FR-018) and **is** reachable — a
+   single schema naming a type `string` collides alone, against the built-in "declaration". This is a
+   separate rule from FR-016b and unaffected by the amendment.
+
+   *This step previously read "collide, unconditionally", which made narrowing impossible and was
+   overturned; research.md D1 records the original reasoning and carries a settled-note.*
 3. **Qualify.** Every schema document's own qualifier is the last non-empty `/`-segment of its `$id`
    (FR-019, research.md D5); a document with no `$id`, or one that yields no segments, has none
-   (FR-019b). Two documents sharing a qualifier is `type-qualifier-collision` (FR-019a) — a
-   **different** namespace than unqualified names, checked independently.
+   (FR-019b). Two documents in one chain sharing a qualifier are **not** a collision either
+   (FR-019a, amended with step 2): a shared qualifier plus a shared type name is a narrowing chain
+   like any other, and step 4's nearest-wins rule settles it. `type-qualifier-collision` is reserved
+   for unrelated documents and is unreachable in v1 for the same structural reason.
 4. **Resolve, per usage.** A `type:` expression is always written by some specific layer `L` — the
    schema layer whose `keys.<name>.demand` (at any nesting depth) or whose own `types.<name>.demand`
    contains it. Resolve each named alternative:

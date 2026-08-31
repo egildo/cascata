@@ -329,8 +329,11 @@ rejected for a demand the descendant governs, and that a qualified name still re
   reject — verified as a property, not only by example.
 - **SC-004**: A violation nested three or more levels deep is reported at its own position with a
   pointer that resolves in the merged configuration, in 100% of cases.
-- **SC-005**: A type-name collision is reported with both declaring positions in 100% of cases; zero
-  collisions resolve by silent shadowing.
+- **SC-005**: A name declared by more than one layer resolves to the **nearest** declaration at or
+  above the layer naming it, in 100% of cases — never to an error, and never to an arbitrary one of
+  them. A built-in name redeclared by any layer is refused in 100% of cases. (Collision between
+  *unrelated* declarations is unreachable in v1 — §6.1's chain — so it carries no success criterion
+  rather than a vacuously satisfied one.)
 - **SC-006**: A cycle among type definitions is refused rather than hanging, in 100% of cases and
   within a bounded time.
 - **SC-007**: Name resolution is deterministic across runs.

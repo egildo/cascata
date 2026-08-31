@@ -41,7 +41,7 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 - [x] T005 `src/validate/types.ts`: implement unconditional unqualified-name collision detection across the whole pedigree (research.md D1) — `type-name-collision`, primary at the later-ranked declaration, `related` naming the first (v0.1 duplicate-key precedent) — depends on T003
 - [x] T006 [P] `src/validate/types.ts`: implement built-in redeclaration refusal — `builtin-type-redeclared` — depends on T003
 - [x] T007 [P] `src/validate/types.ts`: implement qualifier collision detection — `type-qualifier-collision` — depends on T004
-- [x] T008 `src/validate/types.ts`: implement per-layer scope resolution (research.md D2) — a name resolves against declarations from layers `0..L` plus built-ins; a colliding name resolves to nothing — depends on T005, T006
+- [x] T008 `src/validate/types.ts`: implement per-layer scope resolution (research.md D2) — a name resolves against declarations from layers `0..L` plus built-ins; a colliding name resolves to nothing — depends on T005, T006 **[Superseded wording: `SPEC.md` §15 later settled redeclaration as narrowing, so a name declared by several layers resolves nearest-wins rather than to nothing. Delivered in T049-T053; the text above records what was asked at the time.]**
 - [x] T009 `src/validate/types.ts`: implement cycle detection over the resolved type graph — `unresolvable-type-cycle` (FR-009) — depends on T008
 
 **Checkpoint**: Types can be read, collided, qualified, and resolved (not yet checked against values).
