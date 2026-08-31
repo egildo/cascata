@@ -31,7 +31,33 @@
 
 ## Notes
 
-**Validation iterations**: 1, with two corrections applied — both drawn from defect classes earlier
+**Post-`/speckit-analyze` corrections (2026-08-31) — one CRITICAL.** Cross-artifact analysis found
+three defects, the first of which required amending `SPEC.md`:
+
+- **A monotonicity violation, in the milestone where Principle II first binds.** The Assumptions
+  section had chosen "where layers disagree on strategy, the nearer layer's declaration governs", by
+  analogy with value precedence. That analogy is wrong: a descendant switching `append` back to
+  `replace` discards every ancestor's contribution, which §5.2's own row forbids absolutely. §5.2 had
+  **no row for strategy mutation at all**, which is why nothing caught it — the canon was silent, so
+  the spec filled the silence badly. `SPEC.md` §5.2 gained the row, §15 logged it, FR-016 was
+  rewritten as directional (tighten toward accumulation, never away), and a
+  `cascade-strategy-weakened` diagnostic now enforces it.
+- **`contracts/precedence.md` rule 2 was unconstructible.** "Within a layer, an explicit value beats a
+  `provide`" — but §9 puts a schema's data only under `keys.*.provide` and a config's only at top
+  level, so no layer holds both and the rule could never fire. Removed and renumbered, with a note
+  saying what it was reaching for (rule 1 already covers it).
+- **`why` had no defined answer for a synthesized container.** A mapping can exist purely because two
+  layers each supplied a different key beneath it. The middle outcome was called `no-value` and never
+  said when it could occur. Renamed `synthesized`, made to carry its contributors, and all three
+  outcomes are now reachable — an outcome that cannot occur is a distinction nobody can rely on.
+
+**What this says about the checking, honestly.** The authoring-time validation below explicitly
+checked for the v0.2 trap — whether every requirement was *constructible* — and found the spec clean.
+It never asked whether a requirement was *monotone*, in the one milestone where Principle II binds for
+the first time. Constructibility and monotonicity are different questions, and only the first had
+become a habit. The §5.2 row now exists, so the canon answers this rather than each spec re-deciding.
+
+**Validation iterations**: 1 at authoring time, plus this analyze round. Authoring applied two corrections — both drawn from defect classes earlier
 milestones actually shipped.
 
 **Correction 1 — requirements with no acceptance coverage.** FR-002 (unimplemented vocabulary is

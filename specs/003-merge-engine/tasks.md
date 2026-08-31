@@ -104,17 +104,19 @@ sequence; every item present, root-first, nothing removed.
 - [ ] T025 [P] [US2] Cases for append across three layers asserting root-first order and every item present, in tests/corpus/cases/merge-append/
 - [ ] T026 [P] [US2] Case asserting an empty contribution removes nothing (FR-012), in tests/corpus/cases/merge-append/empty/
 - [ ] T027 [P] [US2] Case asserting a key with no declared strategy behaves as `replace` (FR-011), in tests/corpus/cases/merge-append/default/
+- [ ] T028 [P] [US2] Cases for strategy mutation — a descendant weakening `append` to `replace` asserting `cascade-strategy-weakened`, and a descendant tightening `replace` to `append` asserting it is permitted — in tests/corpus/cases/merge-append/strategy-mutation/ (v0.3 FR-016)
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Implement `append` accumulation root-first in src/merge/strategy.ts (FR-012) — depends on T018, T008
-- [ ] T029 [US2] Default every undeclared key to `replace` in src/merge/strategy.ts (FR-011) — depends on T008
-- [ ] T030 [US2] Resolve disagreeing strategy declarations deterministically, the nearer layer governing, in src/merge/strategy.ts (FR-016) — depends on T028
+- [ ] T029 [US2] Implement `append` accumulation root-first in src/merge/strategy.ts (FR-012) — depends on T018, T008
+- [ ] T030 [US2] Default every undeclared key to `replace` in src/merge/strategy.ts (FR-011) — depends on T008
+- [ ] T031 [US2] Resolve disagreeing strategy declarations deterministically, the nearer layer governing, in src/merge/strategy.ts (FR-016) — depends on T029
+- [ ] T032 [US2] Refuse a strategy weakened away from accumulation, per `SPEC.md` §5.2's cascade-strategy row, in src/merge/strategy.ts (v0.3 FR-016) — depends on T029
 
 ### Property tests for User Story 2 (Principle II — the first milestone it binds)
 
-- [ ] T031 [US2] Encode the §5.2 `cascade: append` row as a property test in tests/unit/monotonicity.test.ts: over randomly generated layer stacks, no ancestor's contribution is ever absent from the result, and appending never removes an inherited item (FR-023) — depends on T028
-- [ ] T032 [US2] Encode the constructible half of the `Defaults (provide)` row in tests/unit/monotonicity.test.ts — a nearer layer may replace a provided value — and record in that file's own doc comment that the demand-satisfaction clause is **deferred to v0.4, not stubbed**, per research D5 (FR-024) — depends on T020
+- [ ] T033 [US2] Encode the §5.2 `cascade: append` row as a property test in tests/unit/monotonicity.test.ts: over randomly generated layer stacks, no ancestor's contribution is ever absent from the result, appending never removes an inherited item, and no stack in which a strategy weakens from `append` to `replace` is ever accepted (FR-023, FR-016) — depends on T029
+- [ ] T034 [US2] Encode the constructible half of the `Defaults (provide)` row in tests/unit/monotonicity.test.ts — a nearer layer may replace a provided value — and record in that file's own doc comment that the demand-satisfaction clause is **deferred to v0.4, not stubbed**, per research D5 (FR-024) — depends on T020
 
 **Checkpoint**: The one §5.2 row this vocabulary can construct is discharged executably.
 
@@ -129,20 +131,21 @@ each with a position in a real document.
 
 ### Conformance cases for User Story 3 (write first)
 
-- [ ] T033 [P] [US3] Cases asserting a three-layer chain yields a chain of three entries, winner first, each carrying a span (FR-018, FR-019), in tests/corpus/cases/merge-provenance/
-- [ ] T034 [P] [US3] Case asserting the chain records **overridden** contributions that appear nowhere in the merged tree (FR-022), in tests/corpus/cases/merge-provenance/overridden/
-- [ ] T035 [P] [US3] Case asserting an `append` key's chain names every contributor as accumulated with no nominated winner (FR-020), in tests/corpus/cases/merge-provenance/append/
-- [ ] T036 [P] [US3] Cases asserting `why` distinguishes `no-value` from `unknown-pointer` (FR-021), in tests/corpus/cases/merge-provenance/negatives/
-- [ ] T037 [P] [US3] Case asserting two layers providing byte-identical values both appear in the chain — agreement is not silence, in tests/corpus/cases/merge-provenance/agreement/
+- [ ] T035 [P] [US3] Cases asserting a three-layer chain yields a chain of three entries, winner first, each carrying a span (FR-018, FR-019), in tests/corpus/cases/merge-provenance/
+- [ ] T036 [P] [US3] Case asserting the chain records **overridden** contributions that appear nowhere in the merged tree (FR-022), in tests/corpus/cases/merge-provenance/overridden/
+- [ ] T037 [P] [US3] Case asserting an `append` key's chain names every contributor as accumulated with no nominated winner (FR-020), in tests/corpus/cases/merge-provenance/append/
+- [ ] T038 [P] [US3] Cases asserting `why` distinguishes `no-value` from `unknown-pointer` (FR-021), in tests/corpus/cases/merge-provenance/negatives/
+- [ ] T039 [P] [US3] Case asserting `why` answers *synthesized* with its contributors for a mapping no layer wrote, distinct from a chain for one a layer did write, in tests/corpus/cases/merge-provenance/synthesized/ (v0.3 FR-021)
+- [ ] T040 [P] [US3] Case asserting two layers providing byte-identical values both appear in the chain — agreement is not silence, in tests/corpus/cases/merge-provenance/agreement/
 
 ### Implementation for User Story 3
 
-- [ ] T038 [US3] Build the pointer-keyed provenance record **during** the fold, recording overridden contributions as they lose, in src/merge/provenance.ts (FR-017, FR-022) — depends on T018, T004
-- [ ] T039 [US3] Carry a span into each entry's own layer document so an author can open the file (FR-018), in src/merge/provenance.ts — depends on T038
-- [ ] T040 [US3] Mark every contributor to an `append` key as accumulated, nominating no winner (FR-020), in src/merge/provenance.ts — depends on T038, T028
-- [ ] T041 [US3] Implement `why()` returning a chain, `no-value`, or `unknown-pointer` in src/merge/provenance.ts (FR-021) — depends on T038
-- [ ] T042 [US3] Assert the two structures agree — every pointer resolving in the tree has a chain and every chain's pointer resolves — in tests/unit/provenance-consistency.test.ts, since keeping provenance beside the tree is what makes this failure possible — depends on T038
-- [ ] T043 [US3] Export `why()` from src/index.ts — depends on T041
+- [ ] T041 [US3] Build the pointer-keyed provenance record **during** the fold, recording overridden contributions as they lose, in src/merge/provenance.ts (FR-017, FR-022) — depends on T018, T004
+- [ ] T042 [US3] Carry a span into each entry's own layer document so an author can open the file (FR-018), in src/merge/provenance.ts — depends on T041
+- [ ] T043 [US3] Mark every contributor to an `append` key as accumulated, nominating no winner (FR-020), in src/merge/provenance.ts — depends on T041, T029
+- [ ] T044 [US3] Implement `why()` returning a chain, `no-value`, or `unknown-pointer` in src/merge/provenance.ts (FR-021) — depends on T041
+- [ ] T045 [US3] Assert the two structures agree — every pointer resolving in the tree has a chain and every chain's pointer resolves — in tests/unit/provenance-consistency.test.ts, since keeping provenance beside the tree is what makes this failure possible — depends on T041
+- [ ] T046 [US3] Export `why()` from src/index.ts — depends on T044
 
 **Checkpoint**: Every value accounts for itself, including the values that lost.
 
@@ -156,18 +159,18 @@ each with a position in a real document.
 
 ### Conformance cases for User Story 4 (write first)
 
-- [ ] T044 [P] [US4] Cases for an unknown `cascade` value and a non-string `cascade` value, asserting `unknown-cascade-strategy` at the value's position, in tests/corpus/cases/merge-policy/unknown/
-- [ ] T045 [P] [US4] Case for `cascade: merge-by-key` asserting `unimplemented-cascade-strategy` — **not** `unknown` — since §5.3 reserves the name and the author is early rather than wrong, in tests/corpus/cases/merge-policy/reserved/
-- [ ] T046 [P] [US4] Case for `append` over a scalar and over a mapping, asserting `append-over-non-sequence` in the layer that supplied the offending value, in tests/corpus/cases/merge-policy/append-misuse/
-- [ ] T047 [P] [US4] Case asserting a **config** declaring `cascade` is ignored and the fold proceeds as though it were not written (FR-015), in tests/corpus/cases/merge-policy/config-policy/
+- [ ] T047 [P] [US4] Cases for an unknown `cascade` value and a non-string `cascade` value, asserting `unknown-cascade-strategy` at the value's position, in tests/corpus/cases/merge-policy/unknown/
+- [ ] T048 [P] [US4] Case for `cascade: merge-by-key` asserting `unimplemented-cascade-strategy` — **not** `unknown` — since §5.3 reserves the name and the author is early rather than wrong, in tests/corpus/cases/merge-policy/reserved/
+- [ ] T049 [P] [US4] Case for `append` over a scalar and over a mapping, asserting `append-over-non-sequence` in the layer that supplied the offending value, in tests/corpus/cases/merge-policy/append-misuse/
+- [ ] T050 [P] [US4] Case asserting a **config** declaring `cascade` is ignored and the fold proceeds as though it were not written (FR-015), in tests/corpus/cases/merge-policy/config-policy/
 
 ### Implementation for User Story 4
 
-- [ ] T048 [US4] Refuse an unknown or non-string `cascade` value, naming the supported strategies, in src/merge/strategy.ts (FR-014) — depends on T008, T006
-- [ ] T049 [US4] Refuse `merge-by-key` distinctly as unimplemented rather than unknown, in src/merge/strategy.ts (FR-014) — depends on T048
-- [ ] T050 [US4] Refuse `append` over a non-sequence at the offending value's position, in src/merge/strategy.ts (FR-013) — depends on T028
-- [ ] T051 [US4] Ignore a config's `cascade` declaration so policy comes from schemas only, in src/merge/strategy.ts (FR-015) — depends on T008
-- [ ] T052 [US4] Report every policy failure the fold can determine independently rather than only the first, in src/merge/fold.ts — depends on T048, T050
+- [ ] T051 [US4] Refuse an unknown or non-string `cascade` value, naming the supported strategies, in src/merge/strategy.ts (FR-014) — depends on T008, T006
+- [ ] T052 [US4] Refuse `merge-by-key` distinctly as unimplemented rather than unknown, in src/merge/strategy.ts (FR-014) — depends on T051
+- [ ] T053 [US4] Refuse `append` over a non-sequence at the offending value's position, in src/merge/strategy.ts (FR-013) — depends on T029
+- [ ] T054 [US4] Ignore a config's `cascade` declaration so policy comes from schemas only, in src/merge/strategy.ts (FR-015) — depends on T008
+- [ ] T055 [US4] Report every policy failure the fold can determine independently rather than only the first, in src/merge/fold.ts — depends on T051, T053
 
 **Checkpoint**: Merge policy belongs to the contract, and the boundary is enforced.
 
@@ -175,12 +178,12 @@ each with a position in a real document.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T053 [P] Publish contracts/precedence.md's numbered list in README.md alongside the merge surface and the v0.3 diagnostic codes (SC-008)
-- [ ] T054 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
-- [ ] T055 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
-- [ ] T056 Confirm all 300 pre-v0.3 tests still pass unchanged, so nothing in specs/001-information-model-yaml-adapter/ or specs/002-resolver-dag-builder/ regressed
-- [ ] T057 Run every validation scenario in specs/003-merge-engine/quickstart.md end to end, reporting any scenario that no longer matches reality and which of the two is wrong
-- [ ] T058 Verify the six merge gates in .specify/memory/constitution.md — noting that gate 3, Monotonicity, is **applicable for the first time** and discharged by T031 and T032 rather than declared not-applicable
+- [ ] T056 [P] Publish contracts/precedence.md's numbered list in README.md alongside the merge surface and the v0.3 diagnostic codes (SC-008)
+- [ ] T057 [P] Confirm merging is deterministic — same pedigree and config give a byte-identical tree and identical chains in identical order — in tests/unit/merge-determinism.test.ts (SC-005)
+- [ ] T058 [P] Confirm a merged tree satisfies every v0.1 invariant, using v0.1's own assertions applied to a merged result, in tests/unit/merged-invariants.test.ts (SC-006)
+- [ ] T059 Confirm all 300 pre-v0.3 tests still pass unchanged, so nothing in specs/001-information-model-yaml-adapter/ or specs/002-resolver-dag-builder/ regressed
+- [ ] T060 Run every validation scenario in specs/003-merge-engine/quickstart.md end to end, reporting any scenario that no longer matches reality and which of the two is wrong
+- [ ] T061 Verify the six merge gates in .specify/memory/constitution.md — noting that gate 3, Monotonicity, is **applicable for the first time** and discharged by T033 and T034 rather than declared not-applicable
 
 ---
 
@@ -211,9 +214,9 @@ story still has its own checkpoint and separately testable value.
 ### Parallel opportunities
 
 - T002 in Setup; T005, T006, T007 in Foundational
-- **All of T012–T017** (US1 cases), **T025–T027** (US2), **T033–T037** (US3), **T044–T047** (US4) —
+- **All of T012–T017** (US1 cases), **T025–T027** (US2), **T035–T040** (US3), **T047–T050** (US4) —
   each group is separate directories with no shared state
-- T053, T054, T055 in Polish
+- T056, T057, T058 in Polish
 
 ---
 
@@ -256,15 +259,15 @@ landing before append, provenance, or policy refusal.
 - **T019 (deep merge is mappings only)** — merging sequences element-wise looks plausible and passes
   every mapping test. T014's replace-wholesale cases are the only guard, and `cascade: append` exists
   precisely so element-wise merging is never needed.
-- **T038 (provenance built during the fold)** — a record assembled by inspecting the merged result
+- **T041 (provenance built during the fold)** — a record assembled by inspecting the merged result
   passes every test about winners and fails only on overridden contributions, which are gone by then.
-  T034 is the guard, and §10 calls this the part that cannot be retrofitted.
-- **T031 (the append property test)** — a property test that generates only well-behaved stacks
+  T036 is the guard, and §10 calls this the part that cannot be retrofitted.
+- **T033 (the append property test)** — a property test that generates only well-behaved stacks
   asserts nothing. It must generate stacks that would break a naive implementation: empty
   contributions, single-layer stacks, layers contributing in orders that tempt a sort.
 - **T022 (merged node spans)** — every node must carry a position that means something. A synthetic
   or borrowed span passes every structural assertion and quietly breaks "open the file and see the
   line", which is the whole point of Principle III.
 
-**Also**: 300 existing tests stay green (T056), and v0.1's invariants apply to merged trees — merge
-does not get an exemption for being downstream (T023, T055).
+**Also**: 300 existing tests stay green (T059), and v0.1's invariants apply to merged trees — merge
+does not get an exemption for being downstream (T023, T058).

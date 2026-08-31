@@ -115,6 +115,7 @@ The model discards comments, quoting style, indentation, anchor names, and autho
 | Struct openness | Open → closed | Closed → open |
 | Defaults (`provide`) | Replace with any value satisfying accumulated demands | Provide a value violating any ancestor demand |
 | `cascade: append` arrays | Append provisions | Remove inherited items (not an operation in v1) |
+| `cascade` strategy itself | Tighten toward accumulation (`replace` → `append`) | Weaken away from it (`append` → `replace`): a descendant declaring `replace` for a key an ancestor made `append` discards every ancestor's contribution, which the row above forbids absolutely. Once a key accumulates, it keeps accumulating. |
 | Types (named) | Narrow inherited type (tightens every usage) | Widen or redefine under `adopts` |
 
 ### 5.3 Merge strategies
@@ -384,6 +385,13 @@ All initial open questions are resolved; amendments are integrated into the arti
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
 - **`required` × `provide`** → settled: guaranteed-key pattern is a feature (non-optional TS property); vacuous only under `final provide` (info lint); retraction monotone-legal but parked. See §5.5.
 - **Naming** → settled: **Cascata**.
+- **Cascade-strategy mutation** → settled: **a strategy may tighten toward accumulation and never away
+  from it.** The table had a row forbidding the removal of inherited items under `append`, and no row at
+  all for changing the strategy — so nothing forbade a descendant declaring `replace` for a key its
+  ancestor declared `append`, which removes every inherited item by another route. Found by
+  cross-artifact analysis of v0.3, whose own draft had chosen "the nearer layer's declaration governs"
+  by analogy with value precedence. Precedence is the right rule for values and the wrong one for
+  policy, because policy decides whether earlier values survive at all. See §5.2.
 - **`$adopts` shape and tilde paths** → settled: **`$adopts` and `$schema` are single string scalars**, and a
   leading `~/` in a **config-authored** reference expands to the user's home directory. Both were silences
   rather than decisions, and both bit an implementer. §6.1 said `$adopts` takes exactly one parent but never

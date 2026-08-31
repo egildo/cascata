@@ -14,6 +14,12 @@ a different thing and not a diagnostic field.
 | `unknown-cascade-strategy` | A `cascade` value that is not a strategy — including a non-string value | The declared value |
 | `unimplemented-cascade-strategy` | `merge-by-key`, reserved by §5.3 but not built | The declared value |
 | `append-over-non-sequence` | `cascade: append` on a key whose value in some layer is not a sequence | The offending value, in the layer that supplied it |
+| `cascade-strategy-weakened` | A descendant declaring `replace` for a key an ancestor declared `append` — it would remove every inherited item, which `SPEC.md` §5.2 forbids | The descendant's declaration |
+
+`cascade-strategy-weakened` is a **monotonicity** refusal, not a syntax one: the declaration is
+perfectly well-formed and would be legal on a key no ancestor had made `append`. It is refused for what
+it would do to inherited values. Tightening the other way — `replace` → `append` — is legal and silent,
+since it removes nothing.
 
 `unknown-cascade-strategy` and `unimplemented-cascade-strategy` are deliberately distinct.
 `merge-by-key` is named in `SPEC.md` §5.3 as reserved, so an author writing it is **early, not

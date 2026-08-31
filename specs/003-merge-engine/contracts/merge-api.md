@@ -15,13 +15,25 @@ why(configuration, pointer) -> WhyResult
 
 WhyResult =
   | { kind: "chain";       entries: ProvenanceEntry[] }   // non-empty, winner first
-  | { kind: "no-value" }                                  // pointer resolves, no layer supplied it
+  | { kind: "synthesized"; contributors: ProvenanceEntry[] }  // no layer supplied THIS node; the
+                                                              // merge built it because descendants
+                                                              // were supplied
   | { kind: "unknown-pointer" }                           // pointer names nothing in the tree
 ```
 
-`why` distinguishing `no-value` from `unknown-pointer` is not a nicety: provenance lives beside the
-tree rather than on the node (research D1), so the two structures can in principle disagree, and this
-is where that disagreement becomes observable instead of silent.
+**All three outcomes are reachable, and that is deliberate.** An earlier draft called the middle case
+`no-value` — "pointer resolves, no layer supplied it" — without saying when that could happen, since
+every *value* comes from somewhere. It happens for **containers the merge synthesized**: a mapping at
+`/a` can exist purely because one layer supplied `/a/x` and another `/a/y`, with no layer ever writing
+`/a` itself. A container a single layer did write returns a normal `chain`, so both container cases
+occur and neither is a special case of the other.
+
+`synthesized` carries its contributors rather than being empty, because "the merge built this from
+these layers" is the useful answer and "nothing" is not.
+
+Distinguishing these from `unknown-pointer` is not a nicety: provenance lives beside the tree rather
+than on the node (research D1), so the two structures can in principle disagree, and this is where
+that disagreement becomes observable instead of silent.
 
 ## Behavioral contract
 

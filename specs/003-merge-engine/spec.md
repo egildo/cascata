@@ -87,6 +87,11 @@ the result contains both layers' items, in root-to-leaf order, with neither laye
 3. **Given** a key declared `cascade: append` where a layer's value is not a sequence, **When**
    merged, **Then** it is refused: `append` is meaningless over a scalar or a mapping.
 4. **Given** a key with no `cascade` declared, **When** merged, **Then** it behaves as `replace`.
+5. **Given** an ancestor declaring `cascade: append` and a descendant declaring `replace` for the
+   same key, **When** merged, **Then** it is refused — weakening a strategy away from accumulation
+   would remove inherited items (§5.2).
+6. **Given** an ancestor declaring `replace` and a descendant declaring `append`, **When** merged,
+   **Then** it is permitted: tightening toward accumulation removes nothing.
 
 ---
 
@@ -112,12 +117,14 @@ for that key's pointer and confirm the chain names all three in order, winner fi
 2. **Given** the pointer of a key only one layer supplied, **When** `why` is asked, **Then** the
    chain has exactly one entry.
 3. **Given** a pointer that names nothing in the merged result, **When** `why` is asked, **Then** it
-   says so distinctly, rather than returning an empty chain that could be mistaken for a value no
-   layer supplied.
-4. **Given** a key under `cascade: append`, **When** `why` is asked, **Then** the chain names every
+   says so distinctly, rather than returning an empty chain.
+4. **Given** the pointer of a mapping that exists only because two layers each supplied a different
+   key beneath it, **When** `why` is asked, **Then** it answers *synthesized* and names both
+   contributors — distinct from a container one layer wrote, which answers with a chain.
+5. **Given** a key under `cascade: append`, **When** `why` is asked, **Then** the chain names every
    layer that contributed items — accumulation has no single winner, and the answer must not pretend
    otherwise.
-5. **Given** any merged value, **When** its provenance is inspected, **Then** every entry carries a
+6. **Given** any merged value, **When** its provenance is inspected, **Then** every entry carries a
    position in a real document, so an author can open the file and see the line.
 
 ---
@@ -200,8 +207,10 @@ and a config attempting to declare `cascade`.
   than as unknown.
 - **FR-015**: Merge policy MUST come from schemas only. A `cascade` declared by a config MUST NOT
   take effect.
-- **FR-016**: Where layers declare different strategies for one key, the outcome MUST be defined and
-  deterministic.
+- **FR-016**: A strategy MAY tighten toward accumulation and MUST NOT weaken away from it. A
+  descendant declaring `replace` for a key an ancestor declared `append` MUST be refused: it discards
+  every ancestor's contribution, which §5.2 forbids absolutely. `replace` → `append` is legal, since
+  it removes nothing. Once a key accumulates, it keeps accumulating.
 
 **Provenance** (§10)
 
@@ -213,8 +222,11 @@ and a config attempting to declare `cascade`.
   only the winner, and not only the layers that differed.
 - **FR-020**: For an `append` key, the chain MUST name every contributing layer, since accumulation
   has no single winner.
-- **FR-021**: `why` MUST answer for a pointer, and MUST distinguish "no layer supplied this" from
-  "this pointer names nothing".
+- **FR-021**: `why` MUST answer for a pointer, distinguishing three outcomes: a **chain** for a value
+  or container some layer supplied; **synthesized**, naming its contributors, for a container that
+  exists only because descendants were supplied and no layer wrote it; and **unknown pointer** for
+  one that names nothing in the tree. All three MUST be reachable — an outcome that cannot occur is a
+  distinction nobody can rely on.
 - **FR-022**: Provenance MUST record what was **overridden**, not only what won — including a layer's
   contribution that appears nowhere in the merged result because a nearer layer replaced it. This is
   the observable consequence of building provenance during the fold rather than reconstructing it
@@ -276,9 +288,12 @@ and a config attempting to declare `cascade`.
   fully constructible now; the `provide` row's demand-satisfaction clause is not. Following the
   lesson v0.2 learned three times, the untestable half is declared rather than simulated — a stub
   constraint would make a green test assert against a fiction.
-- **Where layers disagree on strategy, the nearer layer's declaration governs**, consistent with
-  precedence everywhere else. Recorded as a default rather than a quotation: §5.3 says policy belongs
-  to the contract but does not say which contract wins when a chain disagrees.
+- **A strategy may tighten toward accumulation and never away from it** — not "the nearer layer
+  governs", which an earlier draft of this spec assumed by analogy with value precedence. That
+  analogy was wrong, and cross-artifact analysis caught it: precedence is the right rule for values
+  and the wrong one for policy, because policy decides whether earlier values survive at all. A
+  descendant switching `append` back to `replace` would remove every inherited item, which §5.2
+  forbids. `SPEC.md` §5.2 gained the row that was missing and now settles it (logged in §15).
 - **A config's `cascade` is ignored rather than refused.** A config is data; policy is contract. This
   is the more forgiving of the two readings FR-015 permits and is recorded so a future reviewer knows
   it was chosen rather than overlooked.

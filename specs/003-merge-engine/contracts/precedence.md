@@ -12,19 +12,26 @@ For any key, the value is decided by the first rule that applies:
 
 1. **A nearer layer beats a further one.** Layers rank root-first: the root schema is lowest, each
    `$adopts` descendant higher, and the config highest of all.
-2. **Within a layer, an explicit value beats a `provide`.** A config's own value is explicit; a
-   schema contributes only through `provide` in this milestone.
-3. **Mappings on both sides merge deeply**, rule 1 applying independently to each key inside. This is
+2. **Mappings on both sides merge deeply**, rule 1 applying independently to each key inside. This is
    the only rule that recurses.
-4. **Any other pairing replaces**, wholesale — a scalar over a mapping, a sequence over a sequence, a
+3. **Any other pairing replaces**, wholesale — a scalar over a mapping, a sequence over a sequence, a
    mapping over a scalar. Deep merge is for mappings only.
-5. **Unless the key is declared `cascade: append`**, in which case sequences accumulate root-first
+4. **Unless the key is declared `cascade: append`**, in which case sequences accumulate root-first
    instead of replacing, and no contribution is ever removed.
-6. **An explicit null is a value**, and replaces by rule 1. It is not an absence that yields to a
+5. **An explicit null is a value**, and replaces by rule 1. It is not an absence that yields to a
    provide.
-7. **Absence contributes nothing.** A layer silent on a key neither overrides nor clears it.
+6. **Absence contributes nothing.** A layer silent on a key neither overrides nor clears it.
+
+A rule numbered 2 in an earlier draft — "within a layer, an explicit value beats a `provide`" — was
+removed as unconstructible. §9 puts a schema's data only under `keys.*.provide` and a config's only at
+top level, so no single layer holds both, and the rule could never fire. What it was reaching for is
+already rule 1: the config outranks every schema, so its explicit values beat their provisions.
 
 ## What is not in the list
+
+A **strategy** does not participate either — it is not a value that wins, it is the rule deciding how
+values combine. Which strategy applies is settled before precedence runs, by §5.2's constraint that a
+strategy may tighten toward accumulation and never away from it (v0.3 FR-016).
 
 `demand` does not participate — constraints are checked after the fold, in v0.4, against the merged
 result. `seal` and `final` do not participate: they constrain what a *descendant schema* may declare,
