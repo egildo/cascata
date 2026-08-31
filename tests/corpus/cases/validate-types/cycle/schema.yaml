@@ -1,0 +1,11 @@
+types:
+  a:
+    demand:
+      type: b
+  b:
+    demand:
+      type: a
+keys:
+  x:
+    demand:
+      type: a

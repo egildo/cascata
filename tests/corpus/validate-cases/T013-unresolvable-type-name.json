@@ -1,0 +1,20 @@
+{
+  "name": "T013: a type: naming something no layer declares and no built-in provides is refused as unresolvable (v0.4 FR-012, unchanged; spec.md Acceptance Scenario 5)",
+  "cites": "v0.5 FR-006",
+  "fixtureDir": "validate-types/unresolvable",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-type-name",
+        "document": "schema.yaml",
+        "line": 4,
+        "column": 13,
+        "demand": { "pointer": "/keys/homepage/demand/type", "document": "schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

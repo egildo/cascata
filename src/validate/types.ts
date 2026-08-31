@@ -370,6 +370,19 @@ export function cycleDiagnostics(declarations: readonly TypeDeclaration[]): read
           }),
         );
         cycleFound = true;
+        // Mark every name actually *in* the cycle (from where it closes
+        // back to `current.name`, through to the top of the stack) as
+        // globally cleared — not just `current.name` — so a later `start`
+        // elsewhere in `declarations` does not re-discover and re-report
+        // the identical cycle from a different entry point. Without this,
+        // a two-node cycle a->b->a is reported twice: once starting from
+        // `a` ("a -> b -> a") and once from `b` ("b -> a -> b") — the same
+        // cycle, not two independent ones (v0.5 FR-031's collect-all is
+        // about independent failures, not restatements of one).
+        const cycleStart = stack.indexOf(current.name);
+        for (const name of stack.slice(cycleStart)) {
+          globallyCleared.add(name);
+        }
         return;
       }
       stack.push(current.name);

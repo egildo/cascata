@@ -1,0 +1,8 @@
+{
+  "name": "T012: a type name in array and union position resolves like a built-in name (spec.md Acceptance Scenario 4)",
+  "cites": "v0.5 FR-005",
+  "fixtureDir": "validate-types/array-union",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

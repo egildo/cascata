@@ -1,0 +1,8 @@
+{
+  "name": "T016: a types: section written by a config rather than a schema is ignored as ordinary data (v0.3 FR-015, v0.4 FR-003; spec.md Acceptance Scenario 8)",
+  "cites": "v0.5 FR-004",
+  "fixtureDir": "validate-types/config-ignored",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

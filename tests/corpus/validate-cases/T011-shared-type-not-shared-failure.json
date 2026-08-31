@@ -1,0 +1,21 @@
+{
+  "name": "T011: a type used by several keys is not a shared failure -- only the violating key is reported (spec.md Acceptance Scenario 3)",
+  "cites": "v0.5 FR-007",
+  "fixtureDir": "validate-types/shared",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 3,
+        "column": 4,
+        "pointer": "/b",
+        "demand": { "pointer": "/types/resource/demand/minLength", "document": "schema.yaml", "line": 5, "column": 18 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

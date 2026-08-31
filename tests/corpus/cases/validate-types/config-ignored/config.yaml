@@ -1,0 +1,6 @@
+$schema: ./schema.yaml
+types:
+  resource:
+    demand:
+      type: int
+name: ok

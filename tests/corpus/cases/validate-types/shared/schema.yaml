@@ -1,0 +1,12 @@
+types:
+  resource:
+    demand:
+      type: string
+      minLength: 5
+keys:
+  a:
+    demand:
+      type: resource
+  b:
+    demand:
+      type: resource

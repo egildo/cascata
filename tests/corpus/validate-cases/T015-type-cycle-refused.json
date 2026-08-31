@@ -1,0 +1,20 @@
+{
+  "name": "T015: a type whose definition refers to itself through a cycle of other types is refused rather than followed (v0.2's cycle-is-an-error precedent; spec.md Acceptance Scenario 7)",
+  "cites": "v0.5 FR-009",
+  "fixtureDir": "validate-types/cycle",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unresolvable-type-cycle",
+        "document": "schema.yaml",
+        "line": 3,
+        "column": 5,
+        "demand": { "pointer": "/types/a", "document": "schema.yaml", "line": 3, "column": 5 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

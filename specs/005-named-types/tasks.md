@@ -54,13 +54,13 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 
 ### Conformance cases for User Story 1 (write first)
 
-- [ ] T010 [P] [US1] Cases: a conforming value passes, a violating value is reported naming the type declaration's own position (spec.md Acceptance Scenarios 1–2) — `tests/corpus/cases/validate-types/basic/`
-- [ ] T011 [P] [US1] Case: a shared type, only one of two usages violates (Acceptance Scenario 3) — `tests/corpus/cases/validate-types/shared/`
-- [ ] T012 [P] [US1] Case: a type name in array/union position (`resource[]`, `resource | null`) resolves like a built-in (Acceptance Scenario 4) — `tests/corpus/cases/validate-types/array-union/`
-- [ ] T013 [P] [US1] Case: an unresolvable name is refused, not permissive (Acceptance Scenario 5, FR-006) — `tests/corpus/cases/validate-types/unresolvable/`
-- [ ] T014 [P] [US1] Cases: absent/empty/non-mapping `types:` contributes nothing (Acceptance Scenario 6, FR-003) — `tests/corpus/cases/validate-types/empty-section/`
-- [ ] T015 [P] [US1] Case: a self-referential and a two-type cycle are both refused, not hung (Acceptance Scenario 7, FR-009) — `tests/corpus/cases/validate-types/cycle/`
-- [ ] T016 [P] [US1] Case: a config's own `types:` section is ignored (Acceptance Scenario 8, FR-004) — `tests/corpus/cases/validate-types/config-ignored/`
+- [x] T010 [P] [US1] Cases: a conforming value passes, a violating value is reported naming the type declaration's own position (spec.md Acceptance Scenarios 1–2) — `tests/corpus/cases/validate-types/basic/`
+- [x] T011 [P] [US1] Case: a shared type, only one of two usages violates (Acceptance Scenario 3) — `tests/corpus/cases/validate-types/shared/`
+- [x] T012 [P] [US1] Case: a type name in array/union position (`resource[]`, `resource | null`) resolves like a built-in (Acceptance Scenario 4) — `tests/corpus/cases/validate-types/array-union/`
+- [x] T013 [P] [US1] Case: an unresolvable name is refused, not permissive (Acceptance Scenario 5, FR-006) — `tests/corpus/cases/validate-types/unresolvable/`
+- [x] T014 [P] [US1] Cases: absent/empty/non-mapping `types:` contributes nothing (Acceptance Scenario 6, FR-003) — `tests/corpus/cases/validate-types/empty-section/`
+- [x] T015 [P] [US1] Case: a self-referential and a two-type cycle are both refused, not hung (Acceptance Scenario 7, FR-009) — `tests/corpus/cases/validate-types/cycle/`
+- [x] T016 [P] [US1] Case: a config's own `types:` section is ignored (Acceptance Scenario 8, FR-004) — `tests/corpus/cases/validate-types/config-ignored/`
 
 ### Implementation for User Story 1
 

@@ -1,0 +1,11 @@
+types:
+  resource:
+    demand:
+      type: string
+keys:
+  tags:
+    demand:
+      type: resource[]
+  maybe:
+    demand:
+      type: resource | null

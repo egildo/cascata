@@ -1,0 +1,8 @@
+{
+  "name": "T014b: a non-mapping types: section contributes nothing (spec.md Acceptance Scenario 6)",
+  "cites": "v0.5 FR-003",
+  "fixtureDir": "validate-types/non-mapping-section",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

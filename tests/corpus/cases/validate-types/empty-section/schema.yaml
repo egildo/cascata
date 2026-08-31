@@ -1,0 +1,5 @@
+types: {}
+keys:
+  name:
+    demand:
+      type: string
