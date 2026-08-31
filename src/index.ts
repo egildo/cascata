@@ -664,14 +664,16 @@ export type MergeResult = { readonly ok: true; readonly configuration: MergedCon
  * to `cascade: append`, which accumulates root-first instead
  * (contracts/precedence.md).
  *
- * **Scope, as of User Story 2 (Phase 4's checkpoint)**: `foldConfiguration`
- * can now produce the `ok: false` branch — `cascade-strategy-weakened`
- * (v0.3 FR-016), when a descendant schema declares `replace` for a key an
-   * All of this milestone's merge-policy validation is implemented: an
-   * unknown or non-string `cascade`, the reserved `merge-by-key`, `append`
-   * over a non-sequence, and a strategy weakened away from accumulation.
-   * Vocabulary and data-shape failures are reported together (v0.3 FR-028).
- * implemented.
+ * A strategy takes effect from the layer that declares it **downward**: it
+ * does not reach back over a `replace` an ancestor had already settled
+ * (v0.3 FR-026; `SPEC.md` §5.3's worked cascade spells the outcome out).
+ *
+ * All of this milestone's merge-policy validation is implemented: an unknown
+ * or non-string `cascade`, the reserved `merge-by-key`, `append` over a
+ * non-sequence, and a strategy weakened away from accumulation. Vocabulary
+ * failures and data-shape failures are found by different passes and are
+ * reported **together** (v0.3 FR-028) — reporting one category at a time was
+ * a real gap, closed in T061.
  */
 export function merge(resolved: MergeInput): MergeResult {
   return foldConfiguration(resolved.graph, resolved.pedigree);
