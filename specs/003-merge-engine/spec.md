@@ -158,6 +158,9 @@ and a config attempting to declare `cascade`.
    ignored or refused — but never honoured, because policy belongs to the contract (§5.3).
 4. **Given** two layers declaring **different** strategies for the same key, **When** merged, **Then**
    the outcome is defined and deterministic rather than dependent on fold order.
+5. **Given** one key with an unknown strategy and another key accumulating over a non-sequence,
+   **When** merged, **Then** both are reported from one attempt — the two are found by different
+   passes, and stopping after the first pass reports only one.
 
 ---
 
@@ -218,6 +221,12 @@ and a config attempting to declare `cascade`.
   than as unknown.
 - **FR-015**: Merge policy MUST come from schemas only. A `cascade` declared by a config MUST NOT
   take effect.
+- **FR-028**: Merge MUST report every policy failure it can determine independently, rather than only
+  the first — and rather than only the first *category*. v0.1 (FR-019) and v0.2 (FR-025) both state
+  this obligation for their own stages; v0.3 omitted it, and the omission produced exactly the
+  behaviour those requirements exist to prevent: vocabulary failures and accumulation failures are
+  found by different passes, and reporting stopped after the first pass that found anything. A config
+  author debugging merge policy one category at a time is the regression this forbids.
 - **FR-016**: A strategy MAY tighten toward accumulation and MUST NOT weaken away from it. A
   descendant declaring `replace` for a key an ancestor declared `append` MUST be refused: it discards
   every ancestor's contribution, which §5.2 forbids absolutely. `replace` → `append` is legal, since

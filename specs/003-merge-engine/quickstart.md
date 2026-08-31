@@ -50,6 +50,11 @@ Three layers contributing to a key declared `cascade: append`, one of them contr
 sequence.
 
 **Expected**: every item from every layer, root-first, with the empty contribution changing nothing.
+
+Then the case this guide originally skipped, and which two `SPEC.md` amendments turned on: a root
+providing `[a]` with no strategy, a middle layer `[b]`, and a leaf declaring `append` and providing
+`[c]` must yield **`[b, c]`**, not `[a, b, c]`. A strategy governs from the layer that declares it
+downward; it does not reach back over a `replace` that had already settled.
 Then run the property test: for randomly generated layer stacks, no ancestor's contribution is ever
 absent. That is the §5.2 row this milestone is obliged to encode, and the example alone does not
 discharge it.
@@ -64,8 +69,8 @@ by inspecting the result rather than the fold could not produce them.
 
 ### 6. `why` distinguishes all three of its answers (US3, SC-004)
 
-Ask `why` for a mapping one layer wrote, then for a mapping that exists only because two layers each
-supplied a different key beneath it, then for a pointer that names nothing at all.
+Ask `why` for a mapping one layer wrote, then for a mapping two layers both contributed to — **with
+overlapping keys, not only disjoint ones** — then for a pointer that names nothing at all.
 
 **Expected**: a `chain`, then `synthesized` naming both contributors, then `unknown-pointer`. The
 middle case is the one worth constructing deliberately — an earlier draft called it `no-value` and
