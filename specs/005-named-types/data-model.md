@@ -25,9 +25,13 @@ One named bundle of demands, contributed by one schema layer's `types:` section.
 What a given layer can resolve. Not a stored structure — computed on demand from
 `MergedConfiguration.layers`: at layer `L`, the reachable declarations are every `Type Declaration`
 whose `layerRank <= L.rank`, plus the built-in set (`string`, `int`, `float`, `bool`, `null`,
-`mapping`, `sequence`, `url`, `path`, `glob`, unchanged from v0.4 FR-011). A collision (below) makes a
-name's declarations plural within one pedigree; a colliding name resolves to nothing (skipped, not
-guessed) for value-checking, since the collision diagnostic already fails the whole `validate()` call.
+`mapping`, `sequence`, `url`, `path` — nine names; `glob` left the set in v0.5, `SPEC.md` §15: a
+resource is singular, an unexpanded glob is a string nothing interprets, and `type: glob` is now an
+ordinary `unknown-type-name`). Reachability now resolves **nearest-wins** (`SPEC.md` §15, FR-016),
+not to a unique-or-nothing candidate: two or more reachable declarations of one name is an ordinary
+narrowing chain, not a collision. A genuine collision — two *unrelated* declarations, which v1's
+single-parent-chain pedigree cannot produce — remains an error but is structurally unreachable at
+this milestone (FR-016b).
 
 ## Resolved Type
 
@@ -54,17 +58,17 @@ set), the value must additionally match at least one of the narrowed alternative
 | Code | Refuses |
 |---|---|
 | `unknown-type-entry-keyword` | A `types.<name>` entry containing anything but `demand`/`accept` (FR-002) |
-| `type-name-collision` | Two or more schema layers declaring the same unqualified type name (FR-017) — including a redeclaration that would, by content, look like narrowing (research.md D1) |
+| `type-name-collision` | Two *unrelated* schema layers declaring the same unqualified type name (FR-016b) — reserved for a multi-adoption future; structurally unreachable in v1, since every pedigree is one `$adopts` chain and every pair of layers is ancestor/descendant (`SPEC.md` §15, research.md D1's settled-note) |
 | `builtin-type-redeclared` | A schema declaring a type whose name is one of the built-ins (FR-018) |
-| `type-qualifier-collision` | Two documents in one pedigree whose `$id`s share a last segment (FR-019a) |
+| `type-qualifier-collision` | Two *unrelated* documents in one pedigree whose `$id`s share a last segment (FR-019a) — likewise reserved and unreachable in v1 |
 | `unresolvable-type-cycle` | A type definition that refers to itself, directly or through other types (FR-009) |
 | `type-accept-widened` | A usage's (or a type's own) `accept` naming an alternative outside the declared set (FR-013) |
 
 `depth-limit-exceeded` (v0.1) is reused, not repurposed, for FR-025 — see research.md D4.
 `unknown-type-name` (v0.4) is reused for every unresolvable name — a typo, a name only reachable from
-a descendant, an unreachable qualifier, or a colliding name skipped for checking — since all of these
-are, from a checker's standpoint, "a rule that cannot be resolved" (v0.4 FR-012's own framing,
-unchanged).
+a descendant, or an unreachable qualifier — since all of these are, from a checker's standpoint, "a
+rule that cannot be resolved" (v0.4 FR-012's own framing, unchanged). A redeclared name is no longer
+in this list at all: it resolves nearest-wins (FR-016), not as a skipped/unresolvable case.
 
 ## Nested demand structure (recursion)
 

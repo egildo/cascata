@@ -10,9 +10,9 @@
       {
         "code": "type-accept-widened",
         "document": "schema.yaml",
-        "line": 13,
+        "line": 12,
         "column": 11,
-        "demand": { "pointer": "/keys/homepage/demand/accept", "document": "schema.yaml", "line": 13, "column": 11 },
+        "demand": { "pointer": "/keys/homepage/demand/accept", "document": "schema.yaml", "line": 12, "column": 11 },
         "pedigreePosition": 0
       }
     ]

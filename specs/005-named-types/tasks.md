@@ -153,6 +153,29 @@ mechanism remains implemented, correctly generalized, and honestly documented as
 
 ---
 
+## Phase 6d: Correction — `glob` dropped as a built-in type (`SPEC.md` §15, commit 4fbb2b1)
+
+**Goal**: `resource` is singular — `url`/`path` denote one thing, `glob` denotes a set, and an
+unexpanded glob is a string nothing interprets (computation/Principle VI, non-deterministic, a
+security surface, per the amendment). `glob` leaves the built-in set and `picomatch` leaves with it
+(its only call site anywhere in the codebase — confirmed by trace before removing, not assumed).
+
+- [x] T059 Confirm `picomatch`'s only call site is `src/validate/check.ts`'s `isValidGlob` (the coordinator's own claim) — traced via `grep -rn picomatch src tests package.json`, one import + one call site found, nothing else
+- [x] T060 `src/validate/typeexpr.ts`: remove `"glob"` from `BUILTIN_TYPE_NAMES` — nine names remain
+- [x] T061 `src/validate/check.ts`: remove the `picomatch` import, `isValidGlob`, and the `"glob"` case in `matchesBuiltinLeaf`
+- [x] T062 `package.json`: remove `picomatch` and `@types/picomatch`; `pnpm install` to regenerate `pnpm-lock.yaml` (picomatch remains in the lockfile only as `vite`/`vitest`'s own transitive devDependency via `fdir`/`tinyglobby` — confirmed via `pnpm why picomatch` — never Cascata's own dependency, so this is not a partial removal)
+- [x] T063 `CLAUDE.md`: correct the non-negotiables list back to "`yaml` is the only runtime dependency" — the second time this line has needed correcting for the same dependency
+- [x] T064 [P] Case: `tests/unit/typeexpr.test.ts` — remove `glob` from "every FR-011 name resolves"; add a dedicated negative case, `'glob' does not resolve`
+- [x] T065 [P] Case: `type: glob` on its own is an ordinary `unknown-type-name`, not a distinct code — `tests/corpus/cases/validate-types/glob-is-unknown/` (new; no §7 keyword is left for it to be early about)
+- [x] T066 [P] Every existing v0.5 fixture whose `types.*.accept` list included `glob` (`accept-narrow`, `accept-full`, `accept-widened`, `widens-inert`, `qualified-narrows-nearest`, `narrows-with-restated-key`, `narrowing-not-error`, `narrows-without-restated-key`) — `glob` removed as a line, line-shift positions re-verified per file (only `accept-widened`'s `T030` needed a position update, line 13 → 12; every other fixture's asserted positions sat before the removed line or asserted no position at all)
+- [x] T067 README.md, `specs/005-named-types/{data-model.md,quickstart.md,plan.md}`: realign to nine built-in names and no `picomatch`. `research.md` D3's stale example citation gets a settled-note (not a rewrite) — its own AND-composition decision is unaffected, only the illustrative `accept: [url, path, glob]` quote is stale
+- [x] T068 Confirm every pre-existing test still passes unchanged, or with an honestly-changed expectation, never a reshaped fixture forced to keep passing (see the milestone report: no case's pass/fail *outcome* changed at all — `glob` was never the sole reason any existing value passed, `path`'s own permissiveness already covered every value used)
+
+**Checkpoint**: `glob` is gone from the runtime, the vocabulary, and the dependency graph together;
+nothing pretends it is still there, and nothing was reshaped to hide that it is gone.
+
+---
+
 ## Phase 7: Property Tests & Polish
 
 - [x] T040 [P] Property test: the **Types (named)** §5.2 row — random pedigrees, an ancestor's own usage never resolves a descendant-only name; a colliding pedigree never validates — `tests/unit/validate-type-monotonicity.test.ts` (FR-029)

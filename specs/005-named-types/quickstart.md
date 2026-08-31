@@ -41,8 +41,11 @@ v0.4's own report recorded as unconstructible.
 
 ### 6. A usage narrows a type's declared alternatives (US3, Acceptance Scenario 1)
 
-`resource` declares `accept: [url, path, glob]`; a key usage narrows to `accept: [url]`.
-**Expected**: a `path`-shaped value the type alone would admit is rejected at this usage.
+`resource` declares `accept: [url, path]`; a key usage narrows to `accept: [url]`.
+**Expected**: a `path`-shaped value the type alone would admit is rejected at this usage. (`glob`
+left the built-in set in v0.5 — `SPEC.md` §15 — so it no longer appears in this example; see
+`tests/corpus/cases/validate-types/glob-is-unknown/` for `type: glob` on its own, now an ordinary
+`unknown-type-name`.)
 
 ### 7. Widening a usage's accept beyond the type's declared set is refused (US3, Acceptance Scenario 2)
 

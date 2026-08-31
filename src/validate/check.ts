@@ -33,7 +33,6 @@
  * level (layers, keys, keywords, nesting depth, type resolution).
  */
 
-import picomatch from "picomatch";
 import type { Node } from "../model/node.js";
 import { pointerFromPath, resolvePointer } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
@@ -121,18 +120,6 @@ function isValidPath(value: string): boolean {
   return value.length > 0 && !value.includes(" ");
 }
 
-function isValidGlob(value: string): boolean {
-  if (value.length === 0) {
-    return false;
-  }
-  try {
-    picomatch(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function matchesBuiltinLeaf(node: Node, name: string): boolean {
   switch (name) {
     case "string":
@@ -153,8 +140,6 @@ function matchesBuiltinLeaf(node: Node, name: string): boolean {
       return node.type === "scalar" && node.kind === "string" && isValidUrl(node.value);
     case "path":
       return node.type === "scalar" && node.kind === "string" && isValidPath(node.value);
-    case "glob":
-      return node.type === "scalar" && node.kind === "string" && isValidGlob(node.value);
     default:
       return false;
   }

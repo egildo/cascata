@@ -20,10 +20,13 @@ where the two milestones' code sits side by side, which is `src/index.ts` and `s
 
 ## Non-negotiables
 
-- **`yaml` and `picomatch` are the only runtime dependencies**, and both are named in the
-  constitution's own allow-list — `picomatch` arrived in v0.4, implementing §7's `glob` → gitignore
-  syntax. Node built-ins (`node:crypto`, `fetch`, WHATWG `URL`, `TextDecoder`) are not dependencies.
-  Adding anything else needs a constitution amendment.
+- **`yaml` is the only runtime dependency.** `picomatch` arrived in v0.4 for §7's `glob` → gitignore
+  syntax and left again in v0.5 when `glob` itself was dropped as a built-in type (SPEC.md §15) —
+  the second time this line has needed correcting for the same dependency; the constitution's own
+  "Technology & Security Constraints" list is a *ceiling* ("limited to..."), so it still names
+  `picomatch` and needs no amendment for using fewer than it allows. Node built-ins (`node:crypto`,
+  `fetch`, WHATWG `URL`, `TextDecoder`) are not dependencies. Adding anything else needs a
+  constitution amendment.
 - **No network access in tests, ever.** Remote behavior runs against recorded responses.
 - **TypeScript `strict` + `noUncheckedIndexedAccess`. No `any`. No assertion casts on the node
   model** (`Scalar`/`Mapping`/`Sequence`/`Node`). One documented cast exists, on `yaml`'s own AST

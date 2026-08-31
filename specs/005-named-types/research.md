@@ -162,6 +162,16 @@ declared set makes any usage-level selection "outside the declared set" by const
 exactly `spec.md`'s own Edge Case ("`accept` on a type whose demands are not a union... must be
 decided") resolved by reusing FR-013's existing mechanism rather than inventing a new one.
 
+**SETTLED-NOTE (added when `glob` was dropped as a built-in type, `SPEC.md` §15, commit
+4fbb2b1 — D3's own AND-composition decision above is unaffected; only the illustrative citation
+is stale).** The worked example cited above (`accept: [url, path, glob]`) no longer exists in
+`SPEC.md` §7, which now reads `accept: [url, path]` — `glob` denoted a *set*, not a singular
+resource, and an unexpanded glob is a string nothing interprets (§15's own reasoning). The
+citation's own point stands regardless of which three (or two) built-in names populate the
+example: `url`/`path`(/`glob`) were all refinements of `string`, so AND-vs-replaces was
+underdetermined by that example either way — dropping one member of an already-underdetermining
+set changes nothing about why it underdetermined the question.
+
 ## D4 — Depth-bounded recursion (FR-025), probed
 
 **Probe**: node/v8's default stack comfortably tolerates recursion far past any depth a real

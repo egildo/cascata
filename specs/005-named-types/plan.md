@@ -24,7 +24,7 @@ under this reading — reported, not silently substituted, per D1's own note.
 
 **Language/Version**: TypeScript 5.x, `strict` + `noUncheckedIndexedAccess`, Node LTS
 
-**Primary Dependencies**: none added. `yaml` and `picomatch` remain the only runtime dependencies.
+**Primary Dependencies**: none added. `yaml` and `picomatch` remained the only runtime dependencies at plan time; **stale as of `SPEC.md` §15** (commit 4fbb2b1) — `glob` left the built-in type set mid-milestone and `picomatch` left with it, leaving `yaml` alone.
 
 **Testing**: Vitest, table-driven, plus property tests for the two §5.2 rows this milestone newly
 makes fully constructible (Types (named), and Struct openness stays deferred — `seal` is still v0.7,

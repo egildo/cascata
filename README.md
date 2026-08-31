@@ -466,10 +466,14 @@ if (result.ok) {
 
 Ten closed keywords, **all implemented as of v0.5**: `type`, `items`, `keys`, `required`, `min`,
 `max`, `minLength`, `maxLength`, `pattern`, `enum`. `format` is **not** in the list — `SPEC.md` §15
-dropped it in favor of `type: url`/`path`/`glob`, so it is `unknown-demand-keyword` like any other
+dropped it in favor of `type: url`/`path`, so it is `unknown-demand-keyword` like any other
 typo. `type` is SPEC.md §9.1's leaf DSL — unions (`|`), arrays (`T[]`, binding tighter than `|`),
-parentheses — resolving against the model's own kinds, `url`/`path`/`glob`, and any name declared in
-a `types:` section reachable from the usage's own layer (below). `keys` and `items` both nest to
+parentheses — resolving against the model's own kinds, `url`/`path`, and any name declared in
+a `types:` section reachable from the usage's own layer (below). `glob` is **not** a built-in type
+(`SPEC.md` §15, v1): a resource denotes exactly *one* thing, `glob` denotes a *set*, and an
+unexpanded glob is a string nothing interprets — `type: glob` is an ordinary `unknown-type-name`,
+ready for the expansion/sandbox/determinism story §14's Future list parks it behind. `keys` and
+`items` both nest to
 **arbitrary depth** (v0.5 FR-023), bounded by the same 64-level hazard class as v0.1's own parse-depth
 cap (v0.5 FR-025) — a document deep enough to trip that bound never reaches `validate()` in the first
 place, since `resolve()` refuses it first (see `tests/unit/validate-depth-limit.test.ts`'s own header
@@ -502,7 +506,7 @@ demand bundles, resolved by `type: <name>` exactly like a built-in kind:
 types:
   resource:
     demand: { type: string }
-    accept: [url, path, glob]
+    accept: [url, path]        # both singular — multiplicity belongs in `[]`, never the element
 keys:
   styles:
     demand: { type: resource[] }
@@ -511,7 +515,8 @@ keys:
 types:
   resource:
     accept: [url]              # a descendant redeclaring an inherited name NARROWS it —
-                                # not an error (FR-016a) — governing from here downward
+                                # not an error (FR-016a) — governing from here downward.
+                                # "URLs only; nothing served off local disk."
 keys:
   styles:
     demand: { type: resource[] }   # restated, so the house's narrower resource governs it
@@ -606,8 +611,11 @@ under `tests/unit/` instead, driven directly against `resolve()` with an explici
 
 ## Dependency policy
 
-`yaml` (eemeli's) and, since v0.4, `picomatch` are the only runtime dependencies, per the project
-constitution (`.specify/memory/constitution.md`), which names both by name on its allow-list.
-`picomatch` implements the `glob` built-in type (`SPEC.md` §7: "gitignore pattern syntax, implemented
-via picomatch, cited by name") — not a free implementer choice the way `url`/`path` are. Everything
-else is a dev dependency.
+`yaml` (eemeli's) is the only runtime dependency. `picomatch` arrived in v0.4 to implement the `glob`
+built-in type and left again in v0.5 when `glob` itself was dropped (`SPEC.md` §15 — an unexpanded
+glob is a string nothing interprets; expansion needs a filesystem-reading story `glob` does not have
+until §14's Future list gives it one). The project constitution
+(`.specify/memory/constitution.md`)'s dependency policy is a *ceiling* ("limited to..."), so it still
+names `picomatch` on its allow-list and needs no amendment for using fewer than it allows — see
+`CLAUDE.md`'s non-negotiables, corrected for the same reason a second time. Everything else is a dev
+dependency.

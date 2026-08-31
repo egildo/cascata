@@ -3,7 +3,6 @@ types:
     accept:
       - url
       - path
-      - glob
 keys:
   homepage:
     demand:

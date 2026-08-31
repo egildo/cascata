@@ -5,7 +5,6 @@ types:
     accept:
       - url
       - path
-      - glob
 keys:
   styles:
     demand:

@@ -4,4 +4,3 @@ types:
     accept:
       - url
       - path
-      - glob

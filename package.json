@@ -24,12 +24,10 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "picomatch": "^4.0.7",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
-    "@types/picomatch": "^4.0.3",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

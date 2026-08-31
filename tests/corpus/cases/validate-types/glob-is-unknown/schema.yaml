@@ -1,0 +1,4 @@
+keys:
+  homepage:
+    demand:
+      type: glob

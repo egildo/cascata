@@ -100,7 +100,7 @@ describe("parseTypeExpression — malformed expressions", () => {
 
 describe("resolvesToBuiltin / unresolvedAlternatives — FR-011's closed set, FR-012", () => {
   it("every FR-011 name resolves", () => {
-    for (const name of ["string", "int", "float", "bool", "null", "mapping", "sequence", "url", "path", "glob"]) {
+    for (const name of ["string", "int", "float", "bool", "null", "mapping", "sequence", "url", "path"]) {
       expect(resolvesToBuiltin({ name, depth: 0 })).toBe(true);
     }
   });
@@ -111,6 +111,10 @@ describe("resolvesToBuiltin / unresolvedAlternatives — FR-011's closed set, FR
 
   it("a typo does not resolve", () => {
     expect(resolvesToBuiltin({ name: "strnig", depth: 0 })).toBe(false);
+  });
+
+  it("'glob' does not resolve -- dropped as a built-in type in v1 (SPEC.md §15): a set-matching pattern is not a singular resource, and an unexpanded glob is a string nothing interprets. It is an ordinary unresolvable name now, like any other typo -- not a distinct 'arrives later' code, since there is no §7 keyword left for it to be early about", () => {
+    expect(resolvesToBuiltin({ name: "glob", depth: 0 })).toBe(false);
   });
 
   it("unresolvedAlternatives finds exactly the unresolvable ones in a mixed expression", () => {
