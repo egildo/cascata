@@ -77,12 +77,12 @@ graph. Requires no network.
 3. **Given** a config whose `$schema` begins `~/`, **When** resolved, **Then** it resolves against the
    user's home directory; **and given** a schema whose `$adopts` begins `~/`, **Then** it does not
    expand, and is judged as the literal relative path it is.
-3. **Given** a chain in which one schema is reachable by two different routes, **When** resolved,
+4. **Given** a chain in which one schema is reachable by two different routes, **When** resolved,
    **Then** it is read once and appears once in the graph, matched by canonical identity rather than
    by the text of the reference.
-4. **Given** a schema declaring more than one `$adopts` parent, **When** resolved, **Then** it is
+5. **Given** a schema declaring more than one `$adopts` parent, **When** resolved, **Then** it is
    refused — v1 pedigree is a chain.
-5. **Given** a resolved graph, **When** the pedigree is queried, **Then** each entry reports the
+6. **Given** a resolved graph, **When** the pedigree is queried, **Then** each entry reports the
    identity of its document and where the reference to it was written.
 
 ---

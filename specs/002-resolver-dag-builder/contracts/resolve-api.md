@@ -18,8 +18,12 @@ ResolveResult =
 `sandboxRoot` is **required**. There is no default and none is inferred from the entry document's
 location (FR-022) — a capability is granted, never ambient.
 
-`cacheDir` is **conditionally required**: optional in the type, but resolution refuses the moment it
-reaches an `https://` reference without one. A purely local chain neither needs nor should demand it,
+`cacheDir` is **conditionally required**: optional in the type, but resolution **throws** the moment
+it reaches an `https://` reference without one — an exception, not a diagnostic. Missing it is
+programmer error in the same sense a missing `sandboxRoot` is; the difference is only that it is
+reachable data-dependently rather than at the door, so a caller who wraps only the up-front check
+can still be surprised. Callers resolving anything that may reach a remote reference should supply
+it unconditionally. A purely local chain neither needs nor should demand it,
 and requiring it unconditionally would make every local caller declare a capability it cannot use.
 The posture is the same as `sandboxRoot`'s — granted rather than ambient — enforced where it becomes
 load-bearing rather than at the door.
@@ -27,7 +31,8 @@ load-bearing rather than at the door.
 ## Behavioral contract
 
 1. **Never throws for bad input.** Unreachable documents, cycles, pin mismatches, sandbox escapes
-   are all diagnostics. Exceptions remain for programmer error — a missing `sandboxRoot`.
+   are all diagnostics. Exceptions remain for programmer error — a missing `sandboxRoot`, or a
+   missing `cacheDir` once resolution reaches a remote reference. Those two are the complete list.
 2. **Total.** Every input terminates: cycles are detected, chain length is capped, fetches time out.
 3. **Deterministic.** Same inputs and same cache state produce the same graph, the same pedigree
    order, and the same diagnostics in the same order (SC-009).

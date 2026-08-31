@@ -1,6 +1,19 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.1.1 → 1.2.0
+Bump rationale: MINOR — Principle III's diagnostic obligation is now phased by
+milestone rather than stated as a blanket MUST, and merge gate 5 restated to
+match. The prior wording demanded an RFC 6901 pointer, a violated demand, a
+delegation breadcrumb and a pedigree position of every diagnostic — the full
+v0.4 error contract, naming constructs that do not exist until v0.4 and v0.6.
+No milestone before v0.4 could satisfy it. Found when an implementer ran gate 5
+literally against the Diagnostic type for the first time, at the end of v0.2.
+Prior compliance is unaffected; the change makes the principle satisfiable
+rather than narrowing it.
+
+Prior report (v1.1.1) follows.
+
 Version change: 1.1.0 → 1.1.1
 Bump rationale: PATCH — factual correction, no principle changed. The Security
 paragraph asserted RFC 8785 (JCS) canonicalization for $pin, which SPEC.md §6.1
@@ -89,8 +102,17 @@ cheap to protect continuously and unrecoverable once lost.
 node unconstructible: no optional span fields, no post-hoc attachment, no casts that fabricate
 one. "Parse to *positioned* nodes" is the adapter conformance bar, not an aspiration.
 
-Every diagnostic MUST carry the violated demand (declaring layer + RFC 6901 pointer into that
-document), the offending value (layer + span + delegation breadcrumb), and the pedigree position.
+What a diagnostic MUST carry is **phased**, because the full error contract names things that do not
+exist yet. From the first milestone: a **code**, a **human sentence**, and a **primary span**, whose
+origin identifies the document — so every diagnostic is already traceable to a layer. As the
+constructs arrive, so do their obligations: an **RFC 6901 pointer** and the **violated demand** once
+the constraint checker exists (v0.4), a **delegation breadcrumb** once delegation does (v0.6), and a
+**pedigree position** once the pedigree carries meaning for subsumption (v0.4).
+
+Stating the finished contract as a blanket MUST — which this principle did until v1.2.0 — makes it
+unsatisfiable by every milestone that precedes v0.4, which is not a standard but a standing failure.
+The obligation that never phases: **a diagnostic without a position is not shippable**, and the
+position must be the offending construct's own.
 The canonical error sentence of §10 is a tested output format, not prose. RFC 6901 pointers are
 used verbatim; no bespoke path syntax may be invented anywhere in the codebase.
 
@@ -202,7 +224,10 @@ question open. Every generated spec names the `SPEC.md` article it implements (P
 2. The conformance corpus for every standard the change touches is green (Principle V).
 3. Monotonicity property tests are green, and a new construct has added its table row (II).
 4. No new runtime dependency, or an accompanying amendment to Technology & Security Constraints.
-5. Every new diagnostic carries layer, span, and RFC 6901 pointer (III).
+5. Every new diagnostic carries a code, a sentence, and a primary span whose origin names its
+   document — plus whichever of the phased fields in Principle III the milestone's own
+   constructs make available. Before v0.4 that is code + sentence + span; the gate is not
+   satisfied by a diagnostic lacking a position, at any milestone.
 6. No import crosses the format-blindness boundary of Principle IV.
 
 **Complexity.** Any deviation from a principle MUST appear in the plan's Complexity Tracking with
@@ -228,4 +253,4 @@ and re-runs it after. Every code review verifies the six gates above. Principles
 NON-NEGOTIABLE (I, V) admit no Complexity-Tracking exception: a change that violates them is
 rejected, not justified.
 
-**Version**: 1.1.1 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-30
+**Version**: 1.2.0 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-31

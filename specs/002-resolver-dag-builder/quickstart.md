@@ -36,8 +36,9 @@ the equivalent text.
 
 Resolve a config whose `$schema` names a local schema that itself `$adopts` another.
 
-**Expected**: all three documents read, pedigree listing their identities root-to-leaf, each entry
-naming the reference that brought it in and where that reference was written. No network.
+**Expected**: all three documents read, and the pedigree listing the **two schema** identities
+root-to-leaf — the config is the graph's entry, not a pedigree entry (FR-011). Each entry names the
+reference that brought it in and where that reference was written. No network.
 
 ### 3. Relative paths resolve against the referring document (US2)
 
@@ -95,6 +96,18 @@ A self-referencing schema, a mutual pair, and a chain past `maxChainLength`.
 **Expected**: `reference-cycle` naming every reference in the loop in chain order, and
 `chain-limit-exceeded`. All in bounded time — the failure mode being guarded against is a hang, so a
 test that merely checks the code would pass even against an implementation that took an hour.
+
+### 9b. Amended behaviours reach the guide (added after the Phase 4 amendments)
+
+Two behaviours were specified into `SPEC.md` §9 *after* this guide was written, and a reader
+following it literally would never exercise either.
+
+- **`$adopts` is a single scalar.** A schema writing `$adopts: [a, b]` is refused with
+  `multiple-adoption` — not as a malformed value, but naming the one-parent restriction, because a
+  sequence is what multi-adoption will look like when C3 lands.
+- **Tilde expansion is asymmetric.** A config's `$schema: ~/house.yaml` resolves against the home
+  directory; a schema's `$adopts: ~/parent.yaml` does not expand, because §8.1's razor makes a
+  user-written path consent and a schema-demanded one not.
 
 ### 10. The layering boundary still holds (Principle IV)
 

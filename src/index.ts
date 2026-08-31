@@ -153,8 +153,8 @@ export interface ResolveOptions {
   /**
    * Where fetched remote documents are cached on disk (v0.2 FR-016).
    * **Optional here**, deliberately narrower than
-   * contracts/resolve-api.md's literal `{ sandboxRoot, cacheDir, … }`
-   * shape (which shows it without a `?`): a resolution that never
+   * contracts/resolve-api.md, which marks it `cacheDir?`
+   * and names it conditionally required: a resolution that never
    * reaches a remote reference has nothing to cache, and requiring it
    * unconditionally would gratuitously break every purely-local caller
    * (User Story 2's own tests among them) for a capability they cannot
