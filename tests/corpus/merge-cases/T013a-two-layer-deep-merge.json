@@ -21,6 +21,7 @@
       ]
     },
     "spans": [
+      { "pointer": "/network", "document": "config.yaml", "line": 3, "column": 3, "start": 34, "end": 58 },
       { "pointer": "/network/host", "document": "schema.yaml", "line": 4, "column": 13, "start": 42, "end": 53 },
       { "pointer": "/network/timeout", "document": "config.yaml", "line": 3, "column": 12, "start": 43, "end": 45 },
       { "pointer": "/network/retries", "document": "config.yaml", "line": 4, "column": 12, "start": 57, "end": 58 }
