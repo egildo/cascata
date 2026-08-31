@@ -110,7 +110,7 @@ sequence; every item present, root-first, nothing removed.
 
 - [ ] T029 [US2] Implement `append` accumulation root-first in src/merge/strategy.ts (FR-012) — depends on T018, T008
 - [ ] T030 [US2] Default every undeclared key to `replace` in src/merge/strategy.ts (FR-011) — depends on T008
-- [ ] T031 [US2] Resolve disagreeing strategy declarations deterministically, the nearer layer governing, in src/merge/strategy.ts (FR-016) — depends on T029
+- [ ] T031 [US2] Resolve disagreeing strategy declarations deterministically in src/merge/strategy.ts (v0.3 FR-016) — a descendant may tighten `replace` to `append`, which removes nothing; weakening the other way is T032's refusal. **Superseded wording:** this task said "the nearer layer governing" until `SPEC.md` §5.2 gained its cascade-strategy row; that rule would have let a descendant discard every ancestor's contribution — depends on T029
 - [ ] T032 [US2] Refuse a strategy weakened away from accumulation, per `SPEC.md` §5.2's cascade-strategy row, in src/merge/strategy.ts (v0.3 FR-016) — depends on T029
 
 ### Property tests for User Story 2 (Principle II — the first milestone it binds)
