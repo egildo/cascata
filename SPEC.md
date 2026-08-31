@@ -122,6 +122,46 @@ The model discards comments, quoting style, indentation, anchor names, and autho
 
 Merge policy belongs to the contract, not to individual documents (the Kustomize lesson). Per key: `replace` (default, per RFC 7386 spirit), `append`; `merge-by-key` reserved for later. Deep merge for mappings. Precedence is total, deterministic, and documented as a numbered list.
 
+#### Worked cascade
+
+The reference chain has a worked example (§9) and the cascade did not, which is how the *timing* of a strategy declaration stayed ambiguous long enough to be implemented two ways. Prose can carry both readings; an example has to pick one.
+
+```yaml
+# https://site-builder.dev/schema/core.yaml   (root)
+keys:
+  styles:
+    provide: [reset.css]          # no cascade declared — `replace` by default
+```
+
+```yaml
+# ~/.config/house.yaml   (house layer)
+$adopts: https://site-builder.dev/schema/core.yaml
+keys:
+  styles:
+    provide: [house.css]          # still `replace`: this REPLACES [reset.css]
+```
+
+```yaml
+# ./project.yaml   (project schema)
+$adopts: ~/.config/house.yaml
+keys:
+  styles:
+    cascade: append               # tightening — legal, and takes effect HERE
+    provide: [project.css]
+```
+
+```yaml
+# ./site.yaml   (the config)
+$schema: ./project.yaml
+styles: [page.css]
+```
+
+Resolves to **`[house.css, project.css, page.css]`**.
+
+`reset.css` is absent, and that is the point. The house layer replaced it while `replace` was still in force, which was legal and was what the house layer meant at the time. The project schema's `append` binds itself and everything below it — it does not reach back and re-combine a decision its ancestor had already settled. Authority flows one way (§2.3); a descendant that could rewrite an ancestor's merge outcome would be flowing the other.
+
+Had the root itself declared `cascade: append`, the answer would be `[reset.css, house.css, project.css, page.css]`, and the house layer could not have declared `replace` — that is the weakening §5.2 forbids.
+
 ### 5.4 Enforcement, in order
 
 1. **Dynamic (v1):** validate the final merged config against **every** layer root→leaf. Trivially correct even under merge-engine bugs; yields layer-precise errors.

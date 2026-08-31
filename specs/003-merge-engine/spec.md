@@ -235,7 +235,9 @@ and a config attempting to declare `cascade`.
   `append` accumulates that layer's contribution and every later one onto whatever the fold has
   already produced; it MUST NOT reach back and re-combine ancestors that already settled under
   `replace`. Authority flows one way (`SPEC.md` §2.3): a declaration binds descendants, never
-  ancestors.
+  ancestors. `SPEC.md` §5.3's **worked cascade** spells the outcome out — it was added because this
+  rule stayed ambiguous through a spec, a plan, a task list and a full implementation while the
+  reference chain's own worked example (§9) had been catching this class of thing all along.
 - **FR-027**: `cascade` and `provide` are declared for **top-level** keys only. No syntax exists for
   declaring either on a nested key, and none is invented here — a `keys:` entry governs the key of
   that name in the merged configuration's root mapping.
