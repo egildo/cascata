@@ -409,8 +409,10 @@ implement (v0.3 FR-002).
 
 ### `validate(configuration)`
 
-**v0.4.** Judges a `MergedConfiguration` — exactly `merge()`'s `ok: true` shape — against every schema
-layer's own `demand`, root to leaf (`SPEC.md` §5.4, §10; contracts/validate-api.md). A distinct
+**v0.4, extended in v0.5** with named types (`types:`) and arbitrary-depth `keys`/`items` nesting.
+Judges a `MergedConfiguration` — exactly `merge()`'s `ok: true` shape — against every schema
+layer's own `demand`, root to leaf (`SPEC.md` §5.4, §7, §10; contracts/validate-api.md,
+specs/005-named-types/contracts/). A distinct
 pipeline stage, reachable independently of `merge()`, consuming only its output (no separate pedigree
 argument — `MergedConfiguration.layers` already carries what this stage needs).
 
@@ -462,16 +464,17 @@ if (result.ok) {
 
 ### `demand` vocabulary (`SPEC.md` §9, contracts/demand-vocabulary.md)
 
-Eleven closed keywords: `type`, `items`, `required`, `min`, `max`, `minLength`, `maxLength`,
-`pattern`, `enum`, plus `accept` and `keys`, both refused as **unimplemented**, naming v0.5 (SPEC.md
-§9, amended) rather than read or silently ignored. `format` is **not** in the list — `SPEC.md` §15
+Ten closed keywords, **all implemented as of v0.5**: `type`, `items`, `keys`, `required`, `min`,
+`max`, `minLength`, `maxLength`, `pattern`, `enum`. `format` is **not** in the list — `SPEC.md` §15
 dropped it in favor of `type: url`/`path`/`glob`, so it is `unknown-demand-keyword` like any other
 typo. `type` is SPEC.md §9.1's leaf DSL — unions (`|`), arrays (`T[]`, binding tighter than `|`),
-parentheses — resolving against exactly the model's own kinds plus `url`/`path`/`glob` (`string`,
-`int`, `float`, `bool`, `null`, `mapping`, `sequence`, `url`, `path`, `glob`); a `types:` section is
-likewise refused as unimplemented. `keys` and `items` both nest to arbitrary depth per §9, but this
-milestone's own implementation stops at one level for `items` and does not implement `keys` at all —
-both are v0.5 work. `seal`, `final`, and `delegate` remain unread, unchanged from v0.3's posture.
+parentheses — resolving against the model's own kinds, `url`/`path`/`glob`, and any name declared in
+a `types:` section reachable from the usage's own layer (below). `keys` and `items` both nest to
+**arbitrary depth** (v0.5 FR-023), bounded by the same 64-level hazard class as v0.1's own parse-depth
+cap (v0.5 FR-025) — a document deep enough to trip that bound never reaches `validate()` in the first
+place, since `resolve()` refuses it first (see `tests/unit/validate-depth-limit.test.ts`'s own header
+comment for why this milestone's depth guard is exercised by a hand-built `MergedConfiguration`, not
+a file fixture). `seal`, `final`, and `delegate` remain unread, unchanged from v0.3's posture.
 
 ```typescript
 keys:
@@ -483,35 +486,79 @@ keys:
     demand:
       type: string[]        # a mismatched item is blamed by index, not the whole sequence
       items: { minLength: 1 }
+  profile:
+    demand:
+      keys:                 # nests to whatever depth the data does (v0.5)
+        email: { demand: { type: string, minLength: 3 } }
 ```
 
-### v0.4 diagnostic codes
+### Named types (`SPEC.md` §7, v0.5, contracts/type-resolution.md)
 
-Extends v0.1's–v0.3's catalogues above (contracts/diagnostics.md). Two families: vocabulary problems
-(found reading `demand`, before any value is checked) and violations (found checking the merged tree
-against a well-formed demand).
+A `types:` section (schema-only — a config's own `types:` is ignored, FR-004) declares reusable
+demand bundles, resolved by `type: <name>` exactly like a built-in kind:
+
+```typescript
+types:
+  resource:
+    demand: { type: string, minLength: 1 }
+    accept: [url, path, glob]   # the type's own declared alternatives
+keys:
+  homepage:
+    demand:
+      type: resource
+      accept: [url]              # a usage MAY narrow to a subset — never widen
+```
+
+- **Resolution is scope-bound, not graph-wide** (FR-008): a name resolves against declarations from
+  the usage's own layer and its ancestors, never a descendant's. An ancestor's own usage of a name
+  only a descendant declares is `unknown-type-name` — the identical rule v0.3 FR-026 settled for
+  cascade strategies.
+- **Collision is unconditional, not conditional on redeclaration** (FR-017, research.md D1): the
+  moment two layers anywhere in the pedigree declare a type under the same *unqualified* name, both
+  are `type-name-collision` — even if the later one reads like legitimate narrowing. There is no
+  redeclaration-as-narrowing mechanism; narrowing an inherited type is `accept` at the point of use,
+  never a second `types:` entry under the same name.
+- **A qualified name (`<qualifier>/<name>`) is the escape hatch** (FR-019): `<qualifier>` is the last
+  non-empty `/`-segment of the declaring document's own `$id`. Two documents whose `$id`s share a
+  qualifier collide too (`type-qualifier-collision`, FR-019a).
+- **`accept` composes with `demand` by AND** (research.md D3): a value must satisfy the type's own
+  `demand` *and* match at least one narrowed alternative. Selecting every declared alternative behaves
+  as no selector (FR-015); selecting one the type never declared is refused as widening
+  (`type-accept-widened`, FR-013) — widening is forbidden absolutely, the identical posture §5.2 takes
+  for every other row.
+- Redefining a built-in name (`string`, `url`, ...) is refused as `builtin-type-redeclared` (FR-018)
+  — the built-in namespace is not open for redefinition.
+- A cycle through `type`/`accept` references is refused as `unresolvable-type-cycle` (FR-009) rather
+  than followed.
+
+### v0.4/v0.5 diagnostic codes
+
+Extends v0.1's–v0.3's catalogues above (contracts/diagnostics.md, v0.5's contracts/diagnostics.md).
+Two families: vocabulary problems (found reading `demand`/`types:`, before any value is checked) and
+violations (found checking the merged tree against a well-formed demand).
 
 | Code | Refuses |
 |---|---|
 | `unknown-demand-keyword` | A `demand` keyword outside SPEC.md §9's closed list |
-| `unimplemented-demand-keyword` | `accept` or `keys` — named by §9, arriving in v0.5 |
-| `unimplemented-types-section` | A top-level `types:` section |
-| `malformed-demand-value` | A constraint value of the wrong shape (`min: "ten"`, `enum: 3`, `required: "yes"`, or a `pattern` that does not compile as ECMA-262 regex) |
+| `malformed-demand-value` | A constraint value of the wrong shape (`min: "ten"`, `enum: 3`, `required: "yes"`, `keys`/`items` not a mapping, `accept` not a sequence of strings, or a `pattern` that does not compile as ECMA-262 regex) |
 | `malformed-type-expression` | A `type` value that does not parse under §9.1's grammar |
-| `unknown-type-name` | A `type` expression naming something outside the resolved built-in set |
+| `unknown-type-name` | A `type` expression naming something outside the built-in set and every name reachable from this layer (globally unknown, *or* declared only by a descendant, *or* collided everywhere — v0.5 FR-008) |
+| `depth-limit-exceeded` | `keys`/`items` nesting past the 64-level bound (v0.5 FR-025) — reused from v0.1's identical parse-time hazard |
 | `type-mismatch` | A value (or, for `T[]`, one item) whose kind matches no alternative of a `type` demand |
 | `range-violated` | A number outside a `min`/`max` bound |
 | `length-violated` | A string whose code-point length is outside `minLength`/`maxLength` |
 | `pattern-mismatch` | A string not matching a `pattern` demand |
 | `enum-violated` | A value not `nodesEqual` to any member of an `enum` demand |
-| `required-violated` | A `required` key absent, or present with an explicit `null`, after merge |
+| `required-violated` | A `required` key absent, or present with an explicit `null`, after merge — constructible at any `keys` nesting depth as of v0.5 |
+| `unknown-type-entry-keyword` (v0.5) | A `types:` entry keyword other than `demand`/`accept` |
+| `type-name-collision` (v0.5) | Two or more layers declaring the same unqualified type name — unconditional (FR-017) |
+| `builtin-type-redeclared` (v0.5) | A `types:` entry naming a built-in kind (FR-018) |
+| `type-qualifier-collision` (v0.5) | Two documents in one pedigree whose `$id` shares a last segment (FR-019a) |
+| `unresolvable-type-cycle` (v0.5) | A `type`/`accept` reference cycle among declared types (FR-009) |
+| `type-accept-widened` (v0.5) | A usage's `accept` naming an alternative the referenced type never declared (FR-013) |
 
-`unimplemented-demand-keyword`/`unimplemented-types-section` are deliberately distinct from
-`unknown-demand-keyword` — mirroring v0.3's `unimplemented-cascade-strategy`, an author writing
-`accept`, `keys`, or `types:` is early, not wrong. An author writing `format` is not early — `SPEC.md`
-§15 dropped it, so it is `unknown-demand-keyword` like any other typo. A demand restated identically by a nearer layer,
-satisfied, and a key no demand mentions both produce zero diagnostics — schema silence is permission
-(FR-021) until `seal: closed` arrives in v0.7.
+A demand restated identically by a nearer layer, satisfied, and a key no demand mentions both produce
+zero diagnostics — schema silence is permission (FR-021) until `seal: closed` arrives in v0.7.
 
 ## Scripts
 

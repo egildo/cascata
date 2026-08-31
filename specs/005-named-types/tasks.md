@@ -133,12 +133,12 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 
 ## Phase 7: Property Tests & Polish
 
-- [ ] T040 [P] Property test: the **Types (named)** §5.2 row — random pedigrees, an ancestor's own usage never resolves a descendant-only name; a colliding pedigree never validates — `tests/unit/validate-type-monotonicity.test.ts` (FR-029)
-- [ ] T041 Record **Struct openness** as still deferred (v0.7) in that same file's doc comment — third time, per FR-029
-- [ ] T042 [P] Publish contracts/type-resolution.md and contracts/nested-demands.md's rules, and v0.5's diagnostic codes, in `README.md`
-- [ ] T043 Confirm every pre-existing test still passes unchanged — baseline 498 at this milestone's start
-- [ ] T044 Run every quickstart.md scenario end to end
-- [ ] T045 Verify the six constitution gates, gate 5 in particular
+- [x] T040 [P] Property test: the **Types (named)** §5.2 row — random pedigrees, an ancestor's own usage never resolves a descendant-only name; a colliding pedigree never validates — `tests/unit/validate-type-monotonicity.test.ts` (FR-029)
+- [x] T041 Record **Struct openness** as still deferred (v0.7) in that same file's doc comment — third time, per FR-029
+- [x] T042 [P] Publish contracts/type-resolution.md and contracts/nested-demands.md's rules, and v0.5's diagnostic codes, in `README.md`
+- [x] T043 Confirm every pre-existing test still passes unchanged — baseline 498 at this milestone's start
+- [x] T044 Run every quickstart.md scenario end to end
+- [x] T045 Verify the six constitution gates, gate 5 in particular
 - [ ] T046 **Sabotage**: resolve type names against a single pedigree-wide merged graph instead of per-layer scope — confirm T038 (and only genuinely cross-layer cases) go red; single-schema cases stay green
 - [ ] T047 **Sabotage**: re-cap nested recursion at one level — confirm only T021 (three-deep) goes red
 - [ ] T048 **Sabotage**: make collision detection skip a name that would otherwise collide (silently accept the second declaration) — confirm T034 goes red, Principle VI's deny-by-default failing exactly where it should hold
