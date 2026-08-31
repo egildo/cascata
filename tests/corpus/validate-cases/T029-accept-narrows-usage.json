@@ -1,0 +1,21 @@
+{
+  "name": "T029: a usage's accept subset rejects a declared-but-unselected alternative, even though the type itself would admit it (spec.md Acceptance Scenario 1)",
+  "cites": "v0.5 FR-012",
+  "fixtureDir": "validate-types/accept-narrow",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 11,
+        "pointer": "/homepage",
+        "demand": { "pointer": "/types/resource/accept", "document": "schema.yaml", "line": 3, "column": 5 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

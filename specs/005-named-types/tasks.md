@@ -101,14 +101,14 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 
 ### Conformance cases for User Story 3 (write first)
 
-- [ ] T029 [P] [US3] Case: a usage's `accept` subset rejects a declared-but-unselected alternative (Acceptance Scenario 1) — `tests/corpus/cases/validate-types/accept-narrow/`
-- [ ] T030 [P] [US3] Case: a usage's `accept` naming an undeclared alternative is refused (Acceptance Scenario 2, FR-013) — `tests/corpus/cases/validate-types/accept-widened/`
-- [ ] T031 [P] [US3] Case: selecting every declared alternative behaves as no selector (Acceptance Scenario 3, FR-015) — `tests/corpus/cases/validate-types/accept-full/`
+- [x] T029 [P] [US3] Case: a usage's `accept` subset rejects a declared-but-unselected alternative (Acceptance Scenario 1) — `tests/corpus/cases/validate-types/accept-narrow/`
+- [x] T030 [P] [US3] Case: a usage's `accept` naming an undeclared alternative is refused (Acceptance Scenario 2, FR-013) — `tests/corpus/cases/validate-types/accept-widened/`
+- [x] T031 [P] [US3] Case: selecting every declared alternative behaves as no selector (Acceptance Scenario 3, FR-015) — `tests/corpus/cases/validate-types/accept-full/`
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] `src/validate/vocabulary.ts`: shape-check a type entry's own `accept` (a sequence of strings) and a usage's `accept` (same shape) — depends on T017
-- [ ] T033 [US3] `src/validate/constraints.ts`/`check.ts`: implement `accept` as a real leaf check — narrows a type's declared alternatives, refuses widening (`type-accept-widened`), composes with the type's own `demand` by AND (research.md D3) — depends on T018, T032
+- [x] T032 [US3] `src/validate/vocabulary.ts`: shape-check a type entry's own `accept` (a sequence of strings) and a usage's `accept` (same shape) — depends on T017
+- [x] T033 [US3] `src/validate/constraints.ts`/`check.ts`: implement `accept` as a real leaf check — narrows a type's declared alternatives, refuses widening (`type-accept-widened`), composes with the type's own `demand` by AND (research.md D3) — depends on T018, T032
 
 **Checkpoint**: `accept` selects; types cascade in the one mechanism this milestone builds for it.
 

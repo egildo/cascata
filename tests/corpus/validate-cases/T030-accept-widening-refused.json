@@ -1,0 +1,20 @@
+{
+  "name": "T030: a usage's accept naming an alternative the type never declared is refused as widening (spec.md Acceptance Scenario 2, FR-013)",
+  "cites": "v0.5 FR-013",
+  "fixtureDir": "validate-types/accept-widened",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-accept-widened",
+        "document": "schema.yaml",
+        "line": 13,
+        "column": 11,
+        "demand": { "pointer": "/keys/homepage/demand/accept", "document": "schema.yaml", "line": 13, "column": 11 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

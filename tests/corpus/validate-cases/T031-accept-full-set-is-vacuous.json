@@ -1,0 +1,8 @@
+{
+  "name": "T031: selecting every declared alternative behaves exactly as no selector at all (spec.md Acceptance Scenario 3, FR-015)",
+  "cites": "v0.5 FR-015",
+  "fixtureDir": "validate-types/accept-full",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

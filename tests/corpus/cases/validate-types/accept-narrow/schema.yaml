@@ -1,0 +1,12 @@
+types:
+  resource:
+    accept:
+      - url
+      - path
+      - glob
+keys:
+  homepage:
+    demand:
+      type: resource
+      accept:
+        - url
