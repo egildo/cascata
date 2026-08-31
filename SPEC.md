@@ -213,7 +213,7 @@ A type is a **named, reusable bundle of demands**. No new mechanism: types inher
 $id: site-builder/core
 types:
   resource:
-    accept: [url, path, glob]     # declared alternatives
+    accept: [url, path]           # declared alternatives — both singular
     demand: { type: string }
 
 keys:
@@ -225,7 +225,7 @@ keys:
 Laws:
 
 - **Parameters are constraint selectors, never computation.** A parameter may only choose among or tighten the type's declared alternatives. Selecting a subset of a union is narrowing, so parameterization is itself monotone and statically checkable. No template language.
-- **Types cascade.** A descendant may redeclare an inherited type name, and doing so **narrows that type from the declaring layer downward** — the declaring layer's own usages and every layer below it, never an ancestor's. Authority flows one way (§2.3); this is the identical rule §5.2 states for cascade strategies, for the identical reason. House-defaults ergonomics — "our `resource` never allows globs" — therefore bind the house and everything beneath it, while an ancestor's own usage of the name keeps meaning what that ancestor declared. Widening or redefining remains illegal under `adopts` and needs no separate refusal: an ancestor's demand resolves the *ancestor's* declaration, and whole-chain validation (§5.4) applies it regardless, so a widening is inert exactly where it would otherwise do harm. Proving that a redeclaration narrows, with no data present, is static subsumption (§5.4 item 2, v1.x).
+- **Types cascade.** A descendant may redeclare an inherited type name, and doing so **narrows that type from the declaring layer downward** — the declaring layer's own usages and every layer below it, never an ancestor's. Authority flows one way (§2.3); this is the identical rule §5.2 states for cascade strategies, for the identical reason. House-defaults ergonomics — "our `resource` is URLs only; nothing served off local disk" — therefore bind the house and everything beneath it, while an ancestor's own usage of the name keeps meaning what that ancestor declared. Widening or redefining remains illegal under `adopts` and needs no separate refusal: an ancestor's demand resolves the *ancestor's* declaration, and whole-chain validation (§5.4) applies it regardless, so a widening is inert exactly where it would otherwise do harm. Proving that a redeclaration narrows, with no data present, is static subsumption (§5.4 item 2, v1.x).
 - **One flat namespace per pedigree; a collision between *unrelated* declarations is an error.** Two declarations of one name standing in an ancestor/descendant relation are **not** a collision — they are the narrowing the law above describes. Because v1 `$adopts` takes exactly one parent (§6.1), every pedigree is a chain and every pair of layers is related, so **collision is unreachable in v1** and is reserved for future multi-adoption, where two unrelated ancestors may each declare a name. Qualified names (`core/resource` — the qualifier being the last segment of the declaring document's `$id`) restrict resolution to declarations from documents carrying that qualifier, and are the escape hatch. They pin one specific declaration exactly when qualifiers are distinct, which is the case worth designing for; where two layers in one chain share a qualifier *and* a type name, the second is a narrowing of the first like any other, and the **nearest** wins there too. No silent shadowing: unqualified or qualified, a name always resolves to the nearest declaration at or above the layer that names it, and the same reference read from two different layers may therefore name two different declarations — which is the point, since that is what "narrows from the declaring layer downward" means.
 
 #### Worked narrowing
@@ -238,7 +238,7 @@ $id: site-builder/core
 types:
   resource:
     demand: { type: string }
-    accept: [url, path, glob]
+    accept: [url, path]
 keys:
   styles:
     demand: { type: resource[] }
@@ -258,10 +258,10 @@ keys:
 A config under the house supplying `["assets/theme.css"]` — a path — is **rejected**: the house's own `styles` demand resolves the house's `resource`, which now accepts only URLs.
 
 Had the house narrowed `resource` **without** restating `styles`, that same path would be **accepted**. The root's `styles` demand resolves the *root's* `resource`, which still accepts paths, and no other demand applies. This is the cost of resolving in the declaring layer's scope, and it is deliberate: the property that makes it so — an ancestor's demand always means what the ancestor wrote — is exactly what stops a descendant's *widening* from voiding an ancestor's constraint. A narrowing that must reach an ancestor's usage is written by restating that key's demand, which is one line and says what it means.
-- **Primitives are predefined types** in the meta-schema's own `types` section. `url`, `path`, `glob` are built-in refinements of `string` — the semantics JSON Schema's `format` registry names, reached here as ordinary type names rather than a second keyword (§15); `resource` is an ordinary union of them.
-- **Path/glob relativity:** resolved relative to the **declaring file's directory**.
+- **Primitives are predefined types** in the meta-schema's own `types` section. `url` and `path` are built-in refinements of `string` — the semantics JSON Schema's `format` registry names, reached here as ordinary type names rather than a second keyword (§15); `resource` is an ordinary union of them — and a **singular** one: every alternative denotes exactly one resource, which is why a glob is not among them (§15). Multiplicity is written `resource[]`, never smuggled into the element type.
+- **Path relativity:** resolved relative to the **declaring file's directory**.
 
-Built-in type semantics (cited, not invented) — what each predefined type actually validates, in the sense JSON Schema calls a value's "format" without this article using that word as a keyword (§15): `url` → WHATWG URL Standard (what Node's `new URL()` implements; state the WHATWG-vs-RFC 3986 choice explicitly). `pattern` → ECMA-262 regex, stated explicitly. Dates (future) → RFC 3339, not bare "ISO 8601". `path` → POSIX pathname semantics + sandbox rules. `glob` → gitignore pattern syntax (implemented via picomatch), cited by name.
+Built-in type semantics (cited, not invented) — what each predefined type actually validates, in the sense JSON Schema calls a value's "format" without this article using that word as a keyword (§15): `url` → WHATWG URL Standard (what Node's `new URL()` implements; state the WHATWG-vs-RFC 3986 choice explicitly). `pattern` → ECMA-262 regex, stated explicitly. Dates (future) → RFC 3339, not bare "ISO 8601". `path` → POSIX pathname semantics + sandbox rules.
 
 ---
 
@@ -402,18 +402,17 @@ Posture: **maximal conformance at the membrane, original at the core.** Every ci
 | Tree addressing | **RFC 6901 (JSON Pointer)** | Errors, `tool why`, graft points — verbatim |
 | Merge baseline | RFC 7386 (JSON Merge Patch) | Cited as the default-replace baseline we exceed |
 | Patch (future ops) | RFC 6902 (JSON Patch) | If `tool set` ever needs a change format |
-| Constraint leaf names | **JSON Schema 2020-12 vocabulary** (`min…`, `pattern`, `enum`) | Selective vampirism: names yes, composition semantics no. The `format` *registry*'s semantics remain available — as built-in type names (`url`, `path`, `glob`, and any future `email`/`date-time`), not as a second, non-cascading keyword (§15) — but its keyword is not borrowed |
+| Constraint leaf names | **JSON Schema 2020-12 vocabulary** (`min…`, `pattern`, `enum`) | Selective vampirism: names yes, composition semantics no. The `format` *registry*'s semantics remain available — as built-in type names (`url`, `path`, and any future `email`/`date-time`), not as a second, non-cascading keyword (§15) — but its keyword is not borrowed |
 | URLs | **WHATWG URL Standard** (explicitly chosen over RFC 3986 at the margins) | `url` format = what `new URL()` validates |
 | Regex | ECMA-262 | `pattern` dialect, stated explicitly |
 | Dates (future) | RFC 3339 | Not bare ISO 8601 |
-| Globs | gitignore syntax (picomatch) | Cited by name |
 | Identifiers / versions | RFC 3986 (`$id`), SemVer 2.0.0 | Naming |
 | HTTP caching | RFC 9111 | Remote schema fetch |
 | Media type (eventual) | RFC 6838 IANA registration | `application/vnd.<name>+yaml` — low priority signaling |
 
 ### Leverage: software we don't write
 
-`yaml` (eemeli's; YAML 1.2, CST, spans) · Ajv (engine behind the JSON Schema **export**, not the core) · `picomatch` (globs) · WHATWG `URL` (Node built-in) · `toml-test` (adapter corpus shape).
+`yaml` (eemeli's; YAML 1.2, CST, spans) · Ajv (engine behind the JSON Schema **export**, not the core) · WHATWG `URL` (Node built-in) · `toml-test` (adapter corpus shape).
 
 ### Interop: the JSON Schema exporter
 
@@ -446,7 +445,7 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 7. **v0.7** — Sealing/governance (`seal`, `final`, cascade limits) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer).
 8. **v1.0** — Freeze the constitution; typed TS output surface.
 9. **v1.x** — JSON Schema 2020-12 exporter; static subsumption lint; JSON adapter; TOML adapter (run against `toml-test`).
-10. **Future** — `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5).
+10. **Future** — `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
 
 ---
 
@@ -554,6 +553,29 @@ All initial open questions are resolved; amendments are integrated into the arti
   strategies; a widening needs no refusal because an ancestor's demand resolves the ancestor's own
   declaration and §5.4's whole-chain validation still applies it. §7 gains the worked narrowing whose
   absence caused this, the way §5.3 gained a worked cascade for the same reason. See §7, §6.1, §5.4.
+
+- **`glob` as a built-in type** → settled: **dropped from v1.** `resource` is **singular** — every
+  alternative denotes exactly one resource — and `glob` denotes a *set*, so listing it beside `url`
+  and `path` conflated "a reference to a thing" with "a pattern matching many things" and made
+  `resource[]` mean "an array of things-or-sets-of-things". Multiplicity belongs in the `[]`, never
+  smuggled into the element type: an array of stylesheets is `resource[]`, enumerated.
+
+  The decisive argument is not the category error but what an unexpanded glob *is*. A glob is only
+  useful if something expands it into resources; expansion reads the filesystem, which is computation
+  (§2.9, Principle VI), non-deterministic across machines, and a security surface. Without expansion,
+  accepting a glob means accepting a string containing `*` that the system will never interpret —
+  while inviting its author to believe it will. That is worse than refusing it. `glob` therefore
+  belongs to the world that has expansion, and is parked in §14's Future list with the expansion,
+  sandbox, and determinism stories it needs first.
+
+  Consequences: `glob` leaves §7's built-in refinements and both of its examples; §12 loses its Globs
+  row and `picomatch` from "software we don't write" (its only use in the implementation was
+  validating this one type); and §7's stated house-defaults ergonomic — "our `resource` never allows
+  globs" — is replaced, because it was never coherent: a correctly singular `resource` never admitted
+  globs, so narrowing could not remove them. The real motivation for narrowing is between two singular
+  alternatives — "URLs only; nothing served off local disk" — which is what §7's worked narrowing now
+  shows. Supersedes, for `glob` only, the `format`-vs-`type` entry above, which had `url`/`path`/`glob`
+  all staying as built-in types. See §7, §12, §14.
 
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
 
