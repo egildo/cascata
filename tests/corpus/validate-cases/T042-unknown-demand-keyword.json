@@ -1,5 +1,5 @@
 {
-  "name": "T042: a demand keyword outside SPEC.md §9's closed list is refused at its own position (FR-005, spec.md Acceptance Scenario 1)",
+  "name": "T042: a demand keyword outside SPEC.md §9's closed list is refused at its own position, including format, which SPEC.md §15 dropped from the vocabulary in favor of type: url/path/glob (FR-005, spec.md Acceptance Scenario 1)",
   "cites": "v0.4 FR-005",
   "fixtureDir": "validate-vocabulary/unknown-keyword",
   "entry": "config.yaml",
@@ -7,6 +7,14 @@
   "expect": {
     "ok": false,
     "diagnostics": [
+      {
+        "code": "unknown-demand-keyword",
+        "document": "schema.yaml",
+        "line": 7,
+        "column": 15,
+        "demand": { "pointer": "/keys/legacy/demand/format", "document": "schema.yaml", "line": 7, "column": 15 },
+        "pedigreePosition": 0
+      },
       {
         "code": "unknown-demand-keyword",
         "document": "schema.yaml",

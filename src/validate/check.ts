@@ -36,7 +36,7 @@ import { renderViolation, type Demand, type Violation } from "./violation.js";
 
 export type CheckOutcome = { readonly ok: true } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
-/** The keywords this file's own leaf-check dispatch handles directly. `required` is User Story 3's post-merge check (a different shape — it must reason about *absence*, which no `ViolationSite` can anchor to a value); `items` is handled by its own one-level recursion below, not this table; `accept`/`format` are refused as unimplemented by `vocabulary.ts` (User Story 4) and never reach here as values to check. */
+/** The keywords this file's own leaf-check dispatch handles directly. `required` is User Story 3's post-merge check (a different shape — it must reason about *absence*, which no `ViolationSite` can anchor to a value); `items` is handled by its own one-level recursion below, not this table; `accept`/`keys` are refused as unimplemented by `vocabulary.ts` (User Story 4, SPEC.md §9's amendment for `keys`) and never reach here as values to check. `format` is not demand vocabulary at all any more (SPEC.md §15) — a schema writing it is `unknown-demand-keyword`, refused the same way before ever reaching this dispatch. */
 const LEAF_KEYWORDS: ReadonlySet<string> = new Set(["type", "min", "max", "minLength", "maxLength", "pattern", "enum"]);
 
 function runLeafCheck(keyword: DemandKeyword, keywordValue: Node, target: Node): ViolationSite[] {
@@ -58,7 +58,7 @@ function runLeafCheck(keyword: DemandKeyword, keywordValue: Node, target: Node):
     case "enum":
       return checkEnum(keywordValue, target);
     default:
-      // items/required/accept/format — not this function's job (see LEAF_KEYWORDS's own doc).
+      // items/required/accept/keys — not this function's job (see LEAF_KEYWORDS's own doc).
       return [];
   }
 }
@@ -206,7 +206,7 @@ function violationsForLayer(configuration: MergedConfiguration, layer: Layer): V
       if (keyword === "items") {
         violations.push(...violationsForItems(layer, keyName, keywordValue, value, configuration));
       }
-      // "accept"/"format" never reach here as values — US4 refuses them at the vocabulary level.
+      // "accept"/"keys" never reach here as values — US4 refuses them at the vocabulary level.
     }
   }
   return violations;

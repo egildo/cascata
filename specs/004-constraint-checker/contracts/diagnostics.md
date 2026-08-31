@@ -13,8 +13,8 @@ code + sentence + primary span. See data-model.md's `Diagnostic` additive fields
 
 | Code | Refuses | Primary span |
 |---|---|---|
-| `unknown-demand-keyword` | A key inside `demand` that is not in §9's closed list | The unrecognized keyword's own key node |
-| `unimplemented-demand-keyword` | `accept` or `format` — listed by §9, not built this milestone (FR-006, FR-011b; research.md D2 for `format`) | The keyword's own key node |
+| `unknown-demand-keyword` | A key inside `demand` that is not in §9's closed list — including `format`, dropped from §9 in favor of `type: url`/`path`/`glob` (SPEC.md §15) | The unrecognized keyword's own key node |
+| `unimplemented-demand-keyword` | `accept` or `keys` — listed by §9, not built this milestone (FR-006, FR-011b; SPEC.md §9's amendment for `keys`, naming v0.5) | The keyword's own key node |
 | `unimplemented-types-section` | A top-level `types:` section in a schema (FR-011a) | The `types:` key node |
 | `malformed-demand-value` | A constraint whose value is the wrong shape (`min: "ten"`, `enum: 3`, `required: "yes"`) (FR-007) | The value node itself |
 | `malformed-type-expression` | A `type` value that does not parse under §9.1's grammar (FR-009) | The `type` value's own span |
@@ -22,8 +22,10 @@ code + sentence + primary span. See data-model.md's `Diagnostic` additive fields
 
 `unimplemented-demand-keyword` and `unimplemented-types-section` are deliberately distinct from
 `unknown-demand-keyword`, mirroring `unimplemented-cascade-strategy` vs. `unknown-cascade-strategy`
-in v0.3: an author writing `accept`, `format`, or `types:` is early (the keyword is real, named by
-§7/§9, arriving in v0.5), not wrong, and a diagnostic saying "unknown" would teach the opposite.
+in v0.3: an author writing `accept`, `keys`, or `types:` is early (the keyword is real, named by
+§7/§9, arriving in v0.5), not wrong, and a diagnostic saying "unknown" would teach the opposite. An
+author writing `format` is not early — `SPEC.md` §15 dropped it in favor of `type: url`/`path`/`glob`,
+so it is exactly as wrong as any other typo, hence `unknown-demand-keyword`, not this code.
 
 ## Violation codes (data problems — found checking the merged tree against a well-formed demand)
 

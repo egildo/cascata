@@ -85,13 +85,17 @@ that mapping would have carried.
 
 ### 9. Closed vocabulary refuses what it does not know or does not yet build (US4, SC-006)
 
-A schema with a misspelled demand keyword; a schema using `accept`; a schema using `format`; a schema
-with a top-level `types:` section; a schema with `min: "ten"`; a schema with `type: (string`.
+A schema with a misspelled demand keyword; a schema using `format` (SPEC.md §15 dropped it from the
+vocabulary, so it is a typo like any other now, not an early use of real vocabulary); a schema using
+`accept`; a schema using `keys` (SPEC.md §9, amended: nests to arbitrary depth once v0.5 implements
+it, refused as unimplemented until then); a schema with a top-level `types:` section; a schema with
+`min: "ten"`; a schema with `type: (string`.
 
-**Expected**: `unknown-demand-keyword`, two `unimplemented-demand-keyword`s (naming v0.5), one
+**Expected**: two `unknown-demand-keyword`s (the misspelling and `format`), two
+`unimplemented-demand-keyword`s (`accept` and `keys`, both naming v0.5), one
 `unimplemented-types-section` (naming v0.5), `malformed-demand-value`, and
 `malformed-type-expression` respectively — never silently accepted, never merged into one generic
-code, and every one of them reported together in a single run against a schema carrying all six at
+code, and every one of them reported together in a single run against a schema carrying all seven at
 once (spec.md Acceptance Scenario 5).
 
 ### 10. `seal`/`final`/`delegate` stay inert (US4, spec.md Acceptance Scenario 6)

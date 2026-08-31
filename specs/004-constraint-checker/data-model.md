@@ -14,7 +14,7 @@ One constraint declared on one key by one schema layer, read from `keys.<name>.d
 
 | Field | Meaning |
 |---|---|
-| `keyword` | One of §9's closed `demand` keywords — `type`, `items`, `required`, `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`, `format`, `accept` |
+| `keyword` | One of §9's closed `demand` keywords — `type`, `items`, `required`, `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`, `accept`, `keys` |
 | `value` | The raw declared `Node` — a `type` expression is a string scalar at this stage, not yet parsed |
 | `layer` | Which schema layer declared it (`src/merge/provenance.ts`'s `Layer`) |
 | `pointer` | RFC 6901 pointer into **that layer's own document**, e.g. `/keys/styles/demand` |
@@ -26,11 +26,14 @@ every layer's own `Demand` independently and lets whole-chain validation (FR-014
 effect as intersection would, which is exactly FR-033's corrected reading (a property of the
 validation *outcome*, not a refusal at declaration time).
 
-**`format` and `accept`**: both are closed vocabulary (§9 lists them) but this milestone refuses both
-as **unimplemented** rather than reading a meaning into either — `accept` because named types don't
-exist until v0.5 (FR-011b), `format` because D2 in research.md leaves its relationship to `type:
-url/path/glob` an open `SPEC.md` question this implementer does not have standing to settle
-(Principle I).
+**`accept` and `keys`**: both are closed vocabulary (§9 lists them) but this milestone refuses both
+as **unimplemented**, naming v0.5, rather than reading a meaning into either — `accept` because named
+types don't exist until v0.5 (FR-011b), `keys` because SPEC.md §9 (amended, §15) states that `keys`
+and `items` both nest to arbitrary depth but this milestone implements neither the nesting nor `keys`
+at all. **`format` is no longer in the closed list** (SPEC.md §15, settled after this milestone first
+shipped, when D2 in research.md's open question was resolved by the owner): everything constraining a
+leaf's shape is a type, so a schema writing `format` now gets `unknown-demand-keyword`, the same as
+any other typo — not this row.
 
 ## Type Expression
 

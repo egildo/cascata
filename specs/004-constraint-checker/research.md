@@ -65,6 +65,16 @@ is unresolved in the document itself. This implementer is not the right authorit
 is written into §9's *v1* vocabulary list today, so silence would be Principle VI's deny-by-default
 failing exactly where it is supposed to hold firmest).
 
+**Settled, after this milestone shipped** (`SPEC.md` §15, "`format` vs `type: url`"): the owner
+dropped `format` from §9's vocabulary entirely. Everything constraining a leaf's shape is a type —
+`url`/`path`/`glob` stay built-in types, and any future `email`/`date-time` arrive the same way, never
+as a second keyword — because types cascade and narrow and a `format` keyword would not have, which
+is the argument this entry's own "Flagged" paragraph gestured at without being the right authority to
+conclude it. `format` is no longer in the closed list at all: a schema writing it now gets
+`unknown-demand-keyword`, not `unimplemented-demand-keyword` — it is a typo like any other, not an
+early use of real vocabulary. This entry's decision, rationale, and alternatives above are left as
+written: the question was escalated correctly, and the record of that is worth keeping intact.
+
 ### D3 — `pattern`'s ReDoS exposure is accepted explicitly, not mitigated this milestone
 
 **Decision**: No pattern-length cap, no catastrophic-shape denylist, no worker-based timeout. The

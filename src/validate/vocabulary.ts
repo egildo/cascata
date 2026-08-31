@@ -1,10 +1,23 @@
 /**
  * Reading a schema's `demand` vocabulary — SPEC.md §9 ("Schema vocabulary
- * per key: `demand` (`type`, `items`, `required`, `accept`, plus
+ * per key: `demand` (`type`, `items`, `required`, `accept`, `keys`, plus
  * JSON-Schema-named leaf constraints: `min`, `max`, `minLength`,
- * `maxLength`, `pattern`, `enum`, `format`)..."); v0.4 FR-001 through
- * FR-007, FR-011a, FR-011b;
+ * `maxLength`, `pattern`, `enum`)..."); v0.4 FR-001 through FR-007,
+ * FR-011a, FR-011b;
  * specs/004-constraint-checker/contracts/demand-vocabulary.md.
+ *
+ * **`format`/`keys` realignment** (SPEC.md §15, amended after this
+ * milestone first shipped): `format` was dropped from §9's vocabulary
+ * entirely — `url`/`path`/`glob` stay types, and any future `email`/
+ * `date-time` arrive as type names too, never as a second, non-cascading
+ * keyword — so a schema writing `format` now gets `unknown-demand-keyword`
+ * like any other typo, not `unimplemented-demand-keyword`. `keys` joined
+ * the vocabulary in `format`'s place, in the *unimplemented* column
+ * `accept` already occupies: §9 now states that `keys` and `items` both
+ * nest to arbitrary depth, but implementing `keys` at all, and
+ * generalizing `items` past the one level built here, are both v0.5 work
+ * (§14). This file does not implement nested `keys` — only refuses it as
+ * unimplemented, naming v0.5.
  *
  * Mirrors `src/merge/strategy.ts`'s `readKeysVocabulary` in reading style —
  * absent/empty/non-mapping `keys:` contributes nothing, never an error
@@ -44,14 +57,14 @@ import type { Layer } from "../merge/provenance.js";
 import { parseTypeExpression, unresolvedAlternatives } from "./typeexpr.js";
 
 /** §9's closed `demand` keyword list (v0.4 FR-005). Order is declaration order, not significant otherwise. */
-export const DEMAND_KEYWORDS = ["type", "items", "required", "min", "max", "minLength", "maxLength", "pattern", "enum", "accept", "format"] as const;
+export const DEMAND_KEYWORDS = ["type", "items", "required", "min", "max", "minLength", "maxLength", "pattern", "enum", "accept", "keys"] as const;
 
 export type DemandKeyword = (typeof DEMAND_KEYWORDS)[number];
 
 const DEMAND_KEYWORD_SET: ReadonlySet<string> = new Set(DEMAND_KEYWORDS);
 
-/** Keywords §9 lists but this milestone does not implement (v0.4 FR-006, FR-011b) — refused as unimplemented, not unknown. */
-const UNIMPLEMENTED_DEMAND_KEYWORDS: ReadonlySet<string> = new Set(["accept", "format"]);
+/** Keywords §9 lists but this milestone does not implement (v0.4 FR-006, FR-011b; `keys` per SPEC.md §9's amendment, §15) — refused as unimplemented, not unknown. */
+const UNIMPLEMENTED_DEMAND_KEYWORDS: ReadonlySet<string> = new Set(["accept", "keys"]);
 
 /** One raw `demand:` declaration for one key — every keyword present, unvalidated. */
 export type RawDemand = ReadonlyMap<string, Node>;
@@ -125,7 +138,7 @@ export function refuseUnknownOrUnimplementedKeywords(keyName: string, layerRank:
       problems.push({
         diagnostic: createDiagnostic({
           code: "unimplemented-demand-keyword",
-          message: `key '${keyName}' declares 'demand.${keyword}' — named by SPEC.md §7/§9 but not built until v0.5, when named types exist`,
+          message: `key '${keyName}' declares 'demand.${keyword}' — named by SPEC.md §9 but not built until v0.5`,
           primary: valueNode.span,
           demand: { pointer: pointerFromPath([...keysPointerPath, keyName, "demand", keyword]), span: valueNode.span },
           pedigreePosition: layerRank,
@@ -187,8 +200,11 @@ export function refuseTypesSection(layerRank: number, schemaTree: Node): DemandV
  * resolution are `refuseTypeExpressionProblems`'s job, immediately below,
  * since those need their own distinct codes (`malformed-type-expression`,
  * `unknown-type-name`) rather than being folded into this one. `accept`
- * and `format` are never reached — `refuseUnknownOrUnimplementedKeywords`
- * already refuses them before any shape could matter.
+ * and `keys` are never reached — `refuseUnknownOrUnimplementedKeywords`
+ * already refuses them before any shape could matter. `format` is not in
+ * `DEMAND_KEYWORDS` at all any more (SPEC.md §15) and so never reaches
+ * this switch either — it falls to `default` the same way any other
+ * unrecognized keyword does.
  */
 export function refuseMalformedShapes(keyName: string, layerRank: number, keysPointerPath: readonly (string | number)[], raw: RawDemand): DemandVocabularyProblem[] {
   const problems: DemandVocabularyProblem[] = [];

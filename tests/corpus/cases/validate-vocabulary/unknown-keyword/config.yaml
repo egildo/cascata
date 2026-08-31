@@ -1,2 +1,3 @@
 $schema: ./schema.yaml
 name: hi
+legacy: z

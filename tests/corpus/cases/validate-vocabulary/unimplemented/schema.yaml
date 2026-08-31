@@ -6,4 +6,4 @@ keys:
       accept: [url]
   b:
     demand:
-      format: date-time
+      keys: {}

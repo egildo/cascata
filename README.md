@@ -462,13 +462,16 @@ if (result.ok) {
 
 ### `demand` vocabulary (`SPEC.md` §9, contracts/demand-vocabulary.md)
 
-Ten closed keywords: `type`, `items`, `required`, `min`, `max`, `minLength`, `maxLength`, `pattern`,
-`enum`, plus `accept` and `format`, both refused as **unimplemented** (arriving in v0.5, when named
-types exist) rather than read or silently ignored. `type` is SPEC.md §9.1's leaf DSL — unions (`|`),
-arrays (`T[]`, binding tighter than `|`), parentheses — resolving against exactly the model's own
-kinds plus `url`/`path`/`glob` (`string`, `int`, `float`, `bool`, `null`, `mapping`, `sequence`, `url`,
-`path`, `glob`); a `types:` section is likewise refused as unimplemented. `seal`, `final`, and
-`delegate` remain unread, unchanged from v0.3's posture.
+Eleven closed keywords: `type`, `items`, `required`, `min`, `max`, `minLength`, `maxLength`,
+`pattern`, `enum`, plus `accept` and `keys`, both refused as **unimplemented**, naming v0.5 (SPEC.md
+§9, amended) rather than read or silently ignored. `format` is **not** in the list — `SPEC.md` §15
+dropped it in favor of `type: url`/`path`/`glob`, so it is `unknown-demand-keyword` like any other
+typo. `type` is SPEC.md §9.1's leaf DSL — unions (`|`), arrays (`T[]`, binding tighter than `|`),
+parentheses — resolving against exactly the model's own kinds plus `url`/`path`/`glob` (`string`,
+`int`, `float`, `bool`, `null`, `mapping`, `sequence`, `url`, `path`, `glob`); a `types:` section is
+likewise refused as unimplemented. `keys` and `items` both nest to arbitrary depth per §9, but this
+milestone's own implementation stops at one level for `items` and does not implement `keys` at all —
+both are v0.5 work. `seal`, `final`, and `delegate` remain unread, unchanged from v0.3's posture.
 
 ```typescript
 keys:
@@ -491,7 +494,7 @@ against a well-formed demand).
 | Code | Refuses |
 |---|---|
 | `unknown-demand-keyword` | A `demand` keyword outside SPEC.md §9's closed list |
-| `unimplemented-demand-keyword` | `accept` or `format` — named by §7/§9, arriving in v0.5 |
+| `unimplemented-demand-keyword` | `accept` or `keys` — named by §9, arriving in v0.5 |
 | `unimplemented-types-section` | A top-level `types:` section |
 | `malformed-demand-value` | A constraint value of the wrong shape (`min: "ten"`, `enum: 3`, `required: "yes"`, or a `pattern` that does not compile as ECMA-262 regex) |
 | `malformed-type-expression` | A `type` value that does not parse under §9.1's grammar |
@@ -505,7 +508,8 @@ against a well-formed demand).
 
 `unimplemented-demand-keyword`/`unimplemented-types-section` are deliberately distinct from
 `unknown-demand-keyword` — mirroring v0.3's `unimplemented-cascade-strategy`, an author writing
-`accept`, `format`, or `types:` is early, not wrong. A demand restated identically by a nearer layer,
+`accept`, `keys`, or `types:` is early, not wrong. An author writing `format` is not early — `SPEC.md`
+§15 dropped it, so it is `unknown-demand-keyword` like any other typo. A demand restated identically by a nearer layer,
 satisfied, and a key no demand mentions both produce zero diagnostics — schema silence is permission
 (FR-021) until `seal: closed` arrives in v0.7.
 

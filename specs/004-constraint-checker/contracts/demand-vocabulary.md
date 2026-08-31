@@ -9,7 +9,7 @@ exists only as scattered `if` branches in `constraints.ts` is one nobody can pre
 
 ## The closed list (FR-005)
 
-Exactly these ten keywords are legal inside `keys.<name>.demand`. Anything else is
+Exactly these eleven keywords are legal inside `keys.<name>.demand`. Anything else is
 `unknown-demand-keyword`.
 
 | Keyword | Built this milestone | Value shape |
@@ -24,7 +24,7 @@ Exactly these ten keywords are legal inside `keys.<name>.demand`. Anything else 
 | `pattern` | yes | a string scalar, ECMA-262 regex source |
 | `enum` | yes | a sequence of any `Node` shape |
 | `accept` | **no** — `unimplemented-demand-keyword`, naming v0.5 (FR-011b) | n/a |
-| `format` | **no** — `unimplemented-demand-keyword` (research.md D2; a live `SPEC.md` governance question, not resolved here) | n/a |
+| `keys` | **no** — `unimplemented-demand-keyword`, naming v0.5 (SPEC.md §9, amended; same posture `accept` holds) | n/a |
 
 A value of the wrong shape for its keyword (`min: "ten"`, `required: "yes"`, `enum: 3` where a
 sequence was expected) is `malformed-demand-value`, naming the expected shape (FR-007).
@@ -51,7 +51,7 @@ Ident    := [A-Za-z_] [A-Za-z0-9_-]*
   under the grammar (the `Name` production allows it) but cannot resolve to anything until v0.5's
   named types exist — it is `unknown-type-name`, the same as a plain typo, not a distinct
   "not yet supported" code: this milestone's closed set has no notion of a namespace to be early
-  about, unlike `accept`/`format`/`types:`, which are keywords §7/§9 already name.
+  about, unlike `accept`/`keys`/`types:`, which are keywords §7/§9 already name.
 - A `type` value that fails to parse at all (unbalanced parens, a `|` with nothing after it, a bare
   `[]` with no preceding name) is `malformed-type-expression` (FR-009).
 
@@ -79,12 +79,15 @@ never wrote.
 ## Nested demand under `items`
 
 `items`'s own value is a mapping using this **same** closed vocabulary (`type`, `required`, `min`,
-… — anything except `items` itself, which this milestone does not recurse more than one level into,
-since §9 gives no example or requirement text describing `items` inside `items`, and inventing
-arbitrary recursion depth would not be citing anything). Each item of a `Sequence` value is checked
-against this nested demand independently, at merged pointer `<sequencePointer>/<index>` — which is
-exactly the pointer FR-024 already requires and exactly why a `type: string[]` violation on one item
-names *that item*, not the sequence as a whole (spec.md's Acceptance Scenario 6).
+… — anything except `items`/`keys` themselves). This milestone's own implementation does not recurse
+more than one level into a nested demand — **not** for want of a citation any more: `SPEC.md` §9 was
+amended, after this milestone shipped, to state explicitly that `keys` and `items` both nest to
+arbitrary depth. Generalizing `items` past one level, and implementing `keys` at all (shipped here
+only as `unimplemented-demand-keyword`), are both v0.5 work (§14); this milestone's one-level cap is a
+scope decision now, not a citation gap. Each item of a `Sequence` value is checked against this nested
+demand independently, at merged pointer `<sequencePointer>/<index>` — which is exactly the pointer
+FR-024 already requires and exactly why a `type: string[]` violation on one item names *that item*,
+not the sequence as a whole (spec.md's Acceptance Scenario 6).
 
 ## `enum` membership uses model equality, not JS equality
 
