@@ -227,10 +227,10 @@ Laws:
 - **Parameters are constraint selectors, never computation.** A parameter may only choose among or tighten the type's declared alternatives. Selecting a subset of a union is narrowing, so parameterization is itself monotone and statically checkable. No template language.
 - **Types cascade.** Descendants may narrow inherited types (tightening every usage — house-defaults ergonomics: "our `resource` never allows globs"). Widening/redefining is illegal under `adopts`.
 - **One flat namespace per pedigree; collision is a graph-build error.** Qualified names (`core/resource`) are the escape hatch. No silent shadowing.
-- **Primitives are predefined types** in the meta-schema's own `types` section. `url`, `path`, `glob` are built-in refinements of `string` (JSON Schema `format` in spirit); `resource` is an ordinary union of them.
+- **Primitives are predefined types** in the meta-schema's own `types` section. `url`, `path`, `glob` are built-in refinements of `string` — the semantics JSON Schema's `format` registry names, reached here as ordinary type names rather than a second keyword (§15); `resource` is an ordinary union of them.
 - **Path/glob relativity:** resolved relative to the **declaring file's directory**.
 
-Built-in format semantics (cited, not invented): `url` → WHATWG URL Standard (what Node's `new URL()` implements; state the WHATWG-vs-RFC 3986 choice explicitly). `pattern` → ECMA-262 regex, stated explicitly. Dates (future) → RFC 3339, not bare "ISO 8601". `path` → POSIX pathname semantics + sandbox rules. `glob` → gitignore pattern syntax (implemented via picomatch), cited by name.
+Built-in type semantics (cited, not invented) — what each predefined type actually validates, in the sense JSON Schema calls a value's "format" without this article using that word as a keyword (§15): `url` → WHATWG URL Standard (what Node's `new URL()` implements; state the WHATWG-vs-RFC 3986 choice explicitly). `pattern` → ECMA-262 regex, stated explicitly. Dates (future) → RFC 3339, not bare "ISO 8601". `path` → POSIX pathname semantics + sandbox rules. `glob` → gitignore pattern syntax (implemented via picomatch), cited by name.
 
 ---
 
@@ -297,7 +297,7 @@ Reserved document keys: `$id`, `$version`, `$adopts`, `$pin`, `$schema` (config-
 
 **`$adopts` and `$schema` are single string scalars.** A sequence value is refused — not as a malformed value, but with a diagnostic saying v1 adopts exactly one parent (§6.1), because that is the shape multi-adoption will take when C3 linearization lands and an author writing it early deserves to be told which version they are ahead of. Two `$adopts` keys in one mapping are already impossible: duplicate keys are refused (§4.2).
 
-Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, plus JSON-Schema-named leaf constraints: `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`, `format`), `provide`, `cascade: replace | append`, `seal: open | closed`, `final`, `delegate: allow`.
+Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, `keys`, plus JSON-Schema-named leaf constraints: `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`), `provide`, `cascade: replace | append`, `seal: open | closed`, `final`, `delegate: allow`. **`keys` and `items` both nest to arbitrary depth**: `keys` constrains a mapping value's own children the way the schema's top-level `keys:` constrains the config's own top level, and `items` constrains a sequence value's own elements; either may recurse into further `keys`/`items` beneath it, to whatever depth the data actually nests.
 
 Top-level schema sections: `types`, `keys`.
 
@@ -371,7 +371,7 @@ Posture: **maximal conformance at the membrane, original at the core.** Every ci
 | Tree addressing | **RFC 6901 (JSON Pointer)** | Errors, `tool why`, graft points — verbatim |
 | Merge baseline | RFC 7386 (JSON Merge Patch) | Cited as the default-replace baseline we exceed |
 | Patch (future ops) | RFC 6902 (JSON Patch) | If `tool set` ever needs a change format |
-| Constraint leaf names | **JSON Schema 2020-12 vocabulary** (`min…`, `pattern`, `enum`, `format` registry) | Selective vampirism: names yes, composition semantics no |
+| Constraint leaf names | **JSON Schema 2020-12 vocabulary** (`min…`, `pattern`, `enum`) | Selective vampirism: names yes, composition semantics no. The `format` *registry*'s semantics remain available — as built-in type names (`url`, `path`, `glob`, and any future `email`/`date-time`), not as a second, non-cascading keyword (§15) — but its keyword is not borrowed |
 | URLs | **WHATWG URL Standard** (explicitly chosen over RFC 3986 at the margins) | `url` format = what `new URL()` validates |
 | Regex | ECMA-262 | `pattern` dialect, stated explicitly |
 | Dates (future) | RFC 3339 | Not bare ISO 8601 |
@@ -410,7 +410,7 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 2. **v0.2** — Resolver + DAG builder: `$adopts`, pinning (SHA-256 over exact bytes), cycle detection, diamond dedup, HTTP caching.
 3. **v0.3** — Merge engine with per-key strategies (`replace`, `append`) and full provenance; `tool why`.
 4. **v0.4** — Constraint checker (closed vocabulary), whole-chain validation, error contract; `tool certify`.
-5. **v0.5** — Types (`types` section, selector parameters, namespace collision errors).
+5. **v0.5** — Types (`types` section, selector parameters, namespace collision errors); nested demands (`keys` implemented, `items` generalized from one level to arbitrary depth, per §9's amendment).
 6. **v0.6** — Delegation (transclusion, sandbox, positional validation, breadcrumbs).
 7. **v0.7** — Sealing/governance (`seal`, `final`, cascade limits) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer).
 8. **v1.0** — Freeze the constitution; typed TS output surface.
@@ -483,6 +483,28 @@ All initial open questions are resolved; amendments are integrated into the arti
   separately duplicates the relationship and admits the state this article exists to forbid — a node
   whose position and whose layer disagree. Amended after v0.1 implementation surfaced the divergence.
   See §4.1.
+
+- **`format` vs `type: url`** → settled: **`format` is dropped; one mechanism.** §7 made `url`,
+  `path`, `glob` predefined *types*, and separately §9 listed `format` among `demand`'s own keywords,
+  glossed in §7 as "JSON Schema `format` in spirit" — two spellings admitted for one meaning, which
+  cuts against Principle VI (every semantic distinction costs a distinct keyword, and its converse). A
+  v0.4 implementer traced both citations, found the tension, and correctly declined to settle it. The
+  deciding argument: types cascade and narrow (§7's own laws); a `format` keyword would not have, so
+  the v0.7 meta-schema would have ended up with two ways to constrain a leaf's shape and only one of
+  them monotone. Everything constraining a leaf's shape is therefore a type — `url`/`path`/`glob` stay
+  built-in types, and any future `email`/`date-time` arrive the same way, as type names, not as a
+  second keyword. §12's "Constraint leaf names" row is amended to match: the `format` *registry*'s
+  semantics remain a legitimate crib, its keyword does not. See §7, §9, §12.
+- **Nested demands** → settled: **`keys` joins §9's demand vocabulary; `keys` and `items` both nest to
+  arbitrary depth.** §8's own worked example wrote `demand: { type: mapping, keys: { … } }`, but §9's
+  vocabulary line never listed `keys`, and the v0.4 implementation could reach only one level into a
+  value (`items`, for a sequence's own elements, capped there "for want of a citation authorizing
+  more" per that milestone's own contract) — leaving a demanded mapping's *own* children
+  unconstrainable by anything, and §5.2's "Struct openness" row, and v0.7's `seal`, with no subject to
+  govern. `keys` now provides the missing mechanism and the missing citation for `items`'s
+  generalization. `keys` ships in v0.4 as `unimplemented-demand-keyword` naming v0.5 — the posture
+  `accept` already holds — with the nesting itself, and `items`'s generalization from one level to
+  arbitrary depth, arriving in v0.5. See §8, §9, §14.
 
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
 
