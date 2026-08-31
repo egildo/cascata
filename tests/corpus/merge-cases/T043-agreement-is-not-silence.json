@@ -1,0 +1,23 @@
+{
+  "name": "T043: two layers providing byte-identical values both appear in the chain — the house and the project agreeing is different from only the house speaking",
+  "cites": "v0.3 FR-019",
+  "fixtureDir": "merge-provenance/agreement",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [["flag", { "kind": "string", "value": "same-value" }]]
+    },
+    "why": [
+      {
+        "pointer": "/flag",
+        "kind": "chain",
+        "entries": [
+          { "document": "config.yaml", "outcome": "won" },
+          { "document": "schema.yaml", "outcome": "overridden" }
+        ]
+      }
+    ]
+  }
+}

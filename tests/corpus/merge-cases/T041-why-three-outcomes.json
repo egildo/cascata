@@ -1,0 +1,35 @@
+{
+  "name": "T041/v0.3 FR-021: why distinguishes all three outcomes — a chain (/title, one layer wrote it), synthesized (/shared, two layers each wrote a disjoint key beneath it, neither wrote /shared itself), and unknown-pointer (/does-not-exist)",
+  "cites": "v0.3 FR-021",
+  "fixtureDir": "merge-provenance/negatives",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        ["shared", { "mapping": [["x", { "kind": "string", "value": "schema-x" }], ["y", { "kind": "string", "value": "config-y" }]] }],
+        ["title", { "kind": "string", "value": "hello" }]
+      ]
+    },
+    "why": [
+      {
+        "pointer": "/title",
+        "kind": "chain",
+        "entries": [{ "document": "schema.yaml", "outcome": "won" }]
+      },
+      {
+        "pointer": "/shared",
+        "kind": "synthesized",
+        "contributors": [
+          { "document": "schema.yaml", "outcome": "won" },
+          { "document": "config.yaml", "outcome": "won" }
+        ]
+      },
+      {
+        "pointer": "/does-not-exist",
+        "kind": "unknown-pointer"
+      }
+    ]
+  }
+}

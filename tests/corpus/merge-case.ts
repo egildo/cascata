@@ -48,8 +48,21 @@ export interface ExpectedMergeDiagnostic {
   readonly end?: number;
 }
 
+/** One expected entry in a `why()` chain or `synthesized` contributor list — User Story 3 (T038–T043). Identifies a layer by the fixture document its span falls in, same convention `ExpectedMergeSpan` uses, since a `Layer` object itself has no fixture-relative identity to assert against. */
+export interface ExpectedProvenanceEntry {
+  /** Path of the document this entry's layer is, relative to the case's fixture directory. */
+  readonly document: string;
+  readonly outcome: "won" | "overridden" | "accumulated";
+}
+
+/** One expected `why()` call against the merged configuration — User Story 3. */
+export type ExpectedWhy =
+  | { readonly pointer: string; readonly kind: "chain"; readonly entries: readonly ExpectedProvenanceEntry[] }
+  | { readonly pointer: string; readonly kind: "synthesized"; readonly contributors: readonly ExpectedProvenanceEntry[] }
+  | { readonly pointer: string; readonly kind: "unknown-pointer" };
+
 export type MergeExpect =
-  | { readonly ok: true; readonly tree: ExpectedNode; readonly spans?: readonly ExpectedMergeSpan[] }
+  | { readonly ok: true; readonly tree: ExpectedNode; readonly spans?: readonly ExpectedMergeSpan[]; readonly why?: readonly ExpectedWhy[] }
   | { readonly ok: false; readonly diagnostics: readonly ExpectedMergeDiagnostic[] };
 
 /** One merge-conformance case. */
@@ -130,6 +143,44 @@ function parseMergeDiagnostic(raw: unknown, source: string, at: string): Expecte
   return { code: codeRaw, document, line, column, ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}) };
 }
 
+function parseProvenanceEntry(raw: unknown, source: string, at: string): ExpectedProvenanceEntry {
+  if (!isPlainObject(raw)) {
+    fail(source, `'${at}' must be an object`);
+  }
+  const document = requireString(raw, "document", source, at);
+  const outcomeRaw = raw["outcome"];
+  if (outcomeRaw !== "won" && outcomeRaw !== "overridden" && outcomeRaw !== "accumulated") {
+    fail(source, `'${at}.outcome' must be "won", "overridden", or "accumulated", got ${JSON.stringify(outcomeRaw)}`);
+  }
+  return { document, outcome: outcomeRaw };
+}
+
+function parseWhy(raw: unknown, source: string, at: string): ExpectedWhy {
+  if (!isPlainObject(raw)) {
+    fail(source, `'${at}' must be an object`);
+  }
+  const pointer = requireString(raw, "pointer", source, at);
+  const kind = raw["kind"];
+  if (kind === "unknown-pointer") {
+    return { pointer, kind };
+  }
+  if (kind === "chain") {
+    const entriesRaw = raw["entries"];
+    if (!Array.isArray(entriesRaw) || entriesRaw.length === 0) {
+      fail(source, `'${at}.entries' must be a non-empty array when kind is "chain"`);
+    }
+    return { pointer, kind, entries: entriesRaw.map((entry, index) => parseProvenanceEntry(entry, source, `${at}.entries[${index}]`)) };
+  }
+  if (kind === "synthesized") {
+    const contributorsRaw = raw["contributors"];
+    if (!Array.isArray(contributorsRaw)) {
+      fail(source, `'${at}.contributors' must be an array when kind is "synthesized"`);
+    }
+    return { pointer, kind, contributors: contributorsRaw.map((entry, index) => parseProvenanceEntry(entry, source, `${at}.contributors[${index}]`)) };
+  }
+  fail(source, `'${at}.kind' must be "chain", "synthesized", or "unknown-pointer", got ${JSON.stringify(kind)}`);
+}
+
 function parseExpect(raw: unknown, source: string): MergeExpect {
   if (!isPlainObject(raw)) {
     fail(source, "'expect' must be an object");
@@ -138,13 +189,10 @@ function parseExpect(raw: unknown, source: string): MergeExpect {
   if (ok === true) {
     const tree = parseExpectedNode(raw["tree"], source, "");
     const rawSpans = raw["spans"];
-    if (rawSpans === undefined) {
-      return { ok: true, tree };
-    }
-    if (!Array.isArray(rawSpans)) {
-      fail(source, "'expect.spans' must be an array if present");
-    }
-    return { ok: true, tree, spans: rawSpans.map((span, index) => parseMergeSpan(span, source, `expect.spans[${index}]`)) };
+    const rawWhy = raw["why"];
+    const spans = rawSpans === undefined ? undefined : Array.isArray(rawSpans) ? rawSpans.map((span, index) => parseMergeSpan(span, source, `expect.spans[${index}]`)) : fail(source, "'expect.spans' must be an array if present");
+    const why = rawWhy === undefined ? undefined : Array.isArray(rawWhy) ? rawWhy.map((entry, index) => parseWhy(entry, source, `expect.why[${index}]`)) : fail(source, "'expect.why' must be an array if present");
+    return { ok: true, tree, ...(spans !== undefined ? { spans } : {}), ...(why !== undefined ? { why } : {}) };
   }
   if (ok === false) {
     const diagnosticsRaw = raw["diagnostics"];

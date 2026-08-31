@@ -1,0 +1,39 @@
+{
+  "name": "T042/v0.3 FR-021: why answers synthesized for a mapping no layer wrote itself — including recursively, for /combo whose own direct child /combo/nested is itself synthesized — distinct from /solo, a container schema.yaml alone wrote, which answers with a chain",
+  "cites": "v0.3 FR-021",
+  "fixtureDir": "merge-provenance/synthesized",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        ["combo", { "mapping": [["nested", { "mapping": [["p", { "kind": "string", "value": "schema-p" }], ["q", { "kind": "string", "value": "config-q" }]] }]] }],
+        ["solo", { "mapping": [["inner", { "kind": "string", "value": "schema-inner-value" }]] }]
+      ]
+    },
+    "why": [
+      {
+        "pointer": "/solo",
+        "kind": "chain",
+        "entries": [{ "document": "schema.yaml", "outcome": "won" }]
+      },
+      {
+        "pointer": "/combo",
+        "kind": "synthesized",
+        "contributors": [
+          { "document": "schema.yaml", "outcome": "won" },
+          { "document": "config.yaml", "outcome": "won" }
+        ]
+      },
+      {
+        "pointer": "/combo/nested",
+        "kind": "synthesized",
+        "contributors": [
+          { "document": "schema.yaml", "outcome": "won" },
+          { "document": "config.yaml", "outcome": "won" }
+        ]
+      }
+    ]
+  }
+}

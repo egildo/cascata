@@ -28,13 +28,18 @@
  * mappings — never inside a sequence's items, which the fold itself never
  * addresses individually (`cascade: append` accumulates a whole layer's
  * sequence at once, never element by element; an ordinary `replace`
- * replaces a sequence wholesale). A pointer the fold's recursion never
- * visits therefore has no entry — which is fine, because `why()` never
- * needs one: `resolvePointer` already says whether that pointer resolves
- * in the tree at all (`unknown-pointer` when it does not), and this
- * module's own granularity guarantee (every mapping key the fold visits
- * gets an entry) is exactly SC-002's "100% of values in a merged result
- * have a provenance chain".
+ * replaces a sequence wholesale). This module's own granularity guarantee
+ * (every mapping key the fold visits gets an entry) is exactly SC-002's
+ * "100% of values in a merged result have a provenance chain" — for every
+ * position *this* granularity covers. A pointer that reaches inside a
+ * sequence (a numeric index segment) resolves in the tree but was never
+ * recorded directly; `why()` answers it by walking up to the nearest
+ * ancestor pointer that *was* recorded (the containing sequence's own
+ * pointer, at the latest) — see `why()`'s own doc comment. This still
+ * resolves every such pointer to `chain` or `synthesized`, never
+ * `unknown-pointer`, which `tests/unit/provenance-consistency.test.ts`
+ * (T048) checks by walking real merged trees exhaustively, sequence items
+ * included.
  *
  * ## Ordering (FR-019, FR-020) — built chronologically, presented winner-first
  *
@@ -343,6 +348,18 @@ function synthesizedContributors(record: ProvenanceRecord, containerPointer: str
 }
 
 /**
+ * `pointer` with its last segment dropped — `"/items/0"` → `"/items"`,
+ * `"/items"` → `""` (the root). Safe to compute by string surgery alone:
+ * RFC 6901 segments are separated by literal, unescaped `/` characters
+ * (a literal `/` *inside* a key is always `~1`, never a bare `/` —
+ * `src/model/pointer.ts`'s own escaping guarantees that), so the last
+ * unescaped `/` in the string is always a genuine segment boundary.
+ */
+function ancestorPointer(pointer: string): string {
+  return pointer.slice(0, pointer.lastIndexOf("/"));
+}
+
+/**
  * Answer where `pointer`'s value in `configuration.tree` came from — the
  * `git config --show-origin` question (SPEC.md §10). A library function in
  * v0.3 (research D3); no CLI ships here.
@@ -356,12 +373,22 @@ export function why(configuration: MergedConfiguration, pointer: string): WhyRes
   if (chain !== undefined) {
     return { kind: "chain", entries: chain };
   }
-  if (node.type !== "mapping") {
-    // Unreachable given this file's own recording discipline (every leaf
-    // pointer the fold visits gets an entry) — guarded rather than
-    // asserted away, since a defect here must surface as a thrown error a
-    // developer sees, not a wrong answer a caller silently trusts.
-    throw new Error(`Internal error: pointer '${pointer}' resolves to a non-mapping node with no provenance chain`);
+  if (node.type === "mapping") {
+    return { kind: "synthesized", contributors: synthesizedContributors(configuration.provenance, pointer, node) };
   }
-  return { kind: "synthesized", contributors: synthesizedContributors(configuration.provenance, pointer, node) };
+  // `pointer` resolves, but to a position this module's own recording
+  // never addresses directly: the builder records at mapping-key
+  // granularity only (this file's module doc) — a scalar or mapping
+  // sitting *inside* a sequence's own items (a numeric index segment) has
+  // no entry of its own, because `replace`/`append` both apply to the
+  // whole sequence at once, never to one item individually. The nearest
+  // ancestor pointer that DOES have an entry — the containing sequence's
+  // own pointer, or a mapping key further up — answers "why is this item
+  // here" faithfully: an item exists because the sequence it lives in won
+  // or accumulated, never for a reason of its own. This recursion always
+  // terminates: `recordSynthesized` (the only way a chain goes missing)
+  // fires only for a mapping, so a non-mapping ancestor always has a
+  // direct chain, and the walk toward `""` (the root) can shrink at most
+  // as many times as `pointer` has segments.
+  return why(configuration, ancestorPointer(pointer));
 }

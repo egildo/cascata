@@ -11,10 +11,10 @@
  */
 
 import { join, relative } from "node:path";
-import { merge, resolve, type MergedConfiguration } from "../../src/index.js";
+import { merge, resolve, why, type MergedConfiguration, type ProvenanceEntry } from "../../src/index.js";
 import { resolvePointer } from "../../src/model/pointer.js";
 import { compareNode } from "./runner.js";
-import type { ExpectedMergeDiagnostic, ExpectedMergeSpan, MergeCase } from "./merge-case.js";
+import type { ExpectedMergeDiagnostic, ExpectedMergeSpan, ExpectedProvenanceEntry, ExpectedWhy, MergeCase } from "./merge-case.js";
 
 export interface MergeCaseResult {
   readonly name: string;
@@ -46,6 +46,44 @@ function checkSpans(failures: string[], fixtureDir: string, configuration: Merge
     if (expected.end !== undefined && node.span.end !== expected.end) {
       failures.push(`span assertion at '${expected.pointer}': expected end ${expected.end}, got ${node.span.end}`);
     }
+  }
+}
+
+/** Compare an actual `readonly ProvenanceEntry[]` against `expected`, checking length, each entry's contributing document (relative to `fixtureDir`, same convention `checkSpans` uses), and each entry's `outcome`, in order — order matters for a chain (winner-first) and is asserted the same way for `synthesized` contributors (this file's own deterministic, canonically-ordered construction, `src/merge/provenance.ts`'s `synthesizedContributors`). */
+function checkEntries(failures: string[], fixtureDir: string, label: string, actual: readonly ProvenanceEntry[], expected: readonly ExpectedProvenanceEntry[]): void {
+  if (actual.length !== expected.length) {
+    failures.push(`${label}: expected ${expected.length} entries, got ${actual.length} (outcomes: ${actual.map((e) => e.outcome).join(", ")})`);
+    return;
+  }
+  actual.forEach((entry, index) => {
+    const expectedEntry = expected[index];
+    if (expectedEntry === undefined) {
+      return;
+    }
+    const actualDocument = relativeLocation(fixtureDir, entry.layer.identity.location);
+    if (actualDocument !== expectedEntry.document) {
+      failures.push(`${label}[${index}]: expected document '${expectedEntry.document}', got '${actualDocument}'`);
+    }
+    if (entry.outcome !== expectedEntry.outcome) {
+      failures.push(`${label}[${index}]: expected outcome '${expectedEntry.outcome}', got '${entry.outcome}'`);
+    }
+  });
+}
+
+function checkWhy(failures: string[], fixtureDir: string, configuration: MergedConfiguration, expectedWhys: readonly ExpectedWhy[]): void {
+  for (const expected of expectedWhys) {
+    const actual = why(configuration, expected.pointer);
+    const label = `why('${expected.pointer}')`;
+    if (actual.kind !== expected.kind) {
+      failures.push(`${label}: expected kind '${expected.kind}', got '${actual.kind}'`);
+      continue;
+    }
+    if (expected.kind === "chain" && actual.kind === "chain") {
+      checkEntries(failures, fixtureDir, label, actual.entries, expected.entries);
+    } else if (expected.kind === "synthesized" && actual.kind === "synthesized") {
+      checkEntries(failures, fixtureDir, label, actual.contributors, expected.contributors);
+    }
+    // "unknown-pointer" needs no further comparison — the kind match above is the whole assertion.
   }
 }
 
@@ -99,6 +137,9 @@ export async function runMergeCase(testCase: MergeCase): Promise<MergeCaseResult
     compareNode(result.configuration.tree, testCase.expect.tree, "", failures);
     if (testCase.expect.spans !== undefined) {
       checkSpans(failures, testCase.fixtureDir, result.configuration, testCase.expect.spans);
+    }
+    if (testCase.expect.why !== undefined) {
+      checkWhy(failures, testCase.fixtureDir, result.configuration, testCase.expect.why);
     }
   } else {
     if (result.ok) {

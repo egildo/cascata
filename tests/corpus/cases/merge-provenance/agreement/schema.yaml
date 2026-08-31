@@ -1,0 +1,3 @@
+keys:
+  flag:
+    provide: same-value

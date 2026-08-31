@@ -1,0 +1,24 @@
+{
+  "name": "T038: a three-layer chain yields a chain of three entries, winner first, each carrying a span (FR-018, FR-019)",
+  "cites": "v0.3 FR-019",
+  "fixtureDir": "merge-provenance/three-layer-chain",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [["title", { "kind": "string", "value": "config-title" }]]
+    },
+    "why": [
+      {
+        "pointer": "/title",
+        "kind": "chain",
+        "entries": [
+          { "document": "config.yaml", "outcome": "won" },
+          { "document": "schema-mid.yaml", "outcome": "overridden" },
+          { "document": "schema-root.yaml", "outcome": "overridden" }
+        ]
+      }
+    ]
+  }
+}

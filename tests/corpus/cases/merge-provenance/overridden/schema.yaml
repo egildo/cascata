@@ -1,0 +1,3 @@
+keys:
+  greeting:
+    provide: hello-from-schema

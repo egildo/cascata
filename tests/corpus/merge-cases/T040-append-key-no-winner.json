@@ -1,0 +1,35 @@
+{
+  "name": "T040: an append key's chain names every contributor as accumulated, root-first, with no nominated winner (FR-020)",
+  "cites": "v0.3 FR-020",
+  "fixtureDir": "merge-provenance/append",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "items",
+          {
+            "sequence": [
+              { "kind": "string", "value": "root-item" },
+              { "kind": "string", "value": "mid-item" },
+              { "kind": "string", "value": "config-item" }
+            ]
+          }
+        ]
+      ]
+    },
+    "why": [
+      {
+        "pointer": "/items",
+        "kind": "chain",
+        "entries": [
+          { "document": "schema-root.yaml", "outcome": "accumulated" },
+          { "document": "schema-mid.yaml", "outcome": "accumulated" },
+          { "document": "config.yaml", "outcome": "accumulated" }
+        ]
+      }
+    ]
+  }
+}

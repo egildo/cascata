@@ -1,0 +1,23 @@
+{
+  "name": "T039: the chain records the schema's overridden contribution even though 'hello-from-schema' appears nowhere in the merged tree — the guard against building provenance from the finished result (FR-022, SPEC.md §10)",
+  "cites": "v0.3 FR-022",
+  "fixtureDir": "merge-provenance/overridden",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [["greeting", { "kind": "string", "value": "hello-from-config" }]]
+    },
+    "why": [
+      {
+        "pointer": "/greeting",
+        "kind": "chain",
+        "entries": [
+          { "document": "config.yaml", "outcome": "won" },
+          { "document": "schema.yaml", "outcome": "overridden" }
+        ]
+      }
+    ]
+  }
+}

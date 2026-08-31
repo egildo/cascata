@@ -1,0 +1,2 @@
+$schema: ./schema.yaml
+flag: same-value

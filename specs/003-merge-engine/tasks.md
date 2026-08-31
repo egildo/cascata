@@ -134,21 +134,21 @@ each with a position in a real document.
 
 ### Conformance cases for User Story 3 (write first)
 
-- [ ] T038 [P] [US3] Cases asserting a three-layer chain yields a chain of three entries, winner first, each carrying a span (FR-018, FR-019), in tests/corpus/cases/merge-provenance/
-- [ ] T039 [P] [US3] Case asserting the chain records **overridden** contributions that appear nowhere in the merged tree (FR-022), in tests/corpus/cases/merge-provenance/overridden/
-- [ ] T040 [P] [US3] Case asserting an `append` key's chain names every contributor as accumulated with no nominated winner (FR-020), in tests/corpus/cases/merge-provenance/append/
-- [ ] T041 [P] [US3] Cases asserting `why` distinguishes all three outcomes — a chain, `synthesized`, and `unknown-pointer` (v0.3 FR-021) — in tests/corpus/cases/merge-provenance/negatives/
-- [ ] T042 [P] [US3] Case asserting `why` answers *synthesized* with its contributors for a mapping no layer wrote, distinct from a chain for one a layer did write, in tests/corpus/cases/merge-provenance/synthesized/ (v0.3 FR-021)
-- [ ] T043 [P] [US3] Case asserting two layers providing byte-identical values both appear in the chain — agreement is not silence, in tests/corpus/cases/merge-provenance/agreement/
+- [x] T038 [P] [US3] Cases asserting a three-layer chain yields a chain of three entries, winner first, each carrying a span (FR-018, FR-019), in tests/corpus/cases/merge-provenance/
+- [x] T039 [P] [US3] Case asserting the chain records **overridden** contributions that appear nowhere in the merged tree (FR-022), in tests/corpus/cases/merge-provenance/overridden/
+- [x] T040 [P] [US3] Case asserting an `append` key's chain names every contributor as accumulated with no nominated winner (FR-020), in tests/corpus/cases/merge-provenance/append/
+- [x] T041 [P] [US3] Cases asserting `why` distinguishes all three outcomes — a chain, `synthesized`, and `unknown-pointer` (v0.3 FR-021) — in tests/corpus/cases/merge-provenance/negatives/
+- [x] T042 [P] [US3] Case asserting `why` answers *synthesized* with its contributors for a mapping no layer wrote, distinct from a chain for one a layer did write, in tests/corpus/cases/merge-provenance/synthesized/ (v0.3 FR-021)
+- [x] T043 [P] [US3] Case asserting two layers providing byte-identical values both appear in the chain — agreement is not silence, in tests/corpus/cases/merge-provenance/agreement/
 
 ### Implementation for User Story 3
 
-- [ ] T044 [US3] Build the pointer-keyed provenance record **during** the fold, recording overridden contributions as they lose, in src/merge/provenance.ts (FR-017, FR-022) — depends on T018, T004
-- [ ] T045 [US3] Carry a span into each entry's own layer document so an author can open the file (FR-018), in src/merge/provenance.ts — depends on T044
-- [ ] T046 [US3] Mark every contributor to an `append` key as accumulated, nominating no winner (FR-020), in src/merge/provenance.ts — depends on T044, T030
-- [ ] T047 [US3] Implement `why()` returning a chain, `synthesized` with its contributors, or `unknown-pointer` in src/merge/provenance.ts (v0.3 FR-021) — depends on T044
-- [ ] T048 [US3] Assert the two structures agree — every pointer resolving in the tree has a chain and every chain's pointer resolves — in tests/unit/provenance-consistency.test.ts, since keeping provenance beside the tree is what makes this failure possible — depends on T044
-- [ ] T049 [US3] Export `why()` from src/index.ts — depends on T047
+- [x] T044 [US3] Build the pointer-keyed provenance record **during** the fold, recording overridden contributions as they lose, in src/merge/provenance.ts (FR-017, FR-022) — depends on T018, T004
+- [x] T045 [US3] Carry a span into each entry's own layer document so an author can open the file (FR-018), in src/merge/provenance.ts — depends on T044
+- [x] T046 [US3] Mark every contributor to an `append` key as accumulated, nominating no winner (FR-020), in src/merge/provenance.ts — depends on T044, T030
+- [x] T047 [US3] Implement `why()` returning a chain, `synthesized` with its contributors, or `unknown-pointer` in src/merge/provenance.ts (v0.3 FR-021) — depends on T044
+- [x] T048 [US3] Assert the two structures agree — every pointer resolving in the tree has a chain and every chain's pointer resolves — in tests/unit/provenance-consistency.test.ts, since keeping provenance beside the tree is what makes this failure possible — depends on T044
+- [x] T049 [US3] Export `why()` from src/index.ts — depends on T047
 
 **Checkpoint**: Every value accounts for itself, including the values that lost.
 

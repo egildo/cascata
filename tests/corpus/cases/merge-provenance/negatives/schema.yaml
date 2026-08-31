@@ -1,0 +1,6 @@
+keys:
+  title:
+    provide: hello
+  shared:
+    provide:
+      x: schema-x

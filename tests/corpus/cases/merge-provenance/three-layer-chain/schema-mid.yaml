@@ -1,0 +1,4 @@
+$adopts: ./schema-root.yaml
+keys:
+  title:
+    provide: mid-title
