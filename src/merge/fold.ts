@@ -97,9 +97,15 @@
  * whatever pre-existed the moment accumulation starts. Neither moment
  * re-checks a value the other already covered — (1) never re-examines
  * `result` (only `contribution`, this layer's own new value), and (2)
- * only fires on a transition, which — because `resolveStrategies` has
- * already confirmed the stack does not weaken (FR-016) — happens **at
- * most once** per key across the whole fold.
+ * only fires on a transition, which happens **at most once** per key
+ * across the whole fold regardless of what the rest of the stack looks
+ * like: `advanceStrategies` (`strategy.ts`) only ever *adds* a key to its
+ * running map (tightening to `"append"`), never removes one, so once a key
+ * is in the map it stays there for every later layer — a running map can
+ * only grow, so a key can enter it only once. This holds even on a stack
+ * `resolveStrategies` would refuse for weakening elsewhere (see
+ * `foldConfiguration`'s own doc comment for why running this file's loop
+ * on such a stack is safe and not merely non-crashing).
  *
  * Both moments push onto one shared `diagnostics` array for the whole
  * fold rather than returning on the first hit (T058): a schema
@@ -108,15 +114,13 @@
  * first should not have to re-run the fold to discover the second — the
  * same "collect every failure it can determine independently" property
  * v0.2's `resolveAllBranches` established for reference resolution. This
- * is intentionally **not** merged with `resolveStrategies`' own
- * diagnostics: that function's refusals (`unknown-cascade-strategy`,
- * `unimplemented-cascade-strategy`, `cascade-strategy-weakened`) are pure
- * vocabulary, checkable with no data at all, and `foldConfiguration` still
- * aborts before ever folding when any of those are found — `advanceStrategies`
- * is documented as unspecified on a stack `resolveStrategies` has refused,
- * so this file must not call it, or the checks above, on one. Only once
- * `resolveStrategies` finds nothing does folding — and this file's own
- * collect-all — run at all.
+ * array is itself kept separate from `resolveStrategies`' own diagnostics
+ * within this file's functions — `foldWithProvenance` returns only its own
+ * `append-over-non-sequence` findings — but `foldConfiguration` (below)
+ * now runs both `resolveStrategies` and `foldWithProvenance`
+ * unconditionally and concatenates the two arrays (v0.3 FR-028, T061): a
+ * schema's vocabulary problem in one key must not hide a data-shape
+ * problem in another.
  */
 
 import { createMapping, type Mapping, type Node } from "../model/node.js";
@@ -348,10 +352,16 @@ function mergeValue(path: readonly string[], current: Node | undefined, incoming
  * per layer, immediately before merging that layer's own contribution,
  * which is what makes a strategy take effect "from its declaring layer
  * downward" (v0.3 FR-026, T034) rather than reaching back over layers
- * that already settled under a different strategy. This function assumes
- * the caller has already run `resolveStrategies` and found no diagnostics
- * — `advanceStrategies`'s own doc comment explains why calling this on an
- * invalid (weakening) stack is unspecified.
+ * that already settled under a different strategy. This convenience
+ * wrapper discards `foldWithProvenance`'s `diagnostics` entirely and gives
+ * its caller no way to see them — appropriate only for a caller that has
+ * either already run `resolveStrategies` and found no diagnostics, or (this
+ * file's own hand-constructed unit tests) only ever builds well-formed
+ * layers to begin with. `advanceStrategies`'s own doc comment explains why
+ * this function's loop is in fact well-defined on any layer stack,
+ * including one `resolveStrategies` would refuse — `foldConfiguration`
+ * below is the caller that relies on that and surfaces both passes'
+ * diagnostics together (v0.3 FR-028, T061).
  */
 export function fold(layers: readonly Layer[]): Node {
   return foldWithProvenance(layers).tree;
@@ -457,36 +467,73 @@ export type FoldOutcome = { readonly ok: true; readonly configuration: MergedCon
  * same objects the frozen tree ends up holding — the two structures never
  * diverge over freezing.
  *
- * `resolveStrategies` runs **before** the fold itself: `cascade-strategy
- * -weakened`, `unknown-cascade-strategy`, and `unimplemented-cascade
- * -strategy` (T032, T054, T055) are all facts about the pedigree's own
- * *vocabulary*, independent of any data, so there is no reason to build a
- * tree first and discover it cannot be trusted — and `advanceStrategies`
- * is documented as unspecified on a stack `resolveStrategies` has refused,
- * so folding must not even attempt to run on one. `append-over-non
- * -sequence` (T056) is different in kind: it is data-dependent (a value's
- * actual shape, possibly only knowable after earlier layers have already
- * settled what "the value so far" even is — see `foldWithProvenance`'s own
- * module-doc section), so it cannot be found by `resolveStrategies` and is
- * instead collected by the fold itself, exhaustively (T058), once
- * `resolveStrategies` has confirmed the vocabulary is trustworthy enough
- * to fold at all. The two diagnostic sources are therefore sequential, not
- * merged: this function returns immediately on the first if it finds
- * anything, and only consults the second when the first found nothing.
- * `resolveStrategies`' own `strategies` field is unused past that check
- * (T034): `foldWithProvenance` derives the strategy in effect at each
- * layer for itself, via `advanceStrategies`, rather than being handed one
- * flat map.
+ * `resolveStrategies` and `foldWithProvenance` **both always run** (v0.3
+ * FR-028, T061), and their diagnostics are concatenated — vocabulary
+ * failures first, then data-dependent ones — rather than the fold being
+ * skipped the moment `resolveStrategies` finds anything. Before FR-028
+ * existed this function returned as soon as `resolveStrategies` reported a
+ * diagnostic, on the reasoning that `advanceStrategies` is documented as
+ * unspecified on a stack `resolveStrategies` has refused. That reasoning
+ * was sound as far as it went but stopped one step short: FR-028 requires
+ * every independently-determinable failure back, including a data-shape
+ * failure (`append-over-non-sequence`) in a key untouched by whatever made
+ * a *different* key's vocabulary unreadable, so skipping the fold entirely
+ * whenever `resolveStrategies` found anything under-reports by
+ * construction — exactly the bug this requirement exists to forbid.
+ *
+ * Running the fold unconditionally is safe because `advanceStrategies` (and
+ * everything downstream of it in `foldWithProvenance`'s loop) is in fact
+ * total over **every** layer stack, not only ones `resolveStrategies` has
+ * accepted — it is simply that nothing had stated so before FR-028 gave a
+ * reason to check. Walk what it does with a `cascade` declaration
+ * `resolveStrategies` would refuse:
+ *
+ * - An **unrecognized value** (`interpretCascade` returns `undefined`, the
+ *   `unknown-`/`unimplemented-cascade-strategy` cases): `advanceStrategies`
+ *   only ever branches on `interpretCascade(...) === "append"`, so anything
+ *   `interpretCascade` cannot read simply fails that check and is skipped —
+ *   the same "exactly as if nothing had been declared" reading
+ *   `resolveStrategies`' own doc comment already gives this case.
+ * - A **weakening** attempt (`append` → `replace`, `cascade-strategy
+ *   -weakened`): the declared value there is a syntactically valid
+ *   `"replace"`, which `interpretCascade` reads fine — but
+ *   `advanceStrategies` still only *acts* on a value that reads as
+ *   `"append"` (an explicit `"replace"` is never itself a tightening, per
+ *   its own doc comment below), so this declaration is skipped too, and the
+ *   key stays `"append"` from whichever earlier layer already tightened it
+ *   — the one behaviour that keeps faith with `resolveStrategies`' own
+ *   verdict (the map it built also never recorded the weakening).
+ *
+ * Neither case is a crash, an exception, or a silently wrong tree escaping
+ * as `ok: true` — the running strategy map simply never advances for a key
+ * whose declaration was unreadable or illegal, in every place that map is
+ * read (`checkFreshAppendContributions`, `checkTransitionedAppendKeys`,
+ * `mergeMappings`'s own `effectiveStrategy` lookup). And a data-dependent
+ * diagnostic the fold finds for some *other*, well-formed key never depends
+ * on this: `checkAppendable` is a pure function of one key's own current
+ * strategy and one value's own shape, so it is unaffected by what happened
+ * to any other key elsewhere in the stack. This is why running both passes
+ * unconditionally and concatenating their diagnostics is correct and not
+ * merely non-crashing: every diagnostic either pass reports is one that
+ * pass would have reported on this exact stack in isolation.
+ *
+ * The tree itself never leaks out on this path regardless: `diagnostics`
+ * below is the union of both passes, and `freeze`/`ok: true` are reached
+ * only when it is empty — a merge still yields a configuration or
+ * diagnostics, never both, and never a tree built while trusting a
+ * strategy map some layer's declaration was never allowed to advance.
+ * `resolveStrategies`' own `strategies` field is unused past its own
+ * diagnostics (T034): `foldWithProvenance` derives the strategy in effect
+ * at each layer for itself, via `advanceStrategies`, rather than being
+ * handed one flat map.
  */
 export function foldConfiguration(graph: Graph, pedigree: Pedigree): FoldOutcome {
   const layers = deriveLayers(graph);
   const { diagnostics: strategyDiagnostics } = resolveStrategies(layers);
-  if (strategyDiagnostics.length > 0) {
-    return { ok: false, diagnostics: [...strategyDiagnostics] };
-  }
   const { tree, provenance, diagnostics: foldDiagnostics } = foldWithProvenance(layers);
-  if (foldDiagnostics.length > 0) {
-    return { ok: false, diagnostics: [...foldDiagnostics] };
+  const diagnostics = [...strategyDiagnostics, ...foldDiagnostics];
+  if (diagnostics.length > 0) {
+    return { ok: false, diagnostics };
   }
   return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree } };
 }

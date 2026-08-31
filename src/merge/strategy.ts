@@ -328,17 +328,35 @@ export function resolveStrategies(layers: readonly Layer[]): StrategyResolution 
  * and applying it uniformly to every layer.
  *
  * Deliberately does **not** check for a weakening — that is
- * `resolveStrategies`' whole-stack validation, which MUST already have
- * run (and found no diagnostics) before `fold()` relies on this function.
- * Given a stack `resolveStrategies` has accepted, the only transition that
- * can ever occur is tightening (`"replace"` → `"append"`); an explicit
- * `"replace"` declaration is therefore never itself acted on here — in a
- * validated stack it can only be restating the current strategy or
- * following a legal one-way transition already applied by an earlier
- * layer, both of which "leave the map unchanged" already covers. Calling
- * this on a stack `resolveStrategies` has refused is unspecified — nothing
- * in `fold()` does, and `foldConfiguration` never calls `fold()` when
- * `resolveStrategies` reported a diagnostic.
+ * `resolveStrategies`' whole-stack validation, run separately (and
+ * concatenated with this file's data-dependent findings by
+ * `src/merge/fold.ts`'s `foldConfiguration`, v0.3 FR-028, T061). This
+ * function only ever *acts* on a declaration that reads as `"append"`
+ * (`interpretCascade(declaration.cascade) === "append"`); every other
+ * declaration — an explicit `"replace"` (whether it is merely restating the
+ * default or is attempting an illegal weakening `resolveStrategies` would
+ * refuse), or a value `interpretCascade` cannot read at all (unrecognized,
+ * non-string, `merge-by-key`) — falls through the same `continue` and
+ * leaves the running map untouched for that key.
+ *
+ * **Total over every layer stack, not only ones `resolveStrategies` has
+ * accepted** — `foldConfiguration` now relies on this (v0.3 FR-028, T061):
+ * running the fold to look for `append-over-non-sequence` failures must not
+ * be skipped merely because some *other* key's `cascade` is illegal or
+ * unreadable, and this function is exactly why that is safe. On a stack
+ * `resolveStrategies` would refuse, the refused declaration itself is
+ * always one this function already treats as a no-op (per the paragraph
+ * above) — so the running strategy for the key it names simply stays
+ * whatever it already was, "exactly as if nothing had been declared," the
+ * same reading `resolveStrategies`' own doc comment gives that key. It
+ * never crashes, never invents a strategy for a value it cannot interpret,
+ * and never lets a bad declaration for one key perturb any other key's
+ * strategy. What it does **not** do — and this remains true regardless of
+ * validity — is retroactively correct a key that legitimately reached
+ * `"append"` before an (illegal) weakening was declared: that key stays
+ * `"append"`, matching the verdict `resolveStrategies` itself reaches (it
+ * never removes a key from its own map on a weakening either, only reports
+ * a diagnostic).
  *
  * Returns `running` itself, unchanged (no allocation), for the common
  * case — every `role: "config"` layer (FR-015: never read), and a schema
