@@ -155,10 +155,13 @@ function violationForRequired(configuration: MergedConfiguration, layer: Layer, 
     return undefined;
   }
   const demand = buildDemand(layer, keyName, ["required"], requiredNode);
-  if (cause === "null") {
-    // `value` is defined and a null scalar whenever cause === "null".
-    const nullNode = value as Node;
-    return toViolation(configuration, demand, pointerFromPath([keyName]), { pointerSuffix: [], node: nullNode, reason: { kind: "required-violated", cause: "null" } });
+  // `value !== undefined` is always true here when `cause === "null"`
+  // (`requiredViolationCause` only returns "null" for a defined null
+  // scalar) — checked explicitly, rather than asserted, so TypeScript
+  // narrows `value` to `Node` without an assertion cast on the node model
+  // (constitution: "No assertion casts on the node model").
+  if (cause === "null" && value !== undefined) {
+    return toViolation(configuration, demand, pointerFromPath([keyName]), { pointerSuffix: [], node: value, reason: { kind: "required-violated", cause: "null" } });
   }
   return toViolation(configuration, demand, "", { pointerSuffix: [], node: configuration.tree, reason: { kind: "required-violated", cause: "absent" } });
 }

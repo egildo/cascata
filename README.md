@@ -115,6 +115,11 @@ set regardless of order, sequences by items in order. Spans and origins take no 
 
 Stable, part of the public contract (contracts/diagnostics.md). Every diagnostic carries a `code`, a
 human-readable `message`, a `primary: SourceSpan`, and zero or more labelled `related: RelatedSpan[]`.
+Since v0.4, a diagnostic produced by `validate()` additionally carries `pointer?: string` (an RFC 6901
+pointer into the **merged** configuration), `demand?: { pointer: string; span: SourceSpan }` (the
+violated demand's own position, in its declaring document), and `pedigreePosition?: number` (the
+declaring layer's rank) — all three optional, so every diagnostic from an earlier stage stays valid
+with no changes (constitution Principle III's phased contract; see "v0.4 diagnostic codes" below).
 
 | Code | Refuses |
 |---|---|
@@ -379,6 +384,7 @@ interface MergedConfiguration {
   tree: Node; // the folded tree — frozen, canonically ordered, every node positioned
   provenance: ProvenanceRecord;
   pedigree: Pedigree; // carried through from resolve(), unchanged
+  layers: readonly Layer[]; // since v0.4 — root to leaf, what foldConfiguration already computed
 }
 ```
 
@@ -400,6 +406,108 @@ A **config** declaring its own `cascade` produces no diagnostic — it is ignore
 policy comes from schemas only (v0.3 FR-015). A schema using `demand`, `seal`, `final`, or `delegate`
 likewise produces nothing — this milestone reads neither meaning nor error into vocabulary it does not
 implement (v0.3 FR-002).
+
+### `validate(configuration)`
+
+**v0.4.** Judges a `MergedConfiguration` — exactly `merge()`'s `ok: true` shape — against every schema
+layer's own `demand`, root to leaf (`SPEC.md` §5.4, §10; contracts/validate-api.md). A distinct
+pipeline stage, reachable independently of `merge()`, consuming only its output (no separate pedigree
+argument — `MergedConfiguration.layers` already carries what this stage needs).
+
+```typescript
+import { resolve, merge, validate } from "cascata";
+
+// core.yaml:   `keys: { styles: { demand: { type: url } } }`
+// house.yaml:  `$adopts: ./core.yaml` — restates nothing for styles
+// config.yaml: `$schema: ./house.yaml` with `styles: "not-a-url"`
+
+const resolved = await resolve("./config.yaml", { sandboxRoot: process.cwd() });
+if (!resolved.ok) throw new Error("resolve failed");
+const merged = merge({ graph: resolved.graph, pedigree: resolved.pedigree });
+if (!merged.ok) throw new Error("merge failed");
+
+const result = validate(merged.configuration);
+if (result.ok) {
+  result.certified; // the same MergedConfiguration, now certified
+} else {
+  result.diagnostics;
+  // [{ code: "type-mismatch", pointer: "/styles", pedigreePosition: 0,
+  //    demand: { pointer: "/keys/styles/demand/type", span: <core.yaml:1> },
+  //    primary: <config.yaml's own span for "not-a-url"> }]
+  // — the ROOT is named (pedigreePosition 0), even though house.yaml is
+  // the nearer layer and restated nothing: §5.4's whole-chain guarantee.
+}
+```
+
+- **`ValidateResult`** is `{ ok: true, certified: MergedConfiguration } | { ok: false, diagnostics: Diagnostic[] }`
+  — never both. `certified` is `configuration` itself, unchanged: `validate()` never mutates the tree
+  (FR-034) and performs no I/O or reference resolution (FR-035) — every document it needs is already
+  on `configuration.layers`.
+
+**Behavioral contract** (contracts/validate-api.md):
+
+1. Never throws for a bad configuration or schema — every problem is a diagnostic.
+2. **Whole-chain, not leaf-only**: every schema layer's own `demand` is checked against the same merged
+   tree. Restating an ancestor's demand costs nothing extra (FR-015); a nearer layer's silence never
+   excuses an ancestor's demand (FR-016) — this is §5.4's "belt and suspenders".
+3. **Collect-all**: every violation this call can determine independently is reported, including
+   closed-vocabulary problems found by an independent pass that always runs alongside value-checking
+   (mirroring v0.3 FR-028's precedent for `merge()`).
+4. Deterministic: same configuration, same diagnostics, same order, every run (FR-018).
+5. A schema's own `provide` is checked exactly like a config-written value, at the `provide`'s own
+   position (FR-020) — a schema is not exempt from its own rules.
+6. `required` is checked against the **post-merge** tree and means present-and-non-null (§5.5); a key
+   satisfied by a `provide` produces zero diagnostics of any level — the guaranteed-key pattern is a
+   feature, not a tolerated gap.
+
+### `demand` vocabulary (`SPEC.md` §9, contracts/demand-vocabulary.md)
+
+Ten closed keywords: `type`, `items`, `required`, `min`, `max`, `minLength`, `maxLength`, `pattern`,
+`enum`, plus `accept` and `format`, both refused as **unimplemented** (arriving in v0.5, when named
+types exist) rather than read or silently ignored. `type` is SPEC.md §9.1's leaf DSL — unions (`|`),
+arrays (`T[]`, binding tighter than `|`), parentheses — resolving against exactly the model's own
+kinds plus `url`/`path`/`glob` (`string`, `int`, `float`, `bool`, `null`, `mapping`, `sequence`, `url`,
+`path`, `glob`); a `types:` section is likewise refused as unimplemented. `seal`, `final`, and
+`delegate` remain unread, unchanged from v0.3's posture.
+
+```typescript
+keys:
+  homepage:
+    demand:
+      type: url             # WHATWG URL Standard — new URL(), no scheme restriction
+      required: true
+  tags:
+    demand:
+      type: string[]        # a mismatched item is blamed by index, not the whole sequence
+      items: { minLength: 1 }
+```
+
+### v0.4 diagnostic codes
+
+Extends v0.1's–v0.3's catalogues above (contracts/diagnostics.md). Two families: vocabulary problems
+(found reading `demand`, before any value is checked) and violations (found checking the merged tree
+against a well-formed demand).
+
+| Code | Refuses |
+|---|---|
+| `unknown-demand-keyword` | A `demand` keyword outside SPEC.md §9's closed list |
+| `unimplemented-demand-keyword` | `accept` or `format` — named by §7/§9, arriving in v0.5 |
+| `unimplemented-types-section` | A top-level `types:` section |
+| `malformed-demand-value` | A constraint value of the wrong shape (`min: "ten"`, `enum: 3`, `required: "yes"`, or a `pattern` that does not compile as ECMA-262 regex) |
+| `malformed-type-expression` | A `type` value that does not parse under §9.1's grammar |
+| `unknown-type-name` | A `type` expression naming something outside the resolved built-in set |
+| `type-mismatch` | A value (or, for `T[]`, one item) whose kind matches no alternative of a `type` demand |
+| `range-violated` | A number outside a `min`/`max` bound |
+| `length-violated` | A string whose code-point length is outside `minLength`/`maxLength` |
+| `pattern-mismatch` | A string not matching a `pattern` demand |
+| `enum-violated` | A value not `nodesEqual` to any member of an `enum` demand |
+| `required-violated` | A `required` key absent, or present with an explicit `null`, after merge |
+
+`unimplemented-demand-keyword`/`unimplemented-types-section` are deliberately distinct from
+`unknown-demand-keyword` — mirroring v0.3's `unimplemented-cascade-strategy`, an author writing
+`accept`, `format`, or `types:` is early, not wrong. A demand restated identically by a nearer layer,
+satisfied, and a key no demand mentions both produce zero diagnostics — schema silence is permission
+(FR-021) until `seal: closed` arrives in v0.7.
 
 ## Scripts
 
@@ -426,5 +534,8 @@ under `tests/unit/` instead, driven directly against `resolve()` with an explici
 
 ## Dependency policy
 
-`yaml` (eemeli's) is the sole runtime dependency, per the project constitution
-(`.specify/memory/constitution.md`). Everything else is a dev dependency.
+`yaml` (eemeli's) and, since v0.4, `picomatch` are the only runtime dependencies, per the project
+constitution (`.specify/memory/constitution.md`), which names both by name on its allow-list.
+`picomatch` implements the `glob` built-in type (`SPEC.md` §7: "gitignore pattern syntax, implemented
+via picomatch, cited by name") — not a free implementer choice the way `url`/`path` are. Everything
+else is a dev dependency.
