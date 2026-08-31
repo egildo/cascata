@@ -254,12 +254,19 @@ rejected for a demand the descendant governs, and that a qualified name still re
   vocabulary reader in the one stage kept free of schema semantics — and would oblige a stage that has
   never carried §10's error contract to start.
 - **FR-018**: A layer MUST NOT redeclare a built-in type name.
-- **FR-019**: Qualified names MUST resolve to exactly one declaration, independently of which layer
-  asks. The qualifier MUST be the **last segment of the declaring document's `$id`** — `core` for
+- **FR-019**: A qualified name MUST restrict resolution to declarations from documents carrying that
+  qualifier, and MUST then resolve to the **nearest** such declaration at or above the naming layer —
+  the same nearest-wins rule FR-016 states for unqualified names. It pins exactly one declaration when
+  qualifiers are distinct; it does **not** resolve "independently of which layer asks", and an earlier
+  draft of this requirement said so wrongly, in the same way the pre-amendment FR-016 did. The
+  qualifier MUST be the **last segment of the declaring document's `$id`** — `core` for
   `$id: site-builder/core`, which is what §7's own worked example shows without stating the rule.
-- **FR-019a**: Two documents in one pedigree whose `$id`s end in the same segment therefore collide in
-  the qualifier namespace, and that collision MUST be reported like any other (FR-017) rather than
-  silently preferring one. The escape hatch needs its own escape hatch to be an error, not a coin toss.
+- **FR-019a**: Two documents in one pedigree whose `$id`s end in the same segment do **not** collide.
+  In a v1 chain they stand in an ancestor/descendant relation like every other pair, so a shared
+  qualifier plus a shared type name is a narrowing chain and FR-019's nearest-wins rule settles it. A
+  qualifier collision between *unrelated* documents remains reserved for multi-adoption and is
+  unreachable in v1, exactly as FR-016b requires of type-name collision — and MUST be documented as
+  unreachable wherever it is implemented rather than left looking like live protection.
 - **FR-019b**: A document with no `$id` MUST NOT be reachable by qualified name. It has no qualifier
   to derive, and inventing one from its location would make the name depend on where the document was
   fetched from rather than what it claims to be.
