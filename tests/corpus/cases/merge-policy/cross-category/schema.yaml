@@ -1,0 +1,6 @@
+keys:
+  a:
+    cascade: sideways
+  b:
+    cascade: append
+    provide: not-a-list

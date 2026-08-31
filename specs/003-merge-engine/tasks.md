@@ -167,7 +167,7 @@ each with a position in a real document.
 - [x] T052 [P] [US4] Case for `append` over a scalar and over a mapping, asserting `append-over-non-sequence` in the layer that supplied the offending value, in tests/corpus/cases/merge-policy/append-misuse/
 - [x] T053 [P] [US4] Case asserting a **config** declaring `cascade` is ignored and the fold proceeds as though it were not written (FR-015), in tests/corpus/cases/merge-policy/config-policy/
 - [x] T054 [P] [US4] Case with **two independent** policy failures in different keys, asserting both are reported from one merge, in tests/corpus/cases/merge-policy/multiple-failures/ (v0.3 FR-028 — this task cited FR-025 until FR-028 existed to cite; FR-025 is the reserved-keys rule, and there was no collect-all requirement in this milestone to point at). **Added by the implementer**: the collect-all requirement had an implementation task and no case, and the four named fixtures are all single-failure — each stays green against a fold that returns after the first diagnostic
-- [ ] T055 [P] [US4] Case with policy failures in **different categories** — an unknown strategy on one key and `append` over a non-sequence on another — asserting both are reported from one merge, in tests/corpus/cases/merge-policy/cross-category/ (v0.3 FR-028)
+- [x] T055 [P] [US4] Case with policy failures in **different categories** — an unknown strategy on one key and `append` over a non-sequence on another — asserting both are reported from one merge, in tests/corpus/cases/merge-policy/cross-category/ (v0.3 FR-028)
 
 ### Implementation for User Story 4
 

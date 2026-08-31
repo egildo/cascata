@@ -1,0 +1,14 @@
+{
+  "name": "T055: an unknown-cascade-strategy failure on one key and an append-over-non-sequence failure on a different key — two DIFFERENT diagnostic categories — are BOTH reported from one merge() call, not only the vocabulary category that resolveStrategies finds first",
+  "cites": "v0.3 FR-028",
+  "fixtureDir": "merge-policy/cross-category",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      { "code": "unknown-cascade-strategy", "document": "schema.yaml", "line": 3, "column": 14 },
+      { "code": "append-over-non-sequence", "document": "schema.yaml", "line": 6, "column": 14 }
+    ]
+  }
+}
