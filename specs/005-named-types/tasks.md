@@ -139,9 +139,9 @@ description: "Task list for v0.5 — Named Types & Nested Demands"
 - [x] T043 Confirm every pre-existing test still passes unchanged — baseline 498 at this milestone's start
 - [x] T044 Run every quickstart.md scenario end to end
 - [x] T045 Verify the six constitution gates, gate 5 in particular
-- [ ] T046 **Sabotage**: resolve type names against a single pedigree-wide merged graph instead of per-layer scope — confirm T038 (and only genuinely cross-layer cases) go red; single-schema cases stay green
-- [ ] T047 **Sabotage**: re-cap nested recursion at one level — confirm only T021 (three-deep) goes red
-- [ ] T048 **Sabotage**: make collision detection skip a name that would otherwise collide (silently accept the second declaration) — confirm T034 goes red, Principle VI's deny-by-default failing exactly where it should hold
+- [x] T046 **Sabotage**: resolve type names against a single pedigree-wide merged graph instead of per-layer scope — confirm T038 (and only genuinely cross-layer cases) go red; single-schema cases stay green
+- [x] T047 **Sabotage**: re-cap nested recursion at one level — confirm only T021 (three-deep) goes red
+- [x] T048 **Sabotage**: make collision detection skip a name that would otherwise collide (silently accept the second declaration) — confirm T034 goes red, Principle VI's deny-by-default failing exactly where it should hold
 
 ---
 
