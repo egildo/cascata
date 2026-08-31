@@ -4,16 +4,22 @@
  * shared graph node would be wrong precisely because it could carry
  * only one breadcrumb", spec.md's own Key Entities section).
  *
- * `tests/corpus/validate-cases/T013-diamond-fragment.json` already
- * exercises this fixture, but the corpus harness's own expectation
- * schema (`tests/corpus/validate-case.ts`) has no field for asserting a
- * diagnostic's own `delegatedFrom` chain — only `code`/`document`/
- * `line`/`column`/`pointer`/`demand`/`pedigreePosition`. The offending
- * *value*'s own primary span never moves when the breadcrumb is wrong
- * (only the breadcrumb's own reported position does), so the corpus
- * case alone cannot catch the mandated sabotage (dropping the per-graft
- * breadcrumb) even though it is the fixture built for exactly that —
- * this file asserts the field the corpus harness cannot.
+ * **History, kept rather than deleted once the gap it names closed.**
+ * When this file was first written, `tests/corpus/validate-case.ts`'s
+ * expectation schema had no field for asserting a diagnostic's own
+ * `delegatedFrom` chain, so `tests/corpus/validate-cases/
+ * T013-diamond-fragment.json` could not catch the mandated sabotage
+ * (dropping the per-graft breadcrumb) even though it is the exact
+ * fixture built for that — the offending *value*'s own primary span
+ * never moves when the breadcrumb is wrong, only the breadcrumb's own
+ * position does. `validate-case.ts`/`validate-runner.ts` have since
+ * gained a `delegatedFrom` field and T013's own JSON now asserts it
+ * directly, closing that gap in the harness itself rather than leaving
+ * the breadcrumb permanently unit-test-only. This file is kept anyway:
+ * it is a real, independent regression guard (a JSON-schema change to
+ * `validate-case.ts` could reintroduce the same blind spot silently),
+ * and it is the natural home for the "why a diamond, specifically"
+ * reasoning above.
  */
 
 import { describe, expect, it } from "vitest";

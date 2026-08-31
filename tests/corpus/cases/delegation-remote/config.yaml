@@ -1,0 +1,2 @@
+$schema: ./schema.yaml
+network: https://example.test/network.yaml

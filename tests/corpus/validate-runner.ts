@@ -86,6 +86,27 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
     if (expectedDiagnostic.pedigreePosition !== undefined && actualDiagnostic.pedigreePosition !== expectedDiagnostic.pedigreePosition) {
       failures.push(`${label}: expected pedigreePosition ${expectedDiagnostic.pedigreePosition}, got ${JSON.stringify(actualDiagnostic.pedigreePosition)}`);
     }
+    if (expectedDiagnostic.delegatedFrom !== undefined) {
+      const actualHops = actualDiagnostic.delegatedFrom ?? [];
+      if (actualHops.length !== expectedDiagnostic.delegatedFrom.length) {
+        failures.push(`${label}.delegatedFrom: expected ${expectedDiagnostic.delegatedFrom.length} hop(s), got ${actualHops.length}`);
+      } else {
+        expectedDiagnostic.delegatedFrom.forEach((expectedHop, hopIndex) => {
+          const actualHop = actualHops[hopIndex];
+          if (actualHop === undefined) {
+            failures.push(`${label}.delegatedFrom[${hopIndex}]: missing`);
+            return;
+          }
+          const actualHopDocument = relativeLocation(fixtureDir, actualHop.span.origin.label);
+          if (actualHopDocument !== expectedHop.document) {
+            failures.push(`${label}.delegatedFrom[${hopIndex}]: expected document '${expectedHop.document}', got '${actualHopDocument}'`);
+          }
+          if (actualHop.span.line !== expectedHop.line || actualHop.span.column !== expectedHop.column) {
+            failures.push(`${label}.delegatedFrom[${hopIndex}]: expected position ${expectedHop.line}:${expectedHop.column}, got ${actualHop.span.line}:${actualHop.span.column}`);
+          }
+        });
+      }
+    }
   });
 }
 

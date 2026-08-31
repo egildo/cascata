@@ -51,6 +51,17 @@ export interface ExpectedValidateDiagnostic {
   };
   /** The declaring layer's rank in precedence order, 0 = root schema (`Diagnostic.pedigreePosition`). */
   readonly pedigreePosition?: number;
+  /**
+   * The delegation chain that reached the offending value, outermost
+   * document first (v0.6 `Diagnostic.delegatedFrom`, FR-012b) — asserted
+   * only when supplied. **Absent, not an empty array, for a
+   * non-delegated diagnostic**: a case that wants to confirm no
+   * breadcrumb is present asserts `delegatedFrom: []` explicitly (see
+   * `checkDiagnostics` below), which is deliberately a different
+   * assertion from omitting the field altogether (omitting it means "I
+   * am not checking this field at all", not "I expect it absent").
+   */
+  readonly delegatedFrom?: readonly { readonly document: string; readonly line: number; readonly column: number }[];
 }
 
 export type ValidateExpect = { readonly ok: true; readonly tree?: ExpectedNode } | { readonly ok: false; readonly diagnostics: readonly ExpectedValidateDiagnostic[] };
@@ -123,6 +134,23 @@ function parseOptionalNumber(raw: Record<string, unknown>, field: string, source
   return value;
 }
 
+function parseExpectedDelegationHop(raw: unknown, source: string, at: string): { readonly document: string; readonly line: number; readonly column: number } {
+  if (!isPlainObject(raw)) {
+    fail(source, `'${at}' must be an object`);
+  }
+  const document = requireString(raw, "document", source, at);
+  const line = requireNumber(raw, "line", source, at);
+  const column = requireNumber(raw, "column", source, at);
+  return { document, line, column };
+}
+
+function parseExpectedDelegatedFrom(raw: unknown, source: string, at: string): readonly { readonly document: string; readonly line: number; readonly column: number }[] {
+  if (!Array.isArray(raw)) {
+    fail(source, `'${at}' must be an array`);
+  }
+  return raw.map((item, index) => parseExpectedDelegationHop(item, source, `${at}[${index}]`));
+}
+
 function parseValidateDiagnostic(raw: unknown, source: string, at: string): ExpectedValidateDiagnostic {
   if (!isPlainObject(raw)) {
     fail(source, `'${at}' must be an object`);
@@ -142,6 +170,8 @@ function parseValidateDiagnostic(raw: unknown, source: string, at: string): Expe
   const demand = demandRaw === undefined ? undefined : parseExpectedDemand(demandRaw, source, `${at}.demand`);
   const pedigreePositionRaw = raw["pedigreePosition"];
   const pedigreePosition = pedigreePositionRaw === undefined ? undefined : typeof pedigreePositionRaw === "number" ? pedigreePositionRaw : fail(source, `'${at}.pedigreePosition' must be a number if present`);
+  const delegatedFromRaw = raw["delegatedFrom"];
+  const delegatedFrom = delegatedFromRaw === undefined ? undefined : parseExpectedDelegatedFrom(delegatedFromRaw, source, `${at}.delegatedFrom`);
   return {
     code: codeRaw,
     document,
@@ -152,6 +182,7 @@ function parseValidateDiagnostic(raw: unknown, source: string, at: string): Expe
     ...(pointer !== undefined ? { pointer } : {}),
     ...(demand !== undefined ? { demand } : {}),
     ...(pedigreePosition !== undefined ? { pedigreePosition } : {}),
+    ...(delegatedFrom !== undefined ? { delegatedFrom } : {}),
   };
 }
 

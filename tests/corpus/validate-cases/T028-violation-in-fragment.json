@@ -14,7 +14,10 @@
         "column": 7,
         "pointer": "/network/host",
         "demand": { "pointer": "/keys/network/demand/keys/host/demand/minLength", "document": "schema.yaml", "line": 9, "column": 24 },
-        "pedigreePosition": 0
+        "pedigreePosition": 0,
+        "delegatedFrom": [
+          { "document": "config.yaml", "line": 2, "column": 10 }
+        ]
       }
     ]
   }

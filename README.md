@@ -217,7 +217,7 @@ answers "what schemas am I bound by", and the config is not an answer to that �
 interface Reference {
   text: string; // what was written — a relative path, a `~/`-prefixed path, or an absolute URL
   span: SourceSpan; // where it was written, in the document that wrote it
-  kind: "schema" | "adopts";
+  kind: "schema" | "adopts" | "delegate"; // v0.6
   authority: "config-authored" | "schema-authored"; // decides sandbox treatment — never from the text
   pin?: string; // the stated `$pin`, if any
 }
@@ -256,14 +256,80 @@ that failed** (v0.2 FR-023).
 | `too-many-redirects` | More redirect hops than `maxRedirects` |
 | `document-not-cached` | A remote document neither reachable nor already cached |
 
+### Delegation (`SPEC.md` §8, Article VI, v0.6)
+
+A schema grants one key `delegate: allow`; a config supplying a **string** there gets that file's
+contents grafted in as the subtree at that position, before merge and validation — indistinguishable
+from having been written inline (§8.2's identity claim). Resolved as part of `resolve()` itself, after
+the pedigree is walked and before the graph is handed onward:
+
+```typescript
+// schema.yaml
+keys:
+  network:
+    demand: { type: mapping }
+    delegate: allow      # a string value here means: load and graft
+
+// config.yaml
+network: ./conf.network.yaml   # grafted — network.yaml's own content lands here
+favicon: ./icon.png             # NOT granted — stays the literal string (§8.1's razor)
+```
+
+- **§8.1's razor**: nothing infers delegation from a value's *shape*. A string at an ungranted key is
+  always data, never an instruction to load — verified not just by a dedicated case but by the entire
+  pre-v0.6 corpus, which has zero grants anywhere and would fail almost everywhere if this ever broke
+  (a real sabotage result, not a hypothetical one).
+- **A grant permits, never compels** (FR-004): an inline mapping at a granted key is used as written.
+- **`delegate: allow` is the only recognized value** (FR-002); anything else, including the future
+  `delegate: { allow: true, formats: [...] }` selector form, is `delegate-value-unimplemented`.
+- **Recursive, depth-bounded** (FR-012, FR-012a): a fragment may itself delegate, wherever the
+  governing schema grants it, up to `MAX_DELEGATION_DEPTH` (64) hops. In practice this bound is
+  reachable only via a schema deep enough to grant many nested levels by name — and, unlike v0.1's own
+  parse-depth cap, that schema depth itself collides with the same 64-level parse limit well before
+  the delegation bound does (see `tests/unit/delegation-depth-limit.test.ts`), so the guard is tested
+  directly rather than end to end through a real chain of files.
+- **One fragment, many grafts, independent provenance** (FR-013, FR-013a): the same file grafted at
+  two positions is read once but parsed and attributed independently — two grafts never share a
+  breadcrumb, which is what makes each one's own error position correct.
+- **Security is unconditional, not authority-gated** (§8.4): every delegated reference — however
+  deeply nested, whoever nominally "wrote" the string — is confined to the sandbox root and refused if
+  absolute, with no `$schema`-style exemption for a "config-authored" string. Remote targets are
+  refused unless the **caller** opts in (`ResolveOptions.allowRemoteDelegation`), never a schema; the
+  refusal names the missing opt-in and never suggests a schema could grant it.
+- **Article VI in practice**: remote delegation asks the same injectable `Transport` remote
+  `$schema`/`$adopts` fetches already use (v0.2) — the host answers with bytes or the transport
+  reports a failure, and either way `resolve()` returns an ordinary diagnostic, never an exception.
+  Local delegation reads still go through `node:fs` directly, unlike remote ones — Article VI's own
+  unification of local reads into the identical seam is v0.7 work, not v0.6's.
+- **The breadcrumb** (§10, the last of Principle III's phased diagnostic fields): a diagnostic about a
+  value inside a fragment carries `delegatedFrom`, naming the chain of delegating positions outermost
+  to innermost; a diagnostic about a non-delegated value carries none at all. `canonicalSentence`
+  appends `(delegated from site.yaml:12)` (or a longer chain) from these structured fields alone.
+
+### v0.6 diagnostic codes
+
+| Code | Refuses |
+|---|---|
+| `delegate-value-unimplemented` | A `delegate:` value other than `allow` |
+| `fragment-reserved-key` | A `$`-prefixed key inside a fragment's own root |
+| `remote-delegation-not-permitted` | A remote delegation target with no caller opt-in |
+| `absolute-delegated-path` | An absolute delegated path — refused even if it resolves inside the sandbox |
+
+`document-unreachable`, `reference-cycle`, `sandbox-escape`, and `unsupported-scheme` (v0.2) and
+`depth-limit-exceeded` (v0.1/v0.5) are reused for delegation's own identical hazards rather than
+repurposed with new codes.
+
 ### `merge(resolved)`
 
 **v0.3.** Folds a resolved `Graph`/`Pedigree` — exactly `resolve()`'s `ok: true` shape — into one
 `MergedConfiguration`: a single node tree plus a provenance record (contracts/merge-api.md). A
 schema's `keys.<name>.provide` fills whatever the config leaves silent; mappings merge deeply; every
 other pairing replaces, unless a schema declares `cascade: append`, in which case sequences accumulate
-instead. `demand`, `seal`, `final`, and `delegate` are read by nothing in this milestone and MUST be
-ignored, not guessed at (`SPEC.md` §9, v0.3 FR-002).
+instead. As of v0.3, `demand`, `seal`, `final`, and `delegate` were read by nothing and had to be
+ignored, not guessed at (`SPEC.md` §9, v0.3 FR-002) — **stale as a claim about the library overall**:
+`demand` is read by `validate()` since v0.4, and `delegate` is read (and grafts fragments) as part of
+`resolve()` since v0.6. `merge()` itself still reads neither — folding stays exactly what v0.3 built —
+only `seal`/`final` remain genuinely unread anywhere, deferred to v0.7. See Delegation above.
 
 ```typescript
 import { resolve, merge, why } from "cascata";
@@ -403,9 +469,10 @@ documents).
 | `cascade-strategy-weakened` | A descendant declaring `replace` for a key an ancestor declared `append` — refused because it would discard every ancestor's accumulated contribution (`SPEC.md` §5.2), not because the declaration is malformed on its own |
 
 A **config** declaring its own `cascade` produces no diagnostic — it is ignored, never honoured, since
-policy comes from schemas only (v0.3 FR-015). A schema using `demand`, `seal`, `final`, or `delegate`
-likewise produces nothing — this milestone reads neither meaning nor error into vocabulary it does not
-implement (v0.3 FR-002).
+policy comes from schemas only (v0.3 FR-015). A schema using `demand` or `delegate` produces nothing
+*at this stage* — `merge()` itself still reads neither, exactly as v0.3 built it — but both are read
+elsewhere: `demand` by `validate()` (v0.4) and `delegate` by `resolve()` (v0.6, Delegation above).
+Only `seal`/`final` remain unread anywhere in the library, deferred to v0.7 (v0.3 FR-002).
 
 ### `validate(configuration)`
 
@@ -478,7 +545,8 @@ ready for the expansion/sandbox/determinism story §14's Future list parks it be
 cap (v0.5 FR-025) — a document deep enough to trip that bound never reaches `validate()` in the first
 place, since `resolve()` refuses it first (see `tests/unit/validate-depth-limit.test.ts`'s own header
 comment for why this milestone's depth guard is exercised by a hand-built `MergedConfiguration`, not
-a file fixture). `seal`, `final`, and `delegate` remain unread, unchanged from v0.3's posture.
+a file fixture). `seal` and `final` remain unread, unchanged from v0.3's posture — `delegate` no
+longer does; see Delegation above.
 
 ```typescript
 keys:

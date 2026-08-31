@@ -12,7 +12,10 @@
         "document": "shared.yaml",
         "line": 1,
         "column": 7,
-        "pointer": "/backup/host"
+        "pointer": "/backup/host",
+        "delegatedFrom": [
+          { "document": "config.yaml", "line": 3, "column": 9 }
+        ]
       }
     ]
   }

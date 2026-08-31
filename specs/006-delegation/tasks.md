@@ -105,8 +105,8 @@ has somewhere to live end to end. Nothing yet exercises it through `resolve()`.
 
 - [x] T033 [P] [US4] Case: a delegated `..` escape is refused (Acceptance Scenario 1, FR-022) — `tests/corpus/cases/validate-delegation/sandbox-escape/`
 - [x] T034 [P] [US4] Case: an absolute delegated path is refused (Acceptance Scenario 2, FR-023) — `tests/corpus/cases/validate-delegation/absolute-path/`
-- [ ] T035 [P] [US4] Case: a remote delegation target with no opt-in is refused, naming the user's own opt-in as what's missing (Acceptance Scenario 3, FR-024) — `tests/corpus/cases/validate-delegation/remote-no-opt-in/`
-- [ ] T036 [P] [US4] Case: the same with opt-in succeeds under v0.2's remote rules — `tests/unit/delegation-remote.test.ts` (recorded transport, no network — constitution)
+- [x] T035 [P] [US4] Case: a remote delegation target with no opt-in is refused, naming the user's own opt-in as what's missing (Acceptance Scenario 3, FR-024) — `tests/unit/delegation-remote.test.ts` (moved from a JSON corpus fixture: needs a `RecordedTransport`/`cacheDir`, which `resolve-case.ts`'s descriptor format has no field for — the exact precedent `remote-fetch.test.ts` already set for User Story 3's own remote cases in v0.2)
+- [x] T036 [P] [US4] Case: the same with opt-in succeeds under v0.2's remote rules — `tests/unit/delegation-remote.test.ts` (recorded transport, no network — constitution). Written behaviourally per SPEC.md Article VI (Sec16): "the host answered, or the host refused" — a third case in the same file confirms a host refusal (a recorded connection failure) is an ordinary diagnostic, never a thrown exception, with opt-in granted
 - [ ] T037 [P] [US4] Case: a delegated path resolves relative to the delegating config's own directory, not the schema's (Acceptance Scenario 5, FR-021) — `tests/corpus/cases/validate-delegation/relative-to-config/`
 - [x] T038 [P] [US4] Case: a delegation cycle (including a fragment naming itself, and a two-fragment cycle) is refused (Acceptance Scenario 6, FR-015) — `tests/corpus/cases/validate-delegation/delegation-cycle/`
 
@@ -132,14 +132,18 @@ has somewhere to live end to end. Nothing yet exercises it through `resolve()`.
 
 ---
 
-## Incomplete at session end — reported, not silently dropped
+## Incomplete — reported, not silently dropped
 
-T022, T023, T025, T026, T029, T030, T031, T035, T036, T037, T040, T041, T042, T044, T045 were not
-reached before this session's time ran out. `allowRemoteDelegation` and the remote-delegation code
-path (`performGraft`'s `https` branch) exist and typecheck but have **no conformance case at all** —
-the single largest gap, since it is untested code on the milestone's own security-critical path. See
-the milestone report for the full list and why each was deprioritized in favor of the two mandated
-sabotages and the depth-limit finding.
+T035/T036 (remote delegation) and the README staleness are done as of this correction, per the
+coordinator's own priority order. Still not reached: T022, T023, T025, T026, T029, T030, T031, T037,
+T040, T041, T042, T044, T045. See the milestone report for why each was deprioritized.
+
+**The corpus JSON harness now supports asserting `delegatedFrom`** (`tests/corpus/validate-case.ts`,
+`tests/corpus/validate-runner.ts`) — the gap the coordinator's own message flagged as leaving US3
+"structurally under-covered". T013 and T028's own JSON cases assert the breadcrumb directly now;
+`tests/unit/delegation-diamond-breadcrumb.test.ts` is kept as an independent regression guard rather
+than deleted, since a harness-schema regression could silently reopen the exact blind spot that made
+it necessary in the first place.
 
 ## Notes
 
