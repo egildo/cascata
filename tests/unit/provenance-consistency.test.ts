@@ -35,6 +35,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { merge, resolve, why, type MergedConfiguration, type Node } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 
 const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "cases");
 
@@ -50,7 +51,7 @@ const FIXTURES: readonly { readonly name: string; readonly dir: string }[] = [
 ];
 
 async function mergeFixture(dir: string): Promise<MergedConfiguration> {
-  const resolved = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+  const resolved = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
   if (!resolved.ok) {
     throw new Error(`fixture at '${dir}' failed to resolve: ${resolved.diagnostics.map((d) => d.code).join(", ")}`);
   }

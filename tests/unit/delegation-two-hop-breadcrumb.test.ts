@@ -6,12 +6,13 @@
 
 import { describe, expect, it } from "vitest";
 import { resolve, merge, validate } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import path from "node:path";
 
 describe("v0.6 FR-012b -- a two-hop delegation chain carries a two-hop breadcrumb, outermost first", () => {
   it("names config.yaml then hop-a.yaml, in that order", async () => {
     const dir = path.join(__dirname, "../corpus/cases/validate-delegation/two-hop-breadcrumb");
-    const resolved = await resolve(path.join(dir, "config.yaml"), { sandboxRoot: dir });
+    const resolved = await resolve(path.join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
     const merged = merge(resolved);

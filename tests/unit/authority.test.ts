@@ -25,6 +25,7 @@ import { describe, expect, it } from "vitest";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
 
@@ -33,7 +34,7 @@ const CASES_DIR = join(__dirname, "..", "corpus", "cases", "authority");
 describe("v0.7 FR-017 — demandPinnedAdoption refuses an unpinned reference below the declaring root", () => {
   it("demand-pinned-unpinned-refused: config's reference to 'middle' is refused, citing 'root'", async () => {
     const dir = join(CASES_DIR, "demand-pinned-unpinned-refused");
-    const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics).toHaveLength(1);
@@ -46,7 +47,7 @@ describe("v0.7 FR-017 — demandPinnedAdoption refuses an unpinned reference bel
 
   it("demand-pinned-pinned-accepted: the same chain, correctly pinned, resolves", async () => {
     const dir = join(CASES_DIR, "demand-pinned-pinned-accepted");
-    const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(result.ok).toBe(true);
   });
 });
@@ -62,7 +63,7 @@ describe("v0.7 FR-018 — the demand is not retractable", () => {
       );
       writeFileSync(join(dir, "middle.yaml"), "$adopts: ./root.yaml\nauthority:\n  demandPinnedAdoption: false\n");
       writeFileSync(join(dir, "config.yaml"), "$schema: ./middle.yaml\ntitle: hello\n");
-      const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+      const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.diagnostics.some((d) => d.code === "adoption-not-pinned")).toBe(true);
@@ -79,7 +80,7 @@ describe("v0.7 FR-019 — the demand never protects the declaring document's own
     // resolution, and it is exactly the reference that fetches root itself --
     // the one case FR-019 says can never be protected by root's own demand.
     const dir = join(CASES_DIR, "demand-pinned-own-fetch-exempt");
-    const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.diagnostics).toEqual([]);
@@ -89,7 +90,7 @@ describe("v0.7 FR-019 — the demand never protects the declaring document's own
 describe("v0.7 FR-020 — finalAgainstForking is recorded and queryable, and produces zero diagnostics", () => {
   it("final-against-forking-recorded: ok:true, no diagnostics at all, and the pedigree entry carries finalAgainstForking:true", async () => {
     const dir = join(CASES_DIR, "final-against-forking-recorded");
-    const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.diagnostics).toEqual([]);
@@ -101,7 +102,7 @@ describe("v0.7 FR-020 — finalAgainstForking is recorded and queryable, and pro
 describe("v0.7 FR-016 — an authority: member this version does not implement is refused, naming what is supported", () => {
   it("unknown-authority-member: refused at the member's own position", async () => {
     const dir = join(CASES_DIR, "unknown-authority-member");
-    const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics).toHaveLength(1);
@@ -112,7 +113,7 @@ describe("v0.7 FR-016 — an authority: member this version does not implement i
 describe("v0.7 FR-021 — an authority: section declared by a config has no effect", () => {
   it("config-authority-ignored: ok:true -- the config's own 'authority:' is never read", async () => {
     const dir = join(CASES_DIR, "config-authority-ignored");
-    const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(result.ok).toBe(true);
   });
 });
@@ -131,7 +132,7 @@ describe("v0.7 FR-017 (Acceptance Scenario 2, verified via the remote pin mechan
       writeFileSync(join(configDir, "config.yaml"), `$schema: ${URL}\n$pin: sha256:${SCHEMA_HASH}\ntitle: hello\n`);
       const recording: Recording = { url: URL, method: "GET", outcome: { kind: "response", response: { status: 200, headers: {}, body: SCHEMA_BYTES } } };
       const transport = new RecordedTransport([recording]);
-      const result = await resolve(join(configDir, "config.yaml"), { sandboxRoot: configDir, cacheDir, transport });
+      const result = await resolve(join(configDir, "config.yaml"), { host: createNodeHost({ cacheDir }), sandboxRoot: configDir, transport });
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error(`unreachable: ${JSON.stringify(result.diagnostics)}`);
       expect(result.pedigree).toHaveLength(1);

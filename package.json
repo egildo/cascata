@@ -11,6 +11,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./host/node": {
+      "types": "./dist/host/node.d.ts",
+      "import": "./dist/host/node.js"
+    },
+    "./host/node.js": {
+      "types": "./dist/host/node.d.ts",
+      "import": "./dist/host/node.js"
     }
   },
   "main": "./dist/index.js",

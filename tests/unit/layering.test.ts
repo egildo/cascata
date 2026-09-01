@@ -34,6 +34,19 @@
  * precedent this file's own v0.2/v0.3 additions set. `src/validate/` may
  * import `model/`, `diagnostics/`, `graph/`, and `merge/`; it may import
  * neither `adapters/` nor `resolve/`.
+ *
+ * **v0.7 (specs/007-sealing-and-embedding, FR-023/FR-024, gate 7)**: a
+ * third, broader sweep — Article VI, "the library performs no I/O". No
+ * file under all of `src/` (not a fixed subset — every existing and
+ * future module) may statically import `"node:fs"` or call the bare
+ * `fetch` identifier, **except** `src/host/node.ts`, the shipped host,
+ * named here explicitly as the one permitted exception (FR-024: "MUST be
+ * named explicitly by the boundary test"). A socket is not checked
+ * separately — nothing in this codebase opens one directly; `fetch` is
+ * the only network primitive used anywhere, so checking it is checking
+ * the whole surface FR-023 names. This sweep is additive: it does not
+ * touch either assertion above (FR-023: "MUST NOT weaken anything this
+ * file already asserts").
  */
 
 import { readdirSync, readFileSync, type Dirent } from "node:fs";
@@ -139,3 +152,58 @@ for (const relativeDir of NO_RESOLVE_IMPORT_DIRS) {
     }
   });
 }
+
+// --- v0.7 gate 7: the host boundary (Article VI, FR-023/FR-024) -----------
+//
+// No module under ALL of src/ may import "node:fs" or call the bare
+// `fetch` identifier, except the one named exemption below. Unlike the two
+// sweeps above (a fixed, growing list of directories), this one scans
+// every file under src/ unconditionally — the boundary this article draws
+// is total, not confined to a subset of stages.
+
+/** The shipped host — the library's one permitted exemption from gate 7 (FR-024), named explicitly rather than inferred from a pattern. */
+const HOST_BOUNDARY_EXEMPTION = "src/host/node.ts";
+
+const NODE_FS_SPECIFIERS: ReadonlySet<string> = new Set(["node:fs", "fs"]);
+
+// A call to the bare, global `fetch` identifier — not `foo.fetch(...)` (a
+// method on some other object), not an identifier merely containing
+// "fetch" (`myFetch(...)`, `refetch(...)`), and — the false positive an
+// earlier version of this pattern actually hit, caught before this file
+// was ever trusted (this codebase's own prose uses "fetch" as an
+// ordinary noun, e.g. "the document's own fetch (FR-019)") — not the
+// word "fetch" followed by unrelated whitespace and an unrelated later
+// "(", which an earlier `\s*` between "fetch" and "(" happily matched
+// across a comment's own prose. Real call sites in this codebase are
+// always written with no space before the parenthesis (`fetch(url, ...)`),
+// so requiring that exactly is what tells a call apart from a sentence.
+const BARE_FETCH_CALL_PATTERN = /(?<![.\w$])fetch\(/;
+
+function importsNodeFs(filePath: string): boolean {
+  return importSpecifiersOf(filePath).some((specifier) => NODE_FS_SPECIFIERS.has(specifier));
+}
+
+function callsBareFetch(filePath: string): boolean {
+  const content = readFileSync(filePath, "utf-8");
+  return BARE_FETCH_CALL_PATTERN.test(content);
+}
+
+describe("Principle IV / Article VI: the host boundary — no import of node:fs, no call to fetch, except the shipped host", () => {
+  const allSrcFiles = listTsFiles(join(REPO_ROOT, "src"));
+  const policedFiles = allSrcFiles.filter((file) => file.slice(REPO_ROOT.length + 1) !== HOST_BOUNDARY_EXEMPTION);
+
+  it(`the exemption (${HOST_BOUNDARY_EXEMPTION}) actually exists on disk — a boundary test naming a file that isn't there would pass vacuously`, () => {
+    const exemptionPath = join(REPO_ROOT, ...HOST_BOUNDARY_EXEMPTION.split("/"));
+    expect(allSrcFiles).toContain(exemptionPath);
+  });
+
+  for (const file of policedFiles) {
+    const relativeFile = file.slice(REPO_ROOT.length + 1);
+    it(`${relativeFile} does not import "node:fs"`, () => {
+      expect(importsNodeFs(file), `${relativeFile} imports node:fs — only ${HOST_BOUNDARY_EXEMPTION} may`).toBe(false);
+    });
+    it(`${relativeFile} does not call fetch(...)`, () => {
+      expect(callsBareFetch(file), `${relativeFile} calls fetch(...) — only ${HOST_BOUNDARY_EXEMPTION} may`).toBe(false);
+    });
+  }
+});

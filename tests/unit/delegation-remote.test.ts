@@ -27,6 +27,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve, merge, validate } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
 
@@ -53,7 +54,7 @@ describe("v0.6 FR-024/FR-025 -- remote delegation is the host answering or the h
     // opt-in, this test would fail loudly rather than silently pass.
     const transport = new RecordedTransport([]);
     cacheDir = makeTempCacheDir();
-    const result = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport });
+    const result = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics).toHaveLength(1);
@@ -72,7 +73,7 @@ describe("v0.6 FR-024/FR-025 -- remote delegation is the host answering or the h
     };
     const transport = new RecordedTransport([recording]);
 
-    const resolved = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport, allowRemoteDelegation: true });
+    const resolved = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport, allowRemoteDelegation: true });
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
 
@@ -95,7 +96,7 @@ describe("v0.6 FR-024/FR-025 -- remote delegation is the host answering or the h
     };
     const transport = new RecordedTransport([recording]);
 
-    const result = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport, allowRemoteDelegation: true });
+    const result = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport, allowRemoteDelegation: true });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostics).toHaveLength(1);

@@ -24,6 +24,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve as resolvePath } from "node:path";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -69,7 +70,7 @@ describe("v0.6 SC-004 -- delegated paths are confined to the sandbox root", () =
         mkdirSync(targetDir, { recursive: true });
         writeFileSync(join(targetDir, "target.yaml"), "host: example.com\n");
 
-        const result = await resolve(join(configDir, "config.yaml"), { sandboxRoot });
+        const result = await resolve(join(configDir, "config.yaml"), { host: createNodeHost(), sandboxRoot });
 
         if (escapes) {
           expect(result.ok, `trial ${trial}: depth=${depth} hops=${hops} should be refused`).toBe(false);

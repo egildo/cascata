@@ -14,26 +14,31 @@
  * code path here can reach (Cascata is a single client fetching
  * immutable, content-addressed documents).
  *
- * **On disk layout**: two directories under the caller-supplied
- * `cacheDir` —
- *   `entries/<sha256(url)>.json` — one small metadata file per fetched
- *     *URL* (not content hash — an entry must be found by the URL a
- *     reference names, before its content hash is known), holding the
- *     document's content hash and freshness metadata.
- *   `blobs/<content-hash>` — the document's exact bytes, named by their
- *     own SHA-256 (`resolve/identity.ts`'s `hashBytes`) — the actual
- *     "content-addressed" half FR-016 asks for, and what lets two
- *     different URLs serving byte-identical content share one blob on
- *     disk.
+ * **Storage layout — two logical namespaces, opaque keys** (v0.7, SPEC.md
+ * Article VI, FR-025): `"meta/<sha256(url)>"` — one small metadata blob
+ * per fetched *URL* (not content hash — an entry must be found by the URL
+ * a reference names, before its content hash is known), holding the
+ * document's content hash and freshness metadata as JSON bytes.
+ * `"blob/<content-hash>"` — the document's exact bytes, named by their own
+ * SHA-256 (`resolve/identity.ts`'s `hashBytes`) — the actual
+ * "content-addressed" half FR-016 asks for, and what lets two different
+ * URLs serving byte-identical content share one blob.
+ *
+ * **v0.7**: the *storage* moved behind the `Host` seam (`host.cacheRead`/
+ * `host.cacheWrite`) — this class no longer touches `node:fs` at all,
+ * enforced by `tests/unit/layering.test.ts`'s host-boundary sweep. The
+ * caching *policy* (this file's whole reason to exist: content
+ * addressing, the RFC 9111 subset below, `no-store` handling) is
+ * unchanged — FR-025's "the library's caching policy... stays in the
+ * library; the storage does not."
  *
  * `src/resolve/` must never import from `src/adapters/` — enforced by
  * tests/unit/layering.test.ts.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { hashBytes } from "./identity.js";
 import { getHeader } from "./headers.js";
+import type { Host } from "./host.js";
 
 /** The subset of RFC 9111 freshness/revalidation metadata this cache tracks for one entry (research D3). */
 export interface CacheFreshness {
@@ -106,53 +111,39 @@ function urlKey(url: string): string {
   return hashBytes(new TextEncoder().encode(url));
 }
 
-/** A caller-supplied, on-disk, content-addressed store for fetched remote documents (FR-016) — reused across separate `resolve()` calls (and separate process runs) that point `cacheDir` at the same directory, which is what makes offline resolution of a previously-resolved chain possible. */
+/** A `Host`-backed, content-addressed store for fetched remote documents (FR-016, FR-025) — reused across separate `resolve()` calls (and separate process runs, for a `Host` whose cache storage persists, e.g. `createNodeHost`'s) that share a `Host`, which is what makes offline resolution of a previously-resolved chain possible. */
 export class DocumentCache {
-  private readonly cacheDir: string;
+  private readonly host: Host;
 
-  constructor(cacheDir: string) {
-    this.cacheDir = cacheDir;
+  constructor(host: Host) {
+    this.host = host;
   }
 
-  private entriesDir(): string {
-    return join(this.cacheDir, "entries");
+  private metaKey(url: string): string {
+    return `meta/${urlKey(url)}`;
   }
 
-  private blobsDir(): string {
-    return join(this.cacheDir, "blobs");
-  }
-
-  private metaPath(url: string): string {
-    return join(this.entriesDir(), `${urlKey(url)}.json`);
-  }
-
-  private blobPath(hash: string): string {
-    return join(this.blobsDir(), hash);
+  private blobKey(hash: string): string {
+    return `blob/${hash}`;
   }
 
   /** The cached entry for `url`, or `undefined` if nothing was ever stored for it (or its metadata/blob is missing or unreadable — treated as a cache miss, never a crash: a corrupted cache degrades to "must refetch," not a thrown error). */
-  read(url: string): CacheEntry | undefined {
-    const metaFile = this.metaPath(url);
-    if (!existsSync(metaFile)) {
+  async read(url: string): Promise<CacheEntry | undefined> {
+    const metaBytes = await this.host.cacheRead(this.metaKey(url));
+    if (metaBytes === undefined) {
       return undefined;
     }
     let meta: StoredMeta;
     try {
-      meta = JSON.parse(readFileSync(metaFile, "utf-8")) as StoredMeta;
+      meta = JSON.parse(new TextDecoder("utf-8", { ignoreBOM: true }).decode(metaBytes)) as StoredMeta;
     } catch {
       return undefined;
     }
-    const blobFile = this.blobPath(meta.hash);
-    if (!existsSync(blobFile)) {
+    const blobBytes = await this.host.cacheRead(this.blobKey(meta.hash));
+    if (blobBytes === undefined) {
       return undefined;
     }
-    let buffer: Buffer;
-    try {
-      buffer = readFileSync(blobFile);
-    } catch {
-      return undefined;
-    }
-    return { url, bytes: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength), hash: meta.hash, freshness: meta.freshness };
+    return { url, bytes: blobBytes, hash: meta.hash, freshness: meta.freshness };
   }
 
   /**
@@ -161,11 +152,11 @@ export class DocumentCache {
    * `Expires`) and `fetchedAt` (epoch milliseconds; the caller's clock,
    * not this method's, so a revalidation and an original fetch can share
    * one `now` value). A `Cache-Control: no-store` response is **not**
-   * persisted at all — nothing is written to either directory, and a
+   * persisted at all — nothing is written under either key, and a
    * previously-cached entry for the same URL (if any) is left as-is
    * rather than being overwritten with an unstorable response.
    */
-  write(url: string, bytes: Uint8Array, headers: Readonly<Record<string, string>>, fetchedAt: number): void {
+  async write(url: string, bytes: Uint8Array, headers: Readonly<Record<string, string>>, fetchedAt: number): Promise<void> {
     const cacheControl = parseCacheControl(getHeader(headers, "cache-control"));
     if (cacheControl.noStore) {
       return;
@@ -175,9 +166,7 @@ export class DocumentCache {
     const lastModified = getHeader(headers, "last-modified");
     const expiresAt = parseHttpDate(getHeader(headers, "expires"));
 
-    mkdirSync(this.entriesDir(), { recursive: true });
-    mkdirSync(this.blobsDir(), { recursive: true });
-    writeFileSync(this.blobPath(hash), bytes);
+    await this.host.cacheWrite(this.blobKey(hash), bytes);
 
     const freshness: CacheFreshness = {
       fetchedAt,
@@ -189,7 +178,7 @@ export class DocumentCache {
       noCache: cacheControl.noCache,
     };
     const meta: StoredMeta = { hash, freshness };
-    writeFileSync(this.metaPath(url), JSON.stringify(meta));
+    await this.host.cacheWrite(this.metaKey(url), new TextEncoder().encode(JSON.stringify(meta)));
   }
 
   /**

@@ -31,6 +31,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { merge, resolve, why } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import type { Diagnostic, MergedConfiguration, Node, WhyResult } from "../../src/index.js";
 
 const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "cases");
@@ -81,7 +82,7 @@ function projectDiagnostics(diagnostics: readonly Diagnostic[]): unknown {
 
 async function mergeFixture(relativeDir: string): Promise<MergedConfiguration> {
   const fixtureDir = join(CASES_DIR, relativeDir);
-  const resolved = await resolve(join(fixtureDir, "config.yaml"), { sandboxRoot: fixtureDir });
+  const resolved = await resolve(join(fixtureDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: fixtureDir });
   if (!resolved.ok) {
     throw new Error(`fixture failed to resolve: ${resolved.diagnostics.map((d) => d.code).join(", ")}`);
   }
@@ -109,7 +110,7 @@ describe("merge() determinism (T062, SC-005)", () => {
 
   it("running the same fold five times in a row never diverges, including span positions", async () => {
     const fixtureDir = join(CASES_DIR, "merge-fold/deep/three-layer-nested");
-    const resolutions = await Promise.all(Array.from({ length: 5 }, () => resolve(join(fixtureDir, "config.yaml"), { sandboxRoot: fixtureDir })));
+    const resolutions = await Promise.all(Array.from({ length: 5 }, () => resolve(join(fixtureDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: fixtureDir })));
     const configurations = resolutions.map((resolved) => {
       if (!resolved.ok) throw new Error("unreachable — fixture is known-good");
       const result = merge({ graph: resolved.graph, pedigree: resolved.pedigree });
@@ -164,8 +165,8 @@ describe("merge() determinism (T062, SC-005)", () => {
 
   it("malformed merge policy produces the same diagnostics in the same order across repeated runs", async () => {
     const fixtureDir = join(CASES_DIR, "merge-policy/unknown/bad-string");
-    const first = await resolve(join(fixtureDir, "config.yaml"), { sandboxRoot: fixtureDir });
-    const second = await resolve(join(fixtureDir, "config.yaml"), { sandboxRoot: fixtureDir });
+    const first = await resolve(join(fixtureDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: fixtureDir });
+    const second = await resolve(join(fixtureDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: fixtureDir });
     if (!first.ok || !second.ok) throw new Error("unreachable — resolve() itself is not under test here");
 
     const firstResult = merge({ graph: first.graph, pedigree: first.pedigree });

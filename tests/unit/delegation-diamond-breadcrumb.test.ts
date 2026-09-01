@@ -24,12 +24,13 @@
 
 import { describe, expect, it } from "vitest";
 import { resolve, merge, validate } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import path from "node:path";
 
 describe("v0.6 FR-013a — a diamond-grafted fragment carries independent breadcrumbs per graft", () => {
   it("attributes the violation to the graft that actually contains it (backup), not the other graft (primary) of the same fragment file", async () => {
     const dir = path.join(__dirname, "../corpus/cases/validate-delegation/diamond-fragment");
-    const resolved = await resolve(path.join(dir, "config.yaml"), { sandboxRoot: dir });
+    const resolved = await resolve(path.join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
     const merged = merge(resolved);

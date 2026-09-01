@@ -20,6 +20,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
 
@@ -47,7 +48,7 @@ describe("T042: redirect safety", () => {
     };
     const transport = new RecordedTransport([redirectToHttp]);
 
-    const result = await resolve(join(FIXTURE_DIR, "config-insecure.yaml"), { sandboxRoot: FIXTURE_DIR, cacheDir, transport });
+    const result = await resolve(join(FIXTURE_DIR, "config-insecure.yaml"), { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");
@@ -74,7 +75,7 @@ describe("T042: redirect safety", () => {
     ];
     const transport = new RecordedTransport(recordings);
 
-    const result = await resolve(join(FIXTURE_DIR, "config-loop.yaml"), { sandboxRoot: FIXTURE_DIR, cacheDir, transport, limits: { maxRedirects: 2 } });
+    const result = await resolve(join(FIXTURE_DIR, "config-loop.yaml"), { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport, limits: { maxRedirects: 2 } });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");

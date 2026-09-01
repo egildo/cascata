@@ -8,12 +8,13 @@
 
 import { describe, expect, it } from "vitest";
 import { resolve, merge, why } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import path from "node:path";
 
 describe("v0.6 FR-020 -- why() carries the breadcrumb for a value inside a fragment", () => {
   it("answers with a chain entry whose delegatedFrom names the delegating position", async () => {
     const dir = path.join(__dirname, "../corpus/cases/validate-delegation/violation-in-fragment");
-    const resolved = await resolve(path.join(dir, "config.yaml"), { sandboxRoot: dir });
+    const resolved = await resolve(path.join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
     const merged = merge(resolved);

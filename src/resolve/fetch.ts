@@ -247,7 +247,7 @@ function verifyAgainstPin(bytes: Uint8Array, pin: string | undefined): RemoteDoc
  * type does not allow it.
  */
 export async function resolveRemoteDocument(url: string, pin: string | undefined, context: RemoteResolveContext): Promise<RemoteDocumentOutcome> {
-  const cached = context.cache.read(url);
+  const cached = await context.cache.read(url);
   const now = Date.now();
 
   if (cached !== undefined && context.cache.isFresh(cached.freshness, now)) {
@@ -276,91 +276,22 @@ export async function resolveRemoteDocument(url: string, pin: string | undefined
     if (cached === undefined) {
       return { ok: false, failure: { kind: "not-cached" } };
     }
-    context.cache.write(url, cached.bytes, fetched.headers, now);
+    await context.cache.write(url, cached.bytes, fetched.headers, now);
     return verifyAgainstPin(cached.bytes, pin);
   }
 
-  context.cache.write(url, fetched.bytes, fetched.headers, now);
+  await context.cache.write(url, fetched.bytes, fetched.headers, now);
   return verifyAgainstPin(fetched.bytes, pin);
 }
 
-// --- Production transport: the real network (used only when resolve()'s caller supplies no `transport`) ---
-
-/**
- * `Transport` backed by the platform `fetch` — used only when a caller
- * of `resolve()` supplies no `transport` of its own (contracts/
- * resolve-api.md: "Its absence means the real network"). **No test in
- * this codebase ever constructs or calls this function** — every test
- * passes an explicit `RecordedTransport` (CLAUDE.md's non-negotiable:
- * "No network access in tests, ever"), so this function's own behavior
- * is unverified by the suite; it exists to make the documented contract
- * true for real callers, not to be exercised hermetically.
- *
- * Reads the real response body **incrementally**, chunk by chunk via
- * `Response.body`'s reader, tracking the running total and aborting the
- * underlying request (via `AbortController`) the moment it would exceed
- * `maxBytes` — genuine mid-stream cutoff, not a check performed after
- * buffering a whole hostile body into memory. This is the production
- * half of T044's requirement; `fetchDocument`'s `checkSizeCap` (the half
- * exercised by `RecordedTransport`-backed tests, since that seam only
- * ever hands over an already-fully-materialized body — see this file's
- * module doc) is the other half, checked against actual received bytes
- * rather than any advertised `Content-Length`. Both halves enforce the
- * same rule; only one is network-reachable to test.
- */
-export function createNetworkTransport(maxBytes: number): Transport {
-  return {
-    async request(url: string, method: string): Promise<RecordingOutcome> {
-      const controller = new AbortController();
-      let response: Response;
-      try {
-        response = await fetch(url, { method, redirect: "manual", signal: controller.signal });
-      } catch {
-        return { kind: "failure", failure: { kind: "connection-refused" } };
-      }
-
-      const headers: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
-
-      const reader = response.body?.getReader();
-      if (reader === undefined) {
-        const body = new Uint8Array(await response.arrayBuffer());
-        return { kind: "response", response: { status: response.status, headers, body } };
-      }
-
-      const chunks: Uint8Array[] = [];
-      let total = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        total += value.length;
-        if (total > maxBytes) {
-          controller.abort();
-          // Deliberately not a distinguishable `RecordingOutcome` kind —
-          // see `checkSizeCap`'s doc: the recorded-response contract has
-          // no "too large" failure kind, and this codebase does not
-          // amend a frozen contract to accommodate one implementation's
-          // internal need (see the milestone report). A caller of this
-          // transport that hits this path gets an unreachable-shaped
-          // failure; `fetchDocument`'s own `checkSizeCap`, downstream,
-          // is what actually reports `size-limit-exceeded` for the
-          // (much more common, and hermetically testable) case of a
-          // body that arrives whole.
-          return { kind: "failure", failure: { kind: "connection-refused" } };
-        }
-        chunks.push(value);
-      }
-      const body = new Uint8Array(total);
-      let offset = 0;
-      for (const chunk of chunks) {
-        body.set(chunk, offset);
-        offset += chunk.length;
-      }
-      return { kind: "response", response: { status: response.status, headers, body } };
-    },
-  };
-}
+// --- Production transport ---
+//
+// v0.7: `createNetworkTransport` — the `Transport` backed by the platform
+// `fetch` — moved to `src/host/node.ts` (`createNodeTransport`), the
+// shipped host's own separate entry point. This file may no longer call
+// the global `fetch` at all (`tests/unit/layering.test.ts`'s host-boundary
+// sweep, SPEC.md Article VI, FR-023): `src/resolve/` performs no I/O of
+// its own, and the real network is I/O. `resolveRemoteDocument` above is
+// unaffected — it never called `fetch` directly, only through the
+// injectable `Transport` seam, which is exactly what let this move cost
+// nothing at every call site.

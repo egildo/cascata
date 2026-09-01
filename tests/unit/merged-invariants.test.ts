@@ -31,6 +31,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { merge, resolve, type MergedConfiguration } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { compareByCodePoint } from "../../src/model/node.js";
 import type { Node } from "../../src/model/node.js";
 
@@ -38,7 +39,7 @@ const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", 
 
 async function mergeFixture(relativeDir: string): Promise<MergedConfiguration> {
   const fixtureDir = join(CASES_DIR, relativeDir);
-  const resolved = await resolve(join(fixtureDir, "config.yaml"), { sandboxRoot: fixtureDir });
+  const resolved = await resolve(join(fixtureDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: fixtureDir });
   if (!resolved.ok) {
     throw new Error(`fixture failed to resolve: ${resolved.diagnostics.map((d) => d.code).join(", ")}`);
   }

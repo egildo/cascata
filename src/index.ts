@@ -30,8 +30,9 @@ import { createReference, extractAdoptsReference, extractSchemaReference, refere
 import { classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoot, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
 import { DocumentCache } from "./resolve/cache.js";
-import { createNetworkTransport, resolveFetchLimits, resolveRemoteDocument, type FetchLimits, type RemoteDocumentFailure } from "./resolve/fetch.js";
+import { resolveFetchLimits, resolveRemoteDocument, type FetchLimits, type RemoteDocumentFailure } from "./resolve/fetch.js";
 import type { Transport } from "./resolve/transport.js";
+import type { Host } from "./resolve/host.js";
 import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, resolveAllBranches, type BranchOutcome, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 import { checkPinningDemand } from "./graph/authority.js";
@@ -39,6 +40,7 @@ import { foldConfiguration } from "./merge/fold.js";
 import { why as whyImpl } from "./merge/provenance.js";
 import type { MergedConfiguration } from "./merge/provenance.js";
 import { checkConfiguration } from "./validate/check.js";
+import { resource as resourceImpl, type ResolvedResource } from "./validate/resource.js";
 import type { DelegationHop } from "./model/reference.js";
 import { createMapping } from "./model/node.js";
 import { collectDelegationGrants, isAbsoluteDelegatedPath, isDelegationSandboxEscape, mergeGrantTrees, type DelegationGrantNode } from "./resolve/delegate.js";
@@ -160,48 +162,56 @@ export interface ResolveOptions {
    */
   readonly maxChainLength?: number;
   /**
-   * Where fetched remote documents are cached on disk (v0.2 FR-016).
-   * **Optional here**, deliberately narrower than
-   * contracts/resolve-api.md, which marks it `cacheDir?`
-   * and names it conditionally required: a resolution that never
-   * reaches a remote reference has nothing to cache, and requiring it
-   * unconditionally would gratuitously break every purely-local caller
-   * (User Story 2's own tests among them) for a capability they cannot
-   * possibly exercise. If resolution *does* reach an `https://`
-   * reference and no `cacheDir` was supplied, `resolve()` throws — the
-   * same "required exactly when needed, granted, never ambient"
-   * posture `sandboxRoot` has always had (Principle VI) — rather than
-   * inferring a default location. See the milestone report for this
-   * judgment call.
+   * The library's **only** route to local bytes, canonical identity, and
+   * cache storage (v0.7, SPEC.md Article VI, FR-022, FR-028). **Required
+   * — no default, none inferred.** A caller wanting the ordinary local
+   * filesystem passes `createNodeHost()` (`cascata/host/node.js`); a test
+   * passes an in-memory double. Missing or malformed throws, the same
+   * "granted, never ambient" posture `sandboxRoot` has always had.
+   *
+   * **Where `cacheDir` went**: v0.2–v0.6 had a `cacheDir?: string` field
+   * here. As of v0.7 the on-disk cache's *storage* moved behind the host
+   * (FR-025) — `createNodeHost({ cacheDir })` is where that setting now
+   * lives; `resolve()`/`load()` no longer know what "a directory" means
+   * at all.
    */
-  readonly cacheDir?: string;
+  readonly host: Host;
   /**
-   * Injection point for the HTTP transport (research D7). Omit for the
-   * real network; tests always supply a `RecordedTransport`
-   * (constitution, Technology & Security Constraints — no test in this
-   * codebase ever omits this field).
+   * Injection point for the HTTP transport (research D7). **No default as
+   * of v0.7**: the library itself may not call `fetch` (Article VI), so
+   * it cannot silently construct a real-network transport the way v0.2–
+   * v0.6 did. Omitting this means "no remote resolution is possible" — a
+   * remote reference reached with it `undefined` throws, the same
+   * "required exactly when needed" posture `cacheDir` used to have. An
+   * embedder wanting the real network passes `createNodeTransport()`
+   * (`cascata/host/node.js`) explicitly; a test always supplies a
+   * `RecordedTransport` (constitution, Technology & Security Constraints
+   * — no test in this codebase ever omits this field, and now no
+   * production caller gets it for free either).
    */
   readonly transport?: Transport;
   /** Overrides for `resolve/fetch.ts`'s `FetchLimits` (`maxRedirects`, `requestTimeoutMs`, `maxBytes`). `maxChainLength` is a top-level field on this interface, not part of `FetchLimits` — it bounds the schema chain (`src/graph/build.ts`), not any one HTTP fetch. */
   readonly limits?: Partial<FetchLimits>;
   /**
    * The **caller's** own opt-in to remote delegation targets (v0.6
-   * FR-024) — distinct from remote *schema* fetching, which `cacheDir`
-   * alone already permits (research.md's Assumptions: a caller who
-   * permits remote schemas has not thereby permitted remote fragments).
-   * Never expressible by any document, only by the caller. Defaults to
-   * `false`.
+   * FR-024) — distinct from remote *schema* fetching, which supplying a
+   * `transport` alone already permits (research.md's Assumptions: a
+   * caller who permits remote schemas has not thereby permitted remote
+   * fragments). Never expressible by any document, only by the caller.
+   * Defaults to `false`.
    */
   readonly allowRemoteDelegation?: boolean;
 }
 
 /**
  * What `walkAdoptsChain` needs to resolve an `https://` reference — built
- * once per `resolve()` call from `ResolveOptions`, lazily (only
- * constructed if `cacheDir` was supplied), and threaded down rather than
- * reconstructed per reference. `undefined` when the caller supplied no
- * `cacheDir` at all; a remote reference reached with this `undefined`
- * throws (see `ResolveOptions.cacheDir`'s own doc).
+ * once per `resolve()` call from `ResolveOptions`, and threaded down
+ * rather than reconstructed per reference. `undefined` when the caller
+ * supplied no `transport` at all — the caller has opted out of remote
+ * resolution entirely (v0.7: `transport` is where that opt-out/opt-in now
+ * lives, `cacheDir` having moved to the host itself); a remote reference
+ * reached with this `undefined` throws (see `ResolveOptions.transport`'s
+ * own doc).
  */
 interface RemoteContext {
   readonly cache: DocumentCache;
@@ -210,15 +220,13 @@ interface RemoteContext {
 }
 
 function buildRemoteContext(options: ResolveOptions): RemoteContext | undefined {
-  if (options.cacheDir === undefined) {
+  if (options.transport === undefined) {
     return undefined;
   }
   const limits = resolveFetchLimits(options.limits);
   return {
-    cache: new DocumentCache(options.cacheDir),
-    // Real network only when no test (or caller) supplies one — see
-    // createNetworkTransport's own doc: never exercised by this suite.
-    transport: options.transport ?? createNetworkTransport(limits.maxBytes),
+    cache: new DocumentCache(options.host),
+    transport: options.transport,
     limits,
   };
 }
@@ -237,6 +245,14 @@ export type ResolveResult =
 function requireSandboxRoot(options: ResolveOptions): void {
   if (options.sandboxRoot === undefined || options.sandboxRoot === null || options.sandboxRoot.length === 0) {
     throw new Error("resolve() requires 'sandboxRoot' (v0.2 FR-022) — there is no default and none is inferred from the entry document's location");
+  }
+}
+
+/** v0.7 FR-028: a missing or malformed `host` throws — a programmer error, not a fact about the world (SPEC.md Article VI), the same posture `sandboxRoot` has always had. A basic shape check only (every method present) — not a promise that the methods actually work, which is what the rest of `resolve()` finds out by using them. */
+function requireHost(options: ResolveOptions): void {
+  const host = options.host as Host | undefined | null;
+  if (host === undefined || host === null || typeof host.read !== "function" || typeof host.canonicalize !== "function" || typeof host.cacheRead !== "function" || typeof host.cacheWrite !== "function") {
+    throw new Error("resolve() requires 'host' (v0.7 FR-022, FR-028, SPEC.md Article VI) — there is no default; pass createNodeHost() from 'cascata/host/node.js' for the ordinary local filesystem, or an in-memory host for tests");
   }
 }
 
@@ -400,14 +416,16 @@ function remoteFailureDiagnostic(failure: RemoteDocumentFailure, candidate: Refe
 
 /**
  * Read `candidate`'s bytes, whichever kind of location it names —
- * dispatching to a local read or (via `remote`) a cache-aware HTTPS
- * fetch with `$pin` verification. `remote` is `undefined` exactly when
- * `ResolveOptions.cacheDir` was never supplied; reaching an `https`
- * target with no `remote` is a programmer error (see
- * `ResolveOptions.cacheDir`'s own doc), not a document-shaped refusal —
- * it throws, matching `sandboxRoot`'s and `origin`'s existing posture.
+ * dispatching to a local read (via the `Host`, v0.7) or (via `remote`) a
+ * cache-aware HTTPS fetch with `$pin` verification. `remote` is
+ * `undefined` exactly when `ResolveOptions.transport` was never supplied
+ * (v0.7: the opt-in for remote resolution — `cacheDir` moved to the host
+ * itself); reaching an `https` target with no `remote` is a programmer
+ * error (see `ResolveOptions.transport`'s own doc), not a document-shaped
+ * refusal — it throws, matching `sandboxRoot`'s and `origin`'s existing
+ * posture.
  */
-async function readAtTarget(target: ReferenceLocationKind, candidate: Reference, remote: RemoteContext | undefined): Promise<ReadOutcomeUnified> {
+async function readAtTarget(host: Host, target: ReferenceLocationKind, candidate: Reference, remote: RemoteContext | undefined): Promise<ReadOutcomeUnified> {
   if (target.kind === "unsupported-scheme") {
     // Unreachable via walkAdoptsChain's own call site, which branches on
     // `target.kind` before ever calling this function — kept exhaustive
@@ -415,7 +433,7 @@ async function readAtTarget(target: ReferenceLocationKind, candidate: Reference,
     throw new Error(`Internal error: readAtTarget called with an unsupported-scheme target ('${target.scheme}:')`);
   }
   if (target.kind === "local") {
-    const read = readLocalDocument(target.location);
+    const read = await readLocalDocument(host, target.location);
     if (!read.ok) {
       return {
         ok: false,
@@ -430,7 +448,7 @@ async function readAtTarget(target: ReferenceLocationKind, candidate: Reference,
   }
   if (remote === undefined) {
     throw new Error(
-      `resolve() requires 'cacheDir' (v0.2 FR-016) to fetch the remote reference '${candidate.text}' — there is no default and none is inferred, the same "granted, never ambient" posture as 'sandboxRoot'`,
+      `resolve() requires 'transport' (v0.7, SPEC.md Article VI) to fetch the remote reference '${candidate.text}' — there is no default and none is inferred, the same "granted, never ambient" posture as 'sandboxRoot'`,
     );
   }
   const fetched = await resolveRemoteDocument(target.url, candidate.pin, remote);
@@ -461,7 +479,7 @@ async function readAtTarget(target: ReferenceLocationKind, candidate: Reference,
  * finding recorded for T021's local case) — the mechanism is tested
  * directly instead, in `tests/unit/graph-remote-dedup.test.ts`.
  */
-async function walkAdoptsChain(candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined, sandboxRoot: string): Promise<ChainWalkResult> {
+async function walkAdoptsChain(host: Host, candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined, sandboxRoot: string): Promise<ChainWalkResult> {
   const target = classifyReferenceLocation(candidate, referringLocation);
   if (target.kind === "unsupported-scheme") {
     // Refused *before any request is made* (v0.2 FR-013) — this branch
@@ -471,7 +489,7 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
       diagnostics: [referenceDiagnostic("unsupported-scheme", candidate, `Reference '${candidate.text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.2 FR-013)`)],
     };
   }
-  if (target.kind === "local" && isSandboxEscape(candidate, target.location, sandboxRoot)) {
+  if (target.kind === "local" && (await isSandboxEscape(host, candidate, target.location, sandboxRoot))) {
     // Refused *before any read is attempted* (v0.2 FR-021, research D6) —
     // judged on the resolved real path, following symlinks
     // (`isSandboxEscape`/`isWithinSandbox`, `src/resolve/location.ts`).
@@ -506,7 +524,7 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
     };
   }
 
-  const read = await readAtTarget(target, candidate, remote);
+  const read = await readAtTarget(host, target, candidate, remote);
   if (!read.ok) {
     builder.abandonVisit(location);
     return { ok: false, diagnostics: [read.diagnostic] };
@@ -560,7 +578,7 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
     return { ok: true, documentsLeafToRoot: [canonical] };
   }
 
-  const parentResult = await walkAdoptsChain(adoptsExtraction.reference, location, builder, remote, sandboxRoot);
+  const parentResult = await walkAdoptsChain(host, adoptsExtraction.reference, location, builder, remote, sandboxRoot);
   if (!parentResult.ok) {
     // Aborting the whole resolve() call regardless — no further use of
     // `builder` follows, so `location`'s frame is left on the (about to
@@ -626,6 +644,7 @@ export class DelegationCycleTracker {
 }
 
 interface DelegationState {
+  readonly host: Host;
   readonly tracker: DelegationCycleTracker;
   readonly byteCache: Map<string, Uint8Array>;
   readonly sandboxRoot: string;
@@ -725,7 +744,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
     }
   } else {
     location = target.location;
-    if (isDelegationSandboxEscape(location, state.sandboxRoot)) {
+    if (await isDelegationSandboxEscape(state.host, location, state.sandboxRoot)) {
       return {
         ok: false,
         diagnostics: [referenceDiagnostic("sandbox-escape", reference, `Delegated reference '${text}' resolves outside the sandbox root '${state.sandboxRoot}' (SPEC.md §8.4, v0.6 FR-022)`)],
@@ -735,7 +754,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
     if (cached !== undefined) {
       bytes = cached;
     } else {
-      const read = readLocalDocument(location);
+      const read = await readLocalDocument(state.host, location);
       if (!read.ok) {
         return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `Cannot read '${location}' (delegated as '${text}'): ${read.reason}`, primary: valueNode.span })] };
       }
@@ -906,7 +925,7 @@ function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDoc
  * each schema's own resolved `AuthoritySection`, which only exists once
  * this walk has run.
  */
-async function finalizeWithDelegation(graph: Graph, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean): Promise<ResolveResult> {
+async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean): Promise<ResolveResult> {
   const schemaDocumentsRootToLeaf = [...graph.documents.slice(1)].reverse();
 
   const { sections: authoritySections, diagnostics: authorityDiagnostics } = checkPinningDemand(schemaDocumentsRootToLeaf);
@@ -926,6 +945,7 @@ async function finalizeWithDelegation(graph: Graph, sandboxRoot: string, remote:
   }
 
   const state: DelegationState = {
+    host,
     tracker: new DelegationCycleTracker(MAX_DELEGATION_DEPTH),
     byteCache: new Map(),
     sandboxRoot,
@@ -947,6 +967,8 @@ async function finalizeWithDelegation(graph: Graph, sandboxRoot: string, remote:
 
 export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
   requireSandboxRoot(options);
+  requireHost(options);
+  const host = options.host;
   const remote = buildRemoteContext(options);
   const sandboxRoot = toAbsoluteSandboxRoot(options.sandboxRoot);
   const maxChainLength = options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH;
@@ -960,7 +982,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     throw new Error("Internal error: the entry document's first visit was not 'new'");
   }
 
-  const entryRead = readLocalDocument(entryLocation);
+  const entryRead = await readLocalDocument(host, entryLocation);
   if (!entryRead.ok) {
     // No Reference exists to blame for the entry document itself — it is
     // the root of the whole resolution, reached by nothing. A phantom
@@ -1007,10 +1029,10 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     // single-document graph and an empty pedigree.
     builder.finishVisit(entryLocation, canonicalEntry);
     const graph = buildGraph(canonicalEntry, []);
-    return finalizeWithDelegation(graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false);
+    return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false);
   }
 
-  const chainResult = await walkAdoptsChain(schemaExtraction.reference, entryLocation, builder, remote, sandboxRoot);
+  const chainResult = await walkAdoptsChain(host, schemaExtraction.reference, entryLocation, builder, remote, sandboxRoot);
   if (!chainResult.ok) {
     // Aborting the whole call — no further use of `builder` follows, so
     // `entryLocation`'s frame is left on the (about to be discarded)
@@ -1021,7 +1043,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
   builder.finishVisit(entryLocation, canonicalEntry);
 
   const graph = buildGraph(canonicalEntry, chainResult.documentsLeafToRoot);
-  return finalizeWithDelegation(graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false);
+  return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false);
 }
 
 // --- merge() — User Story 1 (v0.3, tasks.md T024) ------------------------
@@ -1086,6 +1108,20 @@ export function merge(resolved: MergeInput): MergeResult {
  */
 export const why = whyImpl;
 
+// --- resource() — User Story 6 (v0.7, SPEC.md §7, §16, §8.1) -------------
+
+export type { ResolvedResource } from "./validate/resource.js";
+
+/**
+ * Where a `path`/`url` value at `pointer` denotes, resolved against the
+ * directory of the document that **declared** it (FR-035 through
+ * FR-039) — never the entry document's, never confined to the sandbox
+ * root (§8.1's razor from the other side, FR-038), and purely lexical
+ * (nothing is read, existence is never checked, FR-039). A query, not a
+ * check: it produces no diagnostic and cannot fail a `load()` call.
+ */
+export const resource = resourceImpl;
+
 // --- validate() — User Story 1 (v0.4, specs/004-constraint-checker/tasks.md T012) --------
 //
 // Judges a merged configuration against every schema layer's `demand`,
@@ -1116,4 +1152,54 @@ export function validate(configuration: MergedConfiguration): ValidateResult {
     return { ok: false, diagnostics: outcome.diagnostics };
   }
   return { ok: true, certified: configuration, diagnostics: outcome.diagnostics };
+}
+
+// --- load() — User Story 5 (v0.7, SPEC.md Article VI (§16): "One call") --------
+
+/**
+ * `resolve()`'s options are exactly what `load()` needs — `merge()` takes
+ * only `resolve()`'s own output, and `validate()` takes only `merge()`'s;
+ * neither stage has an option of its own. Named separately from
+ * `ResolveOptions` anyway, matching contracts/host-api.md and this
+ * milestone's own vocabulary, so a future option belonging to a *later*
+ * stage does not retroactively rename what `resolve()` itself accepts.
+ */
+export type LoadOptions = ResolveOptions;
+
+/**
+ * §16's "one call": a validated configuration with any `info` lints, or a
+ * set of `error`s — **never** a configuration together with errors
+ * (FR-032). `ok: true`'s `diagnostics` is the union of every `info` lint
+ * any stage produced, in the order the staged calls would produce them —
+ * today that is `resolve()`'s own (§8.1's delegate-leaf-shape lint) then
+ * `validate()`'s own (§5.5's `required-vacuous`); `merge()` produces no
+ * diagnostic of any level in this milestone's vocabulary, so nothing from
+ * it is threaded in, not even an empty gap in the ordering.
+ */
+export type LoadResult = { readonly ok: true; readonly configuration: MergedConfiguration; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+
+/**
+ * The ordinary embedding (§16): `resolve()` → `merge()` → `validate()` in
+ * sequence, composed — **not** a second implementation of the pipeline
+ * (FR-033). Throws exactly where the staged calls would (a missing/
+ * malformed `host` or `sandboxRoot`); returns diagnostics, never throws,
+ * for every fact about the world (an unreachable document, a cycle, a
+ * merge refusal, a constraint violation). The staged functions (`parse`,
+ * `resolve`, `merge`, `validate`, `why`) remain public (FR-034) — this
+ * function is the ordinary path, not the only one.
+ */
+export async function load(entryPath: string, options: LoadOptions): Promise<LoadResult> {
+  const resolved = await resolve(entryPath, options);
+  if (!resolved.ok) {
+    return { ok: false, diagnostics: resolved.diagnostics };
+  }
+  const merged = merge(resolved);
+  if (!merged.ok) {
+    return { ok: false, diagnostics: merged.diagnostics };
+  }
+  const validated = validate(merged.configuration);
+  if (!validated.ok) {
+    return { ok: false, diagnostics: validated.diagnostics };
+  }
+  return { ok: true, configuration: validated.certified, diagnostics: [...resolved.diagnostics, ...validated.diagnostics] };
 }

@@ -15,18 +15,30 @@
  * Scheme-aware as of User Story 3: `classifyReferenceLocation` decides
  * local vs. HTTPS vs. refused-scheme, *before* `src/index.ts` ever calls
  * `resolve/fetch.ts`. Sandbox enforcement (schema-authored references
- * confined to `sandboxRoot`, config-authored ones exempt) is still User
- * Story 4, out of scope for this slice — see the milestone report.
+ * confined to `sandboxRoot`, config-authored ones exempt) is User Story 4.
+ *
+ * **v0.7 (SPEC.md Article VI, FR-022, FR-025 through FR-027)**: every
+ * function here that used to touch the filesystem directly —
+ * `readLocalDocument` (a local read) and `isWithinSandbox`/`safeRealpath`
+ * (canonicalization for the sandbox check) — now asks a `Host`
+ * (`resolve/host.ts`) instead, and is `async` accordingly. This is a
+ * **move, not a change** (FR-027): `isWithinSandbox`'s own fallback
+ * behaviour when a location cannot be canonicalized — the lexical path
+ * stands in, and "cannot be canonicalized" is a sandbox verdict in
+ * neither direction — is preserved exactly, just now sourced from
+ * `host.canonicalize()` returning `undefined` instead of a caught
+ * `realpathSync` exception. This file no longer imports `node:fs` at
+ * all — enforced by `tests/unit/layering.test.ts`'s host-boundary sweep.
  *
  * `src/resolve/` must never import from `src/adapters/` — enforced by
  * tests/unit/layering.test.ts.
  */
 
 import { dirname, resolve as resolvePath, sep } from "node:path";
-import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { createDocumentIdentity, type DocumentIdentity } from "./identity.js";
 import type { Reference } from "./reference.js";
+import type { Host } from "./host.js";
 
 /**
  * A document read into the graph, together with the reference that
@@ -210,24 +222,26 @@ export function toAbsoluteSandboxRoot(sandboxRoot: string): string {
  * failure §8.4 exists to prevent, and a symlink is a completely ordinary
  * way to arrange that.
  *
- * `fs.realpathSync` is used for both `location` and `sandboxRoot` —
- * `sandboxRoot` too, in case the root itself is (or sits under) a
- * symlink, so both sides of the comparison are canonicalized consistently.
- * If `location` does not exist at all, `realpathSync` throws; this
- * function then falls back to the already-normalized *lexical* path
+ * **v0.7**: canonicalization is now the **host's** answer (`host.canonicalize`,
+ * FR-026) for both `location` and `sandboxRoot` — `sandboxRoot` too, in
+ * case the root itself is (or sits under) a symlink, so both sides of the
+ * comparison are canonicalized consistently. If `location` does not exist
+ * at all, `host.canonicalize` returns `undefined`; this function then
+ * falls back to the already-normalized *lexical* path
  * (`classifyReferenceLocation`'s output has already resolved `.`/`..`
  * segments) rather than treating "does not exist" as either an automatic
- * pass or an automatic sandbox-escape refusal. This is a deliberate
- * judgment call, recorded here and in the milestone report: a target that
- * does not exist poses no exfiltration risk (nothing can be read from
- * it), and the ordinary `document-unreachable` check downstream already
- * reports "this reference does not resolve to a readable document" with
- * its own clear diagnostic — conflating that with `sandbox-escape` would
- * blur two distinct failures into one. If `sandboxRoot` itself cannot be
- * canonicalized (rare — a caller-supplied root that does not exist), the
- * same fallback applies to it, so a caller misconfiguration here still
- * cannot crash `resolve()` (contracts/resolve-api.md point 1, "Never
- * throws for bad input").
+ * pass or an automatic sandbox-escape refusal — **moved, not changed**
+ * (FR-027) from v0.2's `realpathSync`-catches-and-falls-back shape. This
+ * is a deliberate judgment call, recorded here and in the milestone
+ * report: a target that does not exist poses no exfiltration risk
+ * (nothing can be read from it), and the ordinary `document-unreachable`
+ * check downstream already reports "this reference does not resolve to a
+ * readable document" with its own clear diagnostic — conflating that
+ * with `sandbox-escape` would blur two distinct failures into one. If
+ * `sandboxRoot` itself cannot be canonicalized (rare — a caller-supplied
+ * root that does not exist), the same fallback applies to it, so a
+ * caller misconfiguration here still cannot crash `resolve()`
+ * (contracts/resolve-api.md point 1, "Never throws for bad input").
  *
  * String-prefix comparison, not `path.relative`, because it is the
  * simplest check that is still exactly right once both sides are
@@ -235,19 +249,16 @@ export function toAbsoluteSandboxRoot(sandboxRoot: string): string {
  * path separator, never a bare prefix match (`/sandboxfoo` must not be
  * read as inside `/sandbox`).
  */
-export function isWithinSandbox(location: string, sandboxRoot: string): boolean {
-  const realSandboxRoot = safeRealpath(sandboxRoot);
-  const realLocation = safeRealpath(location);
+export async function isWithinSandbox(host: Host, location: string, sandboxRoot: string): Promise<boolean> {
+  const realSandboxRoot = await safeCanonicalize(host, sandboxRoot);
+  const realLocation = await safeCanonicalize(host, location);
   return realLocation === realSandboxRoot || realLocation.startsWith(realSandboxRoot + sep);
 }
 
-/** `fs.realpathSync`, falling back to the already-normalized lexical path (`path.resolve`'s output, idempotent on an already-absolute path) when the target cannot be canonicalized — e.g. it does not exist. See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is not treated as a sandbox verdict in either direction. */
-function safeRealpath(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return resolvePath(path);
-  }
+/** `host.canonicalize`, falling back to the already-normalized lexical path (`path.resolve`'s output, idempotent on an already-absolute path) when the host cannot canonicalize it — e.g. it does not exist. See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is not treated as a sandbox verdict in either direction. */
+async function safeCanonicalize(host: Host, path: string): Promise<string> {
+  const canonical = await host.canonicalize(path);
+  return canonical ?? resolvePath(path);
 }
 
 /**
@@ -260,29 +271,28 @@ function safeRealpath(path: string): string {
  * same invariant `Reference.authority` documents on itself (D6: a schema
  * cannot claim config authority to escape the sandbox).
  */
-export function isSandboxEscape(candidate: Reference, location: string, sandboxRoot: string): boolean {
+export async function isSandboxEscape(host: Host, candidate: Reference, location: string, sandboxRoot: string): Promise<boolean> {
   if (candidate.authority !== "schema-authored") {
     return false;
   }
-  return !isWithinSandbox(location, sandboxRoot);
+  return !(await isWithinSandbox(host, location, sandboxRoot));
 }
 
 export type ReadOutcome = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly reason: string };
 
 /**
- * Read the bytes at `location`, distinguishing success from any failure
- * (missing file, permission denied, a directory instead of a file, …) —
- * the caller turns a failure into a `document-unreachable` diagnostic
- * anchored to the reference, not to this read (FR-023). Never throws.
+ * Read the bytes at `location` via `host.read` (v0.7 FR-022a), distinguishing
+ * success from any failure (missing file, permission denied, a directory
+ * instead of a file, a host that simply declines, …) — the caller turns a
+ * failure into a `document-unreachable` diagnostic anchored to the
+ * reference, not to this read (FR-023, FR-028). Never throws.
  */
-export function readLocalDocument(location: string): ReadOutcome {
-  try {
-    const buffer = readFileSync(location);
-    return { ok: true, bytes: new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength) };
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    return { ok: false, reason };
+export async function readLocalDocument(host: Host, location: string): Promise<ReadOutcome> {
+  const result = await host.read(location);
+  if (result.ok) {
+    return { ok: true, bytes: result.bytes };
   }
+  return { ok: false, reason: result.reason };
 }
 
 /** Build a `ResolvedDocument` from a location already read into bytes. `location` is used as `DocumentIdentity.location` verbatim — see the report for why this is the lexically-resolved path (`resolveReferenceLocation`'s output) rather than a symlink-following real path: identity/dedup in this slice operates on the lexical location, and `fs.realpathSync` canonicalization is reserved for the sandbox-escape check (User Story 4). */

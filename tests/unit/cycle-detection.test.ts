@@ -39,6 +39,7 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 
 const FIXTURES = join(import.meta.dirname, "..", "fixtures", "cycle");
 
@@ -46,7 +47,7 @@ describe("cycle detection terminates (T029)", () => {
   it(
     "a schema that $adopts itself is refused as reference-cycle, not followed forever",
     async () => {
-      const result = await resolve(join(FIXTURES, "self", "config.yaml"), { sandboxRoot: join(FIXTURES, "self") });
+      const result = await resolve(join(FIXTURES, "self", "config.yaml"), { host: createNodeHost(), sandboxRoot: join(FIXTURES, "self") });
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error("unreachable");
       expect(result.diagnostics).toHaveLength(1);
@@ -58,7 +59,7 @@ describe("cycle detection terminates (T029)", () => {
   it(
     "two schemas that mutually $adopt each other are refused as reference-cycle, not followed forever",
     async () => {
-      const result = await resolve(join(FIXTURES, "mutual", "config.yaml"), { sandboxRoot: join(FIXTURES, "mutual") });
+      const result = await resolve(join(FIXTURES, "mutual", "config.yaml"), { host: createNodeHost(), sandboxRoot: join(FIXTURES, "mutual") });
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error("unreachable");
       expect(result.diagnostics).toHaveLength(1);

@@ -20,6 +20,7 @@
 import { describe, expect, it } from "vitest";
 import { join } from "node:path";
 import { parseText, resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { createOrigin } from "../../src/model/span.js";
 
 describe("v0.7 FR-001/FR-004 — every diagnostic carries level, and pre-existing diagnostics are error", () => {
@@ -36,7 +37,7 @@ describe("v0.7 FR-001/FR-004 — every diagnostic carries level, and pre-existin
 
   it("resolve: a sandbox escape is level:error", async () => {
     const dir = join(__dirname, "..", "corpus", "cases", "sandbox-escape");
-    const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: join(dir, "sandbox") });
+    const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: join(dir, "sandbox") });
     if (result.ok) {
       throw new Error("expected ok:false for a sandbox escape");
     }
@@ -50,7 +51,7 @@ describe("v0.7 FR-001/FR-004 — every diagnostic carries level, and pre-existin
 describe("v0.7 FR-002 — a result whose diagnostics are all info is ok:true, with both the value and the lints", () => {
   it("resolve() carrying only an info lint is ok:true and both the graph and the diagnostics are present", async () => {
     const dir = join(__dirname, "..", "corpus", "cases", "validate-delegation", "delegate-leaf-shape-lint");
-    const result = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const result = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     expect(result.ok).toBe(true);
     if (!result.ok) {
       return;
@@ -64,7 +65,7 @@ describe("v0.7 FR-002 — a result whose diagnostics are all info is ok:true, wi
 describe("v0.7 FR-003 — an info diagnostic carries every field an error of this milestone carries", () => {
   it("delegate-inline-string-loaded (info) and delegate-value-unimplemented (error) carry the identical field shape", async () => {
     const infoDir = join(__dirname, "..", "corpus", "cases", "validate-delegation", "delegate-leaf-shape-lint");
-    const infoResult = await resolve(join(infoDir, "config.yaml"), { sandboxRoot: infoDir });
+    const infoResult = await resolve(join(infoDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: infoDir });
     if (!infoResult.ok) {
       throw new Error("expected ok:true");
     }
@@ -74,7 +75,7 @@ describe("v0.7 FR-003 — an info diagnostic carries every field an error of thi
     }
 
     const errorDir = join(__dirname, "..", "corpus", "cases", "validate-delegation", "delegate-value-unimplemented");
-    const errorResult = await resolve(join(errorDir, "config.yaml"), { sandboxRoot: errorDir });
+    const errorResult = await resolve(join(errorDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: errorDir });
     if (errorResult.ok) {
       throw new Error("expected ok:false");
     }

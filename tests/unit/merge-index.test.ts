@@ -10,11 +10,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { merge, resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 
 const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "cases", "merge-fold", "deep", "two-layer-mapping");
 
 async function resolveFixture(): Promise<Extract<Awaited<ReturnType<typeof resolve>>, { ok: true }>> {
-  const result = await resolve(join(FIXTURE_DIR, "config.yaml"), { sandboxRoot: FIXTURE_DIR });
+  const result = await resolve(join(FIXTURE_DIR, "config.yaml"), { host: createNodeHost(), sandboxRoot: FIXTURE_DIR });
   if (!result.ok) {
     throw new Error(`fixture failed to resolve: ${result.diagnostics.map((d) => d.code).join(", ")}`);
   }

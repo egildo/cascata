@@ -31,6 +31,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import type { Graph, Pedigree } from "../../src/index.js";
 import type { RecordingOutcome, Transport } from "../../src/resolve/transport.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
@@ -72,8 +73,8 @@ describe("resolve() determinism (SC-009)", () => {
     const fixtureDir = join(CORPUS_CASES, "chain-local");
     const entry = join(fixtureDir, "config.yaml");
 
-    const first = await resolve(entry, { sandboxRoot: fixtureDir });
-    const second = await resolve(entry, { sandboxRoot: fixtureDir });
+    const first = await resolve(entry, { host: createNodeHost(), sandboxRoot: fixtureDir });
+    const second = await resolve(entry, { host: createNodeHost(), sandboxRoot: fixtureDir });
 
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
@@ -90,7 +91,7 @@ describe("resolve() determinism (SC-009)", () => {
     const fixtureDir = join(CORPUS_CASES, "chain-local");
     const entry = join(fixtureDir, "config.yaml");
 
-    const results = await Promise.all(Array.from({ length: 10 }, () => resolve(entry, { sandboxRoot: fixtureDir })));
+    const results = await Promise.all(Array.from({ length: 10 }, () => resolve(entry, { host: createNodeHost(), sandboxRoot: fixtureDir })));
     for (const result of results) {
       expect(result.ok).toBe(true);
     }
@@ -111,8 +112,8 @@ describe("resolve() determinism (SC-009)", () => {
     const fixtureDir = join(CYCLE_FIXTURES, "mutual");
     const entry = join(fixtureDir, "config.yaml");
 
-    const first = await resolve(entry, { sandboxRoot: fixtureDir });
-    const second = await resolve(entry, { sandboxRoot: fixtureDir });
+    const first = await resolve(entry, { host: createNodeHost(), sandboxRoot: fixtureDir });
+    const second = await resolve(entry, { host: createNodeHost(), sandboxRoot: fixtureDir });
 
     expect(first.ok).toBe(false);
     expect(second.ok).toBe(false);
@@ -133,7 +134,7 @@ describe("resolve() determinism (SC-009)", () => {
 
       // Populate the cache once, over the network.
       const seeding: Recording = { url, method: "GET", outcome: { kind: "response", response: { status: 200, headers: { "cache-control": "max-age=3600" }, body: schemaBytes } } };
-      const seeded = await resolve(entry, { sandboxRoot: fixtureDir, cacheDir, transport: new RecordedTransport([seeding]) });
+      const seeded = await resolve(entry, { host: createNodeHost({ cacheDir }), sandboxRoot: fixtureDir, transport: new RecordedTransport([seeding]) });
       expect(seeded.ok).toBe(true);
 
       // Two further calls against the same cache directory, with a
@@ -142,8 +143,8 @@ describe("resolve() determinism (SC-009)", () => {
       const alwaysFails: Transport = {
         request: (): Promise<RecordingOutcome> => Promise.resolve<RecordingOutcome>({ kind: "failure", failure: { kind: "connection-refused" } }),
       };
-      const offlineFirst = await resolve(entry, { sandboxRoot: fixtureDir, cacheDir, transport: alwaysFails });
-      const offlineSecond = await resolve(entry, { sandboxRoot: fixtureDir, cacheDir, transport: alwaysFails });
+      const offlineFirst = await resolve(entry, { host: createNodeHost({ cacheDir }), sandboxRoot: fixtureDir, transport: alwaysFails });
+      const offlineSecond = await resolve(entry, { host: createNodeHost({ cacheDir }), sandboxRoot: fixtureDir, transport: alwaysFails });
 
       expect(offlineFirst.ok).toBe(true);
       expect(offlineSecond.ok).toBe(true);

@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from "vitest";
 import { resolve, merge, nodesEqual } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import path from "node:path";
 
 describe("v0.6 FR-014 — a split configuration is semantically identical to the inline original", () => {
@@ -19,8 +20,8 @@ describe("v0.6 FR-014 — a split configuration is semantically identical to the
     const inlineDir = path.join(__dirname, "../corpus/cases/validate-delegation/inline-identity-inline");
     const splitDir = path.join(__dirname, "../corpus/cases/validate-delegation/inline-identity-split");
 
-    const inlineResolved = await resolve(path.join(inlineDir, "config.yaml"), { sandboxRoot: inlineDir });
-    const splitResolved = await resolve(path.join(splitDir, "config.yaml"), { sandboxRoot: splitDir });
+    const inlineResolved = await resolve(path.join(inlineDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: inlineDir });
+    const splitResolved = await resolve(path.join(splitDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: splitDir });
     expect(inlineResolved.ok, "inline resolve() should succeed").toBe(true);
     expect(splitResolved.ok, "split resolve() should succeed").toBe(true);
     if (!inlineResolved.ok || !splitResolved.ok) return;

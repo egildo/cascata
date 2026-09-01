@@ -18,6 +18,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
 
@@ -43,7 +44,7 @@ describe("T057: a fetched-but-unparseable document is attributed to the referenc
     };
     const transport = new RecordedTransport([recording]);
 
-    const result = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport });
+    const result = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");

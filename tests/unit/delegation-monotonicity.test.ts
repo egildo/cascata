@@ -38,6 +38,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolve, merge, nodesEqual } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -89,8 +90,8 @@ describe("v0.6 FR-014/SC-001 -- inline vs. randomly-split configurations merge i
         ];
         writeFileSync(join(dir, "config-inline.yaml"), inlineConfigLines.join("\n") + "\n");
 
-        const splitResolved = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
-        const inlineResolved = await resolve(join(dir, "config-inline.yaml"), { sandboxRoot: dir });
+        const splitResolved = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
+        const inlineResolved = await resolve(join(dir, "config-inline.yaml"), { host: createNodeHost(), sandboxRoot: dir });
         expect(splitResolved.ok, `trial ${trial}: split should resolve`).toBe(true);
         expect(inlineResolved.ok, `trial ${trial}: inline should resolve`).toBe(true);
         if (!splitResolved.ok || !inlineResolved.ok) return;

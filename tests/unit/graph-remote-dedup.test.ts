@@ -40,6 +40,7 @@ import { createNullScalar } from "../../src/model/node.js";
 import { createOrigin, createSourceSpan } from "../../src/model/span.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
+import { createNodeHost } from "../../src/host/node.js";
 
 const URL = "https://example.test/shared-schema.yaml";
 const BODY = new TextEncoder().encode("title: shared\n");
@@ -79,7 +80,7 @@ describe("T039: one remote identity referenced twice is fetched once (v0.2 FR-01
     try {
       const recording: Recording = { url: URL, method: "GET", outcome: { kind: "response", response: { status: 200, headers: {}, body: BODY } } };
       const transport = new RecordedTransport([recording]);
-      const remote: RemoteResolveContext = { transport, cache: new DocumentCache(cacheDir), limits: DEFAULT_FETCH_LIMITS };
+      const remote: RemoteResolveContext = { transport, cache: new DocumentCache(createNodeHost({ cacheDir })), limits: DEFAULT_FETCH_LIMITS };
       const builder = new GraphBuilder();
 
       const first = await visitOnce(URL, fakeReference("document-a.yaml"), builder, remote);

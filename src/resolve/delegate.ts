@@ -30,6 +30,7 @@ import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js"
 import { pointerFromPath } from "../model/pointer.js";
 import { isWithinSandbox } from "./location.js";
 import { parseTypeExpression } from "../validate/typeexpr.js";
+import type { Host } from "./host.js";
 
 /** One `delegate: allow` grant, at one position in one schema layer's own `keys:` tree. */
 export interface DelegationGrant {
@@ -230,8 +231,10 @@ export function isAbsoluteDelegatedPath(text: string): boolean {
  * `isWithinSandbox` directly — the real-path-following primitive
  * `isSandboxEscape` itself calls — never the authority-gated wrapper
  * (FR-026: reuse the sandbox *machinery*, not its `$schema`/`$adopts`-
- * specific policy).
+ * specific policy). `async`/`Host`-backed as of v0.7 — `isWithinSandbox`
+ * itself now asks the host to canonicalize, rather than calling
+ * `realpathSync` directly (SPEC.md Article VI).
  */
-export function isDelegationSandboxEscape(location: string, sandboxRoot: string): boolean {
-  return !isWithinSandbox(location, sandboxRoot);
+export async function isDelegationSandboxEscape(host: Host, location: string, sandboxRoot: string): Promise<boolean> {
+  return !(await isWithinSandbox(host, location, sandboxRoot));
 }

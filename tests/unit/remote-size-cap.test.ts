@@ -17,6 +17,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
 
@@ -45,7 +46,7 @@ describe("T044: the size cap trusts actual bytes received, never an advertised C
     };
     const transport = new RecordedTransport([recording]);
 
-    const result = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport, limits: { maxBytes: 20 } });
+    const result = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport, limits: { maxBytes: 20 } });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error(`unreachable — an oversized body must never enter the graph, but got one with ${result.graph.documents.length} document(s)`);
@@ -63,7 +64,7 @@ describe("T044: the size cap trusts actual bytes received, never an advertised C
     };
     const transport = new RecordedTransport([recording]);
 
-    const result = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport, limits: { maxBytes: 41 } });
+    const result = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport, limits: { maxBytes: 41 } });
 
     expect(result.ok).toBe(true);
   });

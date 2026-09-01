@@ -29,6 +29,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
 
@@ -59,7 +60,7 @@ describe("T036: a successful HTTPS fetch joins the graph like a local document",
     };
     const transport = new RecordedTransport([recording]);
 
-    const result = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport });
+    const result = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport });
 
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -91,7 +92,7 @@ describe("T036: a successful HTTPS fetch joins the graph like a local document",
     const transport = new RecordedTransport([]);
     const httpConfig = join(FIXTURE_DIR, "config-http.yaml");
 
-    const result = await resolve(httpConfig, { sandboxRoot: FIXTURE_DIR, cacheDir, transport });
+    const result = await resolve(httpConfig, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport });
 
     expect(result.ok).toBe(false);
     if (result.ok) {

@@ -7,6 +7,7 @@
 
 import { join, relative } from "node:path";
 import { resolve, type Graph, type GraphDocument, type Pedigree } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import type { ExpectedGraphDocument, ExpectedPedigreeEntry, ExpectedResolveDiagnostic, ExpectedResolveSpan, ResolveCase } from "./resolve-case.js";
 
 export interface ResolveCaseResult {
@@ -126,7 +127,7 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
  * leak into another's — cases can run in the same process/worker.
  */
 async function resolveWithHomeOverride(entryPath: string, sandboxRoot: string, homeDir: string | undefined, maxChainLength: number | undefined): Promise<Awaited<ReturnType<typeof resolve>>> {
-  const options = { sandboxRoot, ...(maxChainLength === undefined ? {} : { maxChainLength }) };
+  const options = { host: createNodeHost(), sandboxRoot, ...(maxChainLength === undefined ? {} : { maxChainLength }) };
   if (homeDir === undefined) {
     return resolve(entryPath, options);
   }

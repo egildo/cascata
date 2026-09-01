@@ -15,6 +15,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { merge, resolve, validate } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import type { Diagnostic } from "../../src/index.js";
 
 const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "cases");
@@ -31,7 +32,7 @@ function projectDiagnostics(diagnostics: readonly Diagnostic[]): unknown {
 
 async function validateFixture(relativeDir: string): Promise<{ readonly ok: boolean; readonly diagnostics: readonly Diagnostic[] }> {
   const fixtureDir = join(CASES_DIR, relativeDir);
-  const resolved = await resolve(join(fixtureDir, "config.yaml"), { sandboxRoot: fixtureDir });
+  const resolved = await resolve(join(fixtureDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: fixtureDir });
   if (!resolved.ok) {
     throw new Error(`fixture failed to resolve: ${resolved.diagnostics.map((d) => d.code).join(", ")}`);
   }
@@ -57,7 +58,7 @@ describe("validate() determinism (v0.4 FR-018, SC-005)", () => {
     const fixtureDir = join(CASES_DIR, "validate-whole-chain/two-violations");
     const runs = await Promise.all(
       Array.from({ length: 5 }, async () => {
-        const resolved = await resolve(join(fixtureDir, "config.yaml"), { sandboxRoot: fixtureDir });
+        const resolved = await resolve(join(fixtureDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: fixtureDir });
         if (!resolved.ok) throw new Error("unreachable — fixture is known-good");
         const merged = merge({ graph: resolved.graph, pedigree: resolved.pedigree });
         if (!merged.ok) throw new Error("unreachable — fixture is known-good");

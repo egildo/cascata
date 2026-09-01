@@ -32,6 +32,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { removeTempCacheDir } from "./remote-test-helpers.js";
 
 describe("T053: a schema-authored reference escaping the sandbox is refused as sandbox-escape", () => {
@@ -52,7 +53,7 @@ describe("T053: a schema-authored reference escaping the sandbox is refused as s
     writeFileSync(join(sandboxRoot, "schema.yaml"), adoptsLine);
     writeFileSync(join(root, "outside.yaml"), "title: Outside\n");
 
-    const result = await resolve(join(sandboxRoot, "config.yaml"), { sandboxRoot });
+    const result = await resolve(join(sandboxRoot, "config.yaml"), { host: createNodeHost(), sandboxRoot });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");
@@ -77,7 +78,7 @@ describe("T053: a schema-authored reference escaping the sandbox is refused as s
     const adoptsLine = `$adopts: ${outsidePath}\n`;
     writeFileSync(join(sandboxRoot, "schema.yaml"), adoptsLine);
 
-    const result = await resolve(join(sandboxRoot, "config.yaml"), { sandboxRoot });
+    const result = await resolve(join(sandboxRoot, "config.yaml"), { host: createNodeHost(), sandboxRoot });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");
@@ -103,7 +104,7 @@ describe("T053: a schema-authored reference escaping the sandbox is refused as s
     // permit it.
     symlinkSync(join("..", "outside3.yaml"), join(sandboxRoot, "link-out.yaml"));
 
-    const result = await resolve(join(sandboxRoot, "config.yaml"), { sandboxRoot });
+    const result = await resolve(join(sandboxRoot, "config.yaml"), { host: createNodeHost(), sandboxRoot });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");

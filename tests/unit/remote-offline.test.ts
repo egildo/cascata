@@ -28,6 +28,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import type { RecordingOutcome, Transport } from "../../src/resolve/transport.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
@@ -64,11 +65,11 @@ describe("T038: offline resolution — fresh cache, absent cache, stale cache", 
       method: "GET",
       outcome: { kind: "response", response: { status: 200, headers: { "cache-control": "max-age=3600" }, body: SCHEMA_BYTES } },
     };
-    const first = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport: new RecordedTransport([firstRecording]) });
+    const first = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport: new RecordedTransport([firstRecording]) });
     expect(first.ok).toBe(true);
 
     const counting = new CountingTransport();
-    const second = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport: counting });
+    const second = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport: counting });
 
     expect(second.ok).toBe(true);
     if (!second.ok) throw new Error(`unreachable: ${JSON.stringify(second.diagnostics)}`);
@@ -79,7 +80,7 @@ describe("T038: offline resolution — fresh cache, absent cache, stale cache", 
   it("a document neither cached nor reachable refuses with document-not-cached", async () => {
     cacheDir = makeTempCacheDir();
     const failing: Recording = { url: URL, method: "GET", outcome: { kind: "failure", failure: { kind: "connection-refused" } } };
-    const result = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport: new RecordedTransport([failing]) });
+    const result = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport: new RecordedTransport([failing]) });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");
@@ -92,11 +93,11 @@ describe("T038: offline resolution — fresh cache, absent cache, stale cache", 
     // No Cache-Control at all -> stale immediately (DocumentCache.isFresh's
     // conservative default), forcing revalidation on the very next call.
     const firstRecording: Recording = { url: URL, method: "GET", outcome: { kind: "response", response: { status: 200, headers: {}, body: SCHEMA_BYTES } } };
-    const first = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport: new RecordedTransport([firstRecording]) });
+    const first = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport: new RecordedTransport([firstRecording]) });
     expect(first.ok).toBe(true);
 
     const offlineOnRevalidate: Recording = { url: URL, method: "GET", outcome: { kind: "failure", failure: { kind: "connection-refused" } } };
-    const second = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport: new RecordedTransport([offlineOnRevalidate]) });
+    const second = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport: new RecordedTransport([offlineOnRevalidate]) });
 
     expect(second.ok).toBe(true);
     if (!second.ok) throw new Error(`unreachable: ${JSON.stringify(second.diagnostics)}`);

@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from "vitest";
 import { resolve, merge, validate } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import path from "node:path";
 
 describe("v0.6 FR-014 -- a violation inside a fragment is identical in outcome to the same value inline", () => {
@@ -21,8 +22,8 @@ describe("v0.6 FR-014 -- a violation inside a fragment is identical in outcome t
     const fragmentDir = path.join(__dirname, "../corpus/cases/validate-delegation/violation-in-fragment");
     const inlineDir = path.join(__dirname, "../corpus/cases/validate-delegation/violation-inline-counterpart");
 
-    const fragmentResolved = await resolve(path.join(fragmentDir, "config.yaml"), { sandboxRoot: fragmentDir });
-    const inlineResolved = await resolve(path.join(inlineDir, "config.yaml"), { sandboxRoot: inlineDir });
+    const fragmentResolved = await resolve(path.join(fragmentDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: fragmentDir });
+    const inlineResolved = await resolve(path.join(inlineDir, "config.yaml"), { host: createNodeHost(), sandboxRoot: inlineDir });
     expect(fragmentResolved.ok).toBe(true);
     expect(inlineResolved.ok).toBe(true);
     if (!fragmentResolved.ok || !inlineResolved.ok) return;

@@ -22,6 +22,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import type { RecordingOutcome, Transport } from "../../src/resolve/transport.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
@@ -58,7 +59,7 @@ describe("T041: revalidation — ETag then 304, freshness metadata refreshed on 
       method: "GET",
       outcome: { kind: "response", response: { status: 200, headers: { etag: '"v1"', "cache-control": "max-age=0" }, body: SCHEMA_BYTES } },
     };
-    const first = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport: new RecordedTransport([withEtag]) });
+    const first = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport: new RecordedTransport([withEtag]) });
     expect(first.ok).toBe(true);
     if (!first.ok) throw new Error(`unreachable: ${JSON.stringify(first.diagnostics)}`);
     expect(first.pedigree[0]?.identity.hash).toBe(SCHEMA_HASH);
@@ -69,7 +70,7 @@ describe("T041: revalidation — ETag then 304, freshness metadata refreshed on 
       outcome: { kind: "response", response: { status: 304, headers: { etag: '"v1"', "cache-control": "max-age=3600" }, body: new Uint8Array() } },
     };
     const secondTransport = new RecordedTransport([notModified]);
-    const second = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport: secondTransport });
+    const second = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport: secondTransport });
     expect(second.ok).toBe(true);
     if (!second.ok) throw new Error(`unreachable: ${JSON.stringify(second.diagnostics)}`);
     expect(second.pedigree[0]?.identity.hash).toBe(SCHEMA_HASH);
@@ -78,7 +79,7 @@ describe("T041: revalidation — ETag then 304, freshness metadata refreshed on 
     // The 304's own Cache-Control refreshed freshness — a third call
     // needs no network at all.
     const counting = new CountingTransport();
-    const third = await resolve(CONFIG_PATH, { sandboxRoot: FIXTURE_DIR, cacheDir, transport: counting });
+    const third = await resolve(CONFIG_PATH, { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport: counting });
     expect(third.ok).toBe(true);
     if (!third.ok) throw new Error(`unreachable: ${JSON.stringify(third.diagnostics)}`);
     expect(third.pedigree[0]?.identity.hash).toBe(SCHEMA_HASH);

@@ -24,6 +24,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { makeTempCacheDir, removeTempCacheDir } from "./remote-test-helpers.js";
 
@@ -49,7 +50,7 @@ describe("T037: $pin verification — matching, mismatching, malformed", () => {
   it("a matching pin verifies: the pedigree entry is marked verified:true", async () => {
     cacheDir = makeTempCacheDir();
     const transport = new RecordedTransport([recording()]);
-    const result = await resolve(join(FIXTURE_DIR, "config-match.yaml"), { sandboxRoot: FIXTURE_DIR, cacheDir, transport });
+    const result = await resolve(join(FIXTURE_DIR, "config-match.yaml"), { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(`unreachable: ${JSON.stringify(result.diagnostics)}`);
@@ -60,7 +61,7 @@ describe("T037: $pin verification — matching, mismatching, malformed", () => {
   it("a mismatching (but well-formed) pin refuses with pin-mismatch, and the bytes never enter a graph", async () => {
     cacheDir = makeTempCacheDir();
     const transport = new RecordedTransport([recording()]);
-    const result = await resolve(join(FIXTURE_DIR, "config-mismatch.yaml"), { sandboxRoot: FIXTURE_DIR, cacheDir, transport });
+    const result = await resolve(join(FIXTURE_DIR, "config-mismatch.yaml"), { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error(`unreachable — a mismatched pin must never produce a graph, but got one with ${result.graph.documents.length} document(s)`);
@@ -73,7 +74,7 @@ describe("T037: $pin verification — matching, mismatching, malformed", () => {
   it("a malformed pin refuses with malformed-pin, distinctly from a mismatch", async () => {
     cacheDir = makeTempCacheDir();
     const transport = new RecordedTransport([recording()]);
-    const result = await resolve(join(FIXTURE_DIR, "config-malformed.yaml"), { sandboxRoot: FIXTURE_DIR, cacheDir, transport });
+    const result = await resolve(join(FIXTURE_DIR, "config-malformed.yaml"), { host: createNodeHost({ cacheDir }), sandboxRoot: FIXTURE_DIR, transport });
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");
