@@ -161,6 +161,57 @@ implementer and, at v1.0, a meaning change requiring v2.0. (b) *A visited-set cu
 value* — `nodesEqual` is O(subtree) and the key computation would itself be the cost being avoided;
 node identity is sound because the merged tree is built once and frozen.
 
+**What this does NOT fix, reported at the time and settled since.** The memo bounds the *walk*; it
+cannot bound the *output*. Where a violation sits at depth *d* under the shared type, each arm
+returns it and the list doubles at every level up — 2^d byte-identical diagnostics. That was reported
+as a gap between FR-004 and FR-005 rather than quietly capped, verified independently, and settled by
+`SPEC.md` §10 as a **correction** ("one violated demand at one position is one diagnostic"). See
+**D-8**.
+
+## D-8. §10's multiplicity rule: the identity, and where it is applied
+
+**Settled by governance (`SPEC.md` §10, §15, amended 2026-09-01), not by this plan.** The finding was
+this milestone's; the rule is the specification's. FR-004a implements it.
+
+**The identity is §10's own triple, read carefully.** The code; the violated demand; the offending
+value's position. The trap is the middle one: §10 defines the violated demand as *"its declaring
+layer + span, as a JSON Pointer per RFC 6901 into that document"* — the pointer alone is **not** the
+demand. Under whole-chain validation (§5.4) two layers may declare the identical pointer and both
+fire, legitimately, and a bare `(code, demand pointer, value pointer)` key deletes one of them.
+`Demand.layerRank` is the component that keeps them apart, and it is exactly what `renderViolation`
+already publishes as `pedigreePosition`. Sabotage-verified: dropping it turns six tests red, four of
+them **monotonicity property tests** — an over-collapse does not merely lose a message, it breaks
+Principle II's invariant, because per-layer reporting is what those properties measure.
+
+**Deliberately not in the key**: the message, the spans, the reason's own payload. Keying on those
+would make the rule "collapse things that are already equal", which is unfalsifiable. The identity is
+what §10 says identifies a diagnostic, and a separate case asserts that the duplicates it collapses
+are identical in every readable field — so a future field that legitimately varied could not be lost
+silently.
+
+**Where it is applied, and a correction to the received wisdom.** The governance entry records that
+"deduplicating at the end does not help, because the exhaustion happens while the lists are being
+assembled". That is the right instruction and the reason the collapse lives inside `checkNamedType`,
+before the memo caches — but **this codebase's own depth-24 case does not demonstrate it**, and the
+sabotage said so. With the accumulating collapse removed and only a final pass left, the 296-byte
+depth-24 configuration *survives*: the final pass runs before `renderViolation`, so the process is
+spared building 16.7M `Diagnostic` objects and returns in 7.97 s instead of 8 ms, on roughly 270 MB
+of transient references. Slower by three orders of magnitude, and still alive.
+
+The placement therefore needed a case the pinned one could not provide. **Depth 40** is that case:
+2^40 references is a terabyte, no final pass is reachable, and with the collapse applied as results
+accumulate the work is linear in depth and returns instantly. The document is ~470 bytes and still
+well inside §11's parse-depth cap of 64. Both cases are in the suite — the 296-byte one because the
+governance pins it, the depth-40 one because it is what actually falsifies the wrong placement.
+
+**FR-005 re-read rather than re-run.** FR-005 asks that memoizing change no diagnostic; it never
+asked that the output be frozen, and reading it that way would have made it forbid the very
+correction that fixed the bug. The instrument survives intact and now runs twice: collapsed-vs-
+collapsed across the two walks, and **raw**-vs-raw (`dedupe: false`) at a depth where the raw output
+still exists. The second is what keeps the first from being a tautology — a collapse could in
+principle mask a difference by discarding the diagnostic that carried it, and running the comparison
+before the collapse forecloses that.
+
 ## D-2. One rule for four sections, in `vocabularyProblemsForLayer`, with its own code
 
 **Decision.** A single loop over `["authority", "directives", "keys", "types"]` in

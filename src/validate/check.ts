@@ -40,7 +40,7 @@ import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import { readDemandVocabulary, readNestedKeysMapping, recursiveVocabularyProblems, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
 import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, requiredViolationCause, type ViolationSite } from "./constraints.js";
-import { renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
+import { dedupeViolations, renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
 import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
 import { parseTypeExpression, type Alternative, type TypeExpression } from "./typeexpr.js";
 import { readDirectives, reservedKeyValue } from "./directives.js";
@@ -63,6 +63,20 @@ import { extend } from "../extend.js";
  */
 export interface CheckOptions {
   readonly memoize?: boolean;
+  /**
+   * **v1.0 FR-004a** — `false` disables §10's multiplicity rule ("one
+   * violated demand at one position is one diagnostic"), producing the raw
+   * walk's output.
+   *
+   * Like `memoize`, this is not a tuning knob and is unreachable from the
+   * public `validate()`. It exists because two claims need the raw output
+   * to still be observable: that the duplicates the rule collapses are
+   * identical in *every* readable field — otherwise the identity would be
+   * checked only against itself — and FR-005's own comparison of the
+   * memoized against the unmemoized walk, which stays meaningful precisely
+   * because it can be run before the collapse as well as after.
+   */
+  readonly dedupe?: boolean;
 }
 
 export type CheckOutcome = { readonly ok: true; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -312,7 +326,16 @@ function checkNamedTypeUncached(decl: TypeDeclaration, value: Node, usageAccept:
       violations.push(toViolation(ctx.configuration, mergedPointer, mismatchSite(value, `one of [${narrowed.join(", ")}]`, declaring, decl.span)));
     }
   }
-  return violations;
+  // **v1.0 FR-004a, and the load-bearing line of it.** §10: one violated
+  // demand at one position is one diagnostic. Collapsing *here* — before
+  // the memo caches the result, so before any caller can concatenate it —
+  // is what bounds the output. §9's `keys` and `values` may both cover an
+  // entry and both recurse into this same type, so each level would
+  // otherwise hand its caller two copies of everything below it, and a
+  // 296-byte configuration at depth 24 would exhaust memory while the
+  // lists were being assembled. A final pass cannot reach that: by the
+  // time it runs, the memory is already gone.
+  return ctx.dedupe ? dedupeViolations(violations) : violations;
 }
 
 /** Whether `value` matches `name` resolved from `ctx.usageLayer`'s scope — boolean only, for existential union/accept membership checks that do not need detailed attribution. */
@@ -505,6 +528,8 @@ interface WalkContext {
    * and why each part is there.
    */
   readonly memo: NamedTypeMemo | undefined;
+  /** **v1.0 FR-004a** — whether §10's multiplicity rule is applied as results accumulate. Off only for the tests that need the raw output as an oracle. */
+  readonly dedupe: boolean;
 }
 
 /** `decl → value → (mergedPointer ∥ depth ∥ typeHops ∥ usageAccept) → violations`. Lives exactly as long as one `checkConfiguration` call, which is why the configuration and the declaration set are not part of the key. */
@@ -696,7 +721,7 @@ function depthLimitViolation(node: Node, ctx: WalkContext, pointerPath: readonly
 }
 
 /** Check one schema layer's own top-level `keys.<name>.demand` against `configuration.tree`. */
-function violationsForLayer(configuration: MergedConfiguration, layer: Layer, allDecls: readonly TypeDeclaration[], memo: NamedTypeMemo | undefined): Violation[] {
+function violationsForLayer(configuration: MergedConfiguration, layer: Layer, allDecls: readonly TypeDeclaration[], memo: NamedTypeMemo | undefined, dedupe: boolean): Violation[] {
   if (layer.role !== "schema") {
     return [];
   }
@@ -705,7 +730,7 @@ function violationsForLayer(configuration: MergedConfiguration, layer: Layer, al
   for (const [keyName, raw] of vocabulary) {
     const keyPointer = pointerFromPath([keyName]);
     const value = resolvePointer(configuration.tree, keyPointer);
-    extend(violations, checkDemand(raw, value, ["keys", keyName, "demand"], keyPointer, { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0, memo }));
+    extend(violations, checkDemand(raw, value, ["keys", keyName, "demand"], keyPointer, { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0, memo, dedupe }));
   }
   return violations;
 }
@@ -1048,7 +1073,7 @@ function finalDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
  * merged position, and the empty pointer is only what a `required`
  * absence needs to anchor against.
  */
-function directiveDiagnostics(configuration: MergedConfiguration, allDecls: readonly TypeDeclaration[], memo: NamedTypeMemo | undefined): Diagnostic[] {
+function directiveDiagnostics(configuration: MergedConfiguration, allDecls: readonly TypeDeclaration[], memo: NamedTypeMemo | undefined, dedupe: boolean): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const subject = configuration.layers.find((layer) => layer.role === "config");
   for (const layer of configuration.layers) {
@@ -1068,7 +1093,7 @@ function directiveDiagnostics(configuration: MergedConfiguration, allDecls: read
         diagnostics.push(problem.diagnostic);
       }
       const value = reservedKeyValue(subject, declaration.name);
-      const violations = checkDemand(raw, value, pointerPath, "", { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0, memo });
+      const violations = checkDemand(raw, value, pointerPath, "", { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0, memo, dedupe });
       for (const violation of violations) {
         diagnostics.push(renderViolation(violation, { omitMergedPointer: true }));
       }
@@ -1089,6 +1114,9 @@ export function checkConfiguration(configuration: MergedConfiguration, options: 
   // false` runs the unbounded walk, and exists so FR-005's "identical
   // diagnostics" can be *checked against something* rather than asserted.
   const memo: NamedTypeMemo | undefined = options.memoize === false ? undefined : new Map();
+  // v1.0 FR-004a: §10's multiplicity rule, on unless a test needs the raw
+  // walk as an oracle.
+  const dedupe = options.dedupe !== false;
   const allDecls = allDeclarations(configuration);
   const knownDeclaredNames = new Set(allDecls.map((d) => d.name));
 
@@ -1104,10 +1132,16 @@ export function checkConfiguration(configuration: MergedConfiguration, options: 
 
   const violations: Violation[] = [];
   for (const layer of configuration.layers) {
-    extend(violations, violationsForLayer(configuration, layer, allDecls, memo));
+    extend(violations, violationsForLayer(configuration, layer, allDecls, memo, dedupe));
   }
+  // The same identity once more over the whole set. Not what bounds the
+  // memory — `checkNamedType` already did that, as results accumulated —
+  // but what makes §10's rule **total**: a violation reached by two paths
+  // that never crossed a named type, or by two of a layer's own keys,
+  // is collapsed here rather than only on the named-type path.
+  const reported = dedupe ? dedupeViolations(violations) : violations;
 
-  const diagnostics = [...vocabularyDiagnostics, ...violations.map((violation) => renderViolation(violation)), ...topLevelSealDiagnostics(configuration), ...finalDiagnostics(configuration), ...directiveDiagnostics(configuration, allDecls, memo)];
+  const diagnostics = [...vocabularyDiagnostics, ...reported.map((violation) => renderViolation(violation)), ...topLevelSealDiagnostics(configuration), ...finalDiagnostics(configuration), ...directiveDiagnostics(configuration, allDecls, memo, dedupe)];
   const errors = diagnostics.filter((d) => d.level === "error");
   if (errors.length > 0) {
     return { ok: false, diagnostics: errors };

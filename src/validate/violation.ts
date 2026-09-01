@@ -83,6 +83,70 @@ const CODE_FOR_REASON: { readonly [K in ViolationReason["kind"]]: DiagnosticCode
   "seal-violated": "seal-violation",
 };
 
+/**
+ * §10's **identity** of a violation — "one violated demand at one position
+ * is one diagnostic" (amended v1.0, §15).
+ *
+ * Three components, and every one of them is something §10 already names:
+ *
+ * - **the code**, which is what a machine branches on;
+ * - **the violated demand**, which §10 defines as "its declaring layer +
+ *   span, as a JSON Pointer per RFC 6901 into that document" — so the
+ *   pointer alone is *not* the demand. Two layers may legitimately declare
+ *   the identical pointer and both fire under whole-chain validation
+ *   (§5.4); collapsing those would delete a real diagnostic. `layerRank`
+ *   is the component that keeps them apart, and it is exactly what
+ *   `renderViolation` publishes as `pedigreePosition`;
+ * - **the offending value's position**, its merged-configuration pointer.
+ *
+ * Deliberately *not* the message, the spans, or the reason's own payload.
+ * Keying on those would make the rule "collapse things that are already
+ * equal", which is unfalsifiable — the point is that a diagnostic is
+ * identified by what §10 says identifies it, and
+ * `tests/unit/composition-bound.test.ts` separately asserts that the
+ * duplicates this collapses are in fact identical in every readable field,
+ * so a future field that legitimately varied could not be silently lost.
+ *
+ * Lives here, beside `canonicalSentence`, because both are §10's own
+ * statements about a diagnostic and neither belongs to the walk that
+ * happens to produce one.
+ */
+export function violationIdentity(violation: Violation): string {
+  // U+0000 separates: it cannot occur in an RFC 6901 pointer or in a
+  // diagnostic code, so no two distinct triples render to one string.
+  return `${CODE_FOR_REASON[violation.reason.kind]}\u0000${violation.demand.pointer}\u0000${violation.demand.layerRank}\u0000${violation.mergedPointer}`;
+}
+
+/**
+ * Collapse violations sharing §10's identity, keeping the **first**
+ * occurrence — first, so the surviving diagnostic's order is the order the
+ * walk produced (v1.0 FR-005's "same order").
+ *
+ * **This is called as results accumulate, not only at the end**, and the
+ * distinction is the whole fix. Where §9's `keys` and `values` both cover
+ * an entry and both recurse into one shared type, each arm returns the
+ * same violation and the list doubles at every level up: a 296-byte
+ * configuration at depth 24 produced 2^24 copies and exhausted memory
+ * *while the lists were being assembled*, long before any final pass could
+ * run. `src/validate/check.ts` collapses inside `checkNamedType`, before
+ * caching, so every level hands its caller a bounded list; it collapses
+ * once more over the whole set afterwards, which is what makes §10's rule
+ * total rather than a property of the named-type path alone.
+ */
+export function dedupeViolations(violations: readonly Violation[]): Violation[] {
+  const seen = new Set<string>();
+  const kept: Violation[] = [];
+  for (const violation of violations) {
+    const identity = violationIdentity(violation);
+    if (seen.has(identity)) {
+      continue;
+    }
+    seen.add(identity);
+    kept.push(violation);
+  }
+  return kept;
+}
+
 /** One human sentence describing `reason` — the `Diagnostic.message`, distinct from `canonicalSentence` below (§10's own, separately specified, machine-checked format). */
 function describeReason(reason: ViolationReason): string {
   switch (reason.kind) {

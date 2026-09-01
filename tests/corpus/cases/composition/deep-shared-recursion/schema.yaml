@@ -1,0 +1,15 @@
+$id: composition/deep
+types:
+  node:
+    demand:
+      type: mapping | string
+      keys:
+        child:
+          demand:
+            type: node
+      values:
+        type: node
+keys:
+  root:
+    demand:
+      type: node

@@ -919,15 +919,23 @@ Extends every catalogue above, unchanged.
 | `malformed-section` | A top-level `types:`/`keys:`/`directives:`/`authority:` in a schema whose value is not a mapping (§9). One rule, four sections — until v1.0 this was silently ignored |
 | `precision-narrowed` | **`info`** — an integer projected to `number` under a demand admitting `float`, where the conversion is not exact (§17) |
 
-### One known limit, stated rather than discovered
+### One violated demand at one position is one diagnostic
 
 Where `keys` and `values` both cover an entry and both name the **same** recursive type, both apply
-(§9) and both descend. v1.0 bounds the *walk* — it is linear, where it used to be `2^depth` — but a
-document that **violates** deep inside such a type still produces `2^depth` byte-identical
-diagnostics, one per path the walk took to reach it. That is what the unbounded walk produced too,
-and collapsing them would change what `validate()` returns, so it is recorded rather than fixed:
-`tests/unit/composition-bound.test.ts` holds the fact. A legal config of roughly thirty nested levels
-with one deep violation under such a schema can still exhaust memory.
+(§9) and both descend — so a walk can reach one demand and one value by more than one path. `SPEC.md`
+§10 settles what that means for the output: **the diagnostic is reported once.**
+
+The identity is §10's own — the code, the violated demand (its *declaring layer* as well as its RFC
+6901 pointer, since §10 defines a demand as both), and the offending value's position. It is applied
+**as results accumulate**, not at the end: the arms hand each other whole result lists, so a
+collapse that waited for a final pass would arrive after the memory was gone.
+
+The rule is a correction, not a new restriction. Before it, a **296-byte** configuration at depth 24
+— legal, and well inside §11's parse-depth cap of 64 — produced 2^24 copies of one violation and
+exhausted memory; every copy was identical in every field a consumer can read, so the repetition
+communicated nothing. Two genuinely different violations at one position are still two: a different
+code, a different demand pointer, or a different declaring layer each keeps them apart, and each has
+its own case in `tests/unit/composition-bound.test.ts`.
 
 ## Scripts
 

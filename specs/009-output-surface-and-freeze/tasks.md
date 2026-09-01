@@ -98,6 +98,35 @@ being true for anything that changes an existing meaning.
 
 **Checkpoint**: polynomial, identical diagnostics, a key that has been shown to be necessary.
 
+### Phase 3a: FR-004a — one violated demand at one position is one diagnostic (added post-implementation)
+
+US2 bounded the walk and reported that it could not bound the output; `SPEC.md` §10 was amended to
+settle the multiplicity, as a correction (§15). This phase implements that rule.
+
+- [x] T047 [US2] `tests/corpus/cases/composition/deep-shared-recursion/` — the governance entry's
+      **296-byte** configuration at depth 24, and its schema. Watched to kill the process before the
+      fix
+- [x] T048 [US2] `tests/unit/composition-bound.test.ts` **before the code**: one diagnostic at every
+      depth; the pinned 296-byte case end to end through `load()`; the **fuller equality** of what is
+      collapsed; first-occurrence order; and three over-collapse guards (different code, different
+      demand pointer, different declaring layer)
+- [x] T049 [US2] `src/validate/violation.ts`: `violationIdentity` and `dedupeViolations`, beside
+      §10's canonical sentence, since both are §10's own statements about a diagnostic. The identity
+      includes the demand's **declaring layer**, not only its pointer — §10 defines a demand as both
+- [x] T050 [US2] `src/validate/check.ts`: collapse inside `checkNamedType` **before the memo caches**
+      (as results accumulate), plus once over the whole set in `checkConfiguration` so the rule is
+      total rather than a property of the named-type path. `CheckOptions` gains `dedupe`
+- [x] T051 [US2] FR-005 re-read, not merely re-run: the memoized-vs-unmemoized comparison now runs
+      **twice**, collapsed and raw, so it cannot become a tautology
+- [x] T052 [US2] **Sabotage 1**: collapse at the end only. Revealed that the pinned depth-24 case
+      *survives* (7.97 s, ~270 MB) because the final pass precedes rendering — so a **depth-40** case
+      was added, where 2^40 references cannot fit in any machine, and that one dies
+- [x] T053 [US2] **Sabotage 2**: an over-collapsing identity (declaring layer dropped) — six tests
+      red, four of them monotonicity property tests. And a third (demand pointer dropped) — three
+      red, including a v0.7 `keys`+`values` corpus case
+- [x] T054 [US2] `pnpm typecheck && pnpm test` green; commit `fix(validate): one violated demand at
+      one position is one diagnostic`
+
 ---
 
 ## Phase 4: User Story 3 — a consumer reads a configuration as ordinary data (Priority: P3)

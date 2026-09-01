@@ -22,7 +22,11 @@
    anywhere else in a demand mapping.
 4. `values` applies to **every** entry of the mapping it constrains, in canonical key order.
 5. Where `keys` names an entry and `values` also covers it, **both** run. Neither wins; there is no
-   precedence rule (§5.1 — demands intersect).
+   precedence rule (§5.1 — demands intersect). **Amended at v1.0**: "both run" is about the two
+   *demands*, and stays true. It never meant "one violation is reported twice" — where both arms
+   reach the **same** demand at the **same** position (which they do whenever both recurse into one
+   shared type), the diagnostic is reported **once** (`SPEC.md` §10, amended; v1.0 FR-004a). Two
+   genuinely different demands failing at one entry are still two diagnostics.
 6. Against a value that is not a mapping, `values` contributes nothing — the shape refusal is
    `type`'s (v0.3 FR-028's never-twice precedent).
 7. `values` nests: its own `demand` may declare further `keys`/`items`/`values`, bounded by

@@ -126,6 +126,15 @@ Measured: 920 ms → 0.4 ms at depth 18, flat to depth 24. **The assertion is a 
 never a wall-clock threshold (FR-004) — scaling is a fact about the algorithm; milliseconds are a
 fact about the machine.
 
+**The memo bounds the walk and not the output, which is FR-004a's half** (added post-implementation,
+after this plan reported the gap): each arm returns the same violation and the list doubles per
+level, so a 296-byte configuration at depth 24 produced 2^24 copies and exhausted memory. `SPEC.md`
+§10 now legislates the multiplicity it had been silent on, as a **correction** — every copy was
+identical in every readable field. The collapse is applied **inside `checkNamedType`, before the memo
+caches**, because a final pass arrives after the memory is gone; research D-8 records what the
+sabotage revealed about that claim, and why the depth-40 case rather than the depth-24 one is what
+actually pins the placement.
+
 ### P-3. The numeric decision is a second, deliberately small walk
 
 `src/validate/numeric.ts` collects `pointer → NumericClass` by walking demands against the merged

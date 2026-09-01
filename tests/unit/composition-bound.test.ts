@@ -47,9 +47,12 @@
  * would admit.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { checkConfiguration } from "../../src/validate/check.js";
-import { validate } from "../../src/index.js";
-import { createMapping, createSequence, createIntScalar, createStringScalar, type Node } from "../../src/model/node.js";
+import { load, validate } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
+import { createBoolScalar, createMapping, createSequence, createIntScalar, createStringScalar, type Node } from "../../src/model/node.js";
 import { createOrigin, createSourceSpan, type SourceSpan } from "../../src/model/span.js";
 import { fold } from "../../src/merge/fold.js";
 import type { Layer, MergedConfiguration } from "../../src/merge/provenance.js";
@@ -164,9 +167,33 @@ describe("v1.0 FR-004 / SC-002 — the composition is polynomial, established by
 });
 
 describe("v1.0 FR-005 — the diagnostics are identical to the unbounded walk's, in set AND order", () => {
-  /** Serializes everything a caller can observe about a diagnostic, so the comparison cannot pass by comparing too little. */
-  function fingerprint(configuration: MergedConfiguration, memoize: boolean): string {
-    const outcome = checkConfiguration(configuration, { memoize });
+  /**
+   * **Re-read, not merely re-run, once FR-004a landed.** FR-005 asks that
+   * memoizing change no diagnostic. It never asked that the *output* be
+   * frozen forever — §10's multiplicity rule (FR-004a) deliberately
+   * changes it, and a comparison against a recorded pre-FR-004a fixture
+   * would have made FR-005 forbid the correction that fixed the bug.
+   *
+   * The instrument survives intact and is run **twice**, which is what
+   * keeps it from becoming a tautology:
+   *
+   *   1. `memoize: true` vs `memoize: false`, both collapsed — two
+   *      genuinely different code paths (one computes each named type
+   *      once, one computes it 2^d times) asked to agree on the answer;
+   *   2. `memoize: true` vs `memoize: false`, both **raw**
+   *      (`dedupe: false`) — the original FR-005 comparison, unchanged,
+   *      on unchanged output, at a depth where the raw output still
+   *      exists. If memoizing altered any diagnostic, this is where it
+   *      shows, and the collapse cannot hide it because the collapse is
+   *      not running.
+   *
+   * Comparing a collapsed run against a collapsed run alone would be the
+   * weaker claim, since the collapse could in principle mask a difference
+   * by discarding the diagnostic that carried it. Running the raw
+   * comparison as well is what forecloses that.
+   */
+  function fingerprint(configuration: MergedConfiguration, memoize: boolean, dedupe = true): string {
+    const outcome = checkConfiguration(configuration, { memoize, dedupe });
     return JSON.stringify(
       outcome.diagnostics.map((d) => ({
         code: d.code,
@@ -206,9 +233,30 @@ describe("v1.0 FR-005 — the diagnostics are identical to the unbounded walk's,
     const memoized = fingerprint(configuration, true);
     const unbounded = fingerprint(configuration, false);
     // Guard the guard: an empty diagnostic list would make this pass
-    // vacuously, which is exactly how a cache test proves nothing.
-    expect(JSON.parse(unbounded).length).toBeGreaterThan(10);
+    // vacuously, which is exactly how a cache test proves nothing. The
+    // count is now derived rather than bounded — **nine**, and each one is
+    // a distinct position: the eight `bad` keys, one per level, each
+    // covered by `values` alone, plus the innermost `child` leaf. Under
+    // FR-004a they no longer multiply, so a `> 10` threshold (written when
+    // the same document produced hundreds) would fail for the right
+    // reason; asserting the derivation instead is stronger than either.
+    expect(JSON.parse(unbounded).length).toBe(9);
     expect(memoized).toBe(unbounded);
+  });
+
+  it("and RAW — with §10's collapse switched off — the two walks still agree exactly, which is what keeps this from being a tautology", () => {
+    // Depth 5 rather than 8: the raw output of this shape is exponential
+    // by construction (that is the finding FR-004a fixes), and the
+    // *unmemoized* raw walk has to actually run for its output to be the
+    // oracle. Small enough to run, large enough that a difference in any
+    // one of the hundreds of diagnostics would show.
+    const configuration = violatingConfiguration(5);
+    const memoizedRaw = fingerprint(configuration, true, false);
+    const unboundedRaw = fingerprint(configuration, false, false);
+    expect(JSON.parse(unboundedRaw).length).toBeGreaterThan(30);
+    expect(memoizedRaw).toBe(unboundedRaw);
+    // And the collapse is what the two of them have in common afterwards.
+    expect(JSON.parse(fingerprint(configuration, true)).length).toBeLessThan(JSON.parse(memoizedRaw).length);
   });
 
   it("a clean document produces the same (empty) answer either way, at a depth the unbounded walk can still reach", () => {
@@ -368,34 +416,40 @@ describe("v1.0 FR-007 — the cache bounds work, not depth: the existing depth c
   });
 });
 
-describe("RECORDED FINDING — the memo bounds the WALK; the diagnostic OUTPUT of a violating document is still 2^depth", () => {
+describe("v1.0 FR-004a — one violated demand at one position is ONE diagnostic (SPEC.md §10, amended)", () => {
   /**
-   * **This is the milestone's sharpest finding and it is deliberately a
-   * test rather than a comment.**
+   * **The other half of the bound, and the half that needed governance.**
    *
-   * The memo makes the walk linear, which fixes v0.7's measured case
-   * exactly: a *clean* document at depth 18 went from 919.8 ms to under a
-   * millisecond. It does **not** — and provably cannot, under FR-005 —
-   * bound the size of the *answer*. Where a violation sits at depth d
-   * under a shared recursive type, the `keys` arm and the `values` arm
-   * each return it, and each level up doubles the list: **2^d
-   * byte-identical diagnostics for one violated demand at one position.**
+   * The memo made the *walk* linear. It could not make the *output*
+   * polynomial: where a violation sits at depth d under a shared recursive
+   * type, the `keys` arm and the `values` arm each returned it and every
+   * level up doubled the list — 2^d byte-identical diagnostics for one
+   * violated demand at one position. Measured before the fix: 1,048,576 at
+   * depth 20, and a **296-byte** configuration at depth 24 killed the
+   * process.
    *
-   * Measured here: 2, 4, 8, 16 at depths 1–4, and 4096 at depth 12 —
-   * memoized and unmemoized alike, which is the point. FR-005 requires
-   * the diagnostics to be *identical to the unbounded walk's*, and the
-   * unbounded walk produces exactly these. Collapsing them would be a
-   * change to what `validate()` returns for a document it already
-   * accepts-or-refuses today, which is a governance decision and not an
-   * implementer's (`SPEC.md` §10 legislates what a diagnostic carries and
-   * is silent on multiplicity; v0.3 FR-028's "never twice" was written
-   * about two *passes*, not two demands).
+   * `SPEC.md` §10 now legislates the multiplicity it had been silent on:
+   * *one violated demand at one position is one diagnostic.* Settled as a
+   * **correction**, not a meaning change — §10 says what a diagnostic
+   * carries and describes one sentence per violation, and every copy was
+   * identical in every field a consumer can read, so the repetition
+   * communicated nothing.
    *
-   * The consequence is real and is reported rather than buried: a legal
-   * config of ~30 nested levels — well inside §11's parse-depth cap of 64
-   * — with one deep violation under a `keys`+`values` shared recursive
-   * type still exhausts memory. v1.0 bounds the walk and leaves this
-   * standing. See the milestone report.
+   * **The identity is §10's own**: the code, the violated demand (its
+   * declaring layer *and* its RFC 6901 pointer — §10 defines a demand as
+   * both, and a bare pointer would collapse two layers that legitimately
+   * declare the same one), and the offending value's position.
+   * `violationIdentity` in `src/validate/violation.ts` is the one place it
+   * is spelled, beside §10's canonical sentence, because both are §10's
+   * own statements about a diagnostic.
+   *
+   * **It is applied as results accumulate, not at the end.** A final pass
+   * cannot help: the exhaustion happens while the lists are being
+   * assembled and concatenated up the recursion, long before any final
+   * pass runs. `checkNamedType` collapses before it caches, so each level
+   * hands its caller a bounded list; `checkConfiguration` then applies the
+   * same identity once more over the whole set, which is what makes the
+   * rule total rather than a property of the named-type path alone.
    */
   function violatingLinearDepth(depth: number): MergedConfiguration {
     let value: Node = createIntScalar(9n, span(ORIGIN_CONFIG)); // an int violates `mapping | string`
@@ -405,21 +459,158 @@ describe("RECORDED FINDING — the memo bounds the WALK; the diagnostic OUTPUT o
     return configurationOf(sharedRecursiveSchema(), createMapping([["root", value]], span(ORIGIN_CONFIG)));
   }
 
-  it("doubles per level, and does so identically with the memo on and off", () => {
-    for (const depth of [1, 2, 3, 4, 8]) {
-      const configuration = violatingLinearDepth(depth);
-      const memoized = checkConfiguration(configuration, { memoize: true });
-      const unbounded = checkConfiguration(configuration, { memoize: false });
-      expect(memoized.diagnostics, `depth ${depth}`).toHaveLength(2 ** depth);
-      expect(unbounded.diagnostics, `depth ${depth} — the unbounded walk produces the same count, which is why FR-005 forbids collapsing them`).toHaveLength(2 ** depth);
-      expect(memoized.diagnostics.map((d) => `${d.code}${d.pointer ?? ""}${d.demand?.pointer ?? ""}`)).toEqual(unbounded.diagnostics.map((d) => `${d.code}${d.pointer ?? ""}${d.demand?.pointer ?? ""}`));
+  it("a violation at depth d yields exactly one diagnostic, at every depth — never 2^d", () => {
+    for (const depth of [0, 1, 2, 3, 4, 8, 12, 20]) {
+      const result = validate(violatingLinearDepth(depth));
+      expect(result.ok, `depth ${depth}`).toBe(false);
+      if (result.ok) continue;
+      expect(result.diagnostics, `depth ${depth}`).toHaveLength(1);
+      expect(result.diagnostics[0]?.code).toBe("type-mismatch");
+      expect(result.diagnostics[0]?.pointer).toBe(`/root${"/child".repeat(depth)}`);
     }
   }, 60_000);
 
-  it("every one of them is byte-identical in every field a consumer can read — which is why collapsing them would lose nothing, and why doing so is still not an implementer's call", () => {
-    const outcome = checkConfiguration(violatingLinearDepth(6));
-    expect(outcome.diagnostics).toHaveLength(64);
-    const distinct = new Set(outcome.diagnostics.map((d) => JSON.stringify({ code: d.code, level: d.level, message: d.message, pointer: d.pointer ?? null, demand: d.demand?.pointer ?? null, primary: d.primary.start, pedigreePosition: d.pedigreePosition ?? null })));
-    expect(distinct.size).toBe(1);
+  it("the collapsed duplicates were byte-identical in EVERY readable field — the fuller equality, so a field that legitimately differed could not have been silently collapsed", () => {
+    // The raw walk stays runnable (`dedupe: false`) at a depth where its
+    // output still exists, for exactly this assertion. Without it the
+    // identity would be checked only against itself: keying on §10's
+    // triple and then asserting §10's triple matches is a tautology, and
+    // what has to be shown is that the *rest* of the diagnostic matched
+    // too — otherwise a future field that legitimately varies would be
+    // collapsed away silently.
+    const configuration = violatingLinearDepth(8);
+    const raw = checkConfiguration(configuration, { dedupe: false });
+    expect(raw.diagnostics).toHaveLength(2 ** 8);
+    const fully = new Set(
+      raw.diagnostics.map((d) =>
+        JSON.stringify({
+          code: d.code,
+          level: d.level,
+          message: d.message,
+          pointer: d.pointer ?? null,
+          pedigreePosition: d.pedigreePosition ?? null,
+          related: d.related,
+          delegatedFrom: d.delegatedFrom ?? null,
+          demand: d.demand === undefined ? null : { pointer: d.demand.pointer, origin: d.demand.span.origin.id, start: d.demand.span.start, end: d.demand.span.end, line: d.demand.span.line, column: d.demand.span.column },
+          primary: { origin: d.primary.origin.id, start: d.primary.start, end: d.primary.end, line: d.primary.line, column: d.primary.column },
+        }),
+      ),
+    );
+    expect(fully.size, "256 diagnostics differing in some field would mean the identity is collapsing information").toBe(1);
+    // And the collapse keeps exactly one of them, unchanged.
+    const collapsed = checkConfiguration(configuration);
+    expect(collapsed.diagnostics).toHaveLength(1);
+    expect(JSON.stringify(collapsed.diagnostics[0])).toBe(JSON.stringify(raw.diagnostics[0]));
+  });
+
+  it("collapsing keeps the FIRST occurrence, so diagnostic order is the order the walk produced", () => {
+    const configuration = violatingLinearDepth(6);
+    const raw = checkConfiguration(configuration, { dedupe: false });
+    const collapsed = checkConfiguration(configuration);
+    // De-duplicating `raw` by hand, keeping first occurrences, must give
+    // exactly what the implementation gives — same members, same order.
+    const seen = new Set<string>();
+    const expected: string[] = [];
+    for (const diagnostic of raw.diagnostics) {
+      const key = `${diagnostic.code}\u0000${diagnostic.demand?.pointer ?? ""}\u0000${diagnostic.pedigreePosition ?? ""}\u0000${diagnostic.pointer ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      expected.push(diagnostic.message);
+    }
+    expect(collapsed.diagnostics.map((d) => d.message)).toEqual(expected);
+  });
+
+  it("AND THE PLACEMENT IS PINNED TOO: depth 40 — where 2^depth cannot fit in any machine — is still one diagnostic", () => {
+    // **This case, not the 296-byte one, is what proves the collapse
+    // happens as results accumulate.** Sabotaging the accumulating
+    // collapse and leaving only the final pass does *not* kill the
+    // depth-24 case: the final pass runs before `renderViolation`, so it
+    // saves the process from building 16.7M `Diagnostic` objects and the
+    // case survives — 7.97 s instead of 8 ms, on ~270 MB of transient
+    // references. Slower by three orders of magnitude, and still alive.
+    //
+    // At depth 40 that escape closes for good: 2^40 references is a
+    // terabyte, and no final pass can be reached. With the collapse
+    // applied as results accumulate the work is linear in depth and this
+    // returns instantly. A ~470-byte document, still well inside §11's
+    // parse-depth cap of 64.
+    let value: Node = createIntScalar(9n, span(ORIGIN_CONFIG));
+    for (let level = 0; level < 40; level += 1) {
+      value = createMapping([["child", value]], span(ORIGIN_CONFIG));
+    }
+    const configuration = configurationOf(sharedRecursiveSchema(), createMapping([["root", value]], span(ORIGIN_CONFIG)));
+    const result = validate(configuration);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics).toHaveLength(1);
+  }, 30_000);
+
+  it("THE PINNED CASE: a 296-byte configuration at depth 24 returns a verdict instead of exhausting memory, end to end through load()", async () => {
+    // The document that killed the process. Real bytes, real `load()`,
+    // through the host seam — not a hand-built tree, because the point of
+    // the finding was that a *legal, ordinary, tiny* document did this.
+    const root = join(__dirname, "..", "corpus", "cases", "composition", "deep-shared-recursion");
+    const configPath = join(root, "config.yaml");
+    expect(readFileSync(configPath).byteLength, "the pinned case is this exact document").toBe(296);
+    const result = await load(configPath, { host: createNodeHost(), sandboxRoot: root });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // Before §10's multiplicity rule this was 2^24 = 16,777,216 copies of
+    // one violation. It is one.
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("type-mismatch");
+    expect(result.diagnostics[0]?.pointer).toBe(`/root${"/child".repeat(24)}`);
+  }, 60_000);
+});
+
+describe("v1.0 FR-004a — the identity does NOT over-collapse: two genuinely different violations stay two", () => {
+  /**
+   * The dangerous half of a de-duplication. A cache that confuses two
+   * subtrees produces a wrong pointer; an over-eager collapse **hides a
+   * real error**, silently, which is worse than the exhaustion it was
+   * introduced to fix. Both cases below fail if the identity loses a
+   * component.
+   */
+  it("two different demands failing at ONE position are two diagnostics — the demand pointer separates them", () => {
+    // `keys.k` demands a string; `values` demands an int; the value is a
+    // bool, so both fail at `/root/k`. Same code, same value pointer,
+    // same layer — only the demand pointer differs, and §10 counts a
+    // demand by its pointer as well as its declaring layer.
+    const schema = m([["keys", m([["root", m([["demand", m([["keys", m([["k", m([["demand", m([["type", s("string")]])]])]])], ["values", m([["type", s("int")]])]])]])]])]]);
+    const config = createMapping([["root", createMapping([["k", createBoolScalar(true, span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG));
+    const result = validate(configurationOf(schema, config));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics).toHaveLength(2);
+    expect(result.diagnostics.map((d) => d.demand?.pointer).sort()).toEqual(["/keys/root/demand/keys/k/demand/type", "/keys/root/demand/values/type"]);
+    expect(new Set(result.diagnostics.map((d) => d.pointer))).toEqual(new Set(["/root/k"]));
+  });
+
+  it("ONE demand pointer declared by TWO layers is two diagnostics — whole-chain validation still reports per layer (§5.4)", () => {
+    // The case a bare (code, demand pointer, value pointer) identity would
+    // silently collapse, and the reason the declaring layer is in the key:
+    // §10 defines the violated demand as "its declaring layer + span, as a
+    // JSON Pointer into that document", so the pointer alone is not the
+    // demand.
+    const schemaTree = m([["types", m([["strType", m([["demand", m([["type", s("string")]])]])]])], ["keys", m([["root", m([["demand", m([["type", s("strType")]])]])]])]]);
+    const rootLayer: Layer = { identity: { location: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
+    const houseLayer: Layer = { identity: { location: "bound-house", hash: "2".repeat(64) }, role: "schema", rank: 1, tree: schemaTree };
+    const configLayer: Layer = { identity: { location: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 2, tree: createMapping([["root", createIntScalar(9n, span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
+    const layers = [rootLayer, houseLayer, configLayer];
+    const configuration: MergedConfiguration = { tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() };
+    const result = validate(configuration);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics).toHaveLength(2);
+    expect(result.diagnostics.map((d) => d.pedigreePosition)).toEqual([0, 1]);
+  });
+
+  it("two violations of DIFFERENT kinds at one position stay two — the code separates them", () => {
+    const schema = m([["keys", m([["root", m([["demand", m([["maxLength", createIntScalar(2n, span(ORIGIN_SCHEMA))], ["pattern", s("^z")], ["type", s("string")]])]])]])]]);
+    const config = createMapping([["root", createStringScalar("abcdef", span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG));
+    const result = validate(configurationOf(schema, config));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics.map((d) => d.code).sort()).toEqual(["length-violated", "pattern-mismatch"]);
   });
 });
