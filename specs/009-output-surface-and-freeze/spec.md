@@ -204,9 +204,17 @@ otherwise reach into the consuming application's type system.
   depths, not a wall-clock threshold.
 - **FR-004a**: the **output** MUST be bounded too. One violated demand at one position MUST yield
   exactly one diagnostic (`SPEC.md` §10, amended). The identity MUST be applied **as results
-  accumulate** — deduplicating at the end does not help, because the exhaustion happens while the
-  lists are being assembled. A 296-byte configuration at depth 24 MUST NOT exhaust memory; a test
-  MUST pin that specific case.
+  accumulate**, because the list doubles at every level up and a final pass runs after the doubling.
+  Two cases MUST be pinned, and they pin different things: a **296-byte configuration at depth 24**
+  (the defect — it exhausted memory before the fix) and a **depth-40 configuration** (the placement —
+  2^40 fits in no machine, so no final-only pass can survive it). *This requirement originally claimed
+  a final-only collapse "does not help" and pinned that to depth 24 alone; the implementer's sabotage
+  showed depth 24 survives a final-only pass in about eight seconds, since this pipeline collapses
+  violations before rendering diagnostics. The rule was right and its example did not exercise it.*
+- **FR-004b**: the identity MUST include the violated demand's **declaring layer**, not merely its
+  pointer. Under §5.4's whole-chain validation two layers may declare the identical pointer and both
+  fire legitimately; a key without the layer deletes one of them. A test MUST prove an
+  over-collapsing identity fails.
 - **FR-005**: Diagnostics MUST be identical — same set, same order — to the unbounded walk's.
 - **FR-006**: Any cache key MUST distinguish subtrees that differ by pointer, layer, or depth, and a
   test MUST prove a mis-keyed cache fails.

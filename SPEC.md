@@ -418,7 +418,7 @@ styles:
 - Every error carries: the violated demand (with its declaring layer + span, as a JSON Pointer per RFC 6901 into that document), the offending value (layer + span, delegation breadcrumb included), and the accumulated pedigree position.
 - Canonical error sentence: `constraint from house.yaml:7 (/keys/styles/demand) rejected value from conf.network.yaml:3 (delegated from site.yaml:12)`.
 - **Diagnostics carry a level: `error` or `info`.** An `error` is a refusal — it decides the outcome, and a result carrying one is not a configuration. An `info` is a **lint**: it teaches and never changes the verdict. Two levels, not three: every lint this document mandates (§5.5's vacuous `required`, §8.1's inline string at a delegating key) is a "this does not mean what you think" observation about a *legitimate* construct, and nothing yet cited needs a middle rank. A third level may be added when something needs it; adding one that nothing fires is the vocabulary inflation Principle VI forbids. Levels are part of the contract, so an `info` carries the same position, pointer, and pedigree data an `error` does — a lint with a worse diagnostic than a refusal would be a lint nobody acts on.
-- **One violated demand at one position is one diagnostic.** Where a walk reaches the same demand and the same value by more than one path — which §9's `keys` + `values` composition makes ordinary, since both may cover an entry and both may recurse into one shared type — the diagnostic is reported **once**. This is a statement about multiplicity, on which this section had been silent; it changes nothing a diagnostic *carries*. It is written down because the silence was not free: at v1.0 a 296-byte configuration, legal and well inside §11's depth cap, reported a single violation 2^depth times and exhausted memory at depth 24. Every copy was byte-identical in every field a consumer can read, so nothing was being communicated by the repetition (§15).
+- **One violated demand at one position is one diagnostic.** Where a walk reaches the same demand and the same value by more than one path — which §9's `keys` + `values` composition makes ordinary, since both may cover an entry and both may recurse into one shared type — the diagnostic is reported **once**. This is a statement about multiplicity, on which this section had been silent; it changes nothing a diagnostic *carries*. It is written down because the silence was not free: at v1.0 a 296-byte configuration, legal and well inside §11's depth cap, reported a single violation 2^depth times and exhausted memory at depth 24. Every copy was byte-identical in every field a consumer can read, so nothing was being communicated by the repetition. **The collapse must be applied as results accumulate**, not once at the end — where two arms recurse into one shared type, the list doubles at every level up, and a final pass runs after the doubling has already happened (§15).
 - Machine-readable error output uses RFC 6901 pointers throughout — do not invent a path syntax.
 - `tool why <config> <pointer>` answers "where did this value come from and what did it override" (the `git config --show-origin` / DevTools struck-through-rule feature). Built into the merge engine from day one; nearly free there, nearly impossible to retrofit.
 
@@ -748,10 +748,20 @@ The bootstrap (§14 item 7) was scheduled before this point precisely so that th
   spans), so the repetition communicated nothing and removing it takes nothing away. What was there
   was an artifact of one walk reaching one `(demand, value)` pair by two paths.
 
-  One implementation note that belongs with the rule, because it is not obvious and getting it wrong
-  reproduces the fault: **deduplicating at the end does not help.** The exhaustion happens while the
-  lists are being assembled and concatenated up the recursion, long before any final pass. The
-  identity must be applied as results accumulate. See §10, §9.
+  One implementation note belongs with the rule, and **the first version of this entry got it wrong in
+  a way worth preserving.** It said flatly that "deduplicating at the end does not help", and pinned
+  that claim to the 296-byte depth-24 document. The implementer ran the sabotage against that exact
+  case rather than a plausible one and found the claim false there: with a final-only pass, depth 24
+  *survives*, in about eight seconds, because this pipeline's final pass runs over violations
+  **before** diagnostics are rendered — so the sixteen million message-carrying objects are never
+  built, and only the cheaper references are. The rule is still right and the placement still matters;
+  the example did not demonstrate it. What does is **depth 40**, where 2^40 references fit in no
+  machine and no final pass is reachable at all — a ~470-byte document, still inside §11's cap. Both
+  cases are pinned in the suite now, the first for the defect and the second for the placement.
+
+  That is the project's own recurring lesson landing on this document one more time: an example is
+  worth what executing it costs, and a claim pinned to an example that does not exercise it is a
+  claim nobody has tested. See §10, §9.
 
 - **Article VII, corrected and generalized by its first implementation** → settled. The article was
   written days before it was built and had never been implemented against; five of its clauses needed
