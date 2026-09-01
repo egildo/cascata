@@ -314,7 +314,7 @@ rather than bundled into a feature change. Versioning is semantic:
 - **PATCH** — clarification, wording, or non-semantic refinement.
 
 **Compliance review.** Every `/speckit-plan` runs a Constitution Check before producing its design,
-and re-runs it after. Every code review verifies the six gates above. Principles marked
+and re-runs it after. Every code review verifies the seven gates above. Principles marked
 NON-NEGOTIABLE (I, V) admit no Complexity-Tracking exception: a change that violates them is
 rejected, not justified.
 
