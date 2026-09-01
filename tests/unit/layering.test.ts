@@ -58,7 +58,14 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // Every directory that may not import an adapter. v0.1 policed the first
 // two; v0.2 (plan.md) extends the set to resolve/ and graph/; v0.3 adds merge/.
-const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge", "src/validate"];
+// **v1.0 (009 FR-028)**: `src/project/` joins both policed sets, following
+// the precedent v0.2/v0.3/v0.4 each set for `resolve/`, `merge/` and
+// `validate/` — a new stage is added to the boundary before it has much
+// code in it, not after someone notices. The value view is the most
+// world-blind stage there is: it consumes a `MergedConfiguration` that is
+// already entirely in hand, and has no business knowing what format any of
+// it arrived in or where any of it came from.
+const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge", "src/validate", "src/project"];
 
 // Matches the module specifier of any `import ... from "spec"` or
 // `export ... from "spec"` statement, static or type-only.
@@ -130,7 +137,7 @@ describe("Principle IV: format-blindness boundary — no import of src/adapters"
 // graph/ alone; v0.3 (T011, plan.md's Structure Decision) adds merge/ — the
 // first module that is both format-blind *and* location-blind. v0.4
 // (specs/004-constraint-checker/tasks.md T008) adds validate/.
-const NO_RESOLVE_IMPORT_DIRS = ["src/graph", "src/merge", "src/validate"];
+const NO_RESOLVE_IMPORT_DIRS = ["src/graph", "src/merge", "src/validate", "src/project"];
 
 for (const relativeDir of NO_RESOLVE_IMPORT_DIRS) {
   describe(`Principle IV: ${relativeDir}/ does not import src/resolve/`, () => {
@@ -256,6 +263,33 @@ function callsDynamicFsImportOrRequire(filePath: string): boolean {
   const content = readFileSync(filePath, "utf-8");
   return DYNAMIC_FS_IMPORT_OR_REQUIRE_PATTERN.test(content);
 }
+
+// --- v1.0 (009): the new stage's direction is one-way ---------------------
+//
+// `src/project/` is §3's last stage and may read `src/validate/` — the
+// accumulated numeric demand is a *demand*, and reading one is validate's
+// job (research.md D-3). The converse must never be true: validation that
+// could see the value view would be a stage consuming a *later* stage's
+// output, which is Principle IV's whole subject. Policed mechanically here
+// rather than left to review, the same way every other direction in this
+// file is.
+
+const CROSSES_PROJECT_BOUNDARY = crossesBoundary("project");
+
+describe("Principle IV: src/validate/ does not import src/project/ — the last stage is downstream of every other, never upstream", () => {
+  const files = listTsFiles(join(REPO_ROOT, "src", "validate"));
+
+  it("src/validate has files — a direction test over an empty directory passes vacuously", () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  for (const file of files) {
+    const relativeFile = file.slice(REPO_ROOT.length + 1);
+    it(`${relativeFile} does not import from src/project`, () => {
+      expect(importSpecifiersOf(file).filter((specifier) => CROSSES_PROJECT_BOUNDARY.test(specifier))).toEqual([]);
+    });
+  }
+});
 
 describe("Principle IV / Article VI: the host boundary — no import (static or dynamic) of node:fs, no require(...) of it, no call to fetch, except the shipped host", () => {
   const allSrcFiles = listTsFiles(join(REPO_ROOT, "src"));

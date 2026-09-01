@@ -41,6 +41,7 @@ import { why as whyImpl } from "./merge/provenance.js";
 import type { MergedConfiguration } from "./merge/provenance.js";
 import { checkConfiguration } from "./validate/check.js";
 import { resource as resourceImpl, type ResolvedResource } from "./validate/resource.js";
+import { project as projectImpl } from "./project/value.js";
 import type { DelegationHop } from "./model/reference.js";
 import { createMapping } from "./model/node.js";
 import { collectDelegationGrants, isAbsoluteDelegatedPath, isDelegationSandboxEscape, mergeGrantTrees, type DelegationGrantNode } from "./resolve/delegate.js";
@@ -1122,6 +1123,31 @@ export type { ResolvedResource } from "./validate/resource.js";
  * check: it produces no diagnostic and cannot fail a `load()` call.
  */
 export const resource = resourceImpl;
+
+// --- project() — User Story 3/4 (v1.0, SPEC.md Article VII (§17)) --------
+
+export type { ConfigValue, ProjectionResult } from "./project/value.js";
+
+/**
+ * The value view (Article VII): a merged configuration as ordinary JS data
+ * — null-prototype objects in §4.2's canonical key order, arrays, and
+ * scalars — with whatever `info` lints the projection earned.
+ *
+ * **A projection, never a replacement.** The `MergedConfiguration` handed
+ * in is untouched and keeps its tree, spans, provenance and pedigree, so a
+ * consumer who needs a position has not lost one and `why()` still answers
+ * by RFC 6901 pointer. A consumer who needs a value no longer pays for
+ * positions they will not read.
+ *
+ * Reachable without `load()` (v1.0 FR-023, Principle IV): it is a pipeline
+ * stage that consumes only the previous stage's output, and a tool stepping
+ * through the stages by hand gets the same value `load()` puts on its own
+ * result, from the same one implementation.
+ *
+ * `T` is the caller's claim and is **never checked** — see
+ * `ProjectionResult.value`.
+ */
+export const project = projectImpl;
 
 // --- validate() — User Story 1 (v0.4, specs/004-constraint-checker/tasks.md T012) --------
 //

@@ -107,23 +107,23 @@ being true for anything that changes an existing meaning.
 **Independent Test**: `Object.getPrototypeOf` is `null`, keys enumerate canonically, a sequence is an
 array.
 
-- [ ] T019 [US3] `tests/unit/value-view.test.ts` **first**, from contracts/value-view.md §1 and §4:
+- [x] T019 [US3] `tests/unit/value-view.test.ts` **first**, from contracts/value-view.md §1 and §4:
       null prototype, arrays, scalars, canonical insertion order, the array-index limit named and
       asserted, `__proto__`, `constructor`/`toString`/`hasOwnProperty`, deep freeze at depth, the
       tree still present, purity, an empty mapping and an empty sequence, a scalar root, `null` vs
       absence, and no `Map` anywhere in the projection
-- [ ] T020 [US3] `src/project/value.ts`: the projection. `Object.create(null)`; canonical insertion;
+- [x] T020 [US3] `src/project/value.ts`: the projection. `Object.create(null)`; canonical insertion;
       `Object.freeze` at every level; no call-site spread (`src/extend.ts`); iterative or bounded
       recursion so FR-014 holds for a deep document
-- [ ] T021 [US3] `src/index.ts`: export `project()`, `ProjectionResult`, `ConfigValue`
-- [ ] T022 [US3] `tests/unit/layering.test.ts`: `src/project/` joins the adapter- and
+- [x] T021 [US3] `src/index.ts`: export `project()`, `ProjectionResult`, `ConfigValue`
+- [x] T022 [US3] `tests/unit/layering.test.ts`: `src/project/` joins the adapter- and
       resolve-boundary sets, and `src/validate/` is asserted **not** to import `src/project/` — the
       new stage's direction, policed mechanically. Additive; nothing existing is weakened
-- [ ] T023 [US3] FR-014 totality: a 200,000-element sequence and a 5,000-level nesting both project
+- [x] T023 [US3] FR-014 totality: a 200,000-element sequence and a 5,000-level nesting both project
       without throwing
-- [ ] T024 [US3] **Sabotage**: replace `Object.create(null)` with `{}`; confirm the `__proto__` case
+- [x] T024 [US3] **Sabotage**: replace `Object.create(null)` with `{}`; confirm the `__proto__` case
       goes red and the others do not. Same protocol
-- [ ] T025 [US3] `pnpm typecheck && pnpm test` green; commit `feat(project): the value view`
+- [x] T025 [US3] `pnpm typecheck && pnpm test` green; commit `feat(project): the value view`
 
 **Checkpoint**: §1's seven-milestone-old promise is kept.
 
@@ -192,7 +192,7 @@ the same JS type.
 Each of these was found by running something, not by reading — recorded here rather than folded
 silently into an earlier phase.
 
-- [ ] T042 `src/project/value.ts`: the projection must be **iterative for sequences and mappings
+- [x] T042 `src/project/value.ts`: the projection must be **iterative for sequences and mappings
       alike**, not merely bounded — a 5,000-level nesting overflows a naive recursive projection,
       and §11 caps parse depth at 64 only for *parsed* documents. `validate()`'s own
       `recursion-termination` suite builds 400-level trees by hand and `merge()` will fold them, so
