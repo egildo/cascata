@@ -171,6 +171,14 @@ describe("v1.0 FR-019 / FR-020 — the precision lint fires on a lost digit and 
     // Principle III's never-phasing obligation: the position is the
     // offending construct's own — the value's, not the demand's.
     expect(lint?.primary.origin.id).toBe("numeric-config");
+    // Constitution gate 5: an `info` is held to the same fields an `error`
+    // of the same milestone carries. The value came from the config layer,
+    // which is rank 1 in this two-layer fixture.
+    expect(lint?.pedigreePosition).toBe(1);
+    expect(lint?.demand?.pointer).toBe("/n");
+    // Never delegated here — absent, not an empty array (v0.4 FR-026's
+    // rule, applied in the other direction by v0.6 FR-018).
+    expect(lint?.delegatedFrom).toBeUndefined();
   });
 
   it("2^53 exactly — representable — emits NOTHING (this is the case `Number.isSafeInteger` gets wrong)", () => {

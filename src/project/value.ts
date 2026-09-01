@@ -58,6 +58,7 @@
  */
 
 import type { MergedConfiguration } from "../merge/provenance.js";
+import type { DelegationHop } from "../model/reference.js";
 import type { Mapping, Node, Sequence } from "../model/node.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import { pointerFromPath } from "../model/pointer.js";
@@ -129,7 +130,39 @@ function narrowsInexactly(value: bigint): boolean {
  * exact — and a `float` value under `type: int` is a *validation* refusal
  * that never reaches a successful projection.
  */
-function projectScalar(node: Node & { readonly type: "scalar" }, pointer: string, numeric: ReadonlyMap<string, NumericClass>, diagnostics: Diagnostic[]): ConfigValue {
+/**
+ * The pedigree position and delegation breadcrumb of the layer a value's
+ * own span traces back to — constitution gate 5, which holds an `info` to
+ * exactly the fields an `error` of the same milestone carries ("a lint
+ * diagnosed worse than a refusal is a lint nobody acts on").
+ *
+ * `check.ts`'s own `layerForSpanOrigin` **throws** where an origin matches
+ * neither a layer nor a delegation breadcrumb, which is right for a walk
+ * whose inputs came from the fold. It would be wrong here: FR-014 says the
+ * projection never throws on a legal document, and `project()`'s contract
+ * takes a configuration from anywhere. Both fields are therefore simply
+ * absent when the origin is unrecognized — the never-phasing floor (code,
+ * sentence, positioned span) is unaffected, since the span is the node's
+ * own either way.
+ */
+function attributionOf(configuration: MergedConfiguration, node: Node): { readonly pedigreePosition?: number; readonly delegatedFrom?: readonly DelegationHop[] } {
+  const originId = node.span.origin.id;
+  const direct = configuration.layers.find((layer) => layer.identity.location === originId);
+  if (direct !== undefined) {
+    return { pedigreePosition: direct.rank };
+  }
+  const breadcrumb = configuration.delegationBreadcrumbs.get(originId);
+  if (breadcrumb === undefined || configuration.layers.length === 0) {
+    return {};
+  }
+  // Every delegated value belongs to the config layer (v0.6 FR-010), which
+  // in every pedigree is the single highest-rank one — `check.ts`'s own
+  // rule, applied here for the same reason.
+  const configLayer = configuration.layers.reduce((highest, layer) => (layer.rank > highest.rank ? layer : highest));
+  return { pedigreePosition: configLayer.rank, delegatedFrom: breadcrumb };
+}
+
+function projectScalar(configuration: MergedConfiguration, node: Node & { readonly type: "scalar" }, pointer: string, numeric: ReadonlyMap<string, NumericClass>, diagnostics: Diagnostic[]): ConfigValue {
   if (node.kind !== "int" || numeric.get(pointer) !== "number") {
     return node.value;
   }
@@ -147,6 +180,7 @@ function projectScalar(node: Node & { readonly type: "scalar" }, pointer: string
         primary: node.span,
         pointer,
         demand: { pointer, span: node.span },
+        ...attributionOf(configuration, node),
       }),
     );
   }
@@ -197,7 +231,7 @@ export function project<T = unknown>(configuration: MergedConfiguration): Projec
     }
     const node = task.node;
     if (node.type === "scalar") {
-      results.push(projectScalar(node, task.pointer, numeric, diagnostics));
+      results.push(projectScalar(configuration, node, task.pointer, numeric, diagnostics));
       continue;
     }
     if (node.type === "mapping") {

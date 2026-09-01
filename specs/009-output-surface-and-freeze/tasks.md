@@ -170,19 +170,19 @@ the same JS type.
 
 ## Phase 7: User Story 6 — the freeze holds (Priority: P6)
 
-- [ ] T036 [US6] `README.md`: sweep. The opening still describes the library as v0.1–v0.3 with
+- [x] T036 [US6] `README.md`: sweep. The opening still describes the library as v0.1–v0.3 with
       "constraint checking and validation still ahead"; the `why()` section claims no CLI ships
       "before v1.0's typed output surface"; `metaValidate`'s "a v1.0 question" is now answerable
       (research D-7). Add the v1.0 surface: `project()`, `load<T>()`, the two new codes, the
       `JSON.stringify` note, and the array-index limit
-- [ ] T037 [US6] `CLAUDE.md`: the traps list gains the two this milestone earned — array-index key
+- [x] T037 [US6] `CLAUDE.md`: the traps list gains the two this milestone earned — array-index key
       hoisting, and `Number.isSafeInteger` being the wrong exactness test
-- [ ] T038 [US6] Sweep every `specs/**/contracts/*.md` for a claim `SPEC.md` as frozen contradicts;
+- [x] T038 [US6] Sweep every `specs/**/contracts/*.md` for a claim `SPEC.md` as frozen contradicts;
       correct in place, citing the milestone
-- [ ] T039 [US6] `package.json`: version `1.0.0` (FR-025)
-- [ ] T040 [US6] `npx vitest run tests/unit/doc-examples.test.ts` — every YAML example in every
+- [x] T039 [US6] `package.json`: version `1.0.0` (FR-025)
+- [x] T040 [US6] `npx vitest run tests/unit/doc-examples.test.ts` — every YAML example in every
       document parses, this milestone's own included (FR-021a's standing sweep)
-- [ ] T041 [US6] `pnpm typecheck && pnpm test` green; commit `docs(freeze): v1.0 — sweep the derived
+- [x] T041 [US6] `pnpm typecheck && pnpm test` green; commit `docs(freeze): v1.0 — sweep the derived
       artifacts`
 
 ---
@@ -197,7 +197,7 @@ silently into an earlier phase.
       and §11 caps parse depth at 64 only for *parsed* documents. `validate()`'s own
       `recursion-termination` suite builds 400-level trees by hand and `merge()` will fold them, so
       a hand-built configuration reaching `project()` is a reachable path, not a hypothetical
-- [ ] T043 `tests/unit/composition-bound.test.ts`: the mis-keyed-cache probe had to vary the
+- [x] T043 `tests/unit/composition-bound.test.ts`: the mis-keyed-cache probe had to vary the
       **code** and hold the probe fixed (drop one key component, re-run the same case) rather than
       vary the probe — otherwise the experiment has two variables and proves nothing about the key
 
@@ -205,8 +205,8 @@ silently into an earlier phase.
 
 ## Phase 9: Close-out
 
-- [ ] T044 `grep -rn SABOTAGE src/ tests/` empty
-- [ ] T045 `pnpm typecheck && pnpm test` green; tree clean; all seven constitution gates
-- [ ] T046 The report: every gap in Article VII, every ambiguity, every invention, every sabotage
+- [x] T044 `grep -rn SABOTAGE src/ tests/` empty
+- [x] T045 `pnpm typecheck && pnpm test` green; tree clean; all seven constitution gates
+- [x] T046 The report: every gap in Article VII, every ambiguity, every invention, every sabotage
       and what it revealed, every changed test, and a plain answer to whether the specification is
       safe to freeze
