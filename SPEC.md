@@ -47,7 +47,7 @@ text → [format adapter] → positioned information model → resolve/graph →
 | **Graph build** | Documents → DAG | Handles `$adopts` edges *and* delegation edges uniformly; cycle detection; diamond dedup by canonical identity (pin hash) |
 | **Merge** | Fold DAG into one node tree | Per-key strategies (`replace` default, `append`, later `merge-by-key`); provenance recorded per node |
 | **Validate** | Check merged tree against every layer's demands, root→leaf | Redundant with by-construction narrowing; keep the redundancy in v1 |
-| **Freeze** | Immutable, typed output | Optionally derive/emit TypeScript types |
+| **Freeze** | Immutable, typed output | Optionally derive/emit TypeScript types — from the accumulated demand, a stage of its own that reads schema layers rather than the merged tree (Article VIII, v1.1) |
 
 Each stage is independently testable and consumes only the output of the previous one. Everything from graph-build onward is format-blind — and **world-blind**: only Resolve touches anything outside the call, and it does so by *asking its host* rather than by reading. See Article VI.
 
@@ -491,8 +491,10 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 6. **v0.6** — Delegation (transclusion, sandbox, positional validation, breadcrumbs).
 7. **v0.7** — Sealing/governance (`seal`, `final`, a root demanding pinned adoption, a root final against forking) + **the embedding surface** (the host seam of Article VI, the one-call `load()`, `resource` values resolved against their declaring document rather than merely shape-checked) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer). The embedding surface belongs *here* rather than at v1.0 because the meta-schema bootstrap is its first real consumer — self-hosting means the library loads its own meta-schema through its own seam, which is the embedding story exercising itself. **Planning the bootstrap made good on its own justification before any code was written**: three vocabulary warts (no construct for author-chosen keys, no recursive types, no way to constrain the reserved keys) and one unimplementable obligation (§5.5's lint, against a `Diagnostic` with no severity) surfaced from trying to write the meta-schema and are settled in §15. `values`, guarded recursion, `directives:`, and diagnostic levels are therefore part of this milestone. Cascade limits are **already shipped** — `cascade-strategy-weakened` landed in v0.3 — and leave the list.
 8. **v1.0** — **Freeze this document** (see §15's freeze rule) + **the output surface** (Article VII): the value view a consumer actually reads, and `load<T>()`. Also closes the two holes v0.7 recorded rather than fixed — a non-mapping top-level `keys:`/`types:` section silently ignored, and the exponential `keys`+`values` composition over a shared recursive type.
-9. **v1.x** — **TypeScript type generator** (emits the `T` that `load<T>()` consumes, derived from a schema chain); JSON Schema 2020-12 exporter; static subsumption lint; JSON adapter; TOML adapter (run against `toml-test`). The TS generator sits **here rather than at v1.0** because it is the same shape of artifact as the JSON Schema exporter beside it — a translation of accumulated demands into a foreign type system — and freezing one while deferring its sibling would be incoherent. It also has by far the larger surface to freeze: `load<T>()` is one signature, while a generator's *output format* makes every emitted construct a compatibility promise.
-10. **Future** — closing §9.1's self-hosting gap (the meta-schema approximates the leaf type-expression grammar with a superset `pattern` because the constraint vocabulary cannot name a grammar; §15); `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
+9. **v1.1** — **The accumulated demand, and the TypeScript type generator** (Article VIII): a value-free stage that intersects every layer's demands per position, and an emitter that writes it as the `T` that `load<T>()` consumes. The tree is the artifact; the emitter is a translation of it.
+10. **v1.2** — **JSON Schema 2020-12 exporter**, a second emitter over the same tree (§12's "accumulated intersection"); Ajv as its test oracle only, never a runtime dependency.
+11. **v1.x** — static subsumption lint (the same tree, compared rather than emitted); JSON adapter; TOML adapter (run against `toml-test`). The TS generator sat **here rather than at v1.0** because it is the same shape of artifact as the JSON Schema exporter beside it — a translation of accumulated demands into a foreign type system — and freezing one while deferring its sibling would have been incoherent. It also has by far the larger surface to freeze: `load<T>()` is one signature, while a generator's *output format* makes every emitted construct a compatibility promise. Split into two milestones at v1.1 so that the tree is built once, under the first emitter, and the second inherits it.
+12. **Future** — closing §9.1's self-hosting gap (the meta-schema approximates the leaf type-expression grammar with a superset `pattern` because the constraint vocabulary cannot name a grammar; §15); `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
 
 ---
 
@@ -934,6 +936,22 @@ The bootstrap (§14 item 7) was scheduled before this point precisely so that th
   `$extends` exists (§6.2), stated now rather than with that keyword so a root published today can
   bind a fork attempted tomorrow. See §6.3, §5.5, §11, §5.2.
 
+- **The accumulated demand, and the emitted type** → added at v1.1 as **Article VIII**, an addition under
+  the freeze rule. Article VII had named the generator without saying what it derives from, and the first
+  design that suggests itself — emit one TypeScript type per layer and let the compiler intersect them
+  with `&` — is unsound twice over: a root admitting `int | float` and a house narrowing to `int` project
+  to `number` and `bigint`, and `number & bigint` is `never`; and an open layer's index signature survives
+  a closed layer's intersection, so `seal: closed` would not close. Both the numeric class and the seal
+  must be computed from the accumulated demand, not left to the host type system — and once two keywords
+  need the intersection, every keyword should have it. The tree already half-existed: §17's numeric rule
+  had been reading one slice of it since v1.0, driven by a concrete document. Article VIII names the
+  whole of it as a stage, value-free, and makes both emitters translations of it, which is what §12 had
+  called the exporter's "accumulated intersection" all along. Two further choices are recorded: the
+  emitted type carries literal unions for scalar `enum`s and pinned constants, and JSDoc for the
+  constraints TypeScript cannot express, the comments declared non-contractual so that only the types
+  are promises; and soundness against the validator is the conformance rule, so that the generator never
+  has an expected output written by hand. See §18, §14, §17, §5.5, §12.
+
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
 
 ---
@@ -990,6 +1008,50 @@ Laws:
 - **The projection is a stage, and has a name.** `project()` takes a merged configuration and returns a value; it reads accumulated demands from the configuration's own layers, so it depends on `merge()` and not on `validate()`. `load()` places it after validation because that is where a *successful* configuration exists, not because of a data dependency. Per Principle IV it consumes only the previous stage's output and is reachable without `load()`.
 - **A present key set to `null` is a present property whose value is `null`**; an absent key is an absent property. §4.2's three-way distinction between absent, null, and empty survives the projection intact.
 - **The precision lint is anchored at the offending value**, carrying that value's own span and pointer — not the demand's. A lint the consumer cannot locate in their own file is a lint they cannot act on (Principle III).
+
+## 18. Article VIII — The Accumulated Demand, and the Emitted Type
+
+*Numbered out of article sequence deliberately*, for the reason Articles VI and VII give: the Roman numeral records where it belongs; the section number records where it could safely go.
+
+Article VII made the consuming application's `T` the caller's claim and named the generator that would replace the claim with a derivation. This article is that generator — and the thing it derives from, which turns out to be the more durable of the two. Added in v1.1 under §15's freeze rule as an addition: nothing a schema meant before this article means anything else after it.
+
+Laws:
+
+- **The accumulated demand is a stage, and has a name.** For every position a schema chain can describe, the accumulated demand is the intersection of every demand any layer places there (§5.1), each named type resolved in the scope of the layer that used it (§7). It is computed from schema layers alone. No configuration takes part, and positions are *shapes*: `values` and `items` denote every entry and every element, not the entries and elements of some document. `accumulate()` takes the schema layers of a chain, root to leaf, and returns the tree; per Principle IV it is reachable without any emitter. §17's numeric rule has read one slice of this tree since v1.0 — the numeric class — and the tree is the rest of it.
+- **Intersection is defined per keyword, and it is the only composition.** `type` expressions intersect alternative by alternative, at equal array depth; a name intersects by the body it resolves to. `keys` unites the declared names and intersects each; `values` and `items` intersect. `required` is true if any layer says so. `enum` intersects as a set under §4.2's equality. `min` and `minLength` take the largest bound, `max` and `maxLength` the smallest. `pattern` accumulates as a conjunction. `accept` intersects as a set of alternatives. `seal` is `closed` if any layer closes the position. None of this is new: every row restates what §5.2 and §5.4's whole-chain validation already enforce, once, in a form that exists before any document does.
+- **An empty intersection is `never`, and is reported.** Where two demands admit no common value — `string` and `int` at one position — the tree records the emptiness, the emitted type is `never`, and an **info**-level diagnostic (§10) names both demands. Whole-chain validation already refuses every value there; this lint is the first time the contradiction is visible with no value to trip over it, which is the beginning of the static subsumption §5.4 promises.
+- **Emitters are translations of the tree, and thin.** The TypeScript generator emits the tree as declaration text; the JSON Schema exporter (§12) emits the same tree as the "accumulated intersection" that section has described since before either existed. Neither reads a schema document; both read the tree. A third foreign type system would be a third emitter, never a third walk.
+- **The generator performs no I/O.** `generate()` takes the tree and returns TypeScript source text with diagnostics; the caller writes it where it belongs, or does not. `generateTypes()` is the one call (Article VI): it resolves a *schema* as the launching point, treats every document it reaches as a schema layer, accumulates, and generates. Article VI's laws apply unchanged.
+- **The mapping from tree to TypeScript is the contract**, and each row is a compatibility promise under §15's freeze rule from the moment it ships:
+
+  | accumulated demand | emitted TypeScript |
+  |---|---|
+  | `string`, `url`, `path` | `string` |
+  | admits `float` | `number` (§17) |
+  | admits `int`, not `float` | `bigint` (§17) |
+  | `bool`, `null` | `boolean`, `null` |
+  | a union of alternatives | a union; `T[]` → `readonly T[]` |
+  | `keys` | an object type; every property `readonly` |
+  | `values: D` | an index signature `readonly [key: string]: D` |
+  | `seal: closed` in any layer | no index signature; otherwise `readonly [key: string]: unknown` |
+  | a key `required` in any layer, or provided in any layer | a non-optional property (§5.5's guaranteed key); otherwise optional |
+  | `enum` whose members are all scalars | a literal union, kind-aware under the numeric rule (`1n` under `bigint`, `1` under `number`); any non-scalar member → the accumulated type |
+  | `final: true` with a scalar `provide` | the literal type of the constant (§6.3); a non-scalar `provide` → the accumulated type |
+  | a named type | a named `export type`; guarded recursion is carried by TypeScript's own recursive aliases, and unguarded cycles never reach here (§7) |
+  | one name declared by two layers of a chain | every declaration carries §7's qualifier as a prefix; a bare name is emitted only where the chain declares it once |
+  | no demand | `unknown` (§17) |
+  | `min`, `max`, `minLength`, `maxLength`, `pattern`, `accept` | no type; a JSDoc comment on the property naming the constraint and its declaring layer |
+  | `delegate`, `cascade`, `directives`, `authority` | nothing; they are not shape |
+
+  **A `null` in the emitted type comes only from a `null` alternative.** `type: string` rejects an explicit `null` (§4.2's three-way distinction), so the emitted `string` carries no `| null` and no `| undefined`. Optionality belongs to the property, never to the value.
+
+  **JSDoc is output, not contract.** The comments exist so that a consumer hovering a property sees what the schema demands; their presence and wording may change without a version bump. The types may not.
+
+- **Identifiers are kept, quoted, or refused — never silently renamed.** A key that is a valid ECMAScript identifier is emitted as written; any other key is a quoted property name, non-ASCII included. A type name that is a valid identifier and not a TypeScript reserved word is emitted as written; otherwise it is escaped by a rule the contract states and the same input always escapes the same way. Two names that escape to one identifier are a generator error, not a coin toss.
+- **Soundness is the conformance rule, and the validator is the oracle.** Every configuration that validation accepts, projected by Article VII, inhabits the type generated from its schema chain — asserted by typechecking the projected value against the emitted type, for every accepting case in the conformance corpus and for the meta-schema against itself. A configuration refused for a type-shaped reason (`type-mismatch`, `required-violated`, `seal-violation`, `enum-violated`) must fail the same check. One refused for a range, a length, or a pattern may pass it, because TypeScript has no type for those and the JSDoc above is the honest substitute. The generator therefore has no expected outputs written by hand; expected outputs are derived, as Principle V requires.
+- **`load<T>()` is unchanged.** `T` remains the caller's claim and the library never checks it (§17). The generator makes the claim derivable; it does not make it checked. A caller who writes `T` by hand still may, and a `T` the generator wrote is still, to `load()`, a claim.
+
+---
 
 ---
 
