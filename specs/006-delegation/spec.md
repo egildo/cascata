@@ -176,6 +176,11 @@ has opted in.
 - **A key granted `delegate: allow` whose demand is `type: string`.** The grant and the demand
   contradict each other — a string value would be loaded, so the demand can never see a string. Is
   that a schema defect to refuse, or simply an odd schema?
+  **Settled in v0.7 planning: an odd schema, and an info-level lint** (`SPEC.md` §8.1, §15). The
+  premise stated here is also half wrong, which is why it stayed open: a *fragment* document holding
+  a bare string scalar satisfies such a demand exactly, so only the **inline** string is unreachable.
+  The schema is surprising, not unusable, and refusing it would overstate the case. Built in
+  `specs/007-sealing-and-embedding` FR-005.
 - **A delegated path whose target lies inside the sandbox but is not a document** (a directory, a
   device file, an unreadable file).
 - **Two different keys delegating to paths that differ only by symlink resolution.** v0.2's sandbox
