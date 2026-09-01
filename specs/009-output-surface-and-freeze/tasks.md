@@ -159,12 +159,12 @@ the same JS type.
 
 ## Phase 6: User Story 5 — one call, one type (Priority: P5)
 
-- [ ] T033 [US5] `tests/unit/load-typed.test.ts` first: `T` defaults to `unknown`; a supplied `T` is
+- [x] T033 [US5] `tests/unit/load-typed.test.ts` first: `T` defaults to `unknown`; a supplied `T` is
       returned untouched and unchecked; the node tree and `why()` survive on the same result; the
       projection's lints ride along on a successful `load()`; `project()` reachable without `load()`
-- [ ] T034 [US5] `src/index.ts`: `LoadResult<T = unknown>` gains `value`; `load<T = unknown>()`
+- [x] T034 [US5] `src/index.ts`: `LoadResult<T = unknown>` gains `value`; `load<T = unknown>()`
       threads it. Additive — every existing call site and every bare `LoadResult` still compiles
-- [ ] T035 [US5] `pnpm typecheck && pnpm test` green; commit `feat(index): load<T>()`
+- [x] T035 [US5] `pnpm typecheck && pnpm test` green; commit `feat(index): load<T>()`
 
 ---
 

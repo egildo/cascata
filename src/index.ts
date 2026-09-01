@@ -1196,14 +1196,38 @@ export type LoadOptions = ResolveOptions;
 /**
  * §16's "one call": a validated configuration with any `info` lints, or a
  * set of `error`s — **never** a configuration together with errors
- * (FR-032). `ok: true`'s `diagnostics` is the union of every `info` lint
- * any stage produced, in the order the staged calls would produce them —
- * today that is `resolve()`'s own (§8.1's delegate-leaf-shape lint) then
- * `validate()`'s own (§5.5's `required-vacuous`); `merge()` produces no
- * diagnostic of any level in this milestone's vocabulary, so nothing from
- * it is threaded in, not even an empty gap in the ordering.
+ * (v0.7 FR-032). `ok: true`'s `diagnostics` is the union of every `info`
+ * lint any stage produced, in the order the staged calls would produce
+ * them — `resolve()`'s own (§8.1's delegate-leaf-shape lint), then
+ * `validate()`'s own (§5.5's `required-vacuous`), then, from v1.0,
+ * `project()`'s own (§17's `precision-narrowed`). `merge()` produces no
+ * diagnostic of any level in this vocabulary, so nothing from it is
+ * threaded in, not even an empty gap in the ordering.
+ *
+ * **v1.0**: `ok: true` also carries `value`, the value view (Article VII).
+ * `T` defaults to `unknown` — the honest default, since nothing is known
+ * about an arbitrary schema — and is never checked. Every pre-v1.0 call
+ * site is unchanged: it infers `unknown`, and every reference to the bare
+ * type name `LoadResult` still resolves.
  */
-export type LoadResult = { readonly ok: true; readonly configuration: MergedConfiguration; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+export type LoadResult<T = unknown> =
+  | {
+      readonly ok: true;
+      /** The node tree, spans, provenance and pedigree — unchanged, and still where `why()` reads them. Article VII: "the value view is a projection, never a replacement". */
+      readonly configuration: MergedConfiguration;
+      /**
+       * **v1.0** — the value view (Article VII): the configuration as
+       * ordinary JS data. `T` is the **caller's claim** and the library
+       * performs no check of it whatsoever; validation enforces the schema
+       * against the value and cannot enforce a belief about what the schema
+       * says. Deriving `T` from the schema chain is the v1.x generator's
+       * job (§14), and until it ships the mismatch is a real cost, named
+       * here rather than discovered.
+       */
+      readonly value: T;
+      readonly diagnostics: readonly Diagnostic[];
+    }
+  | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /**
  * The ordinary embedding (§16): `resolve()` → `merge()` → `validate()` in
@@ -1309,7 +1333,7 @@ export async function metaValidate(options: MetaValidateOptions): Promise<MetaVa
   return validated.ok ? { ok: true, diagnostics: validated.diagnostics } : { ok: false, diagnostics: validated.diagnostics };
 }
 
-export async function load(entryPath: string, options: LoadOptions): Promise<LoadResult> {
+export async function load<T = unknown>(entryPath: string, options: LoadOptions): Promise<LoadResult<T>> {
   const resolved = await resolve(entryPath, options);
   if (!resolved.ok) {
     return { ok: false, diagnostics: resolved.diagnostics };
@@ -1322,5 +1346,10 @@ export async function load(entryPath: string, options: LoadOptions): Promise<Loa
   if (!validated.ok) {
     return { ok: false, diagnostics: validated.diagnostics };
   }
-  return { ok: true, configuration: validated.certified, diagnostics: [...resolved.diagnostics, ...validated.diagnostics] };
+  // v1.0: the last stage, composed like the others rather than
+  // reimplemented — `project()` stays public and a tool stepping through
+  // the pipeline by hand reaches the identical value from the identical
+  // implementation (FR-023).
+  const projected = projectImpl<T>(validated.certified);
+  return { ok: true, configuration: validated.certified, value: projected.value, diagnostics: [...resolved.diagnostics, ...validated.diagnostics, ...projected.diagnostics] };
 }

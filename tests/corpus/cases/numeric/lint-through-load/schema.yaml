@@ -1,0 +1,9 @@
+$id: numeric/lint
+keys:
+  budget:
+    demand:
+      type: int | float
+  name:
+    demand:
+      type: string
+      required: true
