@@ -1,0 +1,8 @@
+keys:
+  tags:
+    demand:
+      type: mapping
+      seal: open
+      values:
+        demand:
+          type: string

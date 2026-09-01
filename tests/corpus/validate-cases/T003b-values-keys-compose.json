@@ -1,0 +1,30 @@
+{
+  "name": "T003b (008): keys and values both cover one entry and both apply (v0.7 FR-002, spec.md US1 Scenario 2)",
+  "cites": "v0.7 FR-002",
+  "fixtureDir": "values/keys-and-values-compose",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 3,
+        "column": 10,
+        "pointer": "/tags/alpha",
+        "demand": { "pointer": "/keys/tags/demand/keys/alpha/demand/minLength", "document": "schema.yaml", "line": 8, "column": 24 },
+        "pedigreePosition": 0
+      },
+      {
+        "code": "length-violated",
+        "document": "config.yaml",
+        "line": 3,
+        "column": 10,
+        "pointer": "/tags/alpha",
+        "demand": { "pointer": "/keys/tags/demand/values/demand/maxLength", "document": "schema.yaml", "line": 11, "column": 22 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

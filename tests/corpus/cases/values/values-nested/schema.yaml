@@ -1,0 +1,10 @@
+keys:
+  matrix:
+    demand:
+      type: mapping
+      values:
+        demand:
+          type: mapping
+          values:
+            demand:
+              type: int

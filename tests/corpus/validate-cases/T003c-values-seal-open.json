@@ -1,0 +1,21 @@
+{
+  "name": "T003c (008): values with seal: open admits any key and shapes it (v0.7 FR-004, spec.md US1 Scenario 3)",
+  "cites": "v0.7 FR-004",
+  "fixtureDir": "values/values-with-seal-open",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 4,
+        "column": 10,
+        "pointer": "/tags/other",
+        "demand": { "pointer": "/keys/tags/demand/values/demand/type", "document": "schema.yaml", "line": 8, "column": 17 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

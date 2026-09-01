@@ -1,0 +1,11 @@
+keys:
+  tags:
+    demand:
+      type: mapping
+      keys:
+        alpha:
+          demand:
+            minLength: 4
+      values:
+        demand:
+          maxLength: 2

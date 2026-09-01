@@ -52,8 +52,25 @@ import { parseTypeExpression, unresolvedAlternatives } from "./typeexpr.js";
  * (not merely tidiness): a per-key `seal` cannot reach a nested mapping
  * or the inside of a named type's own `demand`, and the meta-schema
  * (specs/008-metaschema-bootstrap) needs both.
+ *
+ * **`values` joins this list in v0.7 part 2** (SPEC.md §9, amended; §15's
+ * "A mapping whose keys the schema cannot enumerate"). It is to a mapping
+ * what `items` is to a sequence — every entry, whatever its key — and it
+ * exists because the meta-schema's own `keys:` section is exactly a
+ * mapping of author-chosen names, which nothing in the vocabulary could
+ * describe.
+ *
+ * **`values`' value is a *key declaration*, not a demand mapping**, and
+ * that asymmetry with `items` is deliberate: `values` is the un-named
+ * form of a `keys` entry (`keys: {a: X, b: X}` versus `values: X`, where
+ * `X = { demand: {...} }`), which is what keeps `keys` and `values`
+ * composable by intersection with no reshaping and keeps `delegate:`
+ * syntactically reachable for a mapping whose keys the schema cannot
+ * enumerate. SPEC.md §9's "`values` is to a mapping what `items` is to a
+ * sequence" can be read the other way; the ambiguity is reported in the
+ * v0.7 part 2 milestone report rather than settled here.
  */
-export const DEMAND_KEYWORDS = ["type", "items", "required", "min", "max", "minLength", "maxLength", "pattern", "enum", "accept", "keys", "seal"] as const;
+export const DEMAND_KEYWORDS = ["type", "items", "required", "min", "max", "minLength", "maxLength", "pattern", "enum", "accept", "keys", "seal", "values"] as const;
 
 export type DemandKeyword = (typeof DEMAND_KEYWORDS)[number];
 
@@ -147,6 +164,30 @@ export function readNestedKeysMapping(keysNode: Node): ReadonlyMap<string, RawDe
     result.set(childName, demandNode.entries);
   }
   return result;
+}
+
+/**
+ * The raw demand inside one **key declaration** — the `{ demand: {...} }`
+ * shape a `values:` value takes, and the shape each entry of a nested
+ * `keys:` mapping takes (v0.7 part 2, SPEC.md §9 amended).
+ * `readNestedKeysMapping` above is the plural form of exactly this read;
+ * this is the singular one, kept as its own function so `values` and
+ * `keys` cannot drift apart in what they consider a declaration.
+ *
+ * `undefined` for a declaration that is not a mapping, or that carries no
+ * `demand:` (or a non-mapping one) — the identical "not a mapping ->
+ * nothing" posture v0.3/v0.4 use throughout, and the identical silent
+ * no-op `readNestedKeysMapping` gives such a child.
+ */
+export function readKeyDeclarationDemand(declarationNode: Node): RawDemand | undefined {
+  if (declarationNode.type !== "mapping") {
+    return undefined;
+  }
+  const demandNode = declarationNode.entries.get("demand");
+  if (demandNode === undefined || demandNode.type !== "mapping") {
+    return undefined;
+  }
+  return demandNode.entries;
 }
 
 /** One vocabulary problem, with its own diagnostic. */
@@ -289,6 +330,21 @@ export function refuseMalformedShapes(demandPointerPath: readonly (string | numb
           refuse(keyword, node, "a sequence of strings");
         }
         break;
+      case "values":
+        // v0.7 part 2, SPEC.md §9 amended: `values`' own value is ONE key
+        // declaration (`{demand?, delegate?}`), where `keys`' is a mapping
+        // OF them — so the basic shape check is the same "must be a
+        // mapping" both take, and the declaration's own `demand` sub-shape
+        // is checked by the recursive walk below, not here. A `values:`
+        // mapping carrying no `demand:` constrains nothing, silently — the
+        // identical no-op a `keys:` entry with no `demand:` already has
+        // (research.md W-2). Deliberately NOT refused here, for consistency
+        // with `keys`; reported as a wart rather than fixed by inventing a
+        // rule no document states.
+        if (node.type !== "mapping") {
+          refuse(keyword, node, "a mapping");
+        }
+        break;
       case "seal":
         // v0.7, SPEC.md §6.3/§9 amended: 'open' or 'closed', the identical
         // two-value domain the (retired) per-key `unknown-seal-value` code
@@ -401,6 +457,18 @@ export function recursiveVocabularyProblems(raw: RawDemand, layerRank: number, d
       const nested = readNestedKeysMapping(keysNode);
       for (const [childName, childRaw] of nested) {
         problems.push(...recursiveVocabularyProblems(childRaw, layerRank, [...demandPointerPath, "keys", childName, "demand"], depth + 1, knownDeclaredNames));
+      }
+    }
+  }
+
+  const valuesNode = raw.get("values");
+  if (valuesNode !== undefined && valuesNode.type === "mapping") {
+    if (depth + 1 > MAX_DEMAND_DEPTH) {
+      problems.push(depthLimitProblem(valuesNode, layerRank, [...demandPointerPath, "values"]));
+    } else {
+      const valuesRaw = readKeyDeclarationDemand(valuesNode);
+      if (valuesRaw !== undefined) {
+        problems.push(...recursiveVocabularyProblems(valuesRaw, layerRank, [...demandPointerPath, "values", "demand"], depth + 1, knownDeclaredNames));
       }
     }
   }

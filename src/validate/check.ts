@@ -38,7 +38,7 @@ import type { DelegationHop } from "../model/reference.js";
 import { pointerFromPath, resolvePointer } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
-import { readDemandVocabulary, readNestedKeysMapping, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
+import { readDemandVocabulary, readKeyDeclarationDemand, readNestedKeysMapping, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
 import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, requiredViolationCause, type ViolationSite } from "./constraints.js";
 import { renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
 import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
@@ -443,6 +443,10 @@ function checkDemand(raw: RawDemand, value: Node | undefined, demandPointerPath:
       violations.push(...checkNestedKeys(keywordValue, value, demandPointerPath, mergedPointer, ctx));
       continue;
     }
+    if (keyword === "values") {
+      violations.push(...checkNestedValues(keywordValue, value, demandPointerPath, mergedPointer, ctx));
+      continue;
+    }
     if (keyword === "seal") {
       // v0.7: seal lives in the demand vocabulary now — checked here,
       // using `raw` wholesale (not just this one keyword's own value),
@@ -486,6 +490,52 @@ function checkNestedKeys(keysDeclaration: Node, value: Node, demandPointerPath: 
     const childPointer = `${mergedPointer}${pointerFromPath([childName])}`;
     const childValue = value.entries.get(childName);
     violations.push(...checkDemand(childRaw, childValue, [...demandPointerPath, "keys", childName, "demand"], childPointer, { ...ctx, depth: ctx.depth + 1 }));
+  }
+  return violations;
+}
+
+/**
+ * v0.7 part 2 FR-001–FR-006, SPEC.md §9 amended: `values` constrains
+ * **every** entry of a mapping, whatever its key.
+ *
+ * Three properties, each with its own conformance case:
+ *
+ * - **A non-mapping value is a no-op** (FR-006), not a second diagnostic —
+ *   the shape refusal belongs to `type`, and doubling it would produce two
+ *   diagnostics for one mistake (v0.3 FR-028's precedent). Structurally
+ *   identical to `checkNestedKeys`' own `value.type !== "mapping"` guard,
+ *   and to `checkNestedItems`' `!== "sequence"` one.
+ * - **`keys` and `values` compose by intersection** (FR-002) with no
+ *   precedence rule: they are two independent keywords of one demand, and
+ *   `checkDemand`'s own loop runs both, in canonical keyword order. There
+ *   is nothing here that has to know about `keys` at all — which is the
+ *   whole argument SPEC.md §9 makes for needing no new composition rule.
+ * - **`values` is orthogonal to `seal`** (FR-004). `sealClosedSites` draws
+ *   its declared set from `keys` alone; nothing here adds a name to it.
+ *   `values` says what shape, `seal` says which keys.
+ *
+ * The declaration's own shape is one **key declaration**
+ * (`{demand?, delegate?}`), not a demand mapping — see
+ * `vocabulary.ts`'s `DEMAND_KEYWORDS` doc for why, and for the SPEC.md §9
+ * ambiguity that reading resolves.
+ */
+function checkNestedValues(valuesDeclaration: Node, value: Node, demandPointerPath: readonly (string | number)[], mergedPointer: string, ctx: WalkContext): Violation[] {
+  if (valuesDeclaration.type !== "mapping" || value.type !== "mapping") {
+    return [];
+  }
+  if (ctx.depth + 1 > MAX_DEMAND_DEPTH) {
+    return [depthLimitViolation(valuesDeclaration, ctx, [...demandPointerPath, "values"], mergedPointer)];
+  }
+  const entryRaw = readKeyDeclarationDemand(valuesDeclaration);
+  if (entryRaw === undefined) {
+    return [];
+  }
+  const violations: Violation[] = [];
+  // `value.entries` is canonically key-sorted by construction (§4.2), so
+  // iteration order — and therefore diagnostic order — is deterministic
+  // without sorting anything here (v0.5 FR-010's own argument).
+  for (const [childName, childValue] of value.entries) {
+    violations.push(...checkDemand(entryRaw, childValue, [...demandPointerPath, "values", "demand"], `${mergedPointer}${pointerFromPath([childName])}`, { ...ctx, depth: ctx.depth + 1 }));
   }
   return violations;
 }
@@ -620,6 +670,18 @@ function typeUsageProblems(configuration: MergedConfiguration, allDecls: readonl
       const nested = readNestedKeysMapping(keysNode);
       for (const [childName, childRaw] of nested) {
         walk(childRaw, layer, [...pointerPath, "keys", childName, "demand"], depth + 1);
+      }
+    }
+    // v0.7 part 2: `values` nests exactly as `keys` does, so a type-usage
+    // problem written under one must be found under the other too — this
+    // walk and `vocabulary.ts`'s own recursive pass descend in lockstep,
+    // which is the property that keeps a name unreachable from a nested
+    // position reported once rather than never.
+    const valuesNode = raw.get("values");
+    if (valuesNode !== undefined && valuesNode.type === "mapping") {
+      const valuesRaw = readKeyDeclarationDemand(valuesNode);
+      if (valuesRaw !== undefined) {
+        walk(valuesRaw, layer, [...pointerPath, "values", "demand"], depth + 1);
       }
     }
   }

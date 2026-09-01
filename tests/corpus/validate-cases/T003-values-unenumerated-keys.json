@@ -1,0 +1,21 @@
+{
+  "name": "T003 (008): values checks an entry the schema never enumerated (v0.7 FR-001, spec.md US1 Scenario 1)",
+  "cites": "v0.7 FR-001",
+  "fixtureDir": "values/unenumerated-keys-checked",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 4,
+        "column": 9,
+        "pointer": "/tags/beta",
+        "demand": { "pointer": "/keys/tags/demand/values/demand/type", "document": "schema.yaml", "line": 7, "column": 17 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

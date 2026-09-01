@@ -1,0 +1,5 @@
+$adopts: ./root.yaml
+keys:
+  tags:
+    demand:
+      type: mapping

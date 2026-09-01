@@ -1,0 +1,21 @@
+{
+  "name": "T003e (008): values against a non-mapping is a no-op, not a second diagnostic (v0.7 FR-006, spec.md US1 Scenario 6)",
+  "cites": "v0.7 FR-006",
+  "fixtureDir": "values/values-non-mapping-noop",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 7,
+        "pointer": "/tags",
+        "demand": { "pointer": "/keys/tags/demand/type", "document": "schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

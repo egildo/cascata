@@ -1,0 +1,21 @@
+{
+  "name": "T003d (008): values nested inside values recurses to the depth the document nests (v0.7 FR-003, spec.md US1 Scenario 4)",
+  "cites": "v0.7 FR-003",
+  "fixtureDir": "values/values-nested",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 5,
+        "column": 8,
+        "pointer": "/matrix/a/y",
+        "demand": { "pointer": "/keys/matrix/demand/values/demand/values/demand/type", "document": "schema.yaml", "line": 10, "column": 21 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}
