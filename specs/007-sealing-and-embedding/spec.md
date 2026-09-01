@@ -106,9 +106,10 @@ a strictly narrower demand; confirm the restatement is refused despite being a l
 
 **Acceptance Scenarios**:
 
-1. **Given** a key demanding a mapping under `seal: closed` and a config supplying a child key the
+1. **Given** a demand for a mapping carrying `seal: closed` and a config supplying a child key the
    accumulated `keys` vocabulary does not declare, **When** validated, **Then** the undeclared child
-   is refused, positioned at the child itself.
+   is refused, positioned at the child itself. This MUST be exercised at the top level, at a nested
+   mapping, and inside a named type — the three scopes the amendment above exists to reach.
 2. **Given** the same key under `seal: open` (the default), **When** validated, **Then** the
    undeclared child is accepted.
 3. **Given** an ancestor declaring `seal: open` and a descendant declaring `seal: closed`, **When**
@@ -308,13 +309,32 @@ config in another; confirm the reported location resolves against the house laye
 
 **Sealing per key** (§6.3, §5.2, §9)
 
-- **FR-006**: `seal` MUST accept `open` and `closed` only; any other value is refused at its own
-  position, naming what is supported.
-- **FR-007**: `seal: closed` on a key demanding a mapping MUST refuse any child key the accumulated
+> **Amended 2026-09-01, mid-milestone.** `seal` was specified here as a per-key keyword and is now a
+> **`demand`** keyword (`SPEC.md` §9, §6.3, §15). Drafting the meta-schema for `008` showed that a
+> per-key `seal` can reach neither a nested mapping nor the inside of a **named type**, and the
+> meta-schema's central `demand` type is recursive and therefore must be named. The substance of
+> FR-006 through FR-009 — what `closed` does, the default, the direction of narrowing — is unchanged;
+> only `seal`'s home moves, and with it the machinery that enforces its monotonicity.
+
+- **FR-006**: `seal` MUST join the **`demand`** vocabulary and MUST accept `open` and `closed` only;
+  any other value is refused at its own position, naming what is supported.
+- **FR-007**: `seal: closed` on a demand for a mapping MUST refuse any child key the accumulated
   `keys` vocabulary does not declare, positioned at the child.
 - **FR-008**: `open` is the default.
 - **FR-009**: `open` → `closed` downstream MUST be legal and MUST take effect from the declaring
-  layer downward. `closed` → `open` MUST be refused as a weakening.
+  layer downward. `closed` → `open` MUST be refused as a weakening. This MUST fall out of the
+  demand vocabulary's ordinary narrowing machinery rather than a bespoke check modelled on
+  `cascade-strategy-weakened`; if it does not, that is a finding to report.
+- **FR-009a**: A schema MAY carry a **top-level** `seal`, governing the **config's own top level** —
+  the mate to a schema's top-level `keys:`. The two spellings are one keyword at two scopes and MUST
+  NOT diverge in meaning. Before this milestone there was no way to close a document's top level.
+- **FR-009b**: `seal` MUST work at arbitrary nesting depth and MUST work **inside a named type**.
+  Each MUST have its own conformance case, and each MUST be sabotage-tested: a top-level-only
+  implementation must fail the nested case, and a nesting-only implementation must fail the
+  named-type case.
+- **FR-009c**: `final` MUST be spelled as a **boolean**, `final: true`. `final: false` MUST be legal
+  and inert where no ancestor sealed the key, and MUST be refused as a weakening where one did.
+  `final` stays a **per-key** keyword — it governs who may speak, not what shape a value has.
 - **FR-010**: `final` on a key MUST refuse **any** declaration of that key by a descendant schema
   layer — `demand`, `provide`, `cascade`, `seal`, or `delegate` — including a legal narrowing.
 - **FR-011**: `final` **with** `provide` MUST refuse a config setting that key.
@@ -398,7 +418,9 @@ config in another; confirm the reported location resolves against the house laye
 - **Host** — the seam. Answers bytes-or-refusal and canonical-identity-or-absence. Supplies, never
   decides.
 - **Diagnostic level** — `error` or `info`. Part of the contract, not a presentation detail.
-- **Seal** — per-key openness (`open`/`closed`) and per-key finality (`final`), both binding downward.
+- **Seal** — mapping openness (`open`/`closed`), a **`demand`** keyword, available at every nesting
+  depth, inside named types, and at a schema's top level where it governs the config's top level.
+- **Final** — per-key finality (`final: true`), a governance keyword, binding downward.
 - **Authority** — per-schema governance: `demandPinnedAdoption`, `finalAgainstForking`.
 - **Resolved resource** — a `path`/`url` value paired with the location it denotes, relative to its
   declaring document.
@@ -412,6 +434,8 @@ config in another; confirm the reported location resolves against the house laye
 - **SC-002**: The boundary test fails if any module under `src/` is made to import `node:fs`. Verify
   by sabotage, per the constitution's Principle V protocol.
 - **SC-003**: A descendant restating a `final` key with a strictly **narrower** demand is refused.
+- **SC-003a**: `seal: closed` refuses an undeclared key when written inside a **named type**, which a
+  per-key `seal` could not have expressed at all.
 - **SC-004**: A configuration that produces only `info` lints loads successfully **and** reports them.
 - **SC-005**: A root demanding pinned adoption refuses an unpinned descendant and admits a pinned one.
 - **SC-006**: A `path` provided by an ancestor in a different directory resolves against the

@@ -116,7 +116,7 @@ The model discards comments, quoting style, indentation, anchor names, and autho
 | Enums / unions | Shrink the set | Add members |
 | Ranges / predicates | Tighten; add new predicates (conjunction) | Loosen; remove |
 | `required` | Add | Remove |
-| Struct openness (`seal`) | `open` → `closed` | `closed` → `open` |
+| Struct openness (`seal`, a `demand` keyword) | `open` → `closed` | `closed` → `open` |
 | Defaults (`provide`) | Replace with any value satisfying accumulated demands | Provide a value violating any ancestor demand |
 | `cascade: append` arrays | Append provisions | Remove inherited items (not an operation in v1) |
 | `cascade` strategy itself | Tighten toward accumulation (`replace` → `append`) | Weaken away from it (`append` → `replace`): a descendant declaring `replace` for a key an ancestor made `append` discards every ancestor's contribution, which the row above forbids absolutely. **A strategy governs from the layer that declares it, downward** — authority flows one way (§2.3), so declaring `append` accumulates the declaring layer's contribution and every later one onto whatever the fold had already produced, and does not reach back to re-combine layers that had already settled under `replace`. Once a key accumulates, it keeps accumulating from that point on. |
@@ -211,8 +211,8 @@ Everything here is declared by an **ancestor** and binds **from the declaring la
 
 **Per key.**
 
-- **`seal: open | closed`** — struct openness, the keyword behind §5.2's row. `closed` on a key demanding a mapping refuses any child key the accumulated `keys` vocabulary does not declare. `open` is the default. Openness narrows one way: a descendant may close what an ancestor left open, never reopen what an ancestor closed.
-- **`final`** — the key is sealed against *every* further declaration. Two consequences, and they are different:
+- **`seal: open | closed`** — struct openness, the keyword behind §5.2's row. `closed` on a mapping refuses any child key the accumulated `keys` vocabulary does not declare. `open` is the default. Openness narrows one way: a descendant may close what an ancestor left open, never reopen what an ancestor closed. **It lives in the `demand` vocabulary, not here** (§9, amended v0.7) — it constrains shape rather than authority, so it nests wherever demands nest and works inside a named type. It is described in this article because sealing is what it is *for*, not because it is spelled beside the keywords below.
+- **`final: true`** — the key is sealed against *every* further declaration. Two consequences, and they are different:
   - **No descendant schema layer may declare that key at all** — not `demand`, not `provide`, not `cascade`, not `seal`, not `delegate`. Restating a `final` key is refused even when the restatement would be a legal narrowing, because `final` is the ancestor saying the question is closed, not that it must be answered more tightly.
   - **A `final` key carrying `provide` is a constant.** The provided value is the value; a *config* setting that key is refused. This is §5.5's **pinned constant** pattern, and it is where that section's info-level lint ("`required` is vacuous under `final provide`") fires. A `final` key carrying **no** `provide` freezes the demand only — the config still supplies the value, it simply cannot be governed further.
 - **`cascade`** — §5.2, unchanged.
@@ -358,7 +358,13 @@ Reserved document keys: `$id`, `$version`, `$adopts`, `$pin`, `$schema` (config-
 
 **`$adopts` and `$schema` are single string scalars.** A sequence value is refused — not as a malformed value, but with a diagnostic saying v1 adopts exactly one parent (§6.1), because that is the shape multi-adoption will take when C3 linearization lands and an author writing it early deserves to be told which version they are ahead of. Two `$adopts` keys in one mapping are already impossible: duplicate keys are refused (§4.2).
 
-Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, `keys`, `values`, plus JSON-Schema-named leaf constraints: `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`), `provide`, `cascade: replace | append`, `seal: open | closed`, `final`, `delegate: allow`. **`keys`, `items`, and `values` all nest to arbitrary depth**: `keys` constrains a mapping value's own *named* children the way the schema's top-level `keys:` constrains the config's own top level, `items` constrains a sequence value's own elements, and `values` constrains **every** entry of a mapping whatever its key is; any of them may recurse into further `keys`/`items`/`values` beneath it, to whatever depth the data actually nests.
+Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, `keys`, `values`, `seal: open | closed`, plus JSON-Schema-named leaf constraints: `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`), `provide`, `cascade: replace | append`, `final: true`, `delegate: allow`.
+
+**`seal` is a `demand` keyword, not a per-key one** (amended v0.7; §15). It constrains a mapping value's *shape* — it composes by intersection, `open ∩ closed = closed`, and narrows monotonically — which is what every demand does and what no governance keyword does. Structurally it is `required`, not `cascade`. Placing it beside `provide` and `cascade`, as this document did until v0.7, made it unable to reach a nested mapping or the inside of a named type, and the meta-schema needs both.
+
+**A schema may also carry a top-level `seal`**, governing the **config's own top level** — the mate to a schema's top-level `keys:`, which §9 already says governs the config's own top level. The two are one keyword at two scopes and must never diverge in meaning. Before v0.7 there was no way to close a document's top level at all.
+
+**`final` is a boolean**, written `final: true`. `final: false` is legal and inert where no ancestor sealed the key, and refused as a weakening where one did. The syntax was never stated until the meta-schema forced the question (§15). **`keys`, `items`, and `values` all nest to arbitrary depth**: `keys` constrains a mapping value's own *named* children the way the schema's top-level `keys:` constrains the config's own top level, `items` constrains a sequence value's own elements, and `values` constrains **every** entry of a mapping whatever its key is; any of them may recurse into further `keys`/`items`/`values` beneath it, to whatever depth the data actually nests.
 
 **`values` is to a mapping what `items` is to a sequence** — the construct for a mapping whose keys are the author's to choose rather than the schema's to enumerate. Where a key is named by `keys` *and* covered by `values`, both apply: demands compose by intersection and always have (§5.1), so there is no precedence rule to invent. `values` alone says nothing about *which* keys may appear — that is `seal`'s question, and the two are orthogonal: `values` with `seal: open` means "any key you like, each shaped like this"; adding `keys` entries under `seal: closed` restricts the set to those named. Added in v0.7 because the meta-schema's own `keys:` section is exactly a mapping of author-chosen names, and nothing in the vocabulary could describe it (§15).
 
@@ -626,6 +632,33 @@ All initial open questions are resolved; amendments are integrated into the arti
   embedding story exercising itself. Also corrected in passing: §1 listed remote delegation as a v1
   non-goal, which §8.4 and §11 had already contradicted by gating it behind a user opt-in rather than
   forbidding it. See §1, §3, §11, §14, Article VI.
+
+- **Where `seal` lives, and two things its spelling never said** → settled: **`seal` is a `demand`
+  keyword; `final` is a boolean; a schema may seal its own top level.** All three came out of
+  drafting the meta-schema on paper during v0.7, which is precisely the feedback §14 schedules the
+  bootstrap early to obtain — this time before any of the three had been implemented.
+
+  §9 listed `seal` beside `provide`, `cascade`, `final` and `delegate`, which are governance: they say
+  *who may speak about a key*. `seal` says what *shape a mapping value has*. It composes by
+  intersection (`open ∩ closed = closed`) and narrows monotonically, which is what every demand does
+  and what no governance keyword does; structurally it is `required`. Its misplacement had two
+  consequences, and only the second is fatal. A per-key `seal` cannot reach a **nested** mapping —
+  §15's own nested-demands entry had justified adding `keys` partly on the grounds of giving "v0.7's
+  `seal` a subject to govern", and it would not have had one. And a per-key `seal` cannot appear
+  inside a **named type** at all, since a type entry's vocabulary is `{demand, accept}`; because the
+  meta-schema's central `demand` type is *recursive* it must be a named type, so no amount of
+  nesting-fixing would have made the meta-schema writable. As a demand keyword `seal` reaches both
+  for free and its monotonicity is the ordinary narrowing rule rather than a bespoke check.
+
+  Two smaller things the same exercise found. **`final`'s syntax had never been written down** —
+  §6.3 said `final` and §5.5 said `final provide`, neither saying whether that is a boolean or a bare
+  marker; settled as `final: true`, consistent with `authority:`'s booleans and expressible in the
+  meta-schema, with `final: false` legal and inert where no ancestor sealed and refused as a
+  weakening where one did. And **nothing could close a document's top level**: `seal` was per-key and
+  a document root is not a key, so §5.2's openness row was unreachable there and a schema could not
+  refuse a config carrying a stray top-level key. A schema's top-level `seal` now governs the
+  config's own top level, exactly as its top-level `keys:` already does. One keyword, two scopes, one
+  meaning. See §9, §6.3, §5.2.
 
 - **A mapping whose keys the schema cannot enumerate** → settled: **`values`, a sibling to `keys`.**
   `keys` names children one at a time, which describes every mapping whose shape the schema knows and
