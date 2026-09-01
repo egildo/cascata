@@ -1,0 +1,141 @@
+# DRAFT — a paper exercise, not the shipped meta-schema.
+#
+# Written by hand during v0.7 planning, before any of 008 was implemented, to
+# find out what the vocabulary cannot say. It found five things (research.md,
+# W-1..W-5) and confirmed three decisions already taken (`seal` as a demand
+# keyword, `final: true`, top-level `seal`).
+#
+# The implementer should treat this as an ORACLE, not a starting point: it was
+# derived by hand from SPEC.md §9, never by running the code. Where the shipped
+# meta-schema needs to differ from this draft, that difference is a finding
+# worth reporting — either this draft is wrong about the spec, or the
+# implementation is.
+#
+# Two constructs below are marked UNSETTLED and are research.md's D-4.
+
+$id: cascata/meta
+$version: 1
+
+# A schema document has no top-level keys beyond those declared here.
+# Unreachable before v0.7 — nothing could close a document's top level.
+seal: closed
+
+types:
+
+  # ---- leaf aliases -------------------------------------------------------
+
+  # §9.1's DSL, e.g. "string | resource[]". Only checkable as a *string* here:
+  # the grammar has balanced parens and is therefore not regular, so no
+  # `pattern` can capture it. See research.md W-1 — the one place self-hosting
+  # is partial by construction.
+  typeExpr:
+    demand: { type: string }
+
+  typeName:
+    demand: { type: string }
+
+  # ---- a demand: §9's closed keyword set ----------------------------------
+  # Recursive, via `items`, `keys`, and `values` — every cycle is guarded by a
+  # structural level, which is exactly what §7's amended rule permits.
+  demand:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        type:      { demand: { type: typeExpr } }
+        required:  { demand: { type: bool } }
+        min:       { demand: { type: int | float } }
+        max:       { demand: { type: int | float } }
+        minLength: { demand: { type: int, min: 0 } }
+        maxLength: { demand: { type: int, min: 0 } }
+        pattern:   { demand: { type: string } }
+        enum:      { demand: { type: sequence } }
+        accept:    { demand: { type: typeName[] } }
+        seal:      { demand: { type: string, enum: [open, closed] } }
+        items:     { demand: { type: demand } }
+        keys:      { demand: { type: mapping, values: { demand: { type: nestedKeyDecl } } } }
+        values:    { demand: { type: nestedKeyDecl } }   # UNSETTLED — research.md D-4
+
+  # ---- one entry of a top-level `keys:` or `directives:` section ----------
+  # The FULL per-key vocabulary. Governance keywords live here and only here.
+  keyDecl:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        demand:   { demand: { type: demand } }
+        provide:  { demand: {} }                 # any value at all — see W-2
+        cascade:  { demand: { type: string, enum: [replace, append] } }
+        final:    { demand: { type: bool } }
+        delegate: { demand: { type: string, enum: [allow] } }
+
+  # ---- one entry of a NESTED `keys:` (or of `values:`) --------------------
+  # A strictly smaller vocabulary than keyDecl, and the meta-schema is what
+  # forced the distinction into the open. As built (v0.5/v0.6), a nested entry
+  # is read for `demand` only, plus `delegate`, which v0.6 reaches through its
+  # own separate walker. `provide`, `cascade` and `final` are top-level only.
+  # UNSETTLED — research.md D-4.
+  nestedKeyDecl:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        demand:   { demand: { type: demand } }
+        delegate: { demand: { type: string, enum: [allow] } }
+
+  # ---- one entry of the `types:` section ----------------------------------
+  typeDecl:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        demand: { demand: { type: demand } }
+        accept: { demand: { type: typeName[] } }
+
+keys:
+
+  types:
+    demand: { type: mapping, values: { demand: { type: typeDecl } } }
+
+  keys:
+    demand: { type: mapping, values: { demand: { type: keyDecl } } }
+
+  # Names restricted to the six reserved keys by `keys` + `seal: closed`.
+  # `values` alone would have constrained the shapes and not the names.
+  directives:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        $id:      { demand: { type: keyDecl } }
+        $version: { demand: { type: keyDecl } }
+        $adopts:  { demand: { type: keyDecl } }
+        $pin:     { demand: { type: keyDecl } }
+        $schema:  { demand: { type: keyDecl } }
+        $extends: { demand: { type: keyDecl } }
+
+  authority:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        demandPinnedAdoption: { demand: { type: bool } }
+        finalAgainstForking:  { demand: { type: bool } }
+
+  # A schema's own top-level `seal`, as data, from the meta-schema's side.
+  # Note the name appears twice in this document at two different levels: as a
+  # demand keyword inside `types.demand`, and as a schema key here. Legal, and
+  # confusing enough to deserve the comment.
+  seal:
+    demand: { type: string, enum: [open, closed] }
+
+# The reserved directives. §6.1's pin syntax and §9's "single string scalar"
+# rule, stated declaratively for the first time — until now they existed only
+# as hand-written checks in the implementation.
+directives:
+  $id:      { demand: { type: string, required: true } }
+  $version: { demand: { type: int } }
+  $adopts:  { demand: { type: string } }
+  $pin:     { demand: { type: string, pattern: '^sha256:[0-9a-f]{64}$' } }
+  $schema:  { demand: { type: string } }
+  $extends: { demand: { type: string } }
