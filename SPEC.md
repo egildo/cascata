@@ -180,7 +180,7 @@ Do not skip whole-chain validation in v1 even though narrowing-by-construction m
 
 Provides inject **during merge**; `required` (present-and-non-null) checks the **post-merge** tree.
 
-- **`required` + replaceable `provide` = the *guaranteed key* pattern. Feature, no diagnostic.** Authors may omit the key (the provide fills it); an explicit `key: null` still errors (`required` forbids nulling-out). In the typed TS output this compiles to a **non-optional property** — a real promise to the consuming application.
+- **`required` + replaceable `provide` = the *guaranteed key* pattern. Feature, no diagnostic.** Authors may omit the key (the provide fills it); an explicit `key: null` still errors (`required` forbids nulling-out). In the typed TS output this is a **non-optional property** — a real promise to the consuming application. At v1.0 that means the `T` a caller passes to `load<T>()` should declare it non-optional; the v1.x generator (§14, §17) is what will emit it from the schema rather than trusting the caller to remember.
 - **`required` + `final provide` = the *pinned constant* pattern.** The value is untouchable, so `required` adds nothing: emit an **info-level lint** ("`required` is vacuous under `final provide`"), not an error — the pattern is legitimate; the lint teaches.
 - **Provide retraction** (a descendant removing an inherited provide) is *monotone-legal* — omitting configs go from valid to invalid, which is strict narrowing — but is **out of v1** pending syntax and a story. Parked in future doors as legal-when-wanted, not forbidden.
 
@@ -489,8 +489,8 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 5. **v0.5** — Types (`types` section, selector parameters, namespace collision errors); nested demands (`keys` implemented, `items` generalized from one level to arbitrary depth, per §9's amendment).
 6. **v0.6** — Delegation (transclusion, sandbox, positional validation, breadcrumbs).
 7. **v0.7** — Sealing/governance (`seal`, `final`, a root demanding pinned adoption, a root final against forking) + **the embedding surface** (the host seam of Article VI, the one-call `load()`, `resource` values resolved against their declaring document rather than merely shape-checked) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer). The embedding surface belongs *here* rather than at v1.0 because the meta-schema bootstrap is its first real consumer — self-hosting means the library loads its own meta-schema through its own seam, which is the embedding story exercising itself. **Planning the bootstrap made good on its own justification before any code was written**: three vocabulary warts (no construct for author-chosen keys, no recursive types, no way to constrain the reserved keys) and one unimplementable obligation (§5.5's lint, against a `Diagnostic` with no severity) surfaced from trying to write the meta-schema and are settled in §15. `values`, guarded recursion, `directives:`, and diagnostic levels are therefore part of this milestone. Cascade limits are **already shipped** — `cascade-strategy-weakened` landed in v0.3 — and leave the list.
-8. **v1.0** — Freeze the constitution; typed TS output surface.
-9. **v1.x** — JSON Schema 2020-12 exporter; static subsumption lint; JSON adapter; TOML adapter (run against `toml-test`).
+8. **v1.0** — **Freeze this document** (see §15's freeze rule) + **the output surface** (Article VII): the value view a consumer actually reads, and `load<T>()`. Also closes the two holes v0.7 recorded rather than fixed — a non-mapping top-level `keys:`/`types:` section silently ignored, and the exponential `keys`+`values` composition over a shared recursive type.
+9. **v1.x** — **TypeScript type generator** (emits the `T` that `load<T>()` consumes, derived from a schema chain); JSON Schema 2020-12 exporter; static subsumption lint; JSON adapter; TOML adapter (run against `toml-test`). The TS generator sits **here rather than at v1.0** because it is the same shape of artifact as the JSON Schema exporter beside it — a translation of accumulated demands into a foreign type system — and freezing one while deferring its sibling would be incoherent. It also has by far the larger surface to freeze: `load<T>()` is one signature, while a generator's *output format* makes every emitted construct a compatibility promise.
 10. **Future** — closing §9.1's self-hosting gap (the meta-schema approximates the leaf type-expression grammar with a superset `pattern` because the constraint vocabulary cannot name a grammar; §15); `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
 
 ---
@@ -498,6 +498,18 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 ## 15. Settled Questions (amendment log)
 
 All initial open questions are resolved; amendments are integrated into the articles cited.
+
+### The freeze rule (from v1.0)
+
+**This document freezes at v1.0.** From that release, of the three things an amendment can be:
+
+- **A correction** — this document said something untrue about itself or about the implementation — stays permitted, always, and needs no version bump. Nine of the entries below are corrections; a document that forbids fixing its own errors preserves them rather than its meaning.
+- **An addition** — new vocabulary, a new article, a new future door — stays permitted, provided it changes **no existing meaning**. A schema valid before the addition is valid after, and means the same thing.
+- **A change to an existing meaning** — a keyword that starts doing something different, a rule that starts refusing what it accepted — requires **v2.0**. There is no other way to make one.
+
+The engineering constitution (`.specify/memory/constitution.md`) does **not** freeze: it governs process, not the language, and has been amended four times in seven milestones, each time because an implementer found it unsatisfiable as written. Freezing it would preserve those defects rather than the project's standards.
+
+The bootstrap (§14 item 7) was scheduled before this point precisely so that the vocabulary would be suffered by its own author first. It found nine problems, all fixed above. That is what the freeze is standing on.
 
 - **Diamond `provide` ordering** → settled by restriction: v1 `$adopts` is single-parent (chains only, diamonds impossible); C3 linearization pre-committed for future multi-adoption. See §6.1.
 - **Leaf-DSL grammar** → settled: name-only algebra, TypeScript precedence (`[]` > `|`), set-canonical unions, decidable subsumption. See §9.1.
@@ -715,6 +727,39 @@ All initial open questions are resolved; amendments are integrated into the arti
   vocabulary to be able to name a grammar, which is a v1+ question and is parked in §14 rather than
   papered over. See §9.1, §14.
 
+- **What v1.0 freezes, what a consumer receives, and where the type generator goes** → settled, and
+  the three answers are one decision seen from three sides.
+
+  **The freeze** is of this document, not the engineering constitution, and is additive-only:
+  corrections always allowed, additions allowed while no existing meaning changes, a changed meaning
+  requiring v2.0. §14 said "freeze the constitution" and this document calls *itself* the constitution
+  while `CLAUDE.md` calls the other one the engineering constitution — an ambiguity nobody had had to
+  resolve until the freeze was the next thing to do. The rule is stated in this section's own header
+  because it governs this section.
+
+  **The output surface** is Article VII, and it exists because of a gap nobody had named: seven
+  milestones produced a `Node` tree and no way to read it as data, while §1 promised the tool
+  developer "a validated configuration object". A consumer wanting `config.styles[0]` had to walk a
+  tagged union with spans. The projection is null-prototype objects in canonical key order — null-
+  prototype because a configuration key is author-controlled and `__proto__` must not be settable by
+  writing it in YAML.
+
+  Its sharpest rule: **the demand decides the numeric type, not the document.** `kind` is lexical, so
+  a faithful projection would let a config author's punctuation — `30` versus `30.0` — decide whether
+  the consuming application sees `bigint` or `number` under an unchanged schema. That is this
+  project's own thesis inverted, since the schema demands and the config provides. `type: int` yields
+  `bigint`, `type: float` and `type: int | float` yield `number`, and an undemanded key is `unknown`.
+  Where normalization would actually drop a digit, an info-level lint (§10) fires on the *value*, not
+  on the shape — a lint that cried on every `int | float` key would be ignored within a week.
+
+  **The type generator moves to v1.x**, beside the JSON Schema exporter, because they are the same
+  artifact — a translation of accumulated demands into a foreign type system — and freezing one while
+  deferring its sibling is incoherent. `load<T>()` ships instead: a one-signature surface, where the
+  generator's *output format* would have made every emitted construct a permanent promise at exactly
+  the version that makes promises permanent. The cost is named rather than hidden in Article VII: a
+  `T` that disagrees with its schema is a caller bug the library cannot catch, and removing that
+  guesswork is precisely what the generator is for. See §14, §15, §17, §5.5.
+
 - **Where `seal` lives, and two things its spelling never said** → settled: **`seal` is a `demand`
   keyword; `final` is a boolean; a schema may seal its own top level.** All three came out of
   drafting the meta-schema on paper during v0.7, which is precisely the feedback §14 schedules the
@@ -851,6 +896,32 @@ Laws:
 - **A shipped host is not a violation of the law.** The library performs no I/O; a *host* is supposed to. Cascata therefore ships a Node host as a **separate entry point**, so that the ordinary embedder is not made to write a filesystem adapter to read a file, and so that importing the library proper still cannot touch a disk. The seam is real precisely because the default implementation sits on the other side of it.
 - **One call.** The ordinary embedding is a single `load()` from a launching point to a validated configuration or a set of **errors**, never both. The staged functions stay public for tools that need to step through the pipeline, but no tool should have to assemble the ordinary path itself, and none should have to rediscover how a path relates to the document that declared it. **"Never both" is about errors, not about diagnostics**: an `info` lint (§10) describes a configuration that is valid, so a successful `load()` returns the configuration *with* whatever lints it earned. A result that had to be discarded to see its warnings would guarantee nobody reads them.
 - **Determinism across hosts.** Given the same documents, every host gets the same tree, the same provenance, and the same diagnostics in the same order. A host may decide *whether* the library sees a document; it may never influence what that document means.
+
+---
+
+## 17. Article VII — The Output Surface
+
+*Numbered out of article sequence deliberately*, for the reason Article VI gives: inserting it where it belongs would renumber sections cited throughout the implementation, every milestone spec, the tests, and the README, turning hundreds of **currently correct** citations into wrong ones. The Roman numeral records where it belongs; the section number records where it could safely go.
+
+Seven milestones produced a positioned, frozen `Node` tree and no way to read it as ordinary data. §1 promises the tool developer "a validated configuration object"; until v1.0 it received a tagged union with spans, `Map`s for mappings and `bigint`s for integers, and had to walk the model by hand. This article is that promise kept.
+
+Laws:
+
+- **The ordinary consumer receives a value, not a tree.** Mappings project to **null-prototype objects** whose keys are inserted in §4.2's canonical order; sequences to arrays; scalars to their JS equivalents. `Object.create(null)` rather than `{}` because a configuration key is author-controlled and `__proto__` is not a key anyone should be able to set by writing it in YAML.
+- **The value view is a projection, never a replacement.** The node tree remains available on the same result. Spans, provenance, and pedigree live there, and `why()` still answers by RFC 6901 pointer. A consumer who needs a position has not lost one; a consumer who needs a value no longer pays for positions they will not read.
+- **The demand decides the numeric type, not the document.** `kind` is lexical — `30` is an int and `30.0` is a float — so a *faithful* projection would let a config author's punctuation decide whether the consuming application sees `bigint` or `number`, under an unchanged schema. That is backwards: this project's thesis is that the schema demands and the config provides, and the output type is part of what is demanded. Therefore, per key, from the **accumulated** demand:
+
+  | accumulated demand | value | reason |
+  |---|---|---|
+  | `int` | `bigint` | exact at any magnitude (§4.2) |
+  | `float` | `number` | IEEE-754 is what was asked for |
+  | `int \| float` | `number` | the schema declared a float acceptable here |
+  | no numeric demand | faithful, typed `unknown` | no contract to consult, so nothing is promised |
+
+  A schema author who needs exactness above 2^53 writes `type: int`, which is one line, discoverable, and the only place the decision belongs.
+- **Normalization never loses a digit silently.** Where `int | float` projects an integer that is not exactly representable as a double, an **info**-level diagnostic (§10) says so, naming the key and both values. It fires on actual loss, not on every `int | float` key — a lint that cried on the shape rather than the value would be ignored within a week.
+- **`load<T>()`'s `T` is the caller's claim, and the library never checks it.** Validation enforces the *schema* against the value; it cannot enforce the caller's belief about what the schema says. A `T` that disagrees with its schema is a bug in the calling code, and the v1.x generator (§14) exists to remove the guesswork by deriving `T` from the schema chain. Until then the mismatch is real and is named here rather than discovered.
+- **The value is deeply immutable**, by the same means and to the same depth as the tree (§4.1's freeze), including the `Map`-shaped hazard `src/model/freeze.ts` exists to close.
 
 ---
 

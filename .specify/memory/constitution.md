@@ -1,6 +1,22 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.3.0 → 1.4.0
+Bump rationale: MINOR — the Output section is materially expanded and one claim
+in it corrected; no principle removed or redefined, prior compliance unaffected.
+It said "Typed TS output is derived from the accumulated demands", which will
+not be true at v1.0: `load<T>()` takes the caller's own `T` and derives nothing.
+Deriving is the v1.x generator's job, and the section now says which is which.
+Expanded with SPEC.md Article VII's value view and its rule that the accumulated
+demand — never the document's lexical form — decides a value's numeric type.
+
+Not frozen, deliberately: SPEC.md freezes at v1.0 and this document does not.
+It governs process rather than the language, and has been amended four times in
+seven milestones, every time because an implementer found it unsatisfiable as
+written. Freezing it would preserve those defects rather than the standards.
+
+Prior report (1.3.0) follows.
+
 Version change: 1.2.1 → 1.3.0
 Bump rationale: MINOR — two sections materially expanded, none removed or
 redefined; prior compliance is unaffected.
@@ -266,8 +282,15 @@ document size are capped. Duplicate keys, YAML custom tags, and complex keys are
 coerced. **Tests MUST NOT perform network access** — remote behavior is exercised against recorded
 fixtures, so the pinning and caching logic is testable and CI is hermetic.
 
-**Output.** The frozen result is deeply immutable. Typed TS output is derived from the accumulated
-demands, and the guaranteed-key pattern (§5.5) compiles to a non-optional property.
+**Output.** The frozen result is deeply immutable, value view and node tree alike (`SPEC.md` Article
+VII). The consumer's ordinary reading is a **value** — null-prototype objects in canonical key order,
+arrays, and scalars — with the node tree still available beside it for spans and provenance. **The
+accumulated demand decides a value's numeric type, never the document**: `type: int` yields `bigint`,
+`type: float` and `type: int | float` yield `number`, an undemanded key is `unknown`, and a
+normalization that would drop a digit emits an info-level diagnostic. At v1.0 the caller supplies
+`T` to `load<T>()` and the library does not check it; **deriving** `T` from the accumulated demands —
+where the guaranteed-key pattern (`SPEC.md` §5.5) becomes a non-optional property without the caller
+having to remember — is the v1.x generator's job, beside the JSON Schema exporter.
 
 ## Development Workflow & Quality Gates
 
@@ -318,4 +341,4 @@ and re-runs it after. Every code review verifies the seven gates above. Principl
 NON-NEGOTIABLE (I, V) admit no Complexity-Tracking exception: a change that violates them is
 rejected, not justified.
 
-**Version**: 1.3.0 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-09-01
+**Version**: 1.4.0 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-09-01
