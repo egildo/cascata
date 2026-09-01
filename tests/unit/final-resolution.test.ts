@@ -123,6 +123,18 @@ describe("resolveFinal — final refuses every redeclaration shape, not only wid
     expect(state.get(KEY)?.final).toBeUndefined();
   });
 
+  it("v0.7 FR-009c's second half: final: false declared by a DESCENDANT after an ancestor already sealed final: true is refused as a weakening, via final-key-redeclared -- not silently accepted as 'reopening'", () => {
+    const layers: Layer[] = [
+      schemaLayerFor("root", 0, KEY, { final: true }),
+      schemaLayerFor("descendant", 1, KEY, { final: false }),
+      configLayerFor("c0", 2),
+    ];
+    const { state, diagnostics } = resolveFinal(layers);
+    expect(diagnostics.some((d) => d.code === "final-key-redeclared")).toBe(true);
+    // The redeclaration is inert: the root's own final state is unchanged -- final: false from the descendant does NOT reopen the key.
+    expect(state.get(KEY)?.final?.layer.identity.location).toBe("root");
+  });
+
   it("hasProvide is recorded correctly: final alone vs. final+provide together", () => {
     const noProvide = resolveFinal([schemaLayerFor("s0", 0, KEY, { final: true }), configLayerFor("c0", 1)]);
     expect(noProvide.state.get(KEY)?.final?.hasProvide).toBe(false);
