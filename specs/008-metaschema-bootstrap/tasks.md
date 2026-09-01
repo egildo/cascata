@@ -46,9 +46,10 @@ schema-unseen entries; all three checked, one bad one refused at its own positio
       canonical key order; a non-mapping value is a no-op (FR-006); depth-capped (FR-003)
 - [x] T008 [US1] `src/validate/check.ts`: `typeUsageProblems`'s own walk descends into `values`
 - [x] T009 [US1] `tests/unit/values.test.ts` — the six scenarios, end to end
-- [x] T010 [US1] `tests/unit/values-monotonicity.test.ts` — §5.2's `values` row, discharged
-      dynamically (plan.md Complexity Tracking): a descendant dropping an inherited `values` cannot
-      rescue a value the ancestor's own `values` refuses
+- [x] T010 [US1] §5.2's `values` row, discharged **dynamically** (plan.md Complexity Tracking): a
+      descendant dropping an inherited `values` cannot rescue a value the ancestor's own `values`
+      refuses. Landed in `tests/unit/values.test.ts` beside the rest of the keyword's cases rather
+      than in a file of its own — see T053 for the property form gate 3 asks for
 - [x] T011 [US1] **Sabotage**: break `checkNestedValues`'s non-mapping guard; confirm
       `values-non-mapping-noop` goes red and nothing else does. Back up to `/tmp` first; mark
       `SABOTAGE`; `grep -rn SABOTAGE src/ tests/` before trusting anything
@@ -67,14 +68,21 @@ schema-unseen entries; all three checked, one bad one refused at its own positio
 terminates. Alongside it, an unguarded alias cycle still refused, by v0.5's own unmodified case.
 
 - [x] T013 [US2] Conformance cases first:
-      `tests/corpus/cases/recursion/{guarded-via-keys,guarded-via-values,guarded-one-point-unguarded-another,guarded-depth-cap}/`
-      plus descriptors
+      `tests/corpus/cases/recursion/{guarded-via-keys,guarded-via-values,guarded-one-point-unguarded-another}/`
+      plus descriptors. The depth-cap case is **not** a fixture: a document deep enough to reach the
+      cap cannot get through the parser (`tests/unit/values.test.ts` asserts exactly that), so it is
+      driven from a synthetic AST, following `tests/unit/validate-depth-limit.test.ts`'s precedent
 - [x] T014 [US2] `src/validate/check.ts`: **the invasive change** — `checkNamedType` delegates to
       `checkDemand` with the type's own declaring context, so `keys`/`items`/`values`/`required`
       inside a named type are checked (plan.md P-2). The type-expression path returns `Violation[]`
       rather than `RawSite[]`
-- [x] T015 [US2] Depth accounting: a named-type hop costs 1; a structural level inside a named type
-      costs 2. Verify `MAX_DEMAND_DEPTH` still terminates an unguarded alias chain
+- [x] T015 [US2] Depth accounting. **The plan's design (a hop costs 1, a structural level inside a
+      type costs 2) was replaced during implementation**: charging structure twice would have made a
+      33-level document against a recursive type hit the cap, refusing a legitimate document.
+      `WalkContext` instead carries two counters — `depth` for structural levels, `typeHops` for
+      named-type resolutions **since the last structural level**, reset to 0 by every descent. That
+      is §7's guarded-recursion rule made operational rather than approximated, and an unguarded
+      alias chain still terminates because it never resets
 - [x] T016 [US2] `src/validate/types.ts`: `cycleDiagnostics`'s doc comment states §7's
       guarded-recursion rule as the law it implements — replacing v0.5's "scope decision" wording.
       **No behavioural change**
@@ -98,7 +106,9 @@ terminates. Alongside it, an unguarded alias cycle still refused, by v0.5's own 
 - [x] T021 [US3] `src/merge/fold.ts`: export `RESERVED_DOCUMENT_KEYS` (one definition, not two)
 - [x] T022 [US3] `src/diagnostics/codes.ts`: `unknown-directive-key`
 - [x] T023 [US3] Conformance cases first:
-      `tests/corpus/cases/directives/{pin-pattern-refused,pin-pattern-accepted,unknown-directive-key,config-directives-inert,directives-not-in-merged-tree}/`
+      `tests/corpus/cases/directives/{id-pattern-refused,id-pattern-accepted,unknown-directive-key,config-directives-inert,not-in-merged-tree}/`
+      plus `tests/unit/directives.test.ts` for the `$pin`/`$version` cases, which cannot be corpus
+      fixtures: a config carrying a real `$pin` is verified by the resolver before validation runs
 - [x] T024 [US3] `src/validate/violation.ts`: `renderViolation(v, { omitMergedPointer })`
 - [x] T025 [US3] `src/validate/directives.ts`: read a schema layer's `directives:`; closed
       vocabulary; per-entry `demand` checked against the config layer's own raw `$`-key
@@ -157,7 +167,35 @@ terminates. Alongside it, an unguarded alias cycle still refused, by v0.5's own 
 
 ---
 
-## Phase 8: Close-out
+## Phase 8: Work the plan did not foresee (added during implementation)
+
+Each of these was found by running something, not by reading. Recorded here rather than folded
+silently into an earlier phase, so the list of what the milestone *discovered* stays separable from
+the list of what it *planned*.
+
+- [x] T050 `src/validate/{check,vocabulary}.ts`: replace every `array.push(...results)` with an
+      `extend` loop. **A pre-existing totality defect**, present since v0.5 and found by T018's
+      property test from an unrelated direction: a spread call throws `RangeError` past ~125,000
+      arguments, so a legitimate 800 KB document (inside §11's 8 MB cap) whose every sequence element
+      violated one demand made `validate()` **throw** instead of returning 200,000 diagnostics.
+      Sabotage-verified against the restored spread
+- [x] T051 `meta/cascata.meta.yaml`: correct `typeExpr`'s pattern — the draft's bare `/` separator
+      **falsely rejected** `core / resource`, which `typeexpr.ts` parses. A false rejection is the
+      one thing W-1's governing rule forbids absolutely
+- [x] T052 `meta/cascata.meta.yaml`: `typeName` gains **no** pattern — patterning it would falsely
+      reject a schema the implementation accepts, since `accept:` names resolve against author-chosen
+      `types:` keys and a YAML key can be a name §9.1 could never spell. Verified by construction
+- [x] T053 `tests/unit/values.test.ts`: §5.2's `values` row as a **property**, not three examples
+      (constitution gate 3, matching how `seal`'s and `final`'s rows were discharged in part 1)
+- [x] T054 `tests/unit/recursion-termination.test.ts`: record the `keys` + `values` composition
+      blowup (2^depth) as a bounded test rather than a comment
+- [x] T055 `README.md`: sweep the derived artifact. It documented the surface as of v0.6 and said
+      three times that `seal`/`final` "remain unread anywhere in the library, deferred to v0.7" —
+      false since part 1. Added a v0.7 section for both parts
+
+---
+
+## Phase 9: Close-out
 
 - [x] T047 `grep -rn SABOTAGE src/ tests/` empty
 - [x] T048 `pnpm typecheck && pnpm test` green; tree clean
