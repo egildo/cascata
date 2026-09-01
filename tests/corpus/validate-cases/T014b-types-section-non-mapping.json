@@ -1,8 +1,20 @@
 {
-  "name": "T014b: a non-mapping types: section contributes nothing (spec.md Acceptance Scenario 6)",
-  "cites": "v0.5 FR-003",
+  "name": "T014b: a non-mapping types: section is REFUSED (v1.0 FR-001 supersedes v0.5 FR-003's 'contributes nothing')",
+  "cites": "v1.0 FR-001",
   "fixtureDir": "validate-types/non-mapping-section",
   "entry": "config.yaml",
   "sandboxRoot": ".",
-  "expect": { "ok": true }
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "malformed-section",
+        "document": "schema.yaml",
+        "line": 1,
+        "column": 8,
+        "demand": { "pointer": "/types", "document": "schema.yaml", "line": 1, "column": 8 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
 }

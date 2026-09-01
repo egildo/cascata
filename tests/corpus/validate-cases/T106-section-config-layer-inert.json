@@ -1,0 +1,8 @@
+{
+  "name": "T106: a CONFIG carrying a malformed types:/authority: is inert data, not a refusal — the rule is a schema-layer rule",
+  "cites": "v1.0 FR-002",
+  "fixtureDir": "sections/config-layer-sections-inert",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

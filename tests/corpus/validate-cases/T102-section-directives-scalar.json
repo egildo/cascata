@@ -1,0 +1,20 @@
+{
+  "name": "T102: a top-level directives: that is not a mapping is refused — one rule, all four sections",
+  "cites": "v1.0 FR-001",
+  "fixtureDir": "sections/directives-scalar",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "malformed-section",
+        "document": "schema.yaml",
+        "line": 1,
+        "column": 13,
+        "demand": { "pointer": "/directives", "document": "schema.yaml", "line": 1, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

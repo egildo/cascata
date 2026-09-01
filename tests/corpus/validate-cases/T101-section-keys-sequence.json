@@ -1,0 +1,18 @@
+{
+  "name": "T101: a top-level keys: that is a sequence is refused — the rule is 'not a mapping', not 'not a scalar'",
+  "cites": "v1.0 FR-001",
+  "fixtureDir": "sections/keys-sequence",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "malformed-section",
+        "document": "schema.yaml",
+        "demand": { "pointer": "/keys", "document": "schema.yaml", "line": 2, "column": 3 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

@@ -356,6 +356,73 @@ export function topLevelKeyDeclarationVocabularyProblems(schemaTree: Node, layer
 }
 
 /**
+ * §9's four top-level schema sections, in canonical (code point) order —
+ * which is also the order their diagnostics come out in, so a schema
+ * malforming several of them reports them deterministically without
+ * anything sorting anything.
+ */
+export const TOP_LEVEL_SECTIONS = ["authority", "directives", "keys", "types"] as const;
+
+/**
+ * **v1.0 FR-001** — a present top-level section whose value is not a
+ * mapping is refused at that node's own position, by **one rule covering
+ * all four**.
+ *
+ * Until v1.0 this was the language's last silent acceptance. `types: oops`
+ * and `keys: not-a-mapping` parsed, merged, validated, and did nothing:
+ * every section reader in this codebase — `readDemandVocabulary` and
+ * `topLevelKeyDeclarationVocabularyProblems` here, `types.ts`'s `types:`
+ * read, `directives.ts`'s `readDirectives`, `graph/authority.ts`'s
+ * `readAuthoritySection`, `merge/strategy.ts`'s `readKeysVocabulary`,
+ * `merge/final.ts`'s `final:` scan, and `resolve/delegate.ts`'s grant scan
+ * — independently treats a non-mapping section as "nothing to read, never
+ * an error". v0.7's meta-schema corpus sweep found the hole from the other
+ * side: the meta-schema says a section is a mapping and refused two
+ * fixtures the pipeline accepted, and that divergence was recorded rather
+ * than fixed because closing it is a governance decision. §9 was always
+ * the governance; v1.0 is where the implementation catches up, because a
+ * freeze must not make a silent acceptance permanent.
+ *
+ * **None of those readers changes.** They stay lenient deliberately: a
+ * reader that refused would make the diagnostic depend on which stage
+ * happened to read the section first, and would have to be re-fixed for
+ * every section a later milestone adds. One refusal is raised once, here,
+ * in the pass whose whole job is schema-shape refusal — `unknown-demand-
+ * keyword`'s existing posture applied to a section instead of a keyword.
+ *
+ * **Schema layers only.** The caller (`vocabularyProblemsForLayer`) already
+ * returns early for `layer.role !== "schema"`, so a *config* carrying an
+ * inert `types:`/`keys:` of any shape stays legal and is ordinary data —
+ * v0.3's `merge-fold/inert-vocabulary/` fixtures are exactly that, and
+ * v1.0 FR-002 keeps them so. Absent and malformed are different, and only
+ * one of them is an error.
+ */
+export function topLevelSectionProblems(schemaTree: Node, layerRank: number): DemandVocabularyProblem[] {
+  const problems: DemandVocabularyProblem[] = [];
+  if (schemaTree.type !== "mapping") {
+    return problems;
+  }
+  for (const sectionName of TOP_LEVEL_SECTIONS) {
+    const sectionNode = schemaTree.entries.get(sectionName);
+    if (sectionNode === undefined || sectionNode.type === "mapping") {
+      continue;
+    }
+    const pointer = pointerFromPath([sectionName]);
+    problems.push({
+      diagnostic: createDiagnostic({
+        level: "error",
+        code: "malformed-section",
+        message: `top-level '${sectionName}:' is ${sectionNode.type === "sequence" ? "a sequence" : `a ${sectionNode.kind} scalar`}, not a mapping — SPEC.md §9 declares it a section of named entries (v1.0 FR-001)`,
+        primary: sectionNode.span,
+        demand: { pointer, span: sectionNode.span },
+        pedigreePosition: layerRank,
+      }),
+    });
+  }
+  return problems;
+}
+
+/**
  * Refuse a constraint value of the wrong shape as `malformed-demand-value`
  * (v0.4 FR-007), naming the shape expected. `type` is checked here only
  * for its most basic shape (a string scalar) — the grammar and name
@@ -606,6 +673,12 @@ export function vocabularyProblemsForLayer(layer: Layer, knownDeclaredNames: Rea
     return [];
   }
   const problems: Diagnostic[] = [];
+  // v1.0 FR-001 first: a malformed *section* is a bigger fact than a
+  // malformed keyword inside one, and reporting it first is what makes a
+  // schema with several problems read top-down.
+  for (const problem of topLevelSectionProblems(layer.tree, layer.rank)) {
+    problems.push(problem.diagnostic);
+  }
   for (const problem of topLevelKeyDeclarationVocabularyProblems(layer.tree, layer.rank)) {
     problems.push(problem.diagnostic);
   }

@@ -185,6 +185,39 @@ export const SEALING_AUTHORITY_CODES = [
  */
 export const DIRECTIVES_CODES = ["unknown-directive-key"] as const;
 
+/**
+ * The output surface and the last silence (v1.0, `SPEC.md` §9, §17;
+ * specs/009-output-surface-and-freeze FR-001, FR-019).
+ *
+ * **`malformed-section`** polices §9's four top-level sections — `types`,
+ * `keys`, `directives`, `authority` — whose value must be a mapping.
+ * Until v1.0 a schema writing `types: oops` was **silently ignored**:
+ * every section reader in this codebase treats a non-mapping section as
+ * "nothing to read, never an error", a posture documented since v0.3 and
+ * recorded as a hole by v0.7's meta-schema corpus sweep, where the
+ * meta-schema refused two fixtures the pipeline accepted. A silent
+ * acceptance in a language whose Principle VI is deny-by-default is the
+ * one thing a freeze must not make permanent.
+ *
+ * A fourth code rather than a reuse, for the reason the other three are
+ * distinct from each other: `unknown-demand-keyword` polices a demand
+ * mapping, `unknown-type-entry-keyword` a `types.<name>` entry,
+ * `unknown-directive-key` a `directives:` name, and this one a **section**
+ * — four closed vocabularies, four codes, each naming which one was
+ * violated. It is not `malformed-demand-value`: a section is not a demand
+ * and has no demand of its own to point at.
+ *
+ * **`precision-narrowed`** is `level: "info"` — §17's normalization lint.
+ * It fires where an accumulated demand admitting `float` projects an
+ * `int`-kind scalar to `number` and the conversion is **not exact**;
+ * never on the shape, only on an actual lost digit, because "a lint that
+ * cried on every `int | float` key would be ignored within a week" (§17).
+ * Exactness is the round trip `Number.isFinite(n) && BigInt(n) === v`,
+ * not `Number.isSafeInteger` — 2^53, 3·2^52 and 2^60 are all exactly
+ * representable and all fail the latter (research.md F-3).
+ */
+export const OUTPUT_SURFACE_CODES = ["malformed-section", "precision-narrowed"] as const;
+
 /** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.5's codes are unchanged; v0.6 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
@@ -200,6 +233,7 @@ export const DIAGNOSTIC_CODES = [
   ...DIAGNOSTIC_LEVEL_CODES,
   ...SEALING_AUTHORITY_CODES,
   ...DIRECTIVES_CODES,
+  ...OUTPUT_SURFACE_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

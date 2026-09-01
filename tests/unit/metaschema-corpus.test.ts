@@ -106,10 +106,40 @@ const REFUSED: readonly { readonly fixture: string; readonly pipeline: "ACCEPT" 
     why: "Verdicts agree. Hand-written: `unknown-directive-key` (v0.7 part 2's own). The meta-schema's `directives` is `seal: closed` over the six reserved names.",
   },
   {
-    fixture: "merge-fold/inert-vocabulary/keys-not-a-mapping/schema.yaml",
-    pipeline: "ACCEPT",
+    fixture: "sections/all-four-at-once/schema.yaml",
+    pipeline: "REFUSE",
     metaCodes: ["type-mismatch"],
-    why: "DIVERGENCE. `keys: not-a-mapping-value`. Every section reader in this codebase treats a non-mapping section as 'nothing to read, never an error' — a posture documented since v0.3. The meta-schema says a `keys:` section is a mapping and refuses. The meta-schema is right and the posture is a hole; changing it would be a governance decision, not an implementer's.",
+    why: "Verdicts agree (v1.0 FR-001). All four of §9's top-level sections written as scalars. Hand-written: four `malformed-section`s, one per section, each naming which. The meta-schema: `type-mismatch`, since each section's own declared type is a mapping — the same closed shape said twice in two languages.",
+  },
+  {
+    fixture: "sections/authority-scalar/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["type-mismatch"],
+    why: "Verdicts agree (v1.0 FR-001). `authority: true`. Hand-written: `malformed-section`. The meta-schema: `type-mismatch`.",
+  },
+  {
+    fixture: "sections/directives-scalar/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["type-mismatch"],
+    why: "Verdicts agree (v1.0 FR-001). `directives: 7`. Hand-written: `malformed-section`. The meta-schema: `type-mismatch`.",
+  },
+  {
+    fixture: "sections/keys-sequence/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["type-mismatch"],
+    why: "Verdicts agree (v1.0 FR-001). A `keys:` written as a block sequence — the rule is 'not a mapping', not 'not a scalar'. Hand-written: `malformed-section`. The meta-schema: `type-mismatch`.",
+  },
+  {
+    fixture: "sections/types-scalar/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["type-mismatch"],
+    why: "Verdicts agree (v1.0 FR-001). `types: oops` — the fixture v0.7 recorded as a divergence, in its own case family now that the pipeline refuses it too.",
+  },
+  {
+    fixture: "merge-fold/inert-vocabulary/keys-not-a-mapping/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["type-mismatch"],
+    why: "Verdicts agree, as of v1.0. This was one of two DIVERGENCES v0.7 recorded: `keys: not-a-mapping-value` was silently ignored by every section reader in this codebase, while the meta-schema said a `keys:` section is a mapping and refused. The meta-schema was right; v1.0 FR-001 closed the hole (`malformed-section`, `src/validate/vocabulary.ts`'s `topLevelSectionProblems`) because a freeze must not make a silent acceptance permanent. The hand-written code names the section; the meta-schema reaches the same verdict generically.",
   },
   {
     fixture: "merge-policy/cross-category/schema.yaml",
@@ -143,9 +173,9 @@ const REFUSED: readonly { readonly fixture: string; readonly pipeline: "ACCEPT" 
   },
   {
     fixture: "validate-types/non-mapping-section/schema.yaml",
-    pipeline: "ACCEPT",
+    pipeline: "REFUSE",
     metaCodes: ["type-mismatch"],
-    why: "DIVERGENCE, the twin of keys-not-a-mapping: `types: oops`. Same posture, same hole, same verdict from the meta-schema.",
+    why: "Verdicts agree, as of v1.0 — the twin of keys-not-a-mapping: `types: oops`. Same posture, same hole, closed by the same one rule (v1.0 FR-001).",
   },
   {
     fixture: "validate-vocabulary/collect-all/schema.yaml",
@@ -251,13 +281,30 @@ describe("v0.7 part 2 FR-018 — the verdicts agree; the codes are where the han
     expect(disagreements).toEqual([]);
   });
 
-  it("exactly two divergences, and each is the meta-schema being STRICTER than the pipeline", () => {
+  it("v1.0 FR-003 / SC-001: ZERO divergences — the meta-schema and the pipeline agree on every verdict", () => {
     const divergences = REFUSED.filter((row) => row.pipeline === "ACCEPT");
-    expect(divergences.map((row) => row.fixture)).toEqual(["merge-fold/inert-vocabulary/keys-not-a-mapping/schema.yaml", "validate-types/non-mapping-section/schema.yaml"]);
-    // One hole, two fixtures (a top-level `keys:`/`types:` section that is
-    // not a mapping is read as "nothing", never an error, throughout this
-    // codebase) — the implementation being laxer than §9, not the
-    // meta-schema being wrong.
+    // **The count is asserted, not described** (v1.0 FR-003). This table
+    // is the measure of the self-hosting claim: four rows at the start of
+    // v0.7, two at its end, zero here. Every row that remains is a *code*
+    // difference on an agreed verdict — the hand-written check naming the
+    // construct where the meta-schema says `type-mismatch` or
+    // `seal-violation` generically, which is the hand-written check being
+    // better, not the meta-schema being wrong.
+    expect(divergences).toHaveLength(0);
+    expect(divergences.map((row) => row.fixture)).toEqual([]);
+    // A row claiming to be a divergence and a row the sweep *observes* to
+    // be one are two different things, and both must now be empty — so a
+    // future divergence cannot be smuggled in by writing the prose without
+    // the flag, or the flag without the prose.
+    expect(REFUSED.filter((row) => row.why.startsWith("DIVERGENCE"))).toEqual([]);
+    //
+    // The hole the two former rows exposed — a top-level `keys:`/`types:`
+    // section that is not a mapping read as "nothing", never an error,
+    // throughout this codebase — is closed by v1.0 FR-001's one rule
+    // (`malformed-section`, `src/validate/vocabulary.ts`). It was recorded
+    // rather than fixed in v0.7 because changing a verdict is a governance
+    // decision; §9 was always the governance, and v1.0 is the last release
+    // at which catching up is a correction rather than a meaning change.
     //
     // A second hole used to live here too: a top-level key declaration's
     // vocabulary was not closed, which `merge-fold/inert-vocabulary/
@@ -272,8 +319,5 @@ describe("v0.7 part 2 FR-018 — the verdicts agree; the codes are where the han
     // refusal has its own dedicated coverage instead — see
     // `validate-vocabulary/unknown-key-vocabulary-keyword` and
     // `validate-vocabulary/unknown-nested-key-vocabulary-keyword`.
-    for (const row of divergences) {
-      expect(row.why.startsWith("DIVERGENCE")).toBe(true);
-    }
   });
 });

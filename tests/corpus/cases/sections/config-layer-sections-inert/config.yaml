@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+name: ok
+types: oops
+authority: 7

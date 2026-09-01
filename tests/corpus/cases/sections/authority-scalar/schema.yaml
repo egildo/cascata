@@ -1,0 +1,5 @@
+authority: true
+keys:
+  name:
+    demand:
+      type: string

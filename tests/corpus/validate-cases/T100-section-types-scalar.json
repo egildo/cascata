@@ -1,0 +1,20 @@
+{
+  "name": "T100: a top-level types: that is not a mapping is refused at its own position",
+  "cites": "v1.0 FR-001",
+  "fixtureDir": "sections/types-scalar",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "malformed-section",
+        "document": "schema.yaml",
+        "line": 1,
+        "column": 8,
+        "demand": { "pointer": "/types", "document": "schema.yaml", "line": 1, "column": 8 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

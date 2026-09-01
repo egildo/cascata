@@ -206,7 +206,10 @@ function parseExpect(raw: unknown, source: string): ValidateExpect {
   fail(source, "'expect.ok' must be true or false");
 }
 
-const CITES_PATTERN = /^v0\.[4567] FR-\d+[a-z]?$/;
+// v1.0 joins the milestones that may own a validate case. Widened, never
+// loosened: the shape is still "a milestone plus a qualified FR number",
+// which is CLAUDE.md's citation rule enforced by the loader.
+const CITES_PATTERN = /^v(0\.[4567]|1\.0) FR-\d+[a-z]?$/;
 
 /** Load and validate one validate-conformance case from `file`. `fixtureDir` resolves relative to `file`'s directory, mirroring `merge-case.ts`. */
 export function loadValidateCase(file: string): ValidateCase {

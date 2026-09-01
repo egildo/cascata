@@ -1,0 +1,16 @@
+{
+  "name": "T104: all four sections malformed at once produce four diagnostics, one each, in canonical section order",
+  "cites": "v1.0 FR-001",
+  "fixtureDir": "sections/all-four-at-once",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      { "code": "malformed-section", "document": "schema.yaml", "line": 1, "column": 12, "demand": { "pointer": "/authority", "document": "schema.yaml", "line": 1, "column": 12 }, "pedigreePosition": 0 },
+      { "code": "malformed-section", "document": "schema.yaml", "line": 2, "column": 13, "demand": { "pointer": "/directives", "document": "schema.yaml", "line": 2, "column": 13 }, "pedigreePosition": 0 },
+      { "code": "malformed-section", "document": "schema.yaml", "line": 3, "column": 7, "demand": { "pointer": "/keys", "document": "schema.yaml", "line": 3, "column": 7 }, "pedigreePosition": 0 },
+      { "code": "malformed-section", "document": "schema.yaml", "line": 4, "column": 8, "demand": { "pointer": "/types", "document": "schema.yaml", "line": 4, "column": 8 }, "pedigreePosition": 0 }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "T103: a top-level authority: that is not a mapping is refused",
+  "cites": "v1.0 FR-001",
+  "fixtureDir": "sections/authority-scalar",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "malformed-section",
+        "document": "schema.yaml",
+        "line": 1,
+        "column": 12,
+        "demand": { "pointer": "/authority", "document": "schema.yaml", "line": 1, "column": 12 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

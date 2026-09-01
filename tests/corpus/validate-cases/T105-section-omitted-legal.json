@@ -1,0 +1,8 @@
+{
+  "name": "T105: a schema omitting three of the four sections entirely is legal and unchanged — absent and malformed are different",
+  "cites": "v1.0 FR-002",
+  "fixtureDir": "sections/omitted-sections-legal",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}
