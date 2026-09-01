@@ -383,7 +383,7 @@ config in another; the reported location resolves against the house layer's dire
 - [x] T091 [P] `grep -rn SABOTAGE src/ tests/` returns nothing
 - [x] T092 Tick every checkbox in this file as completed
 - [x] T093 Run `quickstart.md` end to end
-- [ ] T094 Write the milestone report (ambiguities, invented details, sabotage results, changed
+- [x] T094 Write the milestone report (ambiguities, invented details, sabotage results, changed
       tests) per CLAUDE.md's Method section
 
 ---
