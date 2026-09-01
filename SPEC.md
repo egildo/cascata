@@ -2,7 +2,7 @@
 
 > Working title — rename at will. A lightweight TypeScript library for reasoning about configuration as **schema-governed, cascading, file-based data**. Format-agnostic by design (YAML first; JSON and TOML later), self-hosting, provenance-rich.
 
-**Status:** design specification / constitution, v0 (pre-implementation)
+**Status:** v1.0 — implemented and frozen (§15's freeze rule). Corrections always; additions while no existing meaning changes; a changed meaning requires v2.0.
 
 ---
 
