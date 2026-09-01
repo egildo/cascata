@@ -207,7 +207,41 @@ const BARE_FETCH_CALL_PATTERN = /(?<![.\w$])fetch\(/;
 // cannot match: the character after "require" there is "H", never "(".
 // Whitespace *inside* the parens, before the opening quote, is tolerated
 // (`import( "node:fs" )`), since nothing here needs to forbid that.
-const DYNAMIC_FS_IMPORT_OR_REQUIRE_PATTERN = /(?<![.\w$])(?:import|require)\(\s*["'](?:node:fs|fs)["']/;
+//
+// The quote class covers all three JS string delimiters — `"`, `'`, and
+// the backtick — not just the two ordinary-quote forms. A first version
+// of this pattern omitted the backtick; the coordinator's own probe,
+// ``await import(`node:fs`)`` (a template literal, no interpolation —
+// valid, unremarkable JavaScript some codebases use uniformly, not an
+// adversarial input), walked straight through it. Sabotage-verified
+// separately from the double-quote case below, specifically so the
+// backtick branch's own contribution could be seen rather than assumed
+// to ride along with `"`/`'` (see the milestone report for both runs).
+const DYNAMIC_FS_IMPORT_OR_REQUIRE_PATTERN = /(?<![.\w$])(?:import|require)\(\s*["'`](?:node:fs|fs)["'`]/;
+
+// **What this sweep is, and is not, good for.** It is textual — a regex
+// over each file's raw source, not a parse of any kind — so it catches
+// the *accidental* reintroduction of I/O: a static import restored by a
+// bad merge, a lazily-added `await import("node:fs")` reached for out of
+// habit, a stray `require(...)` from copied CommonJS code. That is the
+// actual risk this milestone's own history has produced (see this
+// section's own header comment), and this sweep can be trusted for it.
+// It is not, and cannot be, a defense against *deliberate* evasion: a
+// computed specifier built at runtime (`import("node:" + "fs")`, a
+// specifier assembled from an imported constant, `String.fromCharCode`
+// tricks and the like), an unusual-but-legal whitespace form the anchor
+// deliberately does not chase (`import ("node:fs")` — a space before the
+// paren; declining to match it is a documented, deliberate limit, not an
+// oversight — widening the anchor to catch it would also let it start
+// matching `requireHost (` and this file's own prose, which is a worse
+// trade), or a filesystem handle obtained through any indirection this
+// pattern was never told to look for (a re-exported binding, a
+// dependency that itself wraps `node:fs`, a global some other module
+// attaches). `SPEC.md` Article VI calls the host boundary "structural
+// rather than self-policed" — this test is the part of that claim that
+// is actually true: it makes the boundary hard to cross *by accident*.
+// It does not make the boundary impossible to cross on purpose, and nothing
+// here should be read as claiming otherwise.
 
 function importsNodeFs(filePath: string): boolean {
   return importSpecifiersOf(filePath).some((specifier) => NODE_FS_SPECIFIERS.has(specifier));
