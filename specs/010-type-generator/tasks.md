@@ -108,30 +108,30 @@ rows 6–17 and §3 row 1.
 **Independent Test**: a required key, a provided key, a plain key ⇒ non-optional, non-optional,
 optional.
 
-- [ ] T012 [US2] `tests/unit/generate-shapes.test.ts` **first**: one `it()` per contract row 6–17,
+- [x] T012 [US2] `tests/unit/generate-shapes.test.ts` **first**: one `it()` per contract row 6–17,
       plus §6's `keys: {}` open/closed, `my-key`, `città`, `🍝`, `10`, `__proto__`, `constructor`,
       64-deep `keys`, `values` of `values`, top-level `seal`. Expected text written by hand from the
       contract. Every emitted text is also **compiled** by the US6 harness (build
       `tests/unit/generate-literal.ts`'s compile helper now, T013) so a hand-written expectation that
       is not valid TypeScript fails loudly
-- [ ] T013 [US2] `tests/unit/generate-literal.ts`: `compileInMemory(source: string): Diagnostic[]`
+- [x] T013 [US2] `tests/unit/generate-literal.ts`: `compileInMemory(source: string): Diagnostic[]`
       (the `ts.createProgram` harness from research D-7, sharing one `CompilerHost` and its parsed lib
       across calls) and `toLiteral(value: ConfigValue): string` per contracts/soundness-oracle.md §2;
       its own hand-written pair test in `tests/unit/generate-oracle.test.ts` (stub the file now,
       US6 fills it)
-- [ ] T014 [US2] `src/generate/identifiers.ts`: `propertyName(key)` (bare iff
+- [x] T014 [US2] `src/generate/identifiers.ts`: `propertyName(key)` (bare iff
       `[A-Za-z_$][A-Za-z0-9_$]*`, else a double-quoted TS string literal) and the reserved list for
       aliases (used in US4); research D-6
-- [ ] T015 [US2] `src/generate/emit.ts`: the printer for positions — object types with `readonly`
+- [x] T015 [US2] `src/generate/emit.ts`: the printer for positions — object types with `readonly`
       properties in code-point order, `?` iff neither `required` nor `provided`, the index signature
       (`D` / `unknown` / absent / `never` per rows 10–14), `readonly D[]` with parenthesized unions,
       `unknown` for an undemanded position, JSDoc per contract §2 in fixed order. Leaves print
       `unknown` until US3
-- [ ] T016 [US2] **Sabotage** (same protocol): (a) emit `{}` for the closed-empty case — the row-14
+- [x] T016 [US2] **Sabotage** (same protocol): (a) emit `{}` for the closed-empty case — the row-14
       test and its compiled negative must go red (this is F-4, and the sabotage proves the test
       guards it); (b) drop `provided` from optionality — the provided-key case goes red, the required
       one does not. Restore; record
-- [ ] T017 [US2] `pnpm typecheck && pnpm test` green; commit `feat(generate): shapes — v1.1 US2`
+- [x] T017 [US2] `pnpm typecheck && pnpm test` green; commit `feat(generate): shapes — v1.1 US2`
 
 **Checkpoint**: every shape row of the contract emits, compiles, and is guarded by a case that has
 been watched going red.

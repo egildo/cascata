@@ -68,7 +68,7 @@ import { readKeysVocabulary } from "../merge/strategy.js";
 import { MAX_DEMAND_DEPTH, parseDemand, readNestedKeysMapping, type ParsedDemand, type RawDemand } from "../validate/vocabulary.js";
 import { qualifierOfLayer, readTypeDeclarations, resolveTypeName, type TypeDeclaration } from "../validate/types.js";
 import type { Alternative, BuiltinTypeName, TypeExpression } from "../validate/typeexpr.js";
-import { admissionOfDemand, admissionOfName, intersect as intersectAdmission, union as unionAdmission, type Admission } from "../validate/numeric.js";
+import { admissionOfDemand, admissionOfName, intersect as intersectAdmission, type Admission } from "../validate/numeric.js";
 import { aliasName, qualifiedAlias } from "./identifiers.js";
 import { extend } from "../extend.js";
 
@@ -221,6 +221,11 @@ function declarationKey(declaration: TypeDeclaration): string {
 
 function setKeyOf(declarations: readonly TypeDeclaration[]): string {
   return declarations.map(declarationKey).join("&");
+}
+
+/** The key an `AccumulatedIntersection` is stored under — the emitter's way back from a `ref`'s declaration list to its intersected body. */
+export function intersectionKeyOf(declarations: readonly TypeDeclaration[]): string {
+  return setKeyOf(declarations);
 }
 
 /** Declarations in a set are ordered by declaring rank — the chain's own order, so a set has exactly one spelling. */
@@ -468,9 +473,20 @@ function accumulateNumeric(contributions: readonly Contribution[], ctx: Ctx): Re
       if (alternative.depth === 0) {
         continue;
       }
+      // **Intersected, not unioned, and this is `numeric.ts`'s own
+      // behaviour rather than a choice.** `walkArrayAlternative` records an
+      // element's admission once per alternative and `record` intersects,
+      // so `int[] | float[]` leaves its element with no numeric demand at
+      // all and `project()` falls back to the lexical kind. The emitted
+      // type has to say the same thing or FR-016 is a claim rather than a
+      // construction — and the answer is sound either way, since each array
+      // alternative then keeps its own kind (`readonly bigint[] | readonly
+      // number[]`). Depth 0 unions within one demand, because
+      // `admissionOfDemand` does; the asymmetry is v1.0's, recorded here
+      // rather than smoothed over.
       const admission = admissionOfName(alternative.name, contribution.scopeRank, ctx.allDecls, contribution.parsed.accept, new Set());
       const existing = byArrayDepth.get(alternative.depth);
-      byArrayDepth.set(alternative.depth, existing === undefined ? admission : unionAdmission(existing, admission));
+      byArrayDepth.set(alternative.depth, existing === undefined ? admission : intersectAdmission(existing, admission));
     }
     for (const [depth, admission] of byArrayDepth) {
       fold(depth, admission);
@@ -642,10 +658,18 @@ function positionOf(contributions: readonly Contribution[], depth: number, ctx: 
     return emptyPosition();
   }
   const numericByDepth = accumulateNumeric(contributions, ctx);
+  // A name reaches the tree only where some layer places a **demand** on
+  // it. A nested key declaration carrying `delegate: allow` and nothing
+  // else is a delegation grant, not a shape (§9's nested vocabulary), and
+  // `readNestedKeysMapping` — the reader every other consumer uses — omits
+  // it for the same reason. Found by the emitter's own row-17 case, which
+  // saw a property appear for a key no layer had demanded or provided.
   const names = new Set<string>();
   for (const contribution of contributions) {
-    for (const name of contribution.parsed.keys?.keys() ?? []) {
-      names.add(name);
+    for (const [name, declaration] of contribution.parsed.keys ?? []) {
+      if (declaration.demand !== undefined) {
+        names.add(name);
+      }
     }
   }
   const keys = new Map<string, AccumulatedKey>();

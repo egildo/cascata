@@ -34,6 +34,22 @@
 const BARE_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 /**
+ * One mapping key as a property name: bare where it is an ASCII
+ * identifier, a double-quoted TypeScript string literal otherwise —
+ * verbatim, never renamed (FR-015).
+ *
+ * `JSON.stringify` is the escaper because a TypeScript string literal and a
+ * JSON string literal agree on every escape either needs here: both use
+ * `\"`, `\\`, and `\uXXXX`, and neither permits a raw newline. A key is
+ * author-controlled, so `__proto__`, `constructor`, `10` and `🍝` all reach
+ * this function, and all four compile as quoted property names in the type
+ * *and* in the literal the oracle writes against it (research F-5).
+ */
+export function propertyName(key: string): string {
+  return BARE_IDENTIFIER.test(key) ? key : JSON.stringify(key);
+}
+
+/**
  * Every name TypeScript refuses as a **type alias name**, probed (F-5) and
  * fixed here rather than derived from the compiler: the predefined type
  * names, which it refuses by a dedicated rule ("Type alias name cannot be
