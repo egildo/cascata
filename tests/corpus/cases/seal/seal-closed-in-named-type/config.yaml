@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+config:
+  a: hello
+  b: not declared

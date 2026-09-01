@@ -128,11 +128,22 @@ export const DIAGNOSTIC_LEVEL_CODES = ["delegate-inline-string-loaded"] as const
  * specs/007-sealing-and-embedding/contracts/sealing-authority.md.
  * `required-vacuous` is `level: "info"` (§5.5's lint); every other code
  * here is `level: "error"`.
+ *
+ * **`seal` moved into the `demand` vocabulary during implementation**
+ * (SPEC.md §9/§6.3, amended) — it no longer has its own malformed-value
+ * code (`unknown-seal-value`, retired: a bad `seal:` value now reuses
+ * `malformed-demand-value`, the same code every other demand keyword's
+ * shape mistake uses — `src/validate/vocabulary.ts`) or its own
+ * weakening code (`seal-weakened`, retired: `closed → open` needs no
+ * dedicated refusal — whole-chain validation's own redundancy makes the
+ * attempt inert, the identical "a widening needs no refusal" precedent
+ * SPEC.md §15 already established for named-type narrowing). Neither
+ * code shipped before this correction, so retiring them costs nothing.
+ * `seal-violation` stays, now produced by `src/validate/check.ts`'s
+ * per-layer, per-position check rather than a whole-stack pre-resolution.
  */
 export const SEALING_AUTHORITY_CODES = [
-  "unknown-seal-value",
   "seal-violation",
-  "seal-weakened",
   "final-key-redeclared",
   "final-key-set",
   "required-vacuous",

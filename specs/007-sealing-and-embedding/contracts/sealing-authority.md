@@ -11,23 +11,45 @@
   `info`-only outcome in this milestone (their own diagnostic catalogues are unchanged and remain
   all-`error`).
 
-## `seal`
+## `seal` — **AMENDED mid-implementation** (research.md D4's amendment has the full account; this
+section is corrected in place rather than struck through, since the two rows below are what
+actually ships and the corpus fixtures/tests were rewritten to match)
 
-- Values: `open` (default) | `closed`. Anything else: `unknown-seal-value` at its own position
-  (FR-006).
+- `seal` is a **demand keyword** (sibling of `type`/`required`/`keys`, written
+  `demand: { seal: closed, keys: {...} }`), not a per-key keyword sibling to `provide`/`final`. A
+  schema may **additionally** declare a single top-level `seal: open | closed` (sibling to the
+  top-level `keys:` map), constraining the config's own top-level entries the same way a nested one
+  constrains a mapping value's children.
+- Values: `open` (default) | `closed`. Anything else: refused by the existing `malformed-demand-value`
+  code (not a dedicated `unknown-seal-value` — that code does not exist), at the `seal` entry's own
+  position.
 - `closed` on a key demanding a mapping refuses any child key present in the merged value but
-  absent from the accumulated `demand.keys` vocabulary at that position: `seal-violation`,
+  absent from that same `demand.keys` vocabulary at that position: `seal-violation`,
   positioned at the child (FR-007).
-- `open → closed` is legal, silent, and takes effect from the declaring layer downward. `closed →
-  open` is refused: `seal-weakened`, primary span the descendant's own declared value — the same
-  shape `cascade-strategy-weakened` has (FR-009).
+- `open → closed` is legal and silent. `closed → open` is **not a dedicated refusal** — there is no
+  `seal-weakened` code. Because every ancestor's own demand is re-checked against the final merged
+  tree (SPEC.md §5.4, whole-chain validation), a descendant's attempt to widen back to `open` is
+  automatically inert: the ancestor's own `closed` demand still fires `seal-violation` against the
+  final tree regardless. (FR-009's second half, "closed → open is refused," is therefore true of the
+  *outcome* — the config is still refused — but not of there being a dedicated diagnostic naming the
+  weakening as such; the refusal a reader sees is `seal-violation`, sourced from the ancestor.)
 - `seal: closed` on a key whose demand is not a mapping is accepted and inert — there are no
   children to close over the door (Edge Cases).
+- **Named types**: a named type's own `demand.seal` is read wholesale from the type declaration, the
+  same way every other demand keyword already treats named types (no merging across the usage site's
+  own declaration and the type's).
 
 ## `final`
 
+- Stays a **per-key** keyword (sibling of `provide`/`cascade`/`delegate` inside `keys.<name>`), but
+  ships as a **bare boolean** — `final: true` — not the richer per-key record originally sketched.
+  **Does not nest**: `final` is read only off a schema's own top-level `keys.<name>` declarations,
+  the identical top-level-only scope `cascade` already has; a `final` written inside a nested
+  `demand.keys.<child>` entry is not read as `final` at all (§9 does not claim otherwise once read
+  against the worked examples — see the implementation report's governance-findings section).
 - Once declared by any schema layer, **any** further declaration of that key by a descendant
-  schema layer — `demand`, `provide`, `cascade`, `seal`, or `final` again — is refused:
+  schema layer — `demand`, `provide`, `cascade`, or `final` again (not `seal`, which is no longer a
+  per-key sibling to redeclare) — is refused:
   `final-key-redeclared`, even when the later declaration would be a legal narrowing (FR-010).
 - `final` **with** `provide`: a config setting that key is refused (`final-key-set`, FR-011). A
   config **not** setting it is unaffected — the schema's `provide` supplies the value as normal.

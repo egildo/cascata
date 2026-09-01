@@ -1,0 +1,3 @@
+$schema: ./schema.yaml
+title: hello
+extra: not declared

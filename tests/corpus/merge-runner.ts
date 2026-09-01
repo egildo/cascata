@@ -12,6 +12,7 @@
 
 import { join, relative } from "node:path";
 import { merge, resolve, why, type MergedConfiguration, type ProvenanceEntry } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { resolvePointer } from "../../src/model/pointer.js";
 import { compareNode } from "./runner.js";
 import type { ExpectedMergeDiagnostic, ExpectedMergeSpan, ExpectedProvenanceEntry, ExpectedWhy, MergeCase } from "./merge-case.js";
@@ -121,7 +122,7 @@ export async function runMergeCase(testCase: MergeCase): Promise<MergeCaseResult
   const entryPath = join(testCase.fixtureDir, testCase.entry);
   const sandboxRoot = join(testCase.fixtureDir, testCase.sandboxRoot);
 
-  const resolved = await resolve(entryPath, { sandboxRoot });
+  const resolved = await resolve(entryPath, { host: createNodeHost(), sandboxRoot });
   if (!resolved.ok) {
     failures.push(`resolve() failed before merge() could run: ${resolved.diagnostics.map((d) => `${d.code} @ ${d.primary.origin.label}:${d.primary.line}:${d.primary.column}`).join("; ")}`);
     return { name: testCase.name, passed: false, failures };

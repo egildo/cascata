@@ -1,0 +1,13 @@
+types:
+  strictMapping:
+    demand:
+      type: mapping
+      keys:
+        a:
+          demand:
+            type: string
+      seal: closed
+keys:
+  config:
+    demand:
+      type: strictMapping

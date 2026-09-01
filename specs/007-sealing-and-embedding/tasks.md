@@ -223,73 +223,73 @@ host) imports `node:fs`/calls `fetch`; a full resolution driven by an in-memory 
 
 ### Conformance cases / tests (write first, alongside the refactor since this story is largely mechanical relocation)
 
-- [ ] T050 [US4] `tests/unit/layering.test.ts`: **write** the new gate-7 sweep (scans all of `src/`
+- [x] T050 [US4] `tests/unit/layering.test.ts`: **write** the new gate-7 sweep (scans all of `src/`
       for `node:fs` imports and `fetch(` calls, exempting `src/host/node.ts` by name) — this MUST
       fail against the current tree before any other T05x task, proving the gate is real
       (Acceptance Scenario 1, FR-023, FR-024, SC-002)
-- [ ] T051 [P] [US4] Case: a host backed entirely by an in-memory map resolves a config with
+- [x] T051 [P] [US4] Case: a host backed entirely by an in-memory map resolves a config with
       `$adopts`, `$schema`, and delegated fragments identically to today's fixtures — a new
       in-memory `Host` test double, `tests/unit/host-test-double.ts`, mirroring
       `RecordedTransport`'s role (Acceptance Scenario 2, FR-030) — `tests/unit/host-in-memory.test.ts`
-- [ ] T052 [P] [US4] Case: a host that declines to supply a document — the refusal is a diagnostic
+- [x] T052 [P] [US4] Case: a host that declines to supply a document — the refusal is a diagnostic
       (`document-unreachable`), never a thrown exception (Acceptance Scenario 3, FR-028) —
       `tests/unit/host-refusal.test.ts`
-- [ ] T053 [P] [US4] Case: `resolve()`/`load()` called with no `host` — throws (Acceptance Scenario
+- [x] T053 [P] [US4] Case: `resolve()`/`load()` called with no `host` — throws (Acceptance Scenario
       4, FR-028) — `tests/unit/host-missing-throws.test.ts`
-- [ ] T054 [P] [US4] Case: a location the host **can** canonicalize — host supplies identity, library
+- [x] T054 [P] [US4] Case: a location the host **can** canonicalize — host supplies identity, library
       reaches the confinement verdict (Acceptance Scenario 5, FR-026) — extend
       `tests/unit/sandbox-escape.test.ts`
-- [ ] T055 [P] [US4] Case: a location the host **cannot** canonicalize — lexical fallback, no verdict
+- [x] T055 [P] [US4] Case: a location the host **cannot** canonicalize — lexical fallback, no verdict
       either way (Acceptance Scenario 6, FR-027 — v0.2's `safeRealpath` behaviour, moved not changed)
       — extend `tests/unit/sandbox-escape.test.ts`
-- [ ] T056 [P] [US4] Case: two different hosts supplying byte-identical documents — identical tree,
+- [x] T056 [P] [US4] Case: two different hosts supplying byte-identical documents — identical tree,
       provenance, diagnostics, same order (Acceptance Scenario 7, FR-031) —
       `tests/unit/host-determinism.test.ts`
-- [ ] T057 [US4] Confirm every existing recorded remote fixture still passes **unmodified**
+- [x] T057 [US4] Confirm every existing recorded remote fixture still passes **unmodified**
       (Acceptance Scenario 8, FR-030, SC-008) — do not touch fixture data; only the harness wiring
       that drives `resolve()` may change
-- [ ] T058 [P] [US4] Case: the shipped Node host reads local files and fetches remote schemas with
+- [x] T058 [P] [US4] Case: the shipped Node host reads local files and fetches remote schemas with
       no adapter of the embedder's own (Acceptance Scenario 9) — `tests/unit/node-host.test.ts`
-- [ ] T059 [P] [US4] Case: a host that answers with different bytes for the same location twice in
+- [x] T059 [P] [US4] Case: a host that answers with different bytes for the same location twice in
       one resolution (Edge Cases) — document the library's own non-position on this (it is a law
       about hosts, not enforceable library-side) with a test that shows the library does not crash
       and does not pretend to detect it
-- [ ] T060 [P] [US4] Case: a host that canonicalizes two distinct locations to one identity (Edge
+- [x] T060 [P] [US4] Case: a host that canonicalizes two distinct locations to one identity (Edge
       Cases — a hardlink/case-insensitive filesystem) — confirm diamond dedup (existing
       content-hash mechanism) still applies — extend `tests/unit/graph-content-dedup.test.ts` or add
       a sibling
 
 ### Implementation for User Story 4
 
-- [ ] T061 [US4] `src/resolve/host.ts` (new): the `Host`/`HostReadResult` interface, zero imports
-- [ ] T062 [US4] `src/resolve/location.ts`: `readLocalDocument`/`safeRealpath`/`isWithinSandbox`/
+- [x] T061 [US4] `src/resolve/host.ts` (new): the `Host`/`HostReadResult` interface, zero imports
+- [x] T062 [US4] `src/resolve/location.ts`: `readLocalDocument`/`safeRealpath`/`isWithinSandbox`/
       `isSandboxEscape` become async and Host-backed; remove the `node:fs` import entirely
-- [ ] T063 [US4] `src/resolve/cache.ts`: `DocumentCache` takes a `Host` in its constructor;
+- [x] T063 [US4] `src/resolve/cache.ts`: `DocumentCache` takes a `Host` in its constructor;
       `existsSync`/`readFileSync`/`writeFileSync`/`mkdirSync` replaced by `host.cacheRead`/
       `host.cacheWrite` under `"meta/"`/`"blob/"`-prefixed keys; remove the `node:fs` import
-- [ ] T064 [US4] `src/resolve/fetch.ts`: remove `createNetworkTransport` (moves to T066); this file
+- [x] T064 [US4] `src/resolve/fetch.ts`: remove `createNetworkTransport` (moves to T066); this file
       no longer imports/calls the global `fetch`
-- [ ] T065 [US4] `src/resolve/delegate.ts`: `isDelegationSandboxEscape` becomes async, threads
+- [x] T065 [US4] `src/resolve/delegate.ts`: `isDelegationSandboxEscape` becomes async, threads
       `Host` through (mirrors T062)
-- [ ] T066 [US4] `src/host/node.ts` (new, separate entry point): `createNodeHost(options?: {cacheDir?: string}): Host` (moved `readLocalDocument`/`safeRealpath`/cache bodies) and `createNodeTransport(maxBytes?: number): Transport` (moved `createNetworkTransport` verbatim)
-- [ ] T067 [US4] `package.json`: `exports["./host/node"]` → `dist/host/node.{js,d.ts}`
-- [ ] T068 [US4] `src/index.ts`: `ResolveOptions.host: Host` (required, throws if missing/malformed
+- [x] T066 [US4] `src/host/node.ts` (new, separate entry point): `createNodeHost(options?: {cacheDir?: string}): Host` (moved `readLocalDocument`/`safeRealpath`/cache bodies) and `createNodeTransport(maxBytes?: number): Transport` (moved `createNetworkTransport` verbatim)
+- [x] T067 [US4] `package.json`: `exports["./host/node"]` → `dist/host/node.{js,d.ts}`
+- [x] T068 [US4] `src/index.ts`: `ResolveOptions.host: Host` (required, throws if missing/malformed
       per FR-028); `ResolveOptions.cacheDir` removed; `ResolveOptions.transport` loses its
       real-network default (no silent fallback); every `walkAdoptsChain`/`performGraft`/
       `readAtTarget` call site threads `host` through and awaits the now-async sandbox checks
-- [ ] T069 [US4] Update every test harness that calls `resolve()` directly (or via
+- [x] T069 [US4] Update every test harness that calls `resolve()` directly (or via
       `tests/corpus/resolve-runner.ts`, `tests/unit/remote-test-helpers.ts`, and every `tests/unit/*.test.ts`
       calling `resolve()`) to construct and pass a `Host` — for local-only tests, either
       `tests/unit/host-test-double.ts`'s in-memory host reading from the same fixture directories, or
       `createNodeHost()` from `src/host/node.ts` (test files are exempt from the boundary); for
       remote tests, `createNodeHost({ cacheDir })` alongside the existing `RecordedTransport`
-- [ ] T070 [US4] `pnpm test` green: **every** pre-v0.7 test file listed in the CLAUDE.md baseline
+- [x] T070 [US4] `pnpm test` green: **every** pre-v0.7 test file listed in the CLAUDE.md baseline
       (50 files, 610 tests) still passes, with only harness-level `resolve()` call sites touched —
       no fixture data, no expected-diagnostic data changed (FR-041, SC-007)
-- [ ] T071 [US4] Sabotage: reintroduce a bare `import { readFileSync } from "node:fs"` into
+- [x] T071 [US4] Sabotage: reintroduce a bare `import { readFileSync } from "node:fs"` into
       `src/resolve/location.ts` — confirm T050's new gate-7 sweep fails; restore. Record in the
       report (SC-002's own named sabotage).
-- [ ] T072 [US4] Sabotage: have the in-memory test host silently substitute different bytes for a
+- [x] T072 [US4] Sabotage: have the in-memory test host silently substitute different bytes for a
       cache-hit vs. a fresh read within one call — confirm T056's determinism case fails; restore.
 
 **Checkpoint**: The library performs no I/O anywhere except the named host exemption. Every
@@ -306,27 +306,27 @@ order included.
 
 ### Conformance cases (write first)
 
-- [ ] T073 [P] [US5] Case: `load()` on a resolving/merging/validating entry returns
+- [x] T073 [P] [US5] Case: `load()` on a resolving/merging/validating entry returns
       `{ ok: true, configuration, diagnostics }` (any `info` lints included), never a config
       together with `error`s (Acceptance Scenario 1, FR-032) — `tests/unit/load.test.ts`
-- [ ] T074 [P] [US5] Case: `load()`'s result is identical to the staged calls in sequence, diagnostic
+- [x] T074 [P] [US5] Case: `load()`'s result is identical to the staged calls in sequence, diagnostic
       order included (Acceptance Scenario 2, 3, FR-033) — run both paths against the same fixture,
       assert structural equality
-- [ ] T075 [P] [US5] Case: `load()` on an entry whose schema chain is fine but produces only `info`
+- [x] T075 [P] [US5] Case: `load()` on an entry whose schema chain is fine but produces only `info`
       lints — success with diagnostics, end to end (Edge Cases, reusing T006-T008's fixtures through
       the one-call path)
-- [ ] T076 [P] [US5] Case: `load()` with a missing required option throws; a failure at any stage
+- [x] T076 [P] [US5] Case: `load()` with a missing required option throws; a failure at any stage
       returns diagnostics, never a throw (Acceptance Scenario 5, FR-032)
-- [ ] T077 [P] [US5] Case: `parse`/`resolve`/`merge`/`validate`/`why` remain independently callable
+- [x] T077 [P] [US5] Case: `parse`/`resolve`/`merge`/`validate`/`why` remain independently callable
       and exported (Acceptance Scenario 4, FR-034) — a type-level/import-level assertion, not just a
       runtime one
 
 ### Implementation for User Story 5
 
-- [ ] T078 [US5] `src/index.ts`: `LoadOptions`/`LoadResult` types (contracts/sealing-authority.md's
+- [x] T078 [US5] `src/index.ts`: `LoadOptions`/`LoadResult` types (contracts/sealing-authority.md's
       shape) and `load(entryPath, options)` — composes `resolve()`, `merge()`, `validate()`,
       collecting `info` diagnostics from every stage into the success path
-- [ ] T079 [US5] Sabotage: make `load()` return early on the first `info` lint as if it were fatal —
+- [x] T079 [US5] Sabotage: make `load()` return early on the first `info` lint as if it were fatal —
       confirm T075 fails; restore.
 
 **Checkpoint**: The ordinary embedding path exists and is provably not a second pipeline
@@ -344,33 +344,33 @@ config in another; the reported location resolves against the house layer's dire
 
 ### Conformance cases (write first)
 
-- [ ] T080 [P] [US6] Case: a `path` value's resolved location is available, computed against the
+- [x] T080 [P] [US6] Case: a `path` value's resolved location is available, computed against the
       directory of the document that **declared** it (Acceptance Scenario 1, FR-035) —
       `tests/unit/resource.test.ts`
-- [ ] T081 [P] [US6] Case: a `path` value provided by an ancestor layer, inherited by a config in a
+- [x] T081 [P] [US6] Case: a `path` value provided by an ancestor layer, inherited by a config in a
       different directory — resolves against the **ancestor's** directory, the discriminating case
       (Acceptance Scenario 2, FR-035, SC-006) — same file, a fixture with schema and config in
       different directories
-- [ ] T082 [P] [US6] Case: a `path` value written inside a delegated fragment resolves against the
+- [x] T082 [P] [US6] Case: a `path` value written inside a delegated fragment resolves against the
       **fragment's** own directory (Acceptance Scenario 3, FR-037) — reuse a v0.6 delegation fixture
       with a relative path inside the fragment
-- [ ] T083 [P] [US6] Case: a `url` value resolves to itself (Acceptance Scenario 4, FR-036)
-- [ ] T084 [P] [US6] Case: a `resource` path resolving **outside the sandbox root** is not refused —
+- [x] T083 [P] [US6] Case: a `url` value resolves to itself (Acceptance Scenario 4, FR-036)
+- [x] T084 [P] [US6] Case: a `resource` path resolving **outside the sandbox root** is not refused —
       the resolved location is reported anyway (Acceptance Scenario 5, FR-038) — the case explicitly
       testing the "intuitive-but-wrong" behaviour is absent
-- [ ] T085 [P] [US6] Case: no read, no existence check, for any `resource` value (Acceptance
+- [x] T085 [P] [US6] Case: no read, no existence check, for any `resource` value (Acceptance
       Scenario 6, FR-039) — assert via a host/fs spy that nothing was touched, not merely by
       inspecting the return value
-- [ ] T086 [P] [US6] Case: a `resource` path in a document reached over `https://` — "the declaring
+- [x] T086 [P] [US6] Case: a `resource` path in a document reached over `https://` — "the declaring
       document's directory" when the declaring document is a URL (Edge Cases) — the resolved
       location is a URL joined against the schema's own URL, not a filesystem path
 
 ### Implementation for User Story 6
 
-- [ ] T087 [US6] `src/validate/resource.ts` (new): `resource(configuration, pointer): ResolvedResource`
+- [x] T087 [US6] `src/validate/resource.ts` (new): `resource(configuration, pointer): ResolvedResource`
       per research.md D6 — purely lexical, `span.origin.id`-derived, no schema/demand lookup
-- [ ] T088 [US6] `src/index.ts`: export `resource`
-- [ ] T089 [US6] Sabotage: break the URL-vs-path branch (treat every string as a path) — confirm
+- [x] T088 [US6] `src/index.ts`: export `resource`
+- [x] T089 [US6] Sabotage: break the URL-vs-path branch (treat every string as a path) — confirm
       T083 fails; restore.
 
 **Checkpoint**: All six user stories complete.
@@ -379,10 +379,10 @@ config in another; the reported location resolves against the house layer's dire
 
 ## Phase 9: Polish & Cross-Cutting
 
-- [ ] T090 [P] `pnpm typecheck` clean, zero `any`, zero assertion casts on the node model
-- [ ] T091 [P] `grep -rn SABOTAGE src/ tests/` returns nothing
-- [ ] T092 Tick every checkbox in this file as completed
-- [ ] T093 Run `quickstart.md` end to end
+- [x] T090 [P] `pnpm typecheck` clean, zero `any`, zero assertion casts on the node model
+- [x] T091 [P] `grep -rn SABOTAGE src/ tests/` returns nothing
+- [x] T092 Tick every checkbox in this file as completed
+- [x] T093 Run `quickstart.md` end to end
 - [ ] T094 Write the milestone report (ambiguities, invented details, sabotage results, changed
       tests) per CLAUDE.md's Method section
 

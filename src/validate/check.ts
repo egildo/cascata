@@ -43,7 +43,7 @@ import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPat
 import { renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
 import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
 import { parseTypeExpression, type Alternative, type TypeExpression } from "./typeexpr.js";
-import type { KeySealState } from "../merge/seal.js";
+import type { KeyFinalState } from "../merge/final.js";
 
 /** v0.7 FR-002: an `ok: true` outcome carries whatever `info`-level lints were found (e.g. §5.5's `required-vacuous`) — possibly empty, never `error`-level (an `error` anywhere makes the whole check `ok: false` instead). */
 export type CheckOutcome = { readonly ok: true; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -110,7 +110,8 @@ function describeActual(node: Node): string {
   return node.type === "scalar" ? `a ${node.kind} scalar` : `a ${node.type}`;
 }
 
-function isValidUrl(value: string): boolean {
+/** Exported for `src/validate/resource.ts` (v0.7 US6) — the identical predicate this file's own `url` built-in type check already uses; kept as one definition rather than a second copy. */
+export function isValidUrl(value: string): boolean {
   try {
     new URL(value);
     return true;
@@ -119,7 +120,8 @@ function isValidUrl(value: string): boolean {
   }
 }
 
-function isValidPath(value: string): boolean {
+/** Exported for `src/validate/resource.ts` (v0.7 US6) — see `isValidUrl`'s own doc. */
+export function isValidPath(value: string): boolean {
   return value.length > 0 && !value.includes(" ");
 }
 
@@ -181,10 +183,22 @@ function checkNamedType(decl: TypeDeclaration, value: Node, usageAccept: readonl
       sites.push(siteAt(base, declaring, node.span));
     }
   }
-  // `required`, `items`, `keys` inside a *type's own* demand are not
+  // `required` and `items` inside a *type's own* demand are not
   // exercised by any Acceptance Scenario and are out of scope for this
   // milestone's own worked examples (§7 never shows a type declaring
-  // them) — a scope decision, not a citation gap.
+  // them) — a scope decision, not a citation gap. `seal` (v0.7) IS
+  // checked, using `decl.demand` wholesale (its own `keys` sibling, read
+  // by `sealClosedSites` below) — the meta-schema needs a named type
+  // whose own demand is a closed struct, and this is the minimum reading
+  // of `keys` that makes that meaningful: this type's own declared
+  // children, not a recursive walk into their own further nesting (which
+  // stays out of scope here for the identical reason `items`/`required`
+  // do — no worked example exercises it).
+  const sealDeclaring: DeclaringContext = { layer: decl.layer, layerRank: decl.layerRank, pointerPath: [...typeDeclaring.pointerPath, "seal"] };
+  const sealSpan = decl.demand.get("seal")?.span ?? decl.span;
+  for (const site of sealClosedSites(decl.demand, value)) {
+    sites.push(siteAt(site, sealDeclaring, sealSpan));
+  }
 
   const declaredAccept = decl.accept;
   if (declaredAccept !== undefined && declaredAccept.length > 0) {
@@ -427,6 +441,18 @@ function checkDemand(raw: RawDemand, value: Node | undefined, demandPointerPath:
     }
     if (keyword === "keys") {
       violations.push(...checkNestedKeys(keywordValue, value, demandPointerPath, mergedPointer, ctx));
+      continue;
+    }
+    if (keyword === "seal") {
+      // v0.7: seal lives in the demand vocabulary now — checked here,
+      // using `raw` wholesale (not just this one keyword's own value),
+      // since the closed-check needs `raw`'s own `keys` sibling too. See
+      // this file's own "seal" section (sealClosedSites) for why no
+      // cross-layer accumulation is needed.
+      const declaring: DeclaringContext = { ...usageDeclaringBase, pointerPath: [...demandPointerPath, "seal"] };
+      for (const site of sealClosedSites(raw, value)) {
+        violations.push(toViolation(ctx.configuration, mergedPointer, siteAt(site, declaring, keywordValue.span)));
+      }
     }
   }
 
@@ -610,101 +636,151 @@ function typeUsageProblems(configuration: MergedConfiguration, allDecls: readonl
   return problems;
 }
 
-// --- seal/final enforcement against the merged tree (v0.7, SPEC.md §6.3) --------------------
+// --- seal (v0.7, SPEC.md §6.3/§9 amended) -------------------------------------------------------
 //
-// `src/merge/seal.ts`'s `resolveSeal` already found every *vocabulary*-level
-// seal/final problem (an unrecognized `seal:` value, a weakening, a
-// redeclaration after `final`) without ever looking at the merged tree —
-// those diagnostics abort the fold before `checkConfiguration` is even
-// reached (`src/merge/fold.ts`'s `foldConfiguration`). What is left, and
-// what only the *merged* tree can answer, is FR-007 (an undeclared child
-// under `seal: closed`) and FR-011/FR-013 (a config setting, or a vacuous
-// `required` under, a `final`+`provide` key).
+// `seal` moved into the `demand` vocabulary during implementation
+// (governance finding, reported in full): a per-key `seal` could not
+// reach a nested mapping or the inside of a named type, and the
+// meta-schema needs both. As an ordinary demand keyword it needs **no
+// whole-stack pre-resolution and no dedicated weakening diagnostic** —
+// `src/merge/seal.ts` (whole-stack `seal`/`final` resolution) no longer
+// exists; only `src/merge/final.ts` (`final` alone) remains. The reason
+// is the same one already established for named-type narrowing (SPEC.md
+// §15): whole-chain validation checks every schema layer's own `seal`
+// declaration at every position, every time, redundantly. If an ancestor
+// declares `seal: closed` at some position, that layer's own check keeps
+// firing on every subsequent resolution regardless of what any
+// descendant later declares — including a descendant's own `seal: open`,
+// which is therefore **inert**, not something requiring an explicit
+// refusal: "a widening needs no refusal... inert exactly where it would
+// otherwise do harm" (§15's own words for the identical situation).
+// Symmetrically, a descendant is free to *add* new declared children to
+// an already-closed struct's `keys` vocabulary without needing to touch
+// `seal` at all — the ancestor's own closed check still runs against
+// only what *it itself* declared, so genuinely new children a descendant
+// names are simply outside that one ancestor layer's own check, and nothing
+// here needs to "merge" declarations across layers to get this right.
+//
+// Consequence: `seal: closed`'s enforcement is **entirely local** to one
+// `RawDemand` (one layer's own declaration at one position, or one
+// resolved named type's own declaration) — it needs no map, no pointer
+// bookkeeping, and no separate pass. `sealClosedSites` below is called
+// from exactly two places: `checkDemand`'s existing per-position walk
+// (ordinary keys, nested to arbitrary depth for free, since that walk
+// already recurses), and `checkNamedType`'s walk (so `seal` works inside
+// a named type too — the case named-type narrowing exists for).
 
-/**
- * The union, across every schema layer in the pedigree, of the child names
- * `keyName`'s own nested `demand.keys` vocabulary declares (v0.7 FR-007's
- * "accumulated `keys` vocabulary"). Scoped to top-level keys only,
- * matching `seal`/`final`'s own declaration scope (research.md D4) — this
- * reads each layer's **top-level** `keys.<keyName>.demand.keys`, not an
- * arbitrarily nested one.
- */
-function accumulatedChildNames(configuration: MergedConfiguration, keyName: string): ReadonlySet<string> {
-  const names = new Set<string>();
-  for (const layer of configuration.layers) {
-    if (layer.role !== "schema") {
-      continue;
-    }
-    const vocabulary = readDemandVocabulary(layer.tree);
-    const raw = vocabulary.get(keyName);
-    if (raw === undefined) {
-      continue;
-    }
-    const keysNode = raw.get("keys");
-    if (keysNode === undefined || keysNode.type !== "mapping") {
-      continue;
-    }
-    for (const childName of readNestedKeysMapping(keysNode).keys()) {
-      names.add(childName);
-    }
-  }
-  return names;
-}
-
-/** FR-007: for a key resolved `seal: closed` whose merged value is a mapping, refuse every present child not in `accumulatedChildNames` — positioned at the child. A key with no accumulated vocabulary at all (nothing ever declared `demand.keys` for it) closes over an empty set, refusing every child — an author closing a key with nothing declared has closed it against everything, which is what `closed` means literally. */
-function sealClosedDiagnostics(configuration: MergedConfiguration, keyName: string, sealState: KeySealState): Diagnostic[] {
-  if (sealState.openness !== "closed") {
+/** FR-007: if `raw` declares `seal: closed` and `value` is a mapping, one `ViolationSite` per present child not named by `raw`'s own `keys` (this layer's/type's own declaration alone — see this section's module doc for why no cross-layer accumulation is needed or wanted). A `seal: open` or absent `seal` contributes nothing. A malformed `seal` value is `src/validate/vocabulary.ts`'s job (`malformed-demand-value`), not checked again here. */
+function sealClosedSites(raw: RawDemand, value: Node): readonly ViolationSite[] {
+  const sealNode = raw.get("seal");
+  if (sealNode === undefined || sealNode.type !== "scalar" || sealNode.kind !== "string" || sealNode.value !== "closed") {
     return [];
   }
-  const value = configuration.tree.type === "mapping" ? configuration.tree.entries.get(keyName) : undefined;
-  if (value === undefined || value.type !== "mapping") {
+  if (value.type !== "mapping") {
     return [];
   }
-  const declared = accumulatedChildNames(configuration, keyName);
-  const diagnostics: Diagnostic[] = [];
+  const keysNode = raw.get("keys");
+  const declared = keysNode !== undefined && keysNode.type === "mapping" ? new Set(readNestedKeysMapping(keysNode).keys()) : new Set<string>();
+  const sites: ViolationSite[] = [];
   for (const [childName, childNode] of value.entries) {
     if (declared.has(childName)) {
       continue;
     }
-    const { layer: valueLayer, delegatedFrom } = layerForSpanOrigin(configuration, childNode.span.origin.id);
-    diagnostics.push(
-      createDiagnostic({
-        level: "error",
-        code: "seal-violation",
-        message: `'${keyName}.${childName}' is not declared by any schema's 'keys.${keyName}.demand.keys', and '${keyName}' is sealed 'seal: closed' — a closed struct refuses any key the accumulated vocabulary does not name (SPEC.md §6.3, v0.7 FR-007)`,
-        primary: childNode.span,
-        pointer: `${pointerFromPath([keyName])}${pointerFromPath([childName])}`,
-        pedigreePosition: valueLayer.rank,
-        ...(delegatedFrom !== undefined ? { delegatedFrom } : {}),
-      }),
-    );
+    sites.push({ pointerSuffix: [childName], node: childNode, reason: { kind: "seal-violated", childKey: childName } });
+  }
+  return sites;
+}
+
+/**
+ * A schema's **top-level** `seal` (SPEC.md §9, amended v0.7): the mate to
+ * a schema's top-level `keys:`, governing the **config's own top level**
+ * — new in v0.7 ("there was previously no syntax for closing a
+ * document's top level at all"). Read directly off the schema tree, not
+ * through any `demand` (there is no wrapping key at the document's own
+ * top level to hang a `demand:` off of) — mirrors how top-level `keys:`
+ * itself is read (`src/merge/strategy.ts`'s `readKeysVocabulary`),
+ * reusing the identical `malformed-demand-value`-shaped refusal for a
+ * value that is present but not `"open"`/`"closed"`.
+ */
+function topLevelSealDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  for (const layer of configuration.layers) {
+    if (layer.role !== "schema" || layer.tree.type !== "mapping") {
+      continue;
+    }
+    const sealNode = layer.tree.entries.get("seal");
+    if (sealNode === undefined) {
+      continue;
+    }
+    if (!(sealNode.type === "scalar" && sealNode.kind === "string" && (sealNode.value === "open" || sealNode.value === "closed"))) {
+      diagnostics.push(
+        createDiagnostic({
+          level: "error",
+          code: "malformed-demand-value",
+          message: `top-level 'seal' is not 'open' or 'closed' (SPEC.md §9, v0.7)`,
+          primary: sealNode.span,
+          pointer: "",
+          pedigreePosition: layer.rank,
+        }),
+      );
+      continue;
+    }
+    if (sealNode.value !== "closed" || configuration.tree.type !== "mapping") {
+      continue;
+    }
+    const declared = new Set(readDemandVocabulary(layer.tree).keys());
+    for (const [childName, childNode] of configuration.tree.entries) {
+      if (declared.has(childName)) {
+        continue;
+      }
+      const { layer: valueLayer, delegatedFrom } = layerForSpanOrigin(configuration, childNode.span.origin.id);
+      diagnostics.push(
+        createDiagnostic({
+          level: "error",
+          code: "seal-violation",
+          message: `top-level key '${childName}' is not declared by this schema's own 'keys:' vocabulary, and the document's top level is sealed 'seal: closed' (SPEC.md §6.3, §9, v0.7 FR-007)`,
+          primary: childNode.span,
+          pointer: pointerFromPath([childName]),
+          pedigreePosition: valueLayer.rank,
+          ...(delegatedFrom !== undefined ? { delegatedFrom } : {}),
+        }),
+      );
+    }
   }
   return diagnostics;
 }
 
-/** Whether `raw` (a schema layer's own top-level demand for one key) declares `required: true`. */
+// --- final (v0.7, SPEC.md §6.3) — the pinned-constant pattern, needing the merged tree ----------
+
+/** Whether `raw` (a schema layer's own demand at some position) declares `required: true`. */
 function declaresRequiredTrue(raw: RawDemand): boolean {
   const node = raw.get("required");
   return node !== undefined && node.type === "scalar" && node.kind === "bool" && node.value === true;
 }
 
 /**
- * FR-011/FR-012/FR-013: for a key resolved `final` with `provide`, decide
- * whether the merged value at that key's own pointer is the **config's
- * own** contribution (refused as `final-key-set`) or still the schema's
- * `provide` constant (accepted; and if any schema layer also declared
- * `required: true` for this key, §5.5's `required-vacuous` info lint
- * fires instead — never both, since a refused override already says
- * everything the lint would).
+ * FR-011/FR-012/FR-013: for a **top-level** key resolved `final` with
+ * `provide`, decide whether the merged value at that key's own pointer
+ * is the **config's own** contribution (refused as `final-key-set`) or
+ * still the schema's `provide` constant (accepted; and if any schema
+ * layer also declared `required: true` for this key, §5.5's
+ * `required-vacuous` info lint fires instead — never both, since a
+ * refused override already says everything the lint would).
  *
  * Attribution is by **span**, not by value equality (FR-011's own point:
  * "even though the value may be byte-identical to the provided constant"
  * — a config restating the identical literal still owns that span, under
  * ordinary replace-wholesale precedence, so the merged node's span traces
  * to the config document regardless of what it says).
+ *
+ * **Top-level only, by construction** (`final.ts`'s own doc, SPEC.md
+ * §9 amended): a nested key declaration carries `demand`/`delegate`
+ * only — `provide` cannot even be *written* at a nested position in a
+ * way this vocabulary reads, so `final`'s own state (`src/merge/final.ts`)
+ * is keyed by bare top-level key name, not a pointer path.
  */
-function finalProvideDiagnostics(configuration: MergedConfiguration, keyName: string, sealState: KeySealState): Diagnostic[] {
-  const final = sealState.final;
+function finalProvideDiagnostics(configuration: MergedConfiguration, keyName: string, finalState: KeyFinalState): Diagnostic[] {
+  const final = finalState.final;
   if (final === undefined || !final.hasProvide) {
     return [];
   }
@@ -712,6 +788,7 @@ function finalProvideDiagnostics(configuration: MergedConfiguration, keyName: st
   if (value === undefined) {
     return [];
   }
+  const pointer = pointerFromPath([keyName]);
   const { layer: valueLayer } = layerForSpanOrigin(configuration, value.span.origin.id);
   if (valueLayer.role === "config") {
     return [
@@ -720,7 +797,7 @@ function finalProvideDiagnostics(configuration: MergedConfiguration, keyName: st
         code: "final-key-set",
         message: `'${keyName}' is 'final' with 'provide' — its value is a constant the config may not set, even to restate it (SPEC.md §5.5, §6.3, v0.7 FR-011)`,
         primary: value.span,
-        pointer: pointerFromPath([keyName]),
+        pointer,
         pedigreePosition: valueLayer.rank,
       }),
     ];
@@ -741,18 +818,17 @@ function finalProvideDiagnostics(configuration: MergedConfiguration, keyName: st
       code: "required-vacuous",
       message: `'required' is vacuous under 'final provide' at '${keyName}' — the value is already pinned by 'final', so 'required' asks for nothing 'final' does not already guarantee (SPEC.md §5.5, v0.7 FR-013)`,
       primary: value.span,
-      pointer: pointerFromPath([keyName]),
+      pointer,
       pedigreePosition: final.layer.rank,
     }),
   ];
 }
 
-/** Every seal/final diagnostic the merged tree alone can determine (FR-007, FR-011, FR-013) — walked once per top-level key with a resolved seal/final state. */
-function sealAndFinalDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
+/** Every `final` diagnostic the merged tree alone can determine (FR-011, FR-013) — walked once per top-level key with a resolved `final` state. `seal`'s own diagnostics are found elsewhere (`sealClosedSites`, inline in `checkDemand`/`checkNamedType`; `topLevelSealDiagnostics`, above) — it needs no equivalent state map at all. */
+function finalDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  for (const [keyName, sealState] of configuration.sealState) {
-    diagnostics.push(...sealClosedDiagnostics(configuration, keyName, sealState));
-    diagnostics.push(...finalProvideDiagnostics(configuration, keyName, sealState));
+  for (const [keyName, finalState] of configuration.finalState) {
+    diagnostics.push(...finalProvideDiagnostics(configuration, keyName, finalState));
   }
   return diagnostics;
 }
@@ -782,7 +858,7 @@ export function checkConfiguration(configuration: MergedConfiguration): CheckOut
     violations.push(...violationsForLayer(configuration, layer, allDecls));
   }
 
-  const diagnostics = [...vocabularyDiagnostics, ...violations.map(renderViolation), ...sealAndFinalDiagnostics(configuration)];
+  const diagnostics = [...vocabularyDiagnostics, ...violations.map(renderViolation), ...topLevelSealDiagnostics(configuration), ...finalDiagnostics(configuration)];
   const errors = diagnostics.filter((d) => d.level === "error");
   if (errors.length > 0) {
     return { ok: false, diagnostics: errors };

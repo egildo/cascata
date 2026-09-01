@@ -154,6 +154,54 @@ function tracking three unrelated running maps, which is harder to read and to t
 than three cousins sharing one iteration shape. `seal.ts` imports nothing `strategy.ts` does not
 already import.
 
+**AMENDMENT (during US2 implementation) — the above is superseded for `seal`.** While implementing
+against this decision, the coordinator raised (and Egildo then settled) that `seal` was designed
+here as a *per-key* keyword — a sibling of `provide`/`cascade`/`final` inside `keys.<name>` — which
+is not how §9 of `SPEC.md` actually describes it once read against the worked examples rather than
+against the prose summary alone. Egildo's ruling, delivered mid-implementation:
+
+1. **`seal` moves out of the per-key vocabulary entirely and into the `demand` vocabulary** — it is
+   now a demand keyword like `type` or `required`, written `demand: { seal: closed, keys: {...} }`,
+   not `keys.<name>: { seal: closed }`. `SPEC.md` §9/§6.3/§5.2 were amended to match; this milestone
+   spec's FR-006 through FR-009 still read in the old per-key terms and were **not** re-worded to
+   match (see the implementation report's governance-findings section).
+2. **`final` stays a per-key keyword, but is now written as a bare boolean** (`final: true`), not the
+   richer per-key record this section originally sketched. Its resolution keeps needing whole-stack
+   memory (§ below) for exactly the reason this section gives: a descendant's redeclaration, even a
+   strictly narrower one, must be refused, and nothing but a running per-key map across schema layers
+   can catch that.
+3. **A schema may additionally carry a single top-level `seal: open | closed`** (sibling to the
+   top-level `keys:` map itself), constraining the *config's own* top-level keys the same way a
+   nested `seal: closed` constrains a mapping value's children.
+
+The practical consequences for this file's D4, all verified in the shipped code rather than asserted
+here:
+
+- `seal` needs **no dedicated resolution function and no whole-stack state at all.** Being a demand
+  keyword, it is read fresh off each schema layer's own `demand` (or a named type's own `demand`,
+  wholesale — no cross-declaration merging, matching how every other demand keyword already treats
+  named types) and checked directly against the merged tree, in `src/validate/check.ts`'s
+  `sealClosedSites` (nested) and `topLevelSealDiagnostics` (the new top-level form). `seal.ts` as a
+  file does not exist; `resolveSeal` does not exist.
+- **`seal-weakened` does not exist**, and is not needed. Because every ancestor schema's own demand
+  is checked against the final merged tree redundantly (SPEC.md §5.4, "whole-chain validation") — the
+  same property that already lets a named-type narrowing go unenforced by a dedicated diagnostic — an
+  attempt by a descendant to widen `closed` back to `open` is automatically inert: the ancestor that
+  declared `closed` still fires `seal-violation` against the final tree regardless of what a
+  descendant later claims. A dedicated weakening check would be redundant with a check that already
+  runs. (`DIAGNOSTIC_LEVEL_CODES`/`SEALING_AUTHORITY_CODES` briefly gained a `seal-weakened` code
+  during implementation, then had it retired once this was confirmed by test — see the corresponding
+  comment in `src/diagnostics/codes.ts`.)
+- **`resolveFinal` (renamed from the `resolveSeal` this section sketched) is the one part of this
+  section that shipped essentially as designed**: still a sibling file (`src/merge/final.ts`, `git
+  mv`'d from `seal.ts`), still a single non-recursive whole-stack walk over each schema layer's
+  top-level `keys:`, still refusing **any** further declaration after `final` is set — narrower or
+  not — as `final-key-redeclared`. `KEY_DECLARATION_SIBLINGS` dropped from six entries to five
+  (`demand`, `provide`, `cascade`, `final`, `delegate`) now that `seal` is not among them.
+- `final-key-set` (FR-011) and the `required: true`-under-`final` info lint (FR-013) are unaffected by
+  the correction and shipped as this section describes, simplified to top-level-only lookups (`final`
+  never nests, per the coordinator's third correction — see the report).
+
 ## D5 — Where `authority:` (`demandPinnedAdoption`, `finalAgainstForking`) is read and enforced
 
 **Decision**: a new module, `src/graph/authority.ts` (format-blind, pedigree-shaped — reads only

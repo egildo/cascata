@@ -6,4 +6,4 @@ keys:
         host:
           demand:
             type: string
-    seal: closed
+      seal: closed

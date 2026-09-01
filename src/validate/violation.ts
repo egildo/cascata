@@ -45,7 +45,8 @@ export type ViolationReason =
   | { readonly kind: "pattern-mismatch"; readonly pattern: string }
   | { readonly kind: "enum-violated"; readonly allowedDescription: string }
   | { readonly kind: "required-violated"; readonly cause: "absent" | "null" }
-  | { readonly kind: "depth-limit-exceeded"; readonly maxDepth: number };
+  | { readonly kind: "depth-limit-exceeded"; readonly maxDepth: number }
+  | { readonly kind: "seal-violated"; readonly childKey: string };
 
 /**
  * The pairing of one violated `Demand` with the value that broke it, at
@@ -79,6 +80,7 @@ const CODE_FOR_REASON: { readonly [K in ViolationReason["kind"]]: DiagnosticCode
   "enum-violated": "enum-violated",
   "required-violated": "required-violated",
   "depth-limit-exceeded": "depth-limit-exceeded",
+  "seal-violated": "seal-violation",
 };
 
 /** One human sentence describing `reason` — the `Diagnostic.message`, distinct from `canonicalSentence` below (§10's own, separately specified, machine-checked format). */
@@ -98,6 +100,8 @@ function describeReason(reason: ViolationReason): string {
       return reason.cause === "absent" ? "required key is absent" : "required key is explicitly null, which required forbids (SPEC.md §5.5)";
     case "depth-limit-exceeded":
       return `nested demand exceeds the ${reason.maxDepth}-level limit (v0.5 FR-025)`;
+    case "seal-violated":
+      return `key '${reason.childKey}' is not declared by this demand's own 'keys' vocabulary, and this position is sealed 'seal: closed' — a closed struct refuses any key the declared vocabulary does not name (SPEC.md §6.3, v0.7 FR-007)`;
   }
 }
 

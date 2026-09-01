@@ -1,3 +1,4 @@
 $schema: ./house.yaml
 network:
   host: example.com
+  port: 443

@@ -1,0 +1,5 @@
+seal: closed
+keys:
+  title:
+    demand:
+      type: string

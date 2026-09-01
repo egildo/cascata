@@ -2,4 +2,4 @@ keys:
   title:
     demand:
       type: string
-    seal: closed
+      seal: closed

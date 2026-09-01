@@ -1,0 +1,5 @@
+$schema: ./schema.yaml
+network:
+  connection:
+    host: example.com
+    port: 443

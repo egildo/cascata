@@ -10,6 +10,7 @@
 
 import { join, relative } from "node:path";
 import { merge, resolve, validate, type Diagnostic } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 import { compareNode } from "./runner.js";
 import type { ExpectedValidateDiagnostic, ValidateCase } from "./validate-case.js";
 
@@ -127,7 +128,7 @@ export async function runValidateCase(testCase: ValidateCase): Promise<ValidateC
   const entryPath = join(testCase.fixtureDir, testCase.entry);
   const sandboxRoot = join(testCase.fixtureDir, testCase.sandboxRoot);
 
-  const resolved = await resolve(entryPath, { sandboxRoot });
+  const resolved = await resolve(entryPath, { host: createNodeHost(), sandboxRoot });
   if (!resolved.ok) {
     return checkStageFailure(testCase, resolved.diagnostics, "resolve()");
   }

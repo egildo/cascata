@@ -1,4 +1,10 @@
 $adopts: ./root.yaml
 keys:
   network:
-    seal: closed
+    demand:
+      type: mapping
+      keys:
+        host:
+          demand:
+            type: string
+      seal: closed

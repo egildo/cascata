@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { join } from "node:path";
 import { merge, resolve, validate, type Diagnostic } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
 
 const CASES_DIR = join(__dirname, "..", "corpus", "cases", "seal");
 
@@ -16,7 +17,7 @@ type PipelineResult = { readonly ok: true; readonly diagnostics: readonly Diagno
 
 async function runPipeline(caseName: string): Promise<PipelineResult> {
   const dir = join(CASES_DIR, caseName);
-  const resolved = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+  const resolved = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
   if (!resolved.ok) {
     return { ok: false, diagnostics: resolved.diagnostics };
   }
@@ -31,7 +32,7 @@ async function runPipeline(caseName: string): Promise<PipelineResult> {
 describe("v0.7 FR-010 — final closes the question, refusing even a narrower redeclaration, at merge time", () => {
   it("final-refuses-narrowing: a strictly narrower descendant demand is still refused", async () => {
     const dir = join(CASES_DIR, "final-refuses-narrowing");
-    const resolved = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const resolved = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     if (!resolved.ok) throw new Error("expected resolve() ok:true");
     const merged = merge(resolved);
     expect(merged.ok).toBe(false);
@@ -41,7 +42,7 @@ describe("v0.7 FR-010 — final closes the question, refusing even a narrower re
 
   it("final-on-already-final: a redundant restatement of final itself is still refused", async () => {
     const dir = join(CASES_DIR, "final-on-already-final");
-    const resolved = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const resolved = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     if (!resolved.ok) throw new Error("expected resolve() ok:true");
     const merged = merge(resolved);
     expect(merged.ok).toBe(false);
@@ -64,7 +65,7 @@ describe("v0.7 FR-011 — final with provide refuses a config setting the key", 
 describe("v0.7 FR-012 — final without provide admits a config setting the key", () => {
   it("final-no-provide-admits-config-set: ok:true, 'mode' is the config's own value", async () => {
     const dir = join(CASES_DIR, "final-no-provide-admits-config-set");
-    const resolved = await resolve(join(dir, "config.yaml"), { sandboxRoot: dir });
+    const resolved = await resolve(join(dir, "config.yaml"), { host: createNodeHost(), sandboxRoot: dir });
     if (!resolved.ok) throw new Error("expected resolve() ok:true");
     const merged = merge(resolved);
     if (!merged.ok) throw new Error("expected merge() ok:true");

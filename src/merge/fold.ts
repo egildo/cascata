@@ -130,7 +130,7 @@ import type { Pedigree } from "../graph/pedigree.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { accumulateAppend, advanceStrategies, checkAppendable, effectiveStrategy, readKeysVocabulary, resolveStrategies } from "./strategy.js";
 import { createProvenanceBuilder, type Layer, type MergedConfiguration, type MergeStrategy, type ProvenanceBuilder, type ProvenanceRecord } from "./provenance.js";
-import { resolveSeal } from "./seal.js";
+import { resolveFinal } from "./final.js";
 import type { DelegationHop } from "../model/reference.js";
 
 /** No key has a declared strategy — used for every merge below the top level, where `cascade` never applies (rule 4's own doc comment above). */
@@ -532,13 +532,15 @@ export type FoldOutcome = { readonly ok: true; readonly configuration: MergedCon
 export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]> = new Map()): FoldOutcome {
   const layers = deriveLayers(graph);
   const { diagnostics: strategyDiagnostics } = resolveStrategies(layers);
-  // v0.7: seal/final resolution runs alongside cascade's own whole-stack
-  // pass, for the identical reason (v0.3 FR-028's "found by different
-  // passes, reported together" precedent) — a schema's cascade-strategy
-  // mistake in one key must not hide a seal-weakening mistake in another.
-  const { state: sealState, diagnostics: sealDiagnostics } = resolveSeal(layers);
+  // v0.7: final resolution runs alongside cascade's own whole-stack pass,
+  // for the identical reason (v0.3 FR-028's "found by different passes,
+  // reported together" precedent) — a schema's cascade-strategy mistake
+  // in one key must not hide a final-redeclaration mistake in another.
+  // `seal` needs no equivalent pass here — it moved into the `demand`
+  // vocabulary and is checked entirely inside `src/validate/check.ts`.
+  const { state: finalState, diagnostics: finalDiagnostics } = resolveFinal(layers);
   const { tree, provenance, diagnostics: foldDiagnostics } = foldWithProvenance(layers);
-  const diagnostics = [...strategyDiagnostics, ...sealDiagnostics, ...foldDiagnostics];
+  const diagnostics = [...strategyDiagnostics, ...finalDiagnostics, ...foldDiagnostics];
   if (diagnostics.length > 0) {
     return { ok: false, diagnostics };
   }
@@ -550,6 +552,6 @@ export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBr
   // `resolve()`'s own delegation walk (research.md D3/D4) and threaded
   // through here unchanged — `src/merge/` never reads `delegate`
   // vocabulary itself, only carries the map `src/validate/` needs.
-  // v0.7 additive field: `sealState` — see MergedConfiguration's own doc.
-  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs, sealState } };
+  // v0.7 additive field: `finalState` — see MergedConfiguration's own doc.
+  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs, finalState } };
 }

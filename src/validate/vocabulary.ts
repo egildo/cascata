@@ -38,8 +38,22 @@ import { pointerFromPath } from "../model/pointer.js";
 import type { Layer } from "../merge/provenance.js";
 import { parseTypeExpression, unresolvedAlternatives } from "./typeexpr.js";
 
-/** §9's closed `demand` keyword list (v0.4 FR-005). Order is declaration order, not significant otherwise. */
-export const DEMAND_KEYWORDS = ["type", "items", "required", "min", "max", "minLength", "maxLength", "pattern", "enum", "accept", "keys"] as const;
+/**
+ * §9's closed `demand` keyword list (v0.4 FR-005). Order is declaration
+ * order, not significant otherwise.
+ *
+ * **`seal` joins this list in v0.7** (SPEC.md §9/§6.3, amended) — moved
+ * here from a per-key sibling of `provide`/`cascade`/`final`/`delegate`,
+ * where it started this milestone. `seal` constrains a mapping value's
+ * *shape*: it composes by intersection (`open ∩ closed = closed`) and
+ * narrows monotonically, exactly like `required`/`type`/every other
+ * demand keyword — and unlike `cascade` (merge policy) or `final`
+ * (governance, "who may speak"), which stay per-key. The decisive reason
+ * (not merely tidiness): a per-key `seal` cannot reach a nested mapping
+ * or the inside of a named type's own `demand`, and the meta-schema
+ * (specs/008-metaschema-bootstrap) needs both.
+ */
+export const DEMAND_KEYWORDS = ["type", "items", "required", "min", "max", "minLength", "maxLength", "pattern", "enum", "accept", "keys", "seal"] as const;
 
 export type DemandKeyword = (typeof DEMAND_KEYWORDS)[number];
 
@@ -273,6 +287,16 @@ export function refuseMalformedShapes(demandPointerPath: readonly (string | numb
         // (src/validate/types.ts).
         if (node.type !== "sequence" || !node.items.every((item) => item.type === "scalar" && item.kind === "string")) {
           refuse(keyword, node, "a sequence of strings");
+        }
+        break;
+      case "seal":
+        // v0.7, SPEC.md §6.3/§9 amended: 'open' or 'closed', the identical
+        // two-value domain the (retired) per-key `unknown-seal-value` code
+        // used to police — now folded into this file's own
+        // malformed-demand-value posture, matching every other demand
+        // keyword's shape check.
+        if (!(node.type === "scalar" && node.kind === "string" && (node.value === "open" || node.value === "closed"))) {
+          refuse(keyword, node, "'open' or 'closed'");
         }
         break;
       default:

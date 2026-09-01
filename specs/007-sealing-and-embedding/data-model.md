@@ -32,24 +32,32 @@ permitted"). See research.md D1.
 | `cacheDir` | **Removed.** Caching is now the host's own construction-time configuration (`createNodeHost({ cacheDir })`) — research.md D2. |
 | `transport` | **No longer defaults to a real network transport.** Omitting it now means "no remote resolution is possible" (a remote reference reached with no transport throws, same posture as today's "reached with no cacheDir"), not "use the real network." An embedder wanting the real network passes `createNodeTransport()` from `cascata/host/node.js` explicitly. |
 
-## `Seal` (new — per-key state, `src/merge/seal.ts`)
+## `Seal` / `Final` — **AMENDED mid-implementation; see research.md D4's amendment for the full
+account.** This section originally designed `seal` as per-key state resolved whole-stack, alongside
+`final`, in one `src/merge/seal.ts`. Egildo's ruling during US2 implementation moved `seal` into the
+`demand` vocabulary instead (a demand keyword, not a per-key one — no whole-stack resolution, no
+dedicated file); only `final` kept the shape this section sketches, renamed `final.ts`, and switched
+to a bare boolean (`final: true`) rather than the richer per-key record below. The type that actually
+ships:
 
 ```ts
-export type SealOpenness = "open" | "closed";
+// src/merge/final.ts
 export interface FinalState {
   readonly layer: Layer;
   readonly span: SourceSpan;
   readonly hasProvide: boolean;
 }
-export interface KeySealState {
-  readonly openness: SealOpenness;
+export interface KeyFinalState {
   readonly final?: FinalState;
 }
 ```
 
-Resolved per top-level key, root-to-leaf, exactly as `MergeStrategy` is (data-model.md "Merge
-Strategy" analogue). `final` is `undefined` until some layer declares it; once set, it is never
-cleared (§6.3: "closes the question," not merely tightens it).
+`final` is `undefined` until some layer declares it; once set, it is never cleared, and any further
+declaration of that key — narrower or not — is refused (§6.3: "closes the question," not merely
+tightens it). `SealOpenness`/`KeySealState` as typed above do not exist in the shipped code; `seal`'s
+actual resolved shape is just the raw `"open" | "closed"` string read straight off a `demand`
+mapping's own `seal` entry, per schema layer, with no accumulation across layers at all — see
+research.md D4's amendment for why none is needed.
 
 ## `Authority` (new — per-schema declarations, `src/graph/authority.ts`)
 
@@ -84,11 +92,18 @@ type; this function cannot fail a `load()` call (FR-038).
 
 ## New diagnostic codes
 
+**AMENDED**: `unknown-seal-value` does not exist — a malformed `seal:` value is refused by the
+existing `malformed-demand-value` code, reused (`seal` is a demand keyword now, checked the same way
+every other malformed demand value is). `seal-weakened` does not exist and was never needed —
+whole-chain validation (SPEC.md §5.4) makes a descendant's attempted widening automatically inert, no
+dedicated diagnostic required (research.md D4's amendment). The row below is struck through for the
+paper trail; the two rows after it are as-shipped.
+
 | Code | Refuses | Level |
 |---|---|---|
-| `unknown-seal-value` | `seal:` value other than `open`/`closed` (FR-006) | error |
+| ~~`unknown-seal-value`~~ | ~~`seal:` value other than `open`/`closed` (FR-006)~~ — see `malformed-demand-value` | — |
 | `seal-violation` | An undeclared child key under `seal: closed` (FR-007) | error |
-| `seal-weakened` | `closed` → `open` (FR-009) | error |
+| ~~`seal-weakened`~~ | ~~`closed` → `open` (FR-009)~~ — inert by whole-chain validation, no code needed | — |
 | `final-key-redeclared` | Any descendant schema declaration of a `final` key (FR-010) | error |
 | `final-key-set` | A config setting a `final`+`provide` key (FR-011) | error |
 | `required-vacuous` | `required: true` under `final`+`provide` (FR-013, §5.5's lint) | **info** |

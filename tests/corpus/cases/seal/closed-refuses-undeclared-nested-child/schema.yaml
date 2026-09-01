@@ -1,0 +1,13 @@
+keys:
+  network:
+    demand:
+      type: mapping
+      keys:
+        connection:
+          demand:
+            type: mapping
+            keys:
+              host:
+                demand:
+                  type: string
+            seal: closed
