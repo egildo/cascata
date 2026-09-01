@@ -210,7 +210,14 @@ other milestone.
 
 **`values`** (§9, §5.2)
 
-- **FR-001**: `values` MUST join the `demand` vocabulary and MUST constrain every entry of a mapping
+> **Amended 2026-09-01, post-implementation.** FR-001 left `values`' *syntax* unstated and the first
+> implementation read it as a key declaration; it takes a **bare demand mapping**, as `items` does
+> (`SPEC.md` §9, §15). FR-005 and FR-017 are reworded to say what they meant — the implementer read
+> both correctly and the requirements were carelessly written. FR-020 is corrected against a defect in
+> `SPEC.md` §11 itself, now amended.
+
+- **FR-001**: `values` MUST join the `demand` vocabulary, MUST take a **bare demand mapping** and not
+  a key declaration, and MUST constrain every entry of a mapping
   regardless of key.
 - **FR-002**: Where `keys` and `values` both cover an entry, both MUST apply, composing by
   intersection.
@@ -219,7 +226,9 @@ other milestone.
 - **FR-004**: `values` MUST be orthogonal to `seal`: `values` constrains shape, `seal` constrains
   membership.
 - **FR-005**: Adding or tightening `values` downstream MUST be legal; loosening or removing it MUST
-  be refused.
+  be refused **dynamically**, by §5.4's whole-chain validation, exactly as `seal` is. A *static*
+  refusal is subsumption checking, which §5.4 item 2 defers to v1.x by name; the original wording read
+  as demanding one and did not mean to.
 - **FR-006**: `values` against a non-mapping value MUST be a no-op, not a second diagnostic.
 
 **Guarded recursion** (§7)
@@ -247,12 +256,18 @@ other milestone.
 - **FR-015**: A meta-schema MUST exist, written in Cascata's own vocabulary, describing `types`,
   `keys`, `directives`, `authority`, the full per-key vocabulary, and the full `demand` keyword set.
 - **FR-016**: The meta-schema MUST validate against itself.
-- **FR-017**: Every schema document in the conformance corpus MUST validate against the meta-schema.
+- **FR-017**: Every schema document in the conformance corpus **that the pipeline accepts** MUST
+  validate against the meta-schema. The corpus deliberately contains malformed schemas; a meta-schema
+  that passed those would be the broken one. The original wording said "every schema document" and was
+  unsatisfiable as written.
 - **FR-018**: For every schema-vocabulary error the codebase already refuses by hand-written check,
   the meta-schema's verdict MUST agree. A disagreement is a reported finding, never a silently
   adjusted test.
 - **FR-019**: The meta-schema MUST be obtained through the host seam, never read directly.
-- **FR-020**: The schema language's version MUST be readable from the meta-schema's own pedigree.
+- **FR-020**: The schema language's version MUST be readable from the meta-schema's **identity in the
+  pedigree of a schema that adopts it** — never from the meta-schema's own pedigree, which is empty
+  (a pedigree entry carries no `$version`, and §6.1's chain excludes the entry document). `SPEC.md`
+  §11 asserted the impossible version of this and is amended (§15).
 
 **Reporting** (Principle V, §14)
 

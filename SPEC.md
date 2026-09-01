@@ -371,7 +371,7 @@ Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, `key
 
 **A nested key declaration is a smaller thing than a top-level one, and deliberately so** (amended v0.7; §15). This sentence used to say a nested `keys` constrains a mapping's children "the way" a schema's top-level `keys:` constrains the config's top level, which asserted a parity that never existed. A **top-level** entry carries the full per-key vocabulary — `demand`, `provide`, `cascade`, `final`, `delegate`. A **nested** entry carries `demand` and `delegate` only. The distinction is not an accretion: `provide`, `cascade` and `final` are statements about *a layer's authority over a key*, which is a relationship between documents and means something only where a schema declares a key of its own; a nested key is part of a value's **shape**, and shape is what `demand` is for. `delegate` nests because §8's grant is per key at any depth, and v0.6 built it that way on purpose. `seal` is no longer an exception either, having moved into `demand` above, where it nests with every other demand.
 
-**`values` is to a mapping what `items` is to a sequence** — the construct for a mapping whose keys are the author's to choose rather than the schema's to enumerate. Where a key is named by `keys` *and* covered by `values`, both apply: demands compose by intersection and always have (§5.1), so there is no precedence rule to invent. `values` alone says nothing about *which* keys may appear — that is `seal`'s question, and the two are orthogonal: `values` with `seal: open` means "any key you like, each shaped like this"; adding `keys` entries under `seal: closed` restricts the set to those named. Added in v0.7 because the meta-schema's own `keys:` section is exactly a mapping of author-chosen names, and nothing in the vocabulary could describe it (§15).
+**`values` is to a mapping what `items` is to a sequence** — the construct for a mapping whose keys are the author's to choose rather than the schema's to enumerate. **The parallel is exact, including the shape: `values` takes a bare demand mapping** (`values: { type: string }`), as `items` does, and *not* a key declaration. Corrected in v0.7 after the first implementation took the other reading and made the wrong spelling a silent no-op (§15). Where a key is named by `keys` *and* covered by `values`, both apply: demands compose by intersection and always have (§5.1), so there is no precedence rule to invent. `values` alone says nothing about *which* keys may appear — that is `seal`'s question, and the two are orthogonal: `values` with `seal: open` means "any key you like, each shaped like this"; adding `keys` entries under `seal: closed` restricts the set to those named. Added in v0.7 because the meta-schema's own `keys:` section is exactly a mapping of author-chosen names, and nothing in the vocabulary could describe it (§15).
 
 Top-level schema sections: `types`, `keys`, `directives`, `authority`. The last two arrive in v0.7; `authority` holds the per-schema governance declarations of §6.3 and is described there.
 
@@ -428,7 +428,7 @@ styles:
 - **Remote schemas: HTTPS, always.** Pinning by content hash (`$pin`, SHA-256 over the exact bytes, §6.1) is **verified whenever a pin is present**, and verification is absolute: mismatched bytes are refused and never enter the graph. Whether a pin is *required* is not the library's decision but the pedigree's — authority flows downward (§2.3), and a published root legislates what its descendants must do, here as everywhere. v0.2 shipped the mechanism; **the legislation lands in §6.3 at v0.7**, where a root may demand pinned adoption and an unpinned link in its pedigree is refused. An unpinned reference is therefore fetched on TLS alone, and **an unpinned remote link MUST be reportable**, so a root's demand is auditable and an author can see what they are trusting unverified. One limit is inherent rather than chosen: a root's demand can only be read after that root has been fetched, so it hardens every subsequent resolution but not the first — which is what a lockfile closes. Immutable content-addressed cache per RFC 9111 semantics; lockfile-friendly.
 - A remote schema can never trigger local file reads outside the sandbox (delegation rules, §8.4) nor remote delegation without user opt-in. **This is structural, not self-policed**: the library performs no I/O of its own and can read only what its host answers (Article VI), so a host that declines has denied it and no schema can appeal. The sandbox rules below remain in force as defence in depth, so that a permissive host still gets every guarantee.
 - YAML custom tags rejected; parse depth/size capped; duplicate keys rejected.
-- The schema language itself is versioned via the meta-schema's own pedigree.
+- The schema language is versioned by the meta-schema's identity **in the pedigree of the schemas that adopt it** — location plus content hash, from which the `$version` is read in the document that identity names. Not by the meta-schema's *own* pedigree, which is empty: a pedigree entry carries an identity rather than a version, and §6.1's chain excludes the entry document, so a meta-schema resolved as its own entry has nothing in front of it. Corrected in v0.7, when the bootstrap was the first thing able to try it (§15).
 
 ---
 
@@ -637,6 +637,36 @@ All initial open questions are resolved; amendments are integrated into the arti
   embedding story exercising itself. Also corrected in passing: §1 listed remote delegation as a v1
   non-goal, which §8.4 and §11 had already contradicted by gating it behind a user opt-in rather than
   forbidding it. See §1, §3, §11, §14, Article VI.
+
+- **`values`' shape, and a version read from an empty pedigree** → settled: **`values` takes a bare
+  demand; the schema language is versioned by the meta-schema's identity in its adopters' pedigrees,
+  not by its own.** Both found by v0.7's own bootstrap, which is what §14 schedules it early to do.
+
+  §9 introduced `values` by analogy to `items` and then left its *syntax* unstated, and the first
+  implementation read it as taking a key declaration (`values: { demand: {…} }`) rather than the bare
+  demand `items` takes. The analogy is not the argument that settles it — the failure mode is. Under
+  the key-declaration reading, `values: { type: string }` — the spelling the analogy invites — parses,
+  is accepted, and **constrains nothing**: a silent no-op, the worst outcome available. Under the bare
+  demand, the wrong spelling contains `demand`, which is not a demand keyword, and is refused as
+  `unknown-demand-keyword`. Loud beats silent. It also retires a smaller wart at no cost: the
+  key-declaration form left room to write `delegate:` under `values`, which the pipeline never grants
+  (§8's grants are scoped to `keys`), so the meta-schema had been promising something the
+  implementation does not do; with a bare demand there is nowhere to write it.
+
+  Separately, §11 claimed "the schema language itself is versioned via the meta-schema's own
+  pedigree". It cannot be: a `PedigreeEntry` carries an identity and no `$version`, and §6.1's chain
+  excludes the entry document, so the meta-schema resolved as its own entry has an **empty** pedigree.
+  The claim had never been exercised because nothing before the bootstrap had a meta-schema to
+  resolve. The true and useful statement is the one that survives: the meta-schema appears in the
+  pedigree of every schema adopting it, by location and content hash, and the version is read from the
+  document that identity names. See §9, §11.
+
+  A third finding is settled without amending this document, because the text was already right and
+  only the implementation was not: §9 states the per-key vocabulary as a closed list and Principle VI
+  requires closure, but nothing enforced it — the one closed vocabulary in the language with no
+  `unknown-…` refusal behind it, while `demand` and type entries each have one. Two corpus fixtures
+  had carried a per-key `seal:` since that keyword moved into `demand` earlier in v0.7, passing for a
+  reason they were not written for, and no milestone noticed. v0.7 closes it.
 
 - **Five of this document's worked examples did not parse** → fixed: **quote a type expression
   containing `[]` inside a YAML flow mapping.** `demand: { type: resource[] }` is well-formed
