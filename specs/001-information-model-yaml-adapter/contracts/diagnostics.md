@@ -50,7 +50,11 @@ message may quote the underlying reader; its **code** stays ours.
 ## Rules for adding a code
 
 1. A new code needs a `SPEC.md` article to cite — Principle I. If no article sanctions the refusal,
-   amend `SPEC.md` first.
+   amend `SPEC.md` first. **From v1.0 that amendment is bounded** (§15's freeze rule): a *correction*
+   is always permitted and an *addition* is permitted while no existing meaning changes, but a rule
+   that starts refusing what it previously accepted **is** a changed meaning and requires **v2.0**.
+   A new refusal code for a construct the language already accepts is therefore a v2.0 change, not a
+   v1.x one.
 2. A new code arrives with at least one accepting and one refusing conformance case (Principle V).
 3. Codes are never repurposed. Retiring one and adding another is correct; quietly changing what one
    means is not, since the corpus and downstream tooling both depend on it (Principle VI).

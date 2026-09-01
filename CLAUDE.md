@@ -32,8 +32,10 @@ where the two milestones' code sits side by side, which is `src/index.ts` and `s
   model** (`Scalar`/`Mapping`/`Sequence`/`Node`). One documented cast exists, on `yaml`'s own AST
   types, in `src/adapters/yaml/expand.ts`.
 - **The format-blindness boundary is enforced by a test**, not by convention. `src/model/`,
-  `src/diagnostics/`, `src/resolve/`, and `src/graph/` may not import adapters; `graph/` may not
-  import `resolve/`. See `tests/unit/layering.test.ts`. Never weaken it for convenience.
+  `src/diagnostics/`, `src/resolve/`, `src/graph/`, `src/merge/`, `src/validate/` and `src/project/`
+  may not import adapters; `graph/`, `merge/`, `validate/` and `project/` may not import `resolve/`;
+  `validate/` may not import `project/` (the last stage is downstream of every other, never
+  upstream). See `tests/unit/layering.test.ts`. Never weaken any of it for convenience.
 - **Positions are structural.** A node without a span must be unconstructible, not merely
   discouraged. Same for a `Reference`.
 
@@ -88,9 +90,25 @@ section of a report has been worth more than the diff.
   without error. All four are Cascata's to enforce.
 - **Sorting strings by JS default (`<`, `sort()`, `localeCompare`) is UTF-16 order, not code point
   order.** They disagree above the BMP. The model sorts by code point.
+- **A JS object cannot enumerate in canonical order.** ECMA-262's `OrdinaryOwnPropertyKeys` returns
+  every **array-index** key — a canonical numeric string in `[0, 2^32−2]` — first, in ascending
+  numeric order, ahead of every other key, which then follow in insertion order. `"4294967295"` is
+  one past the last index and is *not* hoisted; neither are `"-0"` or `"01"`. `Object.create(null)`
+  changes nothing about this. Article VII says the value view *inserts* keys canonically, which is
+  all that is achievable.
+- **`Number.isSafeInteger` is the wrong test for "is this `bigint` exactly a double".** 2^53, 3·2^52
+  and 2^60 are all exactly representable and all fail it. The predicate is the round trip,
+  `Number.isFinite(n) && BigInt(n) === v` — and the `isFinite` guard is load-bearing, since
+  `Number(2n ** 1024n)` is `Infinity` and `BigInt(Infinity)` throws.
+- **`Object.create(null)` is what makes `__proto__` an ordinary key.** On `{}`, `o["__proto__"] = v`
+  sets the prototype and creates no own property at all — silently, and a configuration key is
+  author-controlled.
 
 ## Conventions
 
+- **`SPEC.md` is frozen as of v1.0** (§15's freeze rule). A *correction* is always permitted; an
+  *addition* is permitted while no existing meaning changes; **changing an existing meaning requires
+  v2.0**. The engineering constitution does not freeze — it governs process, not the language.
 - Conventional commits. End messages with the co-author trailer for whichever model authored them.
 - Never amend, rebase, or force-push. Add commits.
 - Tick task checkboxes in `specs/NNN-*/tasks.md` as you complete them.

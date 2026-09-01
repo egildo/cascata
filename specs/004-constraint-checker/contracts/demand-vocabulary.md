@@ -1,6 +1,6 @@
 # Contract: The `demand` Vocabulary (v0.4)
 
-**Implements**: `SPEC.md` §9, §9.1 | **Stability**: no compatibility promise before v1.0
+**Implements**: `SPEC.md` §9, §9.1 | **Stability**: written before v1.0, when no compatibility promise was made; from v1.0 the surface follows `SPEC.md` §15's freeze rule (a correction always, an addition while no meaning changes, a changed meaning only at v2.0)
 
 Published as its own contract, on the same reasoning `precedence.md` gave in v0.3: a vocabulary that
 exists only as scattered `if` branches in `constraints.ts` is one nobody can predict from reading

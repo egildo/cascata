@@ -92,16 +92,27 @@ actually ships and the corpus fixtures/tests were rewritten to match)
 ## `load()`
 
 ```ts
+// v0.7's shape. **Superseded at v1.0, additively**: `LoadResult` gains a type
+// parameter with a default and an `ok: true` field `value: T` — the value view
+// (SPEC.md Article VII, v1.0 FR-022). Every v0.7 call site still compiles and
+// still reads `configuration`, which does not move.
+//
+//   type LoadResult<T = unknown> =
+//     | { ok: true; configuration: MergedConfiguration; value: T; diagnostics: readonly Diagnostic[] }
+//     | { ok: false; diagnostics: Diagnostic[] };
+//   function load<T = unknown>(entryPath: string, options: LoadOptions): Promise<LoadResult<T>>;
 type LoadResult = { ok: true; configuration: MergedConfiguration; diagnostics: readonly Diagnostic[] }
                  | { ok: false; diagnostics: Diagnostic[] };
 function load(entryPath: string, options: LoadOptions): Promise<LoadResult>;
 ```
 
 - Composes `resolve()` → `merge()` → `validate()` in sequence (FR-032, FR-033) — never a second
-  implementation of the pipeline.
+  implementation of the pipeline. **v1.0 appends one stage**, `→ project()`, whose own `info` lints
+  join a successful result's diagnostics (`SPEC.md` Article VII).
 - `ok: true`'s `diagnostics` holds every `info` lint the run produced (possibly empty); `ok: false`
   is reached the moment any stage produces an `error` (FR-032: "never a configuration together with
   errors").
 - Throws exactly where the staged calls would (missing `host`/`sandboxRoot`) — FR-032's last
   clause.
-- The staged functions (`parse`, `resolve`, `merge`, `validate`, `why`) remain public (FR-034).
+- The staged functions (`parse`, `resolve`, `merge`, `validate`, `why`) remain public (FR-034) —
+  and `project()` joins them at v1.0 (v1.0 FR-023), reachable without `load()`.

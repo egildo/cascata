@@ -56,7 +56,10 @@ makes it reachable (Principle V).
   other three fields untouched).
 - A `demand` written by a **config**: never read at all (FR-003) — the same "this layer's role is not
   even consulted" posture v0.3 FR-015 established for a config's `cascade`.
-- An absent, empty, or non-mapping `keys:` section: contributes no demands (FR-004).
+- An absent **or empty** `keys:` section: contributes no demands (FR-004). **Corrected at v1.0**: a
+  *non-mapping* `keys:` in a **schema** layer is refused as `malformed-section` (v1.0 FR-001,
+  `SPEC.md` §9) rather than silently ignored. It still contributes no demands; it now also produces a
+  diagnostic. A **config** layer's own `keys:` remains inert, per the bullet above.
 - A key no demand mentions: any value is accepted — schema silence is permission (FR-021), until
   `seal: closed` arrives in v0.7.
 - A demand restated identically by a nearer layer, on a value that satisfies it: legal and vacuous

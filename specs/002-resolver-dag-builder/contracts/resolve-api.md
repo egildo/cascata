@@ -1,6 +1,6 @@
 # Contract: Resolution Entry Point
 
-**Implements**: FR-001–FR-004, FR-022, FR-025 | **Stability**: no compatibility promise before v1.0
+**Implements**: FR-001–FR-004, FR-022, FR-025 | **Stability**: written before v1.0, when no compatibility promise was made; from v1.0 the surface follows `SPEC.md` §15's freeze rule (a correction always, an addition while no meaning changes, a changed meaning only at v2.0)
 
 ## Shape
 

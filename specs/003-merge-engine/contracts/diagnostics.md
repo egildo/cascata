@@ -44,5 +44,9 @@ carve-out.
   (§5.3). Recorded as the more forgiving of the two readings FR-015 permits.
 - A schema using `demand`, `seal`, `final`, or `delegate`: ignored. This milestone reads neither
   meaning nor error into vocabulary it does not implement (FR-002).
-- An absent, empty, or non-mapping `keys:` section: contributes nothing (FR-003). A schema that
-  provides nothing is not a broken schema.
+- An absent **or empty** `keys:` section: contributes nothing (FR-003). A schema that provides
+  nothing is not a broken schema. **Corrected at v1.0**: this bullet used to read "absent, empty, or
+  non-mapping". A *non-mapping* `keys:` in a **schema** layer is refused as `malformed-section` from
+  v1.0 (v1.0 FR-001, `SPEC.md` §9). The fold's own leniency is unchanged — the refusal is raised once
+  by `validate()`, not here — and a **config** layer's own `keys:` stays inert data, exactly as the
+  bullets above say.

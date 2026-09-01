@@ -1,7 +1,7 @@
 {
   "name": "cascata",
-  "version": "0.1.0",
-  "description": "A format-blind, positioned information model with a YAML adapter — the foundation of the Cascata configuration cascade.",
+  "version": "1.0.0",
+  "description": "Schema-governed cascading configuration: a folder of human-readable documents turned into one validated, provenance-rich configuration object.",
   "type": "module",
   "license": "MIT",
   "engines": {

@@ -1,25 +1,57 @@
 # Cascata
 
-A format-blind, positioned information model with a YAML adapter, the resolver and DAG builder that
-follow a config's `$schema`/`$adopts` chain into a graph and a pedigree, and the merge engine that
-folds that chain into one configuration with full provenance — v0.1, v0.2, and v0.3 of the Cascata
-configuration cascade (see `SPEC.md` for the full product vision; these are the first three
-milestones of its §14 roadmap).
+**A library a tool embeds to turn a folder of human-readable documents into one validated
+configuration object.** The tool names a launching point; the library walks the cascade from it,
+enforces every schema it finds along the way, resolves the resources those schemas describe, and
+returns an object that knows where each value came from — or refuses, naming the document, the line,
+and the rule that was broken. Format-blind above the adapter, provenance-rich throughout, and it
+performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
+for (`SPEC.md` Article VI).
 
-v0.1 turns a document's bytes into a tree of mappings, sequences, and scalars in which **every node
-reports exactly where it came from**, or — when the document leans on constructs outside the
-portability floor (§4.2) — into a complete, position-ordered list of diagnostics. v0.2 finds the
-*documents*: it follows `$schema` and `$adopts` through local files and HTTPS references, verifies
-pins, caches fetches, and assembles the result into an acyclic graph with a queryable, root-to-leaf
-pedigree. v0.3 is where the chain finally does something: `merge()` folds the pedigree and the config
-into **one** node tree — a schema's `provide` fills what the config leaves silent, mappings merge
-deeply, everything else replaces unless a key is declared `cascade: append` — while recording, for
-every value, an ordered provenance chain `why()` can answer. Constraint checking and validation are
-still ahead — v0.4 per `SPEC.md` §14.
+**v1.0.** All eight milestones of `SPEC.md` §14's roadmap have shipped, and the specification is
+frozen: from this release a *correction* to `SPEC.md` is always permitted, an *addition* is permitted
+while no existing meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze
+rule).
 
-Full detail lives in `specs/001-information-model-yaml-adapter/` (v0.1), `specs/002-resolver-dag-builder/`
-(v0.2), and `specs/003-merge-engine/` (v0.3) — each has its own `spec.md`, `plan.md`, `data-model.md`,
-and `contracts/`. This file is the shorter, code-facing version of the same surface.
+| | |
+| --- | --- |
+| **v0.1** | the positioned information model and the YAML adapter — every node reports exactly where it came from, or the document is refused with a complete, position-ordered list of diagnostics |
+| **v0.2** | the resolver and DAG builder — `$schema` and `$adopts` followed through local files and HTTPS, pins verified, fetches cached, the result an acyclic graph with a queryable root-to-leaf pedigree |
+| **v0.3** | the merge engine — one node tree, per-key `replace`/`append`, and a provenance chain `why()` can answer |
+| **v0.4** | the constraint checker — the closed `demand` vocabulary, whole-chain validation, and the error contract |
+| **v0.5** | named types, selector parameters, and nested demands to arbitrary depth |
+| **v0.6** | delegation: a fragment grafted into its parent's tree, sandboxed, positionally validated, with a breadcrumb on every diagnostic |
+| **v0.7** | sealing and authority (`seal`, `final`, `authority:`), the host seam and `load()`, and the meta-schema bootstrap — the language describing itself and validating against itself |
+| **v1.0** | **the output surface** — `project()` and `load<T>()`, the value a consumer actually reads (`SPEC.md` Article VII) — plus the freeze |
+
+Full detail lives in `specs/001-…` through `specs/009-…`, each with its own `spec.md`, `plan.md`,
+`research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
+the same surface.
+
+## Quick start
+
+```typescript
+import { load } from "cascata";
+import { createNodeHost } from "cascata/host/node";
+
+interface Site {
+  readonly styles: readonly string[];
+  readonly port: bigint;            // the schema demands `type: int`, so exactness is kept
+}
+
+const result = await load<Site>("./site.yaml", { host: createNodeHost(), sandboxRoot: process.cwd() });
+
+if (result.ok) {
+  result.value.styles[0];        // ordinary data: no walk, no tagged union, no spans
+  result.configuration.tree;     // still there — spans, provenance, pedigree
+  result.diagnostics;            // any info-level lints the configuration earned
+} else {
+  result.diagnostics;            // errors, each naming a document, a line, and a rule
+}
+```
+
+`T` is the caller's claim and the library never checks it (Article VII). Deriving it from the schema
+chain is the v1.x generator's job (`SPEC.md` §14).
 
 ## Install
 
@@ -29,8 +61,10 @@ pnpm install
 
 ## Public surface
 
-Everything below is exported from the package root. There is no compatibility promise before v1.0
-(contracts/parse-api.md, contracts/resolve-api.md).
+Everything below is exported from the package root. **v1.0 is the first release carrying a
+compatibility promise**, and it is the promise `SPEC.md` §15 makes about the *language*: a
+correction always; an addition while no existing meaning changes; a changed meaning only at v2.0.
+The TypeScript surface follows the same rule.
 
 ### `parse(bytes, options)`
 
@@ -396,7 +430,10 @@ tie-breaking, because there are no ties.
 
 **v0.3.** Answers where a merged value came from — the `git config --show-origin` question — for an
 RFC 6901 `pointer` into `configuration.tree`. A library function, not a command: `SPEC.md` §10 writes
-`tool why`, but no CLI ships before v1.0's typed output surface (v0.3 research D3).
+`tool why`, and **no CLI ships at all** — `SPEC.md` §14 places none in any milestone, and v1.0 is the
+output *surface*, not a command line. v0.3's research D3 said "before v1.0's typed output surface",
+which read as a promise this milestone would bring one; corrected at v1.0 rather than left to imply
+a CLI that was never scheduled.
 
 ```typescript
 const timeout = why(result.configuration, "/timeout");
@@ -704,9 +741,9 @@ const result = await load("./site.yaml", {
 });
 ```
 
-`load()` composes `resolve()` → `merge()` → `validate()`; the staged calls stay public. Diagnostics
-now carry a **level**: an `error` decides the outcome, an `info` is a lint that teaches and rides
-along with a successful result.
+`load()` composes `resolve()` → `merge()` → `validate()` → `project()`; the staged calls stay public.
+Diagnostics carry a **level**: an `error` decides the outcome, an `info` is a lint that teaches and
+rides along with a successful result.
 
 ### `values` (v0.7 part 2, `SPEC.md` §9 amended)
 
@@ -773,8 +810,11 @@ obtained through the `Host` seam like any other, because the one document that c
 been exempted from Article VI is the one that must not be.
 
 Meta-validation is **available, not automatic**: `load()` does not run it. `SPEC.md` §2.6 frames
-self-hosting as "publishing a schema = validating it as a config" — a publishing act — and making it
-the default is a v1.0 question, decided with the vocabulary freeze.
+self-hosting as "publishing a schema = validating it as a config" — a publishing act. v0.7 left
+"whether it becomes the default" as a v1.0 question; **v1.0 answers it: it stays opt-in.** Running
+it inside `load()` would double the work of every resolution and change the diagnostics of every
+schema written in seven milestones, at the exact release that makes changes permanent — and §2.6's
+own framing is of a publishing act rather than a resolution step.
 
 Two things it cannot do, both deliberate. §9.1's leaf type-expression grammar is not regular, so
 `typeExpr`'s `pattern` is a **superset** governed by one rule: it must accept every string the grammar
@@ -798,6 +838,96 @@ Extends every catalogue above, unchanged.
 | `unknown-directive-key` | A `directives:` entry naming something outside the six reserved keys (§9, v0.7 part 2) |
 | `unknown-key-vocabulary-keyword` | A key declaration carrying a member outside its own closed per-key vocabulary — the full five (`demand`, `provide`, `cascade`, `final`, `delegate`) at a top-level `keys.<name>`/`directives.<name>`, or `demand`/`delegate` only at a nested `keys:` child (§9, v0.7 part 2) |
 
+
+## v1.0 — the output surface, and the freeze
+
+### `project(configuration)` — the value view (`SPEC.md` Article VII, §17)
+
+Seven milestones produced a positioned, frozen `Node` tree and no way to read it as ordinary data.
+`project()` is that gap closed.
+
+```typescript
+import { project } from "cascata";
+
+const { value, diagnostics } = project<{ readonly server: { readonly host: string } }>(result.configuration);
+value.server.host;   // ordinary data
+```
+
+- **Mappings become null-prototype objects; sequences become arrays; scalars become their JS
+  equivalents.** `Object.create(null)` rather than `{}` because a configuration key is
+  author-controlled: on an ordinary object `o["__proto__"] = v` *sets the prototype* and creates no
+  own property at all. `constructor`, `toString` and `hasOwnProperty` come free from the same choice.
+- **A projection, never a replacement.** The node tree stays on the same result. Spans, provenance
+  and pedigree live there and `why()` still answers by RFC 6901 pointer.
+- **Deeply immutable**, at every depth, by `Object.freeze`.
+- **Total.** It never throws for any legal document, at any depth or width.
+- **Pure.** The tree it read is unchanged.
+
+**One named limit.** Keys are *inserted* in `SPEC.md` §4.2's canonical (code point) order, which is
+as far as JavaScript goes: ECMA-262's `OrdinaryOwnPropertyKeys` returns every **array-index** key — a
+canonical numeric string in `[0, 2^32−2]` — first, in ascending numeric order, ahead of every other
+key, which then follow in insertion order. No object can do otherwise. A mapping whose keys are
+`10`, `2`, `b`, `a` therefore enumerates `2, 10, a, b`. Asserted in both directions in
+`tests/unit/value-view.test.ts`, so the limit is on the record rather than a surprise in a config.
+
+### The numeric rule — the demand decides, not the document
+
+`kind` is lexical (`SPEC.md` §4.2): `30` is an int and `30.0` is a float. A *faithful* projection
+would therefore let a config author's punctuation decide whether the consuming application sees a
+`bigint` or a `number`, under an unchanged schema — which is this project's thesis inverted. So the
+**accumulated** demand decides:
+
+| accumulated demand | value |
+| --- | --- |
+| `int` | `bigint` — exact at any magnitude |
+| `float` | `number` |
+| `int \| float` | `number` — the schema declared a float acceptable here |
+| no numeric demand | faithful to the lexical kind, and typed `unknown` |
+
+Union within one type expression (alternatives are alternatives); **intersection** across demands
+(§5.1), so two layers give one answer and the order they are read in does not change it. A schema
+author who needs exactness above 2^53 writes `type: int`, which is one line.
+
+Where an `int | float` projection actually drops a digit, an **`info`** diagnostic
+(`precision-narrowed`) names the key and both values, at the offending value's own span. It fires on
+actual loss, never on the shape — 2^53, 3·2^52 and 2^60 are all exactly representable and none of
+them lints.
+
+**`JSON.stringify` throws on a `bigint`** (`TypeError: Do not know how to serialize a BigInt`). That
+is the consumer's problem and is deliberately not hidden: converting would silently reintroduce
+exactly the precision loss §4.2 and §6.1 exist to prevent. Two one-line workarounds:
+
+```typescript
+JSON.stringify(value, (_key, x) => (typeof x === "bigint" ? x.toString() : x));  // or
+// demand `float` in the schema wherever a JSON round trip matters
+```
+
+### `load<T>()`
+
+`LoadResult<T = unknown>` carries `value` beside `configuration`. **`T` is the caller's claim and the
+library performs no check of it** — validation enforces the schema against the value and cannot
+enforce a belief about what the schema says. A `T` that disagrees with its schema is a bug in the
+calling code; the v1.x TypeScript generator (`SPEC.md` §14) exists to remove the guesswork by
+deriving `T` from the schema chain.
+
+### v1.0 diagnostic codes
+
+Extends every catalogue above, unchanged.
+
+| Code | Raised when |
+| --- | --- |
+| `malformed-section` | A top-level `types:`/`keys:`/`directives:`/`authority:` in a schema whose value is not a mapping (§9). One rule, four sections — until v1.0 this was silently ignored |
+| `precision-narrowed` | **`info`** — an integer projected to `number` under a demand admitting `float`, where the conversion is not exact (§17) |
+
+### One known limit, stated rather than discovered
+
+Where `keys` and `values` both cover an entry and both name the **same** recursive type, both apply
+(§9) and both descend. v1.0 bounds the *walk* — it is linear, where it used to be `2^depth` — but a
+document that **violates** deep inside such a type still produces `2^depth` byte-identical
+diagnostics, one per path the walk took to reach it. That is what the unbounded walk produced too,
+and collapsing them would change what `validate()` returns, so it is recorded rather than fixed:
+`tests/unit/composition-bound.test.ts` holds the fact. A legal config of roughly thirty nested levels
+with one deep violation under such a schema can still exhaust memory.
 
 ## Scripts
 
