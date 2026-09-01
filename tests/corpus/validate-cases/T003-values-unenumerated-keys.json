@@ -13,7 +13,7 @@
         "line": 4,
         "column": 9,
         "pointer": "/tags/beta",
-        "demand": { "pointer": "/keys/tags/demand/values/demand/type", "document": "schema.yaml", "line": 7, "column": 17 },
+        "demand": { "pointer": "/keys/tags/demand/values/type", "document": "schema.yaml", "line": 6, "column": 15 },
         "pedigreePosition": 0
       }
     ]

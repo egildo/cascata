@@ -4,5 +4,4 @@ keys:
       type: mapping
       seal: open
       values:
-        demand:
-          type: string
+        type: string

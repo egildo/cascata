@@ -22,7 +22,7 @@
         "line": 3,
         "column": 10,
         "pointer": "/tags/alpha",
-        "demand": { "pointer": "/keys/tags/demand/values/demand/maxLength", "document": "schema.yaml", "line": 11, "column": 22 },
+        "demand": { "pointer": "/keys/tags/demand/values/maxLength", "document": "schema.yaml", "line": 10, "column": 20 },
         "pedigreePosition": 0
       }
     ]

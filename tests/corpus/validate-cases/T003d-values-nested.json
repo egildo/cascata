@@ -13,7 +13,7 @@
         "line": 5,
         "column": 8,
         "pointer": "/matrix/a/y",
-        "demand": { "pointer": "/keys/matrix/demand/values/demand/values/demand/type", "document": "schema.yaml", "line": 10, "column": 21 },
+        "demand": { "pointer": "/keys/matrix/demand/values/values/type", "document": "schema.yaml", "line": 8, "column": 17 },
         "pedigreePosition": 0
       }
     ]

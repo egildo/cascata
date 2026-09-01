@@ -1,0 +1,20 @@
+{
+  "name": "T003g (008): `values: { demand: {...} }` — the shape the first v0.7 implementation took — is refused, not silently accepted as a no-op (SPEC.md §9/§15, v0.7 FR-001 corrected). `demand` is not itself a demand keyword, so the wrong spelling is loud, not silent.",
+  "cites": "v0.7 FR-001",
+  "fixtureDir": "values/values-key-declaration-refused",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-demand-keyword",
+        "document": "schema.yaml",
+        "line": 7,
+        "column": 11,
+        "demand": { "pointer": "/keys/tags/demand/values/demand", "document": "schema.yaml", "line": 7, "column": 11 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

@@ -13,7 +13,7 @@
         "line": 3,
         "column": 10,
         "pointer": "/tags/alpha",
-        "demand": { "pointer": "/keys/tags/demand/values/demand/type", "document": "root.yaml", "line": 7, "column": 17 },
+        "demand": { "pointer": "/keys/tags/demand/values/type", "document": "root.yaml", "line": 6, "column": 15 },
         "pedigreePosition": 0
       }
     ]

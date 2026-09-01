@@ -2,14 +2,24 @@
 
 **Milestone**: v0.7, part 2. Normative for this milestone; `SPEC.md` outranks it.
 
+> **Amended, post-implementation.** Item 3 below originally read `values`' value as a **key
+> declaration** (`{ demand?, delegate? }`) — the shape the first implementation took. That reading
+> is wrong and is corrected here to match `SPEC.md` §9/§15 as amended: `values` takes a **bare
+> demand mapping**, exactly as `items` does. The failure mode, not the `items` analogy, is what
+> settles it — under the key-declaration reading, `values: { type: string }` (the spelling the
+> analogy itself invites) parses, is accepted, and constrains nothing, a silent no-op; under the
+> bare demand, that same spelling contains `demand`, which is not a demand keyword, and is refused
+> as `unknown-demand-keyword`. It also closes item 3's own "not refused, reported as a wart" gap:
+> under a bare demand there is no `demand:`-less no-op left to have a wart about.
+
 ## 1. `values`
 
 1. `values` is a member of §9's closed `demand` keyword set.
 2. Its value MUST be a mapping; anything else is `malformed-demand-value`.
-3. Its value is a **key declaration** (`{ demand?, delegate? }`), not a demand mapping. A `values:`
-   mapping with no `demand:` child constrains nothing — the identical silent no-op a `keys:` entry
-   with no `demand:` already has (research.md W-2). **Not refused**, for consistency with `keys`;
-   reported as a wart.
+3. Its value is a **bare demand mapping**, exactly the shape `items` takes — not a key declaration.
+   A member outside the closed `demand` keyword set (most notably `demand` itself, the spelling the
+   first implementation took) is refused as `unknown-demand-keyword`, exactly as it would be
+   anywhere else in a demand mapping.
 4. `values` applies to **every** entry of the mapping it constrains, in canonical key order.
 5. Where `keys` names an entry and `values` also covers it, **both** run. Neither wins; there is no
    precedence rule (§5.1 — demands intersect).

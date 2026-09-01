@@ -61,15 +61,21 @@ import { extend } from "../extend.js";
  * mapping of author-chosen names, which nothing in the vocabulary could
  * describe.
  *
- * **`values`' value is a *key declaration*, not a demand mapping**, and
- * that asymmetry with `items` is deliberate: `values` is the un-named
- * form of a `keys` entry (`keys: {a: X, b: X}` versus `values: X`, where
- * `X = { demand: {...} }`), which is what keeps `keys` and `values`
- * composable by intersection with no reshaping and keeps `delegate:`
- * syntactically reachable for a mapping whose keys the schema cannot
- * enumerate. SPEC.md §9's "`values` is to a mapping what `items` is to a
- * sequence" can be read the other way; the ambiguity is reported in the
- * v0.7 part 2 milestone report rather than settled here.
+ * **`values` takes a *bare demand mapping*, exactly as `items` does —
+ * corrected in v0.7 part 2, post-implementation** (SPEC.md §9/§15, amended
+ * today). The first implementation read `values` as a *key declaration*
+ * (`values: { demand: {...} }`), by analogy with a `keys:` entry. The
+ * analogy is not the argument that settles the syntax — the failure mode
+ * is: under the key-declaration reading, `values: { type: string }` — the
+ * spelling the analogy itself invites an author to write — parses, is
+ * accepted, and constrains **nothing**, a silent no-op. Under the bare
+ * demand, that same wrong spelling contains `demand`, which is not a
+ * demand keyword, so it is refused as `unknown-demand-keyword`. Loud
+ * beats silent. It also retires a smaller wart at no cost: the
+ * key-declaration reading left room to write `delegate:` under `values`,
+ * which the pipeline never grants (delegation grants are scoped to
+ * `keys`, `src/resolve/delegate.ts`) — with a bare demand there is
+ * nowhere left to write it.
  */
 export const DEMAND_KEYWORDS = ["type", "items", "required", "min", "max", "minLength", "maxLength", "pattern", "enum", "accept", "keys", "seal", "values"] as const;
 
@@ -332,16 +338,12 @@ export function refuseMalformedShapes(demandPointerPath: readonly (string | numb
         }
         break;
       case "values":
-        // v0.7 part 2, SPEC.md §9 amended: `values`' own value is ONE key
-        // declaration (`{demand?, delegate?}`), where `keys`' is a mapping
-        // OF them — so the basic shape check is the same "must be a
-        // mapping" both take, and the declaration's own `demand` sub-shape
-        // is checked by the recursive walk below, not here. A `values:`
-        // mapping carrying no `demand:` constrains nothing, silently — the
-        // identical no-op a `keys:` entry with no `demand:` already has
-        // (research.md W-2). Deliberately NOT refused here, for consistency
-        // with `keys`; reported as a wart rather than fixed by inventing a
-        // rule no document states.
+        // v0.7 part 2, SPEC.md §9/§15 amended (corrected post-implementation):
+        // `values`' own value is a BARE DEMAND MAPPING, exactly the shape
+        // `items` takes — so the basic shape check is the identical "must
+        // be a mapping" both take, and the mapping's own keywords are
+        // checked by the recursive walk below, not here (this file's own
+        // `DEMAND_KEYWORDS` doc has the full argument for the correction).
         if (node.type !== "mapping") {
           refuse(keyword, node, "a mapping");
         }
@@ -464,13 +466,11 @@ export function recursiveVocabularyProblems(raw: RawDemand, layerRank: number, d
 
   const valuesNode = raw.get("values");
   if (valuesNode !== undefined && valuesNode.type === "mapping") {
+    const nextPath = [...demandPointerPath, "values"];
     if (depth + 1 > MAX_DEMAND_DEPTH) {
-      problems.push(depthLimitProblem(valuesNode, layerRank, [...demandPointerPath, "values"]));
+      problems.push(depthLimitProblem(valuesNode, layerRank, nextPath));
     } else {
-      const valuesRaw = readKeyDeclarationDemand(valuesNode);
-      if (valuesRaw !== undefined) {
-        extend(problems, recursiveVocabularyProblems(valuesRaw, layerRank, [...demandPointerPath, "values", "demand"], depth + 1, knownDeclaredNames));
-      }
+      extend(problems, recursiveVocabularyProblems(valuesNode.entries, layerRank, nextPath, depth + 1, knownDeclaredNames));
     }
   }
 

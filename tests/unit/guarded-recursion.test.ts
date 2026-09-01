@@ -41,7 +41,7 @@ const CONFIG = ["$schema: ./schema.yaml", "tree:", "  down:", "    down: 7", ""]
 function twoTypeLoop(guard: "keys" | "values" | "items" | "alias"): string {
   const body: Record<typeof guard, string[]> = {
     keys: ["      type: mapping", "      keys:", "        down:", "          demand:", "            type: a"],
-    values: ["      type: mapping", "      values:", "        demand:", "          type: a"],
+    values: ["      type: mapping", "      values:", "        type: a"],
     items: ["      type: sequence", "      items:", "        type: a"],
     alias: ["      type: a"],
   };

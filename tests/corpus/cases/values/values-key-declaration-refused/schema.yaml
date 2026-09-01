@@ -1,0 +1,7 @@
+keys:
+  tags:
+    demand:
+      type: mapping
+      values:
+        demand:
+          type: string

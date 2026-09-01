@@ -38,7 +38,7 @@ import type { DelegationHop } from "../model/reference.js";
 import { pointerFromPath, resolvePointer } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
-import { readDemandVocabulary, readKeyDeclarationDemand, readNestedKeysMapping, recursiveVocabularyProblems, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
+import { readDemandVocabulary, readNestedKeysMapping, recursiveVocabularyProblems, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
 import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, requiredViolationCause, type ViolationSite } from "./constraints.js";
 import { renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
 import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
@@ -524,10 +524,12 @@ function checkNestedKeys(keysDeclaration: Node, value: Node, demandPointerPath: 
  *   its declared set from `keys` alone; nothing here adds a name to it.
  *   `values` says what shape, `seal` says which keys.
  *
- * The declaration's own shape is one **key declaration**
- * (`{demand?, delegate?}`), not a demand mapping — see
- * `vocabulary.ts`'s `DEMAND_KEYWORDS` doc for why, and for the SPEC.md §9
- * ambiguity that reading resolves.
+ * The declaration's own shape is a **bare demand mapping**, exactly as
+ * `items` takes — corrected in v0.7 part 2, post-implementation, from a
+ * first reading of **key declaration** (`{demand?, delegate?}`); see
+ * `vocabulary.ts`'s `DEMAND_KEYWORDS` doc for the failure mode that
+ * settles it (the key-declaration reading made the wrong spelling a
+ * silent no-op instead of a refusal).
  */
 function checkNestedValues(valuesDeclaration: Node, value: Node, demandPointerPath: readonly (string | number)[], mergedPointer: string, ctx: WalkContext): Violation[] {
   if (valuesDeclaration.type !== "mapping" || value.type !== "mapping") {
@@ -536,16 +538,12 @@ function checkNestedValues(valuesDeclaration: Node, value: Node, demandPointerPa
   if (ctx.depth + 1 > MAX_DEMAND_DEPTH) {
     return [depthLimitViolation(valuesDeclaration, ctx, [...demandPointerPath, "values"], mergedPointer)];
   }
-  const entryRaw = readKeyDeclarationDemand(valuesDeclaration);
-  if (entryRaw === undefined) {
-    return [];
-  }
   const violations: Violation[] = [];
   // `value.entries` is canonically key-sorted by construction (§4.2), so
   // iteration order — and therefore diagnostic order — is deterministic
   // without sorting anything here (v0.5 FR-010's own argument).
   for (const [childName, childValue] of value.entries) {
-    extend(violations, checkDemand(entryRaw, childValue, [...demandPointerPath, "values", "demand"], `${mergedPointer}${pointerFromPath([childName])}`, { ...ctx, depth: ctx.depth + 1, typeHops: 0 }));
+    extend(violations, checkDemand(valuesDeclaration.entries, childValue, [...demandPointerPath, "values"], `${mergedPointer}${pointerFromPath([childName])}`, { ...ctx, depth: ctx.depth + 1, typeHops: 0 }));
   }
   return violations;
 }
@@ -682,17 +680,16 @@ function typeUsageProblems(configuration: MergedConfiguration, allDecls: readonl
         walk(childRaw, layer, [...pointerPath, "keys", childName, "demand"], depth + 1);
       }
     }
-    // v0.7 part 2: `values` nests exactly as `keys` does, so a type-usage
-    // problem written under one must be found under the other too — this
-    // walk and `vocabulary.ts`'s own recursive pass descend in lockstep,
-    // which is the property that keeps a name unreachable from a nested
-    // position reported once rather than never.
+    // v0.7 part 2: `values` nests exactly as `items` does (a bare demand
+    // mapping — corrected post-implementation, `vocabulary.ts`'s
+    // `DEMAND_KEYWORDS` doc), so a type-usage problem written under one
+    // must be found under the other too — this walk and `vocabulary.ts`'s
+    // own recursive pass descend in lockstep, which is the property that
+    // keeps a name unreachable from a nested position reported once
+    // rather than never.
     const valuesNode = raw.get("values");
     if (valuesNode !== undefined && valuesNode.type === "mapping") {
-      const valuesRaw = readKeyDeclarationDemand(valuesNode);
-      if (valuesRaw !== undefined) {
-        walk(valuesRaw, layer, [...pointerPath, "values", "demand"], depth + 1);
-      }
+      walk(valuesNode.entries, layer, [...pointerPath, "values"], depth + 1);
     }
   }
 

@@ -3,8 +3,7 @@ types:
     demand:
       type: mapping
       values:
-        demand:
-          type: node
+        type: node
 keys:
   tree:
     demand:

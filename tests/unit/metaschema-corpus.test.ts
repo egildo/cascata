@@ -177,6 +177,12 @@ const REFUSED: readonly { readonly fixture: string; readonly pipeline: "ACCEPT" 
     metaCodes: ["seal-violation"],
     why: "Verdicts agree. Hand-written: `unknown-demand-keyword`. The meta-schema: `seal-violation` from `demand`'s own `seal: closed` — the same closed vocabulary, said twice in two languages, which is what self-hosting looks like when it works.",
   },
+  {
+    fixture: "values/values-key-declaration-refused/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["seal-violation"],
+    why: "Verdicts agree. `values: { demand: {...} }` is the key-declaration shape the first v0.7 implementation took (SPEC.md §9/§15, corrected). Hand-written: `unknown-demand-keyword`, since `demand` is not itself a demand keyword. The meta-schema: `seal-violation`, because `values`'s own demand type is `seal: closed` and `demand` is not among its keywords.",
+  },
 ];
 
 describe("v0.7 part 2 FR-017 / SC-002 — every corpus schema, against the meta-schema", () => {

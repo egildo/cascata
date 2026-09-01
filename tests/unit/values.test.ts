@@ -14,10 +14,12 @@
  *   from a synthetic AST rather than a document, and the third case here
  *   says why in the form of an assertion: a `values` chain long enough to
  *   reach the guard **cannot be written as a document at all**, because
- *   v0.1's parse `maxDepth` is the same 64 counting a coarser unit. That
- *   is `guards-that-dont-guard` restated for this keyword — the guard is
- *   real, but unreachable through `resolve()`, and saying so is the
- *   point.
+ *   v0.1's parse `maxDepth` is the same 64 counting a coarser unit (raw
+ *   YAML nesting, not semantic `values` steps) and the fixed
+ *   `keys`/`deep`/`demand` prefix alone is enough to push a 64-deep chain
+ *   past it. That is `guards-that-dont-guard` restated for this keyword —
+ *   the guard is real, but unreachable through `resolve()`, and saying so
+ *   is the point.
  * - **FR-005's monotonicity row, discharged dynamically.** §5.2 says
  *   loosening or removing an inherited `values` is refused. This
  *   milestone discharges that the way v0.4 FR-033 and v0.7's `seal` row
@@ -81,20 +83,25 @@ describe("v0.7 part 2 FR-003 — values is depth-bounded, by the same guard keys
    * `tests/unit/validate-depth-limit.test.ts` records in full**: a real
    * document deep enough to reach `MAX_DEMAND_DEPTH` cannot get through
    * `resolve()`, because v0.1's own parse `maxDepth` is the same number
-   * (64) counting a coarser unit. `values` makes that gap *wider*, not
-   * narrower — each semantic `values` step costs **two** raw YAML levels
-   * (`values:` then its `demand:`), where a bare `items` chain costs one.
-   * Confirmed by running it: a `values` chain long enough to matter is
-   * refused by the parser as `document-unreachable` long before
-   * `src/validate/`'s own guard is consulted. The guard remains a real
-   * second line of defence for a caller who raises `ParseLimits.maxDepth`,
-   * a future adapter, or a hand-built `MergedConfiguration` — which is
-   * exactly what this test is.
+   * (64) counting a coarser unit — raw YAML nesting, not semantic
+   * `values` steps. `values` takes a bare demand mapping (corrected
+   * post-implementation, `vocabulary.ts`'s `DEMAND_KEYWORDS` doc), so one
+   * semantic `values` step now costs exactly the **one** raw YAML level a
+   * bare `items` chain costs (this used to cost two — `values:` then its
+   * own `demand:` — under the key-declaration reading the fix retired).
+   * Confirmed by running it: even at one level per step, the fixed
+   * `keys`/`deep`/`demand` prefix pushes a 64-deep chain past the
+   * parser's own cap on its own, so a `values` chain long enough to
+   * matter is still refused as `document-unreachable` before
+   * `src/validate/`'s own guard is ever consulted. The guard remains a
+   * real second line of defence for a caller who raises
+   * `ParseLimits.maxDepth`, a future adapter, or a hand-built
+   * `MergedConfiguration` — which is exactly what this test is.
    */
   function nestedValuesDemand(id: string, depth: number): Node {
     let inner: Node = createMapping([["type", createStringScalar("string", span(id, 1))]], span(id, 2));
     for (let level = 0; level < depth; level += 1) {
-      inner = createMapping([["values", createMapping([["demand", inner]], span(id, 300 + level))]], span(id, 100 + level));
+      inner = createMapping([["values", inner]], span(id, 100 + level));
     }
     return inner;
   }
@@ -125,17 +132,19 @@ describe("v0.7 part 2 FR-003 — values is depth-bounded, by the same guard keys
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.code).toBe("depth-limit-exceeded");
     // Derived by hand from contracts/values-and-directives.md §1.7, not
-    // from output: each accepted level contributes "/values/demand", and
-    // the level that crosses the bound is named by "/values" alone.
-    expect(result.diagnostics[0]?.demand?.pointer).toBe("/keys/value/demand" + "/values/demand".repeat(MAX_DEMAND_DEPTH) + "/values");
+    // from output: `values` is a bare demand mapping (corrected
+    // post-implementation), so every level — the 64 accepted and the one
+    // that crosses the bound — contributes exactly one "/values" segment,
+    // MAX_DEMAND_DEPTH + 1 in total.
+    expect(result.diagnostics[0]?.demand?.pointer).toBe("/keys/value/demand" + "/values".repeat(MAX_DEMAND_DEPTH + 1));
   });
 
   it("a values chain deep enough to reach the guard cannot be written as a document at all — the parser refuses it first", async () => {
     const schemaLines: string[] = ["keys:", "  deep:", "    demand:"];
     let indent = "      ";
     for (let level = 0; level < MAX_DEMAND_DEPTH; level += 1) {
-      schemaLines.push(`${indent}values:`, `${indent}  demand:`);
-      indent += "    ";
+      schemaLines.push(`${indent}values:`);
+      indent += "  ";
     }
     schemaLines.push(`${indent}type: int`);
     const result = await loadFiles({ "/v/schema.yaml": `${schemaLines.join("\n")}\n`, "/v/config.yaml": "$schema: ./schema.yaml\ndeep: {}\n" });
@@ -146,7 +155,7 @@ describe("v0.7 part 2 FR-003 — values is depth-bounded, by the same guard keys
 });
 
 describe("v0.7 part 2 FR-005 — §5.2's values row, discharged dynamically under whole-chain validation", () => {
-  const ROOT = ["keys:", "  tags:", "    demand:", "      type: mapping", "      values:", "        demand:", "          type: string", ""].join("\n");
+  const ROOT = ["keys:", "  tags:", "    demand:", "      type: mapping", "      values:", "        type: string", ""].join("\n");
 
   it("a descendant that says nothing about values cannot rescue a value the ancestor's values refuses", async () => {
     const result = await loadFiles({
@@ -163,7 +172,7 @@ describe("v0.7 part 2 FR-005 — §5.2's values row, discharged dynamically unde
   it("a descendant TIGHTENING values is legal, and both layers' demands apply", async () => {
     const result = await loadFiles({
       "/v/root.yaml": ROOT,
-      "/v/child.yaml": ["$adopts: ./root.yaml", "keys:", "  tags:", "    demand:", "      type: mapping", "      values:", "        demand:", "          type: string", "          minLength: 4", ""].join("\n"),
+      "/v/child.yaml": ["$adopts: ./root.yaml", "keys:", "  tags:", "    demand:", "      type: mapping", "      values:", "        type: string", "        minLength: 4", ""].join("\n"),
       "/v/config.yaml": ["$schema: ./child.yaml", "tags:", "  alpha: ab", ""].join("\n"),
     });
     expect(result.ok).toBe(false);
@@ -175,7 +184,7 @@ describe("v0.7 part 2 FR-005 — §5.2's values row, discharged dynamically unde
   it("the same tightened chain accepts a value satisfying both layers", async () => {
     const result = await loadFiles({
       "/v/root.yaml": ROOT,
-      "/v/child.yaml": ["$adopts: ./root.yaml", "keys:", "  tags:", "    demand:", "      type: mapping", "      values:", "        demand:", "          type: string", "          minLength: 4", ""].join("\n"),
+      "/v/child.yaml": ["$adopts: ./root.yaml", "keys:", "  tags:", "    demand:", "      type: mapping", "      values:", "        type: string", "        minLength: 4", ""].join("\n"),
       "/v/config.yaml": ["$schema: ./child.yaml", "tags:", "  alpha: abcd", ""].join("\n"),
     });
     expect(result.ok).toBe(true);
@@ -185,7 +194,7 @@ describe("v0.7 part 2 FR-005 — §5.2's values row, discharged dynamically unde
 describe("v0.7 part 2 FR-004 — values says what shape, seal says which keys", () => {
   it("values with seal: closed and no keys refuses every entry — membership is seal's question alone", async () => {
     const result = await loadFiles({
-      "/v/schema.yaml": ["keys:", "  tags:", "    demand:", "      type: mapping", "      seal: closed", "      values:", "        demand:", "          type: string", ""].join("\n"),
+      "/v/schema.yaml": ["keys:", "  tags:", "    demand:", "      type: mapping", "      seal: closed", "      values:", "        type: string", ""].join("\n"),
       "/v/config.yaml": ["$schema: ./schema.yaml", "tags:", "  alpha: fine", ""].join("\n"),
     });
     expect(result.ok).toBe(false);
@@ -230,11 +239,11 @@ function valueOfKind(kind: Kind, id: string, at: number): Node {
   }
 }
 
-/** `keys: { m: { demand: { type: mapping, values: { demand: { type: <kind> } } } } }`, or no `values` at all when `kind` is undefined. */
+/** `keys: { m: { demand: { type: mapping, values: { type: <kind> } } } }` — a bare demand mapping, or no `values` at all when `kind` is undefined. */
 function valuesSchemaLayer(id: string, rank: number, kind: Kind | undefined): Layer {
   const inner: [string, Node][] = [["type", createStringScalar("mapping", span(id, 1))]];
   if (kind !== undefined) {
-    inner.push(["values", createMapping([["demand", createMapping([["type", createStringScalar(kind, span(id, 2))]], span(id, 3))]], span(id, 4))]);
+    inner.push(["values", createMapping([["type", createStringScalar(kind, span(id, 2))]], span(id, 3))]);
   }
   const tree = createMapping([["keys", createMapping([["m", createMapping([["demand", createMapping(inner, span(id, 5))]], span(id, 6))]], span(id, 7))]], span(id, 8));
   return { identity: { location: id, hash: `${rank}`.repeat(64).slice(0, 64) }, role: "schema", rank, tree };

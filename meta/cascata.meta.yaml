@@ -111,8 +111,8 @@ types:
         accept:    { demand: { type: "typeName[]" } }
         seal:      { demand: { type: string, enum: [open, closed] } }
         items:     { demand: { type: demand } }
-        keys:      { demand: { type: mapping, values: { demand: { type: nestedKeyDecl } } } }
-        values:    { demand: { type: nestedKeyDecl } }
+        keys:      { demand: { type: mapping, values: { type: nestedKeyDecl } } }
+        values:    { demand: { type: demand } }
 
   # ---- one entry of a top-level `keys:` or `directives:` section ----------
   # The FULL per-key vocabulary. Governance keywords live here and only here.
@@ -127,7 +127,7 @@ types:
         final:    { demand: { type: bool } }
         delegate: { demand: { type: string, enum: [allow] } }
 
-  # ---- one entry of a NESTED `keys:` (or of `values:`) --------------------
+  # ---- one entry of a NESTED `keys:` -------------------------------------
   # A strictly smaller vocabulary than keyDecl, and the meta-schema is what
   # forced the distinction into the open — SPEC.md §9 had claimed a parity
   # that never existed. Settled (§15): `provide`, `cascade` and `final`
@@ -135,7 +135,9 @@ types:
   # schema declares a key of its own; a nested key is part of a value's
   # SHAPE, and shape is what `demand` is for. `delegate` nests because §8's
   # grant is per key at any depth — the considered exception, not a loose
-  # end.
+  # end. NOT `values`' own shape (corrected post-implementation, §15):
+  # `values` takes a bare `demand`, exactly as `items` does — see the
+  # `demand` type's own `values` entry above.
   nestedKeyDecl:
     demand:
       type: mapping
@@ -156,10 +158,10 @@ types:
 keys:
 
   types:
-    demand: { type: mapping, values: { demand: { type: typeDecl } } }
+    demand: { type: mapping, values: { type: typeDecl } }
 
   keys:
-    demand: { type: mapping, values: { demand: { type: keyDecl } } }
+    demand: { type: mapping, values: { type: keyDecl } }
 
   # Names restricted to the six reserved keys by `keys` + `seal: closed`.
   # `values` alone would have constrained the shapes and not the names,

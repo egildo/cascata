@@ -712,17 +712,16 @@ keys:
     demand:
       type: mapping
       values:                       # every entry, whatever its key
-        demand:
-          type: mapping
-          keys:
-            url: { demand: { type: url, required: true } }
+        type: mapping
+        keys:
+          url: { demand: { type: url, required: true } }
 ```
 
-Its value is a **key declaration** (`{ demand?, delegate? }`), not a bare demand mapping — `values`
-is the un-named form of a `keys` entry, which is what keeps the two composable. Where `keys` names an
-entry and `values` also covers it, **both** apply: demands compose by intersection (§5.1) and there is
-no precedence rule to invent. `values` is orthogonal to `seal`: `values` says what shape, `seal` says
-which keys. Against a non-mapping value it is a no-op — the shape refusal belongs to `type`.
+Its value is a **bare demand mapping**, exactly the shape `items` takes — not a key declaration.
+Where `keys` names an entry and `values` also covers it, **both** apply: demands compose by
+intersection (§5.1) and there is no precedence rule to invent. `values` is orthogonal to `seal`:
+`values` says what shape, `seal` says which keys. Against a non-mapping value it is a no-op — the
+shape refusal belongs to `type`.
 
 ### Guarded recursion (`SPEC.md` §7 amended)
 

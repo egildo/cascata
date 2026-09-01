@@ -3,5 +3,4 @@ keys:
     demand:
       type: mapping
       values:
-        demand:
-          type: string
+        type: string

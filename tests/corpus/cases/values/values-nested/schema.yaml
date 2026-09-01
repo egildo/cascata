@@ -3,8 +3,6 @@ keys:
     demand:
       type: mapping
       values:
-        demand:
-          type: mapping
-          values:
-            demand:
-              type: int
+        type: mapping
+        values:
+          type: int
