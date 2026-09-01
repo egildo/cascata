@@ -11,7 +11,9 @@
 # worth reporting — either this draft is wrong about the spec, or the
 # implementation is.
 #
-# Two constructs below are marked UNSETTLED and are research.md's D-4.
+# research.md's D-4 (nested vs. top-level key declarations) and W-1 (the leaf
+# DSL) were open when this draft was first written and are now both settled in
+# SPEC.md §15; the draft below reflects the settled answers.
 
 $id: cascata/meta
 $version: 1
@@ -24,12 +26,27 @@ types:
 
   # ---- leaf aliases -------------------------------------------------------
 
-  # §9.1's DSL, e.g. "string | resource[]". Only checkable as a *string* here:
-  # the grammar has balanced parens and is therefore not regular, so no
-  # `pattern` can capture it. See research.md W-1 — the one place self-hosting
-  # is partial by construction.
+  # §9.1's DSL, e.g. "string | resource[]". The grammar is not regular
+  # (`Primary := "(" Union ")"`), so this `pattern` is a deliberate SUPERSET,
+  # governed by one rule: it must accept every string the grammar accepts.
+  # Over-acceptance is safe — the parser is the authority and refuses the rest;
+  # a false rejection would put two authorities in contradiction. In practice
+  # the only difference is that parenthesis balance is unchecked.
+  #
+  # Established, not assumed: 200,000 expressions generated from §9.1's grammar
+  # (including whitespace injected at every legal position) are all accepted —
+  # zero false rejects. Probe gate: non-ASCII names are rejected, matching the
+  # grammar; adversarial inputs stay flat (16k chars in ~0.1ms).
+  #
+  # DO NOT "simplify" this pattern. The obvious whitespace-tolerant form —
+  # several adjacent `\s*` groups — is QUADRATIC, measured at 4x per doubling
+  # of input (16k spaces took 404ms). Whitespace is folded into the structural
+  # character classes here precisely so exactly one quantifier consumes each
+  # boundary. See research.md W-1.
   typeExpr:
-    demand: { type: string }
+    demand:
+      type: string
+      pattern: '^[\s(]*[A-Za-z_][A-Za-z0-9_-]*(?:/[A-Za-z_][A-Za-z0-9_-]*)?[\s)]*(?:\[[\s]*\][\s)]*)*(?:\|[\s(]*[A-Za-z_][A-Za-z0-9_-]*(?:/[A-Za-z_][A-Za-z0-9_-]*)?[\s)]*(?:\[[\s]*\][\s)]*)*)*$'
 
   typeName:
     demand: { type: string }
@@ -44,17 +61,17 @@ types:
       keys:
         type:      { demand: { type: typeExpr } }
         required:  { demand: { type: bool } }
-        min:       { demand: { type: int | float } }
-        max:       { demand: { type: int | float } }
+        min:       { demand: { type: "int | float" } }
+        max:       { demand: { type: "int | float" } }
         minLength: { demand: { type: int, min: 0 } }
         maxLength: { demand: { type: int, min: 0 } }
         pattern:   { demand: { type: string } }
         enum:      { demand: { type: sequence } }
-        accept:    { demand: { type: typeName[] } }
+        accept:    { demand: { type: "typeName[]" } }
         seal:      { demand: { type: string, enum: [open, closed] } }
         items:     { demand: { type: demand } }
         keys:      { demand: { type: mapping, values: { demand: { type: nestedKeyDecl } } } }
-        values:    { demand: { type: nestedKeyDecl } }   # UNSETTLED — research.md D-4
+        values:    { demand: { type: nestedKeyDecl } }
 
   # ---- one entry of a top-level `keys:` or `directives:` section ----------
   # The FULL per-key vocabulary. Governance keywords live here and only here.
@@ -71,10 +88,12 @@ types:
 
   # ---- one entry of a NESTED `keys:` (or of `values:`) --------------------
   # A strictly smaller vocabulary than keyDecl, and the meta-schema is what
-  # forced the distinction into the open. As built (v0.5/v0.6), a nested entry
-  # is read for `demand` only, plus `delegate`, which v0.6 reaches through its
-  # own separate walker. `provide`, `cascade` and `final` are top-level only.
-  # UNSETTLED — research.md D-4.
+  # forced the distinction into the open — SPEC.md §9 had claimed a parity that
+  # never existed. Settled (§15): `provide`, `cascade` and `final` state a
+  # LAYER'S AUTHORITY over a key, which means something only where a schema
+  # declares a key of its own; a nested key is part of a value's SHAPE, and
+  # shape is what `demand` is for. `delegate` nests because §8's grant is per
+  # key at any depth — the considered exception, not a loose end.
   nestedKeyDecl:
     demand:
       type: mapping
@@ -90,7 +109,7 @@ types:
       seal: closed
       keys:
         demand: { demand: { type: demand } }
-        accept: { demand: { type: typeName[] } }
+        accept: { demand: { type: "typeName[]" } }
 
 keys:
 

@@ -244,7 +244,7 @@ types:
 
 keys:
   styles:
-    demand: { type: resource[], accept: [url] }   # usage selects a subset — narrowing
+    demand: { type: "resource[]", accept: [url] }   # usage selects a subset — narrowing
     cascade: append
 ```
 
@@ -269,7 +269,7 @@ types:
     accept: [url, path]
 keys:
   styles:
-    demand: { type: resource[] }
+    demand: { type: "resource[]" }
 ```
 
 ```yaml
@@ -280,7 +280,7 @@ types:
     accept: [url]               # narrowing — legal, and it takes effect HERE
 keys:
   styles:
-    demand: { type: resource[] }   # the house restates the key, so its own narrower resource governs
+    demand: { type: "resource[]" }   # the house restates the key, so its own narrower resource governs
 ```
 
 A config under the house supplying `["assets/theme.css"]` — a path — is **rejected**: the house's own `styles` demand resolves the house's `resource`, which now accepts only URLs.
@@ -347,10 +347,13 @@ Name     := Ident ( "/" Ident )?          (* qualified: core/resource *)
 Ident    := [A-Za-z_] [A-Za-z0-9_-]*
 ```
 
+- **A type expression containing `[]` must be quoted inside a YAML *flow* mapping.** `{ type: resource[] }` is not a parse error in Cascata but in YAML: `[` opens a flow sequence, so the document never reaches this grammar. Block style needs no quoting (`type: resource[]` on its own line is a plain scalar), and `|` alone is safe in flow (`{ type: int | float }` parses). This is a property of the host format rather than of the type language, and it is stated here because it is invisible until it bites: five of this document's own worked examples were written in the unquoted flow form and did not parse, undetected for six milestones because every executed fixture happens to use block style (§15).
 - **`[]` binds tighter than `|`** (TypeScript precedence): `string | string[]` = string or array-of-string; `(string | int)[]` needs parens. Whitespace insignificant.
 - **Names only.** No literals, no parameters, no `?` marker. Enums via `enum:`, optionality via `required:`, parameters via sibling keys (`accept:`, `min:`…). One construct per meaning — the DSL is a pure type-name algebra.
 - **Canonical form:** unions flatten and dedupe as *sets* (order insignificant for equality); arrays compare structurally.
 - **Subsumption:** `A ⊑ B` iff every alternative of A is ⊑ some alternative of B; `T[] ⊑ U[]` iff `T ⊑ U`; names resolve through the type graph. Decidable, ~50 lines — this is what keeps static subsumption on type expressions nearly free.
+
+**This grammar is not describable by the constraint vocabulary, and the meta-schema approximates it.** The production `Primary := "(" Union ")"` makes the language non-regular, so no `pattern` can capture it and a schema cannot invoke this parser. The meta-schema therefore constrains a `type:` value with a `pattern` that is a deliberate **superset** of this grammar, governed by one rule: **it must accept every string this grammar accepts.** Over-acceptance is safe — the parser is the authority and refuses what it must — while a single false rejection would put two authorities in contradiction, which is the failure the razor of §8.1 exists to prevent. In practice the superset differs from the grammar only in not checking that parentheses balance. The debt is recorded rather than hidden: **self-hosting is complete except for leaf type expressions**, and closing that gap properly is a v1+ question (§14, §15).
 
 Reserved document keys: `$id`, `$version`, `$adopts`, `$pin`, `$schema` (config-side pointer), later `$extends`.
 
@@ -364,7 +367,9 @@ Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, `key
 
 **A schema may also carry a top-level `seal`**, governing the **config's own top level** — the mate to a schema's top-level `keys:`, which §9 already says governs the config's own top level. The two are one keyword at two scopes and must never diverge in meaning. Before v0.7 there was no way to close a document's top level at all.
 
-**`final` is a boolean**, written `final: true`. `final: false` is legal and inert where no ancestor sealed the key, and refused as a weakening where one did. The syntax was never stated until the meta-schema forced the question (§15). **`keys`, `items`, and `values` all nest to arbitrary depth**: `keys` constrains a mapping value's own *named* children the way the schema's top-level `keys:` constrains the config's own top level, `items` constrains a sequence value's own elements, and `values` constrains **every** entry of a mapping whatever its key is; any of them may recurse into further `keys`/`items`/`values` beneath it, to whatever depth the data actually nests.
+**`final` is a boolean**, written `final: true`. `final: false` is legal and inert where no ancestor sealed the key, and refused as a weakening where one did. The syntax was never stated until the meta-schema forced the question (§15). **`keys`, `items`, and `values` all nest to arbitrary depth**: `keys` constrains a mapping value's own *named* children, `items` constrains a sequence value's own elements, and `values` constrains **every** entry of a mapping whatever its key is; any of them may recurse into further `keys`/`items`/`values` beneath it, to whatever depth the data actually nests.
+
+**A nested key declaration is a smaller thing than a top-level one, and deliberately so** (amended v0.7; §15). This sentence used to say a nested `keys` constrains a mapping's children "the way" a schema's top-level `keys:` constrains the config's top level, which asserted a parity that never existed. A **top-level** entry carries the full per-key vocabulary — `demand`, `provide`, `cascade`, `final`, `delegate`. A **nested** entry carries `demand` and `delegate` only. The distinction is not an accretion: `provide`, `cascade` and `final` are statements about *a layer's authority over a key*, which is a relationship between documents and means something only where a schema declares a key of its own; a nested key is part of a value's **shape**, and shape is what `demand` is for. `delegate` nests because §8's grant is per key at any depth, and v0.6 built it that way on purpose. `seal` is no longer an exception either, having moved into `demand` above, where it nests with every other demand.
 
 **`values` is to a mapping what `items` is to a sequence** — the construct for a mapping whose keys are the author's to choose rather than the schema's to enumerate. Where a key is named by `keys` *and* covered by `values`, both apply: demands compose by intersection and always have (§5.1), so there is no precedence rule to invent. `values` alone says nothing about *which* keys may appear — that is `seal`'s question, and the two are orthogonal: `values` with `seal: open` means "any key you like, each shaped like this"; adding `keys` entries under `seal: closed` restricts the set to those named. Added in v0.7 because the meta-schema's own `keys:` section is exactly a mapping of author-chosen names, and nothing in the vocabulary could describe it (§15).
 
@@ -382,7 +387,7 @@ types:
   resource: { accept: [url, path], demand: { type: string } }
 keys:
   styles:
-    demand: { type: resource[], accept: [url], required: true }
+    demand: { type: "resource[]", accept: [url], required: true }
     cascade: append
     seal: open
 ```
@@ -393,7 +398,7 @@ $adopts: https://site-builder.dev/schema/core.yaml
 $pin: sha256:9f2c…
 keys:
   styles:
-    demand: { type: resource[] }                      # legal: (vacuous) narrowing
+    demand: { type: "resource[]" }                      # legal: (vacuous) narrowing
     provide: ["https://cdn.house.dev/base.css"]       # house default, appended
 ```
 
@@ -486,7 +491,7 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 7. **v0.7** — Sealing/governance (`seal`, `final`, a root demanding pinned adoption, a root final against forking) + **the embedding surface** (the host seam of Article VI, the one-call `load()`, `resource` values resolved against their declaring document rather than merely shape-checked) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer). The embedding surface belongs *here* rather than at v1.0 because the meta-schema bootstrap is its first real consumer — self-hosting means the library loads its own meta-schema through its own seam, which is the embedding story exercising itself. **Planning the bootstrap made good on its own justification before any code was written**: three vocabulary warts (no construct for author-chosen keys, no recursive types, no way to constrain the reserved keys) and one unimplementable obligation (§5.5's lint, against a `Diagnostic` with no severity) surfaced from trying to write the meta-schema and are settled in §15. `values`, guarded recursion, `directives:`, and diagnostic levels are therefore part of this milestone. Cascade limits are **already shipped** — `cascade-strategy-weakened` landed in v0.3 — and leave the list.
 8. **v1.0** — Freeze the constitution; typed TS output surface.
 9. **v1.x** — JSON Schema 2020-12 exporter; static subsumption lint; JSON adapter; TOML adapter (run against `toml-test`).
-10. **Future** — `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
+10. **Future** — closing §9.1's self-hosting gap (the meta-schema approximates the leaf type-expression grammar with a superset `pattern` because the constraint vocabulary cannot name a grammar; §15); `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
 
 ---
 
@@ -632,6 +637,53 @@ All initial open questions are resolved; amendments are integrated into the arti
   embedding story exercising itself. Also corrected in passing: §1 listed remote delegation as a v1
   non-goal, which §8.4 and §11 had already contradicted by gating it behind a user opt-in rather than
   forbidding it. See §1, §3, §11, §14, Article VI.
+
+- **Five of this document's worked examples did not parse** → fixed: **quote a type expression
+  containing `[]` inside a YAML flow mapping.** `demand: { type: resource[] }` is well-formed
+  Cascata and malformed *YAML* — `[` opens a flow sequence, so the document is rejected before §9.1's
+  grammar is ever consulted. §7 carried three such examples and §9's worked chain two. Nothing caught
+  it in six milestones because no executed fixture is written that way: every corpus case uses block
+  style, where the same expression is an ordinary plain scalar and needs no quoting. The examples
+  were prose that had never been run. Found while drafting the meta-schema, when the draft was fed to
+  the project's own parser rather than merely read. The fix is textual — five pairs of quotes — and
+  the durable part is the rule now stated in §9.1, since the trap belongs to every schema author and
+  not only to this document. A reminder that a worked example is only worth what executing it costs
+  (§5.3, §7, and the reason both gained one).
+
+- **Nested vs. top-level key declarations** → settled: **they are different shapes, and §9's claim
+  of parity was wrong.** §9 said a nested `keys` constrains a mapping's children "the way" a schema's
+  top-level `keys:` constrains the config's top level. It never did: a top-level entry carries
+  `demand`, `provide`, `cascade`, `final` and `delegate`; a nested one carries `demand` and
+  `delegate`. Found by drafting the meta-schema, which needed *two* types where the vocabulary
+  appeared to offer one, and could not write either until the difference was named. Settled in favour
+  of the split rather than of the prose, on the ground that `provide`, `cascade` and `final` state a
+  **layer's authority over a key** — a relationship between documents, meaningful only where a schema
+  declares a key of its own — while a nested key is part of a value's **shape**, which is what
+  `demand` is for. `delegate` nests because §8's grant is per key at any depth and v0.6 built it so
+  deliberately; it is the considered exception, not the loose end. Rejected: making `provide`,
+  `cascade` and `final` nest, which would have needed real new semantics settled first (a nested
+  `provide` injects a default deep inside a tree; a nested `cascade` gives a subkey its own merge
+  strategy) for a parity nothing had asked for. See §9.
+
+- **Whether the meta-schema can describe §9.1's leaf DSL** → settled: **no, and it approximates it
+  with a `pattern` under one governing rule.** `Primary := "(" Union ")"` makes the type-expression
+  language non-regular, so no `pattern` captures it and a schema cannot invoke the parser. The
+  meta-schema's `pattern` is therefore a deliberate **superset**: it must accept every string the
+  grammar accepts, may accept some the grammar rejects, and in practice differs only by not checking
+  that parentheses balance. That asymmetry is what keeps the approximation from creating two
+  contradicting authorities — the parser refuses what the pattern lets through, and nothing the
+  pattern refuses could have been valid. A false rejection would be the contradiction, which is why
+  the property is stated as a MUST and established by generating from the grammar rather than by
+  examples.
+
+  Two things worth recording for whoever revisits this. The obvious whitespace-tolerant pattern is
+  **quadratic** — several adjacent optional whitespace groups compete for one run of spaces, giving
+  catastrophic backtracking measured at 4× per doubling of input. Folding whitespace into the
+  structural character classes, so that exactly one quantifier consumes each boundary, makes it
+  linear at no cost in strictness. Do not "simplify" it back. And the honest consequence for §2.6:
+  **self-hosting is complete except for leaf type expressions.** Closing that properly needs the
+  vocabulary to be able to name a grammar, which is a v1+ question and is parked in §14 rather than
+  papered over. See §9.1, §14.
 
 - **Where `seal` lives, and two things its spelling never said** → settled: **`seal` is a `demand`
   keyword; `final` is a boolean; a schema may seal its own top level.** All three came out of

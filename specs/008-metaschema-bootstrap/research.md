@@ -14,7 +14,11 @@ The exercise has already paid for itself twice. Its **first** pass, during v0.7 
 structural gaps and one unimplementable obligation, all settled in `SPEC.md` §15 (`values`, guarded
 recursion, `directives:`, diagnostic levels). Its **second** pass, recorded here, found three more
 that were settled mid-implementation (`seal` belonging to `demand`, `final: true`, top-level `seal`)
-and five that are still open below.
+and three more recorded below — of which two are now settled and one, the YAML flow trap, turned out
+to be a live defect in `SPEC.md` rather than a limitation of the vocabulary.
+
+**The draft parses.** It has been round-tripped through the project's own `yaml` dependency, which is
+how W-6 was found; a draft that had only been read would still contain the same error `SPEC.md` did.
 
 ---
 
@@ -43,7 +47,7 @@ mappings of author-chosen names → `values`. `directives:` is a mapping of exac
 `keys` plus `seal: closed`, because `values` alone would constrain the six entries' shapes while
 admitting a seventh.
 
-### D-4. **UNSETTLED** — a nested key declaration is a different shape from a top-level one
+### D-4. **SETTLED** — a nested key declaration is a different shape from a top-level one
 
 The draft needs two types where the vocabulary appears to offer one. As built:
 
@@ -61,7 +65,14 @@ top-level `keys:` constrains the config's own top level", which asserts a parity
 The draft models the difference as two types, `keyDecl` and `nestedKeyDecl`, and marks both
 UNSETTLED.
 
-Three readings, and this is the milestone's largest open question:
+**Settled in favour of the split; `SPEC.md` §9's parity claim was corrected (§15).** The reasoning:
+`provide`, `cascade` and `final` state a *layer's authority over a key* — a relationship between
+documents, meaningful only where a schema declares a key of its own — while a nested key is part of a
+value's **shape**, and shape is what `demand` is for. `delegate` nests because §8's grant is per key
+at any depth and v0.6 built it that way deliberately; it is the considered exception, not the loose
+end. The draft's `keyDecl` / `nestedKeyDecl` split is therefore the shipped shape.
+
+The three readings, recorded because the rejected two each cost something real:
 
 1. **The split is correct and §9's prose is wrong.** Governance keywords are about a *layer's
    authority over a key*, which only means something for a key the schema declares at its top level;
@@ -74,8 +85,10 @@ Three readings, and this is the milestone's largest open question:
 3. **Neither — the two shapes should have different *syntax***, so that the difference is visible
    rather than inferred from what a reader knows about the implementation.
 
-Do not settle this by implementing whichever is convenient. It is a `SPEC.md` question and therefore
-Egildo's; surface it, with the cost of each reading, before building around it.
+Reading 2 was rejected for needing genuinely new semantics settled first — a nested `provide`
+injects a default deep inside a tree, a nested `cascade` gives a subkey its own merge strategy — in
+service of a parity nothing had asked for. Reading 3 was rejected for breaking the shape of every
+existing nested `keys` fixture.
 
 ---
 
@@ -84,18 +97,30 @@ Egildo's; surface it, with the cost of each reading, before building around it.
 Numbered for citation. W-1 and W-2 bear on what self-hosting can honestly claim; W-3 and W-4 bear on
 how the milestone's own requirements should be read.
 
-### W-1. The leaf DSL is outside the meta-schema's reach
+### W-1. **RESOLVED WITH DEBT** — the leaf DSL, approximated by a superset pattern
 
-`demand.type` holds a §9.1 type expression — `string | resource[]`. The meta-schema can say it is a
-**string** and nothing more. §9.1's grammar has balanced parentheses, so it is not regular and no
-`pattern` can capture it, and there is no way for a schema to invoke the DSL parser.
+§9.1's grammar has balanced parentheses, so it is not regular, no `pattern` can capture it, and a
+schema cannot invoke the DSL parser. **Self-hosting is therefore complete except for leaf type
+expressions.** Settled (§9.1, §15) as an approximation under one governing rule:
 
-**Self-hosting is therefore partial by construction.** The type-expression DSL is a second, embedded
-language, and the first cannot describe it. This is not a defect to fix — a grammar in the constraint
-vocabulary would be a far worse cure — but §2.6's claim ("the schema language is defined by a
-meta-schema written in itself") is, strictly, true of everything except its leaf type expressions.
-That belongs in the milestone report and probably in §15, and it is Egildo's to decide whether §2.6's
-wording should acknowledge it.
+> **The pattern MUST accept every string the grammar accepts.** Over-acceptance is safe — the parser
+> is the authority and refuses the rest — while a single false rejection would put two authorities in
+> contradiction. In practice the superset differs only in not checking that parentheses balance.
+
+The pattern is in `draft-meta-schema.yaml`. It was **established, not assumed**: 200,000 expressions
+generated from §9.1's productions, with whitespace injected at every legal position, are all accepted
+— zero false rejects — and the check was re-run on the pattern *after* a round-trip through the
+project's own `yaml` dependency, since a pattern that does not survive YAML is no pattern at all.
+Probe gate: non-ASCII names are rejected, matching the grammar, which is agreement rather than a gap.
+
+**Two things for whoever revisits this.** First, the obvious whitespace-tolerant pattern is
+**quadratic**: several adjacent optional whitespace groups compete for one run of spaces, giving
+catastrophic backtracking measured at 4× per doubling — 16k spaces took 404ms. Folding whitespace
+into the structural character classes, so exactly one quantifier consumes each boundary, makes it
+linear (0.1ms on the same input) at no cost in strictness. A shipped library carrying a ReDoS-able
+pattern in its own artifact is a different matter from `src/validate/constraints.ts`'s documented
+acceptance of author-supplied regex exposure, and must not be reintroduced by "simplifying" it.
+Second, the debt is parked in §14: closing it needs the vocabulary to be able to name a grammar.
 
 ### W-2. "Declared, but unconstrained" has no natural spelling
 
@@ -132,6 +157,22 @@ mismatch. That is the hand-written check being *better*, not the meta-schema bei
 as accept/refuse agreement, and report every place the codes differ, because each is a candidate for
 teaching the meta-schema a `pattern` or an `enum` that recovers the better message.
 
+### W-6. YAML flow style breaks unquoted `[]` — and five `SPEC.md` examples with it
+
+`demand: { type: resource[] }` is well-formed Cascata and malformed **YAML**: inside a flow mapping,
+`[` opens a flow sequence, so the document is rejected before §9.1's grammar is consulted. Block
+style is unaffected, and `|` alone is safe in flow (`{ type: int | float }` parses).
+
+Found by feeding the draft to the project's own parser rather than reading it. **Five of `SPEC.md`'s
+own worked examples were written in the broken form** — three in §7, two in §9's worked chain — and
+had been wrong for six milestones. Nothing caught them because no *executed* fixture uses flow style
+with brackets; the examples were prose that had never been run. Fixed textually, with the durable
+part being the authoring rule now stated in §9.1 (§15).
+
+The lesson generalizes past this milestone and is the reason §5.3 and §7 each gained a worked example
+in the first place: **an example is worth what executing it costs.** Any example this milestone adds
+to a document should be parsed by the real parser in a test, not merely written.
+
 ### W-5. `seal` names two different things in one document
 
 In the draft, `seal` appears as a demand keyword inside `types.demand`, and again as an entry in the
@@ -157,15 +198,13 @@ whether the implementation ever confuses the two scopes.
 
 ## Risks for `/speckit-plan`
 
-1. **D-4 is unsettled and is load-bearing.** The draft cannot be finished without it. Surface it
-   before building.
-2. **The corpus may not be clean.** FR-017 requires every schema in the conformance corpus to
+1. **The corpus may not be clean.** FR-017 requires every schema in the conformance corpus to
    validate against the meta-schema. Six milestones of hand-written fixtures were never held to one;
    some will fail, and each failure is either a sloppy fixture or a meta-schema that is too strict.
    Budget for triage, and do not "fix" a fixture without establishing which of the two it is.
-3. **The depth cap.** The meta-schema is the deepest document this project has produced. If it
+2. **The depth cap.** The meta-schema is the deepest document this project has produced. If it
    approaches `MAX_DEMAND_DEPTH`, the cap needs re-examining and that is a finding, not an
    inconvenience — see the `guards-that-dont-guard` lesson: prove a bound is reachable before calling
    it protection.
-4. **008 depends on 007's `load()` and host seam** (FR-019: the meta-schema is obtained through the
+3. **008 depends on 007's `load()` and host seam** (FR-019: the meta-schema is obtained through the
    seam, never read directly as a bundled constant). It cannot start its US5 until those land.
