@@ -57,7 +57,7 @@ export function isUnsupportedTag(tag: string | undefined): tag is string {
  * papered over: see the Phase 4 report.
  */
 export function unsupportedTagDiagnostic(tag: string, span: SourceSpan): Diagnostic {
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "unsupported-tag",
     message: `Tag '${tag}' is outside the YAML 1.2 core schema`,
     primary: span,
@@ -66,7 +66,7 @@ export function unsupportedTagDiagnostic(tag: string, span: SourceSpan): Diagnos
 
 /** `non-string-key` at the key's own span (FR-012). */
 export function nonStringKeyDiagnostic(span: SourceSpan): Diagnostic {
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "non-string-key",
     message: "A mapping key must be text",
     primary: span,
@@ -80,7 +80,7 @@ export function nonStringKeyDiagnostic(span: SourceSpan): Diagnostic {
  */
 export function duplicateKeyDiagnostic(laterSpan: SourceSpan, firstSpan: SourceSpan): Diagnostic {
   const related: RelatedSpan[] = [{ label: "first occurrence", span: firstSpan }];
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "duplicate-key",
     message: "The same key appears more than once in this mapping",
     primary: laterSpan,
@@ -90,7 +90,7 @@ export function duplicateKeyDiagnostic(laterSpan: SourceSpan, firstSpan: SourceS
 
 /** `alias-cycle` at the closing alias's own position (contracts: "The alias closing the cycle"), not the anchor's. */
 export function aliasCycleDiagnostic(aliasName: string, span: SourceSpan): Diagnostic {
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "alias-cycle",
     message: `Alias '*${aliasName}' refers to content that encloses itself`,
     primary: span,

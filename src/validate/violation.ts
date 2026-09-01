@@ -124,7 +124,7 @@ export function canonicalSentence(violation: Violation): string {
 
 /** Render one `Violation` into a `Diagnostic` — every v0.4 additive field populated (gate 5 at full strength), `message` combining `describeReason` with the canonical sentence so a reader gets both the specific reason and the standard cross-reference in one place. */
 export function renderViolation(violation: Violation): Diagnostic {
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: CODE_FOR_REASON[violation.reason.kind],
     message: `${describeReason(violation.reason)} — ${canonicalSentence(violation)}`,
     primary: violation.valueSpan,

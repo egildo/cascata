@@ -292,7 +292,7 @@ function convertScalar(scalarAst: ScalarNode, ctx: WalkContext): Node | undefine
   // above. Kept so parse() stays total even if that invariant is ever
   // wrong for some tag this corpus does not cover.
   ctx.diagnostics.add(
-    createDiagnostic({
+    createDiagnostic({ level: "error",
       code: "malformed-document",
       message: `Scalar value of type '${typeof value}' is outside the portability floor's five kinds`,
       primary: span,
@@ -552,9 +552,9 @@ function readerErrorDiagnostic(error: YamlReaderError, ctx: SpanContext): Diagno
   const [start, end] = error.pos;
   if (error.code === "MULTIPLE_DOCS") {
     const markerSpan = toSourceSpan([start, start + 3, start + 3], ctx);
-    return createDiagnostic({ code: "multiple-documents", message: error.message, primary: markerSpan });
+    return createDiagnostic({ level: "error", code: "multiple-documents", message: error.message, primary: markerSpan });
   }
-  return createDiagnostic({ code: "malformed-document", message: error.message, primary: toSourceSpan([start, end, end], ctx) });
+  return createDiagnostic({ level: "error", code: "malformed-document", message: error.message, primary: toSourceSpan([start, end, end], ctx) });
 }
 
 /**
@@ -591,7 +591,7 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   for (const offset of findLoneSurrogateOffsets(text)) {
     const span = toSourceSpan([offset, offset + 1, offset + 1], spanContext);
     diagnostics.add(
-      createDiagnostic({
+      createDiagnostic({ level: "error",
         code: "invalid-encoding",
         message: "Input contains an unpaired UTF-16 surrogate, which cannot correspond to valid UTF-8",
         primary: span,
@@ -816,7 +816,7 @@ export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides
       column: location.column,
       documentLength: bytes.length,
     });
-    const diagnostic = createDiagnostic({
+    const diagnostic = createDiagnostic({ level: "error",
       code: "invalid-encoding",
       message: `Byte ${invalidOffset} begins a sequence that is not well-formed UTF-8 (RFC 3629)`,
       primary: span,

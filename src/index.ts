@@ -223,7 +223,14 @@ function buildRemoteContext(options: ResolveOptions): RemoteContext | undefined 
 }
 
 export type ResolveResult =
-  | { readonly ok: true; readonly graph: Graph; readonly pedigree: Pedigree; readonly delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]> }
+  | {
+      readonly ok: true;
+      readonly graph: Graph;
+      readonly pedigree: Pedigree;
+      readonly delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]>;
+      /** v0.7 FR-002: `info`-level lints found during resolution (e.g. §8.1's delegate-leaf-shape lint). Never `error`-level — an `error` anywhere makes the whole call `ok: false` instead. Possibly empty. */
+      readonly diagnostics: readonly Diagnostic[];
+    }
   | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 function requireSandboxRoot(options: ResolveOptions): void {
@@ -242,7 +249,7 @@ function parseAtLocation(bytes: Uint8Array, location: string): ReturnType<typeof
   const origin = createOrigin(location, location);
   const format = formatForLocation(location);
   if (format === undefined || format !== "yaml") {
-    return { ok: false, diagnostics: [createDiagnostic({ code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
+    return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
   }
   return parseYamlBytes(bytes, origin);
 }
@@ -307,7 +314,7 @@ function cycleDiagnostic(chain: readonly { readonly location: string; readonly i
 function multipleAdoptionDiagnostic(extraction: { readonly sequenceSpan: ReturnType<typeof createSourceSpan>; readonly entries: readonly GraphReference[] }): Diagnostic {
   const [first, second] = extraction.entries;
   if (second !== undefined) {
-    return createDiagnostic({
+    return createDiagnostic({ level: "error",
       code: "multiple-adoption",
       message: "A sequence value is refused for '$adopts'/'$schema' — v1 adopts exactly one parent (SPEC.md §6.1, §9)",
       primary: second.span,
@@ -315,14 +322,14 @@ function multipleAdoptionDiagnostic(extraction: { readonly sequenceSpan: ReturnT
     });
   }
   if (first !== undefined) {
-    return createDiagnostic({
+    return createDiagnostic({ level: "error",
       code: "multiple-adoption",
       message: "A sequence value is refused for '$adopts'/'$schema', even with a single item — v1 adopts exactly one parent, written as a single string scalar (SPEC.md §6.1, §9)",
       primary: first.span,
       related: [],
     });
   }
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "multiple-adoption",
     message: "A sequence value is refused for '$adopts'/'$schema' — v1 adopts exactly one parent, written as a single string scalar (SPEC.md §6.1, §9)",
     primary: extraction.sequenceSpan,
@@ -346,43 +353,43 @@ type ReadOutcomeUnified = { readonly ok: true; readonly bytes: Uint8Array; reado
 function remoteFailureDiagnostic(failure: RemoteDocumentFailure, candidate: Reference): Diagnostic {
   switch (failure.kind) {
     case "unsupported-scheme":
-      return createDiagnostic({
+      return createDiagnostic({ level: "error",
         code: "unsupported-scheme",
         message: `Reference '${candidate.text}' redirected to an unsupported scheme '${failure.scheme}:' — only HTTPS is permitted (v0.2 FR-013)`,
         primary: candidate.span,
       });
     case "insecure-redirect":
-      return createDiagnostic({
+      return createDiagnostic({ level: "error",
         code: "insecure-redirect",
         message: `Reference '${candidate.text}' redirected to a non-HTTPS location ('${failure.location}') — every redirect hop must satisfy v0.2 FR-013, and the insecure hop is refused before it is followed`,
         primary: candidate.span,
       });
     case "too-many-redirects":
-      return createDiagnostic({
+      return createDiagnostic({ level: "error",
         code: "too-many-redirects",
         message: `Reference '${candidate.text}' exceeded the redirect hop limit (v0.2 FR-028)`,
         primary: candidate.span,
       });
     case "size-limit-exceeded":
-      return createDiagnostic({
+      return createDiagnostic({ level: "error",
         code: "size-limit-exceeded",
         message: `Fetched document at '${candidate.text}' is at least ${failure.actualBytes} bytes, exceeding the size limit`,
         primary: candidate.span,
       });
     case "not-cached":
-      return createDiagnostic({
+      return createDiagnostic({ level: "error",
         code: "document-not-cached",
         message: `Reference '${candidate.text}' is neither reachable nor already cached (v0.2 FR-018)`,
         primary: candidate.span,
       });
     case "pin-mismatch":
-      return createDiagnostic({
+      return createDiagnostic({ level: "error",
         code: "pin-mismatch",
         message: `Fetched bytes for '${candidate.text}' do not match the stated $pin — expected sha256:${failure.expected}, got sha256:${failure.actual} (v0.2 FR-014)`,
         primary: candidate.span,
       });
     case "malformed-pin":
-      return createDiagnostic({
+      return createDiagnostic({ level: "error",
         code: "malformed-pin",
         message: `'$pin' on the reference to '${candidate.text}' is not a well-formed 'sha256:<64 hex digits>' value (v0.2 FR-015)`,
         primary: candidate.span,
@@ -411,7 +418,7 @@ async function readAtTarget(target: ReferenceLocationKind, candidate: Reference,
     if (!read.ok) {
       return {
         ok: false,
-        diagnostic: createDiagnostic({
+        diagnostic: createDiagnostic({ level: "error",
           code: "document-unreachable",
           message: `Cannot read '${target.location}' (referenced as '${candidate.text}'): ${read.reason}`,
           primary: candidate.span,
@@ -513,7 +520,7 @@ async function walkAdoptsChain(candidate: Reference, referringLocation: string, 
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
+        createDiagnostic({ level: "error",
           code: "document-unreachable",
           message: `Document at '${location}' (referenced as '${candidate.text}') is not readable as a document`,
           primary: candidate.span,
@@ -636,7 +643,7 @@ function fragmentReservedKeyDiagnostics(root: Node): Diagnostic[] {
   for (const [key, valueNode] of root.entries) {
     if (key.startsWith("$")) {
       problems.push(
-        createDiagnostic({
+        createDiagnostic({ level: "error",
           code: "fragment-reserved-key",
           message: `Fragment contains reserved key '${key}' — fragments carry no '$'-prefixed keys in v1 (SPEC.md §8.2, v0.6 FR-009)`,
           primary: valueNode.span,
@@ -667,7 +674,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   if (isAbsoluteDelegatedPath(text)) {
     return {
       ok: false,
-      diagnostics: [createDiagnostic({ code: "absolute-delegated-path", message: `Delegated path '${text}' is absolute — v1 opens no door for absolute delegated paths (SPEC.md §8.4, v0.6 FR-023)`, primary: valueNode.span })],
+      diagnostics: [createDiagnostic({ level: "error", code: "absolute-delegated-path", message: `Delegated path '${text}' is absolute — v1 opens no door for absolute delegated paths (SPEC.md §8.4, v0.6 FR-023)`, primary: valueNode.span })],
     };
   }
 
@@ -729,7 +736,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
     } else {
       const read = readLocalDocument(location);
       if (!read.ok) {
-        return { ok: false, diagnostics: [createDiagnostic({ code: "document-unreachable", message: `Cannot read '${location}' (delegated as '${text}'): ${read.reason}`, primary: valueNode.span })] };
+        return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `Cannot read '${location}' (delegated as '${text}'): ${read.reason}`, primary: valueNode.span })] };
       }
       bytes = read.bytes;
       state.byteCache.set(location, bytes);
@@ -741,7 +748,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
+        createDiagnostic({ level: "error",
           code: "reference-cycle",
           message: `Delegation cycle: '${text}' reaches a fragment already being resolved (${[...state.tracker.chain(), location].join(" -> ")}) — refused rather than followed (SPEC.md §8.3, v0.6 FR-015)`,
           primary: valueNode.span,
@@ -753,7 +760,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({ code: "depth-limit-exceeded", message: `Recursive delegation exceeds the ${MAX_DELEGATION_DEPTH}-level limit (SPEC.md §8.2, v0.6 FR-012a)`, primary: valueNode.span }),
+        createDiagnostic({ level: "error", code: "depth-limit-exceeded", message: `Recursive delegation exceeds the ${MAX_DELEGATION_DEPTH}-level limit (SPEC.md §8.2, v0.6 FR-012a)`, primary: valueNode.span }),
       ],
     };
   }
@@ -766,13 +773,13 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   const graftId = `${location} #graft=${state.graftCounter}`;
   const origin = createOrigin(graftId, location);
   const format = formatForLocation(location);
-  const reparsed = format === "yaml" ? parseYamlBytes(bytes, origin) : { ok: false as const, diagnostics: [createDiagnostic({ code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
+  const reparsed = format === "yaml" ? parseYamlBytes(bytes, origin) : { ok: false as const, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
   if (!reparsed.ok) {
     state.tracker.exit();
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
+        createDiagnostic({ level: "error",
           code: "document-unreachable",
           message: `Fragment at '${location}' (delegated as '${text}') is not readable as a document`,
           primary: valueNode.span,
@@ -882,12 +889,20 @@ function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDoc
  * problems (e.g. an unrecognized `delegate:` value, FR-002) are reported
  * before the config tree is ever walked, matching v0.5's own "vocabulary
  * problems first" precedent.
+ *
+ * **v0.7**: grant-collection can also produce `level: "info"` lints
+ * (§8.1's delegate-leaf-shape lint, FR-005) alongside — never instead of —
+ * any `error`s. Only an `error` aborts the call (v0.7 FR-002: a
+ * result whose diagnostics are all `info` is still `ok: true`); every
+ * `info` survives into the successful result's own `diagnostics` field.
  */
 async function finalizeWithDelegation(graph: Graph, pedigree: Pedigree, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean): Promise<ResolveResult> {
   const schemaDocumentsRootToLeaf = [...graph.documents.slice(1)].reverse();
   const { tree: grantTree, problems } = collectAllDelegationGrants(schemaDocumentsRootToLeaf);
-  if (problems.length > 0) {
-    return { ok: false, diagnostics: [...problems] };
+  const grantErrors = problems.filter((d) => d.level === "error");
+  const grantInfos = problems.filter((d) => d.level === "info");
+  if (grantErrors.length > 0) {
+    return { ok: false, diagnostics: grantErrors };
   }
 
   const state: DelegationState = {
@@ -907,7 +922,7 @@ async function finalizeWithDelegation(graph: Graph, pedigree: Pedigree, sandboxR
 
   const graftedEntry: GraphDocument = { ...graph.entry, tree: walked.node };
   const graftedGraph: Graph = { entry: graftedEntry, documents: [graftedEntry, ...graph.documents.slice(1)] };
-  return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs };
+  return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs, diagnostics: grantInfos };
 }
 
 export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
@@ -935,7 +950,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
+        createDiagnostic({ level: "error",
           code: "document-unreachable",
           message: `Cannot read entry document '${entryLocation}': ${entryRead.reason}`,
           primary: phantomSpan(entryOrigin),

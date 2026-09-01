@@ -29,6 +29,7 @@ import type { SourceSpan } from "../model/span.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import { pointerFromPath } from "../model/pointer.js";
 import { isWithinSandbox } from "./location.js";
+import { parseTypeExpression } from "../validate/typeexpr.js";
 
 /** One `delegate: allow` grant, at one position in one schema layer's own `keys:` tree. */
 export interface DelegationGrant {
@@ -55,6 +56,47 @@ export interface DelegationGrantNode {
 
 const EMPTY_GRANT_NODE: DelegationGrantNode = { keys: new Map() };
 
+/**
+ * Whether a granted key's own `demand` (siblings at the same `keys.<name>`
+ * position, never a resolved/accumulated demand across the pedigree — v0.7
+ * FR-005, `SPEC.md` §8.1) is a leaf shape an inline string scalar would
+ * satisfy — the §8.1 razor's own "almost" case: a fragment reached through
+ * `delegate: allow` is a document, so the config author is very unlikely to
+ * have meant "store the literal string I wrote" once the key can also load
+ * a file, but a bare string scalar fragment would in fact satisfy such a
+ * demand, so this is a lint, not a refusal.
+ *
+ * **Deliberately scoped to what grant-collection can decide on its own**
+ * (research.md D4's sibling reasoning, applied here): this runs per schema
+ * layer, before merge or named-type resolution exist, so it cannot resolve
+ * a qualified or pedigree-declared type name the way `src/validate/check.ts`
+ * can at validate time. It recognizes exactly two shapes, both syntactic:
+ * no `type:` constraint at all (nothing to violate — vacuously satisfied),
+ * and `type: string` as a single, depth-0, unqualified alternative — §8.1's
+ * own "plain case". A union that merely *includes* `string`
+ * (`string | mapping`), or a named type that would resolve to `string`, is
+ * out of this function's reach and is not lint-covered — recorded as a
+ * scope decision in the milestone report, not silently dropped.
+ */
+function demandAcceptsInlineString(demandNode: Node | undefined): boolean {
+  if (demandNode === undefined || demandNode.type !== "mapping") {
+    return true;
+  }
+  const typeNode = demandNode.entries.get("type");
+  if (typeNode === undefined) {
+    return true;
+  }
+  if (typeNode.type !== "scalar" || typeNode.kind !== "string") {
+    return false;
+  }
+  const parsed = parseTypeExpression(typeNode.value);
+  if (!parsed.ok || parsed.value.alternatives.length !== 1) {
+    return false;
+  }
+  const alt = parsed.value.alternatives[0];
+  return alt !== undefined && alt.depth === 0 && alt.name === "string";
+}
+
 function lookupMappingEntry(tree: Node, key: string): Node | undefined {
   if (tree.type !== "mapping") {
     return undefined;
@@ -78,14 +120,27 @@ export function collectDelegationGrants(schemaTree: Node, declaringDocument: str
     if (entryNode.type !== "mapping") {
       return EMPTY_GRANT_NODE;
     }
+    const demandNode = entryNode.entries.get("demand");
     let grant: DelegationGrant | undefined;
     const delegateNode = entryNode.entries.get("delegate");
     if (delegateNode !== undefined) {
       if (delegateNode.type === "scalar" && delegateNode.kind === "string" && delegateNode.value === "allow") {
         grant = { pointer, declaringDocument, declaringRank, span: delegateNode.span };
+        if (demandAcceptsInlineString(demandNode)) {
+          problems.push(
+            createDiagnostic({
+              level: "info",
+              code: "delegate-inline-string-loaded",
+              message: `'${pointerFromPath(pointer)}' grants 'delegate: allow' but its own demand is a leaf shape an inline string would satisfy — an inline string here is LOADED as a delegation target, never matched against that demand (SPEC.md §8.1, v0.7 FR-005)`,
+              primary: delegateNode.span,
+              demand: { pointer: pointerFromPath([...pointer, "delegate"]), span: delegateNode.span },
+              pedigreePosition: declaringRank,
+            }),
+          );
+        }
       } else {
         problems.push(
-          createDiagnostic({
+          createDiagnostic({ level: "error",
             code: "delegate-value-unimplemented",
             message: `'${pointerFromPath(pointer)}.delegate' is not 'allow' — v0.6 recognizes only 'delegate: allow'; a selector-style form ('delegate: { allow: true, formats: [...] }') is a future door, not yet implemented (SPEC.md §8.4, v0.6 FR-002)`,
             primary: delegateNode.span,
@@ -96,7 +151,6 @@ export function collectDelegationGrants(schemaTree: Node, declaringDocument: str
       }
     }
     const keys = new Map<string, DelegationGrantNode>();
-    const demandNode = entryNode.entries.get("demand");
     const nestedKeysNode = demandNode !== undefined && demandNode.type === "mapping" ? demandNode.entries.get("keys") : undefined;
     if (nestedKeysNode !== undefined && nestedKeysNode.type === "mapping") {
       for (const [childName, childEntry] of nestedKeysNode.entries) {

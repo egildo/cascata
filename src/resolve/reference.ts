@@ -84,7 +84,7 @@ export function createReference(fields: {
  * cannot be constructed without a `Reference` to anchor it to.
  */
 export function referenceDiagnostic(code: DiagnosticCode, reference: Reference, message: string, related?: readonly RelatedSpan[]): Diagnostic {
-  return createDiagnostic({ code, message, primary: reference.span, ...(related !== undefined ? { related } : {}) });
+  return createDiagnostic({ level: "error", code, message, primary: reference.span, ...(related !== undefined ? { related } : {}) });
 }
 
 // --- Extraction from a parsed tree (v0.2 User Story 2, T025-T026, T032) ---

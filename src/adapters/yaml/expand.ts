@@ -48,7 +48,7 @@ type AliasTarget = ScalarNode | MapNode | SeqNode;
 export type AliasResolution = { readonly ok: true; readonly target: AliasTarget } | { readonly ok: false; readonly diagnostic: Diagnostic };
 
 function malformedDocumentDiagnostic(message: string, span: SourceSpan): Diagnostic {
-  return createDiagnostic({ code: "malformed-document", message, primary: span });
+  return createDiagnostic({ level: "error", code: "malformed-document", message, primary: span });
 }
 
 /**

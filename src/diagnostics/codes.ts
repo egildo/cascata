@@ -112,6 +112,34 @@ export const NAMED_TYPE_CODES = ["unknown-type-entry-keyword", "type-name-collis
  */
 export const DELEGATION_CODES = ["delegate-value-unimplemented", "fragment-reserved-key", "remote-delegation-not-permitted", "absolute-delegated-path"] as const;
 
+/**
+ * Diagnostic levels (v0.7, `SPEC.md` §10) — specs/007-sealing-and-embedding.
+ * `delegate-inline-string-loaded` is `level: "info"` (§8.1's lint, closing
+ * v0.6's own unanswered Edge Case): at a key granted `delegate: allow`
+ * whose own `demand` is a leaf shape an inline string would satisfy, an
+ * inline string there is loaded as a delegation target, never matched
+ * against that demand — legitimate, but surprising, so it teaches rather
+ * than refuses.
+ */
+export const DIAGNOSTIC_LEVEL_CODES = ["delegate-inline-string-loaded"] as const;
+
+/**
+ * Sealing and authority (v0.7, `SPEC.md` §6.3, §5.2, §9, §11) —
+ * specs/007-sealing-and-embedding/contracts/sealing-authority.md.
+ * `required-vacuous` is `level: "info"` (§5.5's lint); every other code
+ * here is `level: "error"`.
+ */
+export const SEALING_AUTHORITY_CODES = [
+  "unknown-seal-value",
+  "seal-violation",
+  "seal-weakened",
+  "final-key-redeclared",
+  "final-key-set",
+  "required-vacuous",
+  "unknown-authority-member",
+  "adoption-not-pinned",
+] as const;
+
 /** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.5's codes are unchanged; v0.6 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
@@ -124,6 +152,8 @@ export const DIAGNOSTIC_CODES = [
   ...VALIDATE_VIOLATION_CODES,
   ...NAMED_TYPE_CODES,
   ...DELEGATION_CODES,
+  ...DIAGNOSTIC_LEVEL_CODES,
+  ...SEALING_AUTHORITY_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

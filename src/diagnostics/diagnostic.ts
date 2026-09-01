@@ -21,6 +21,16 @@
  * never in `src/merge/`'s `Layer` — `src/diagnostics/` may not import
  * `src/merge/` (`tests/unit/layering.test.ts`), and a `Layer`-typed field
  * here would invert that dependency direction for the sake of one caller.
+ *
+ * **v0.7 additive field**: `level` (`"error" | "info"`, SPEC.md §10, v0.7
+ * FR-001) is the one field on this type with **no default** — every
+ * `createDiagnostic()` call site must state it explicitly. Unlike
+ * `pointer`/`demand`/`pedigreePosition` (phased fields that stay absent
+ * until a milestone's own constructs exist), `level` is mandatory from the
+ * moment it exists: a diagnostic with no level cannot be sorted into
+ * "changes the outcome" vs. "teaches" (v0.7 FR-001's "no default that lets
+ * one be omitted"). Every diagnostic constructed before this milestone is
+ * `"error"` (v0.7 FR-004 — no reclassification in passing).
  */
 
 import type { SourceSpan } from "../model/span.js";
@@ -47,10 +57,15 @@ export interface ViolatedDemand {
   readonly span: SourceSpan;
 }
 
-/** One refusal. Positions are the point (SPEC.md §10). */
+/** `"error"` decides the outcome (a result carrying one is not a configuration); `"info"` teaches and never changes the verdict (SPEC.md §10, v0.7 FR-001). */
+export type DiagnosticLevel = "error" | "info";
+
+/** One refusal or lint. Positions are the point (SPEC.md §10). */
 export interface Diagnostic {
   /** Stable, machine-readable — see contracts/diagnostics.md. */
   readonly code: DiagnosticCode;
+  /** `"error"` or `"info"` — never absent, never defaulted (v0.7 FR-001). */
+  readonly level: DiagnosticLevel;
   /** One human sentence. */
   readonly message: string;
   /** The span the problem is at. Never absent. */
@@ -72,9 +87,10 @@ export interface Diagnostic {
   readonly delegatedFrom?: readonly DelegationHop[];
 }
 
-/** Construct a Diagnostic. `related` defaults to the empty list; `pointer`/`demand`/`pedigreePosition` default to absent. */
+/** Construct a Diagnostic. `level` is required (v0.7 FR-001 — no default). `related` defaults to the empty list; `pointer`/`demand`/`pedigreePosition`/`delegatedFrom` default to absent. */
 export function createDiagnostic(fields: {
   code: DiagnosticCode;
+  level: DiagnosticLevel;
   message: string;
   primary: SourceSpan;
   related?: readonly RelatedSpan[];
@@ -85,6 +101,7 @@ export function createDiagnostic(fields: {
 }): Diagnostic {
   return {
     code: fields.code,
+    level: fields.level,
     message: fields.message,
     primary: fields.primary,
     related: fields.related ?? [],

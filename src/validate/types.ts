@@ -93,7 +93,7 @@ const TYPE_ENTRY_KEYWORDS: ReadonlySet<string> = new Set(["demand", "accept"]);
 
 function refuse(code: "unknown-type-entry-keyword" | "malformed-demand-value", message: string, primary: Node["span"], pointer: string, layerRank: number): TypeVocabularyProblem {
   return {
-    diagnostic: createDiagnostic({
+    diagnostic: createDiagnostic({ level: "error",
       code,
       message,
       primary,
@@ -205,7 +205,7 @@ export function builtinCollisionDiagnostics(declarations: readonly TypeDeclarati
   return declarations
     .filter((decl) => BUILTIN_TYPE_NAME_SET.has(decl.name))
     .map((decl) =>
-      createDiagnostic({
+      createDiagnostic({ level: "error",
         code: "builtin-type-redeclared",
         message: `type '${decl.name}' redeclares a built-in type name — the built-in namespace is not open for redefinition (SPEC.md §7)`,
         primary: decl.span,
@@ -354,7 +354,7 @@ export function cycleDiagnostics(declarations: readonly TypeDeclaration[]): read
       }
       if (onStack.has(current.name)) {
         diagnostics.push(
-          createDiagnostic({
+          createDiagnostic({ level: "error",
             code: "unresolvable-type-cycle",
             message: `type '${current.name}' is reachable from itself through: ${[...stack, current.name].join(" -> ")} (SPEC.md §7, v0.5 FR-009)`,
             primary: current.span,

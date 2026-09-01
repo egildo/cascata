@@ -42,7 +42,7 @@ export function checkSizeLimit(byteLength: number, limits: ParseLimits, origin: 
     return undefined;
   }
   const primary: SourceSpan = createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: byteLength });
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "size-limit-exceeded",
     message: `Input is ${byteLength} bytes, exceeding the ${limits.maxBytes}-byte limit`,
     primary,
@@ -59,7 +59,7 @@ export function checkDepthLimit(depth: number, limits: ParseLimits, span: Source
   if (depth <= limits.maxDepth) {
     return undefined;
   }
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "depth-limit-exceeded",
     message: `Nesting depth ${depth} exceeds the ${limits.maxDepth}-level limit`,
     primary: span,

@@ -165,7 +165,7 @@ export function refuseUnknownOrUnimplementedKeywords(demandPointerPath: readonly
   for (const [keyword, valueNode] of raw) {
     if (UNIMPLEMENTED_DEMAND_KEYWORDS.has(keyword)) {
       problems.push({
-        diagnostic: createDiagnostic({
+        diagnostic: createDiagnostic({ level: "error",
           code: "unimplemented-demand-keyword",
           message: `'${describePointer(demandPointerPath)}.${keyword}' — named by SPEC.md §9 but not built until v0.5`,
           primary: valueNode.span,
@@ -177,7 +177,7 @@ export function refuseUnknownOrUnimplementedKeywords(demandPointerPath: readonly
     }
     if (!DEMAND_KEYWORD_SET.has(keyword)) {
       problems.push({
-        diagnostic: createDiagnostic({
+        diagnostic: createDiagnostic({ level: "error",
           code: "unknown-demand-keyword",
           message: `'${describePointer(demandPointerPath)}.${keyword}' is not one of SPEC.md §9's closed demand keywords`,
           primary: valueNode.span,
@@ -203,7 +203,7 @@ export function refuseMalformedShapes(demandPointerPath: readonly (string | numb
   const problems: DemandVocabularyProblem[] = [];
   function refuse(keyword: string, node: Node, expectedShape: string): void {
     problems.push({
-      diagnostic: createDiagnostic({
+      diagnostic: createDiagnostic({ level: "error",
         code: "malformed-demand-value",
         message: `'${describePointer(demandPointerPath)}.${keyword}' is not ${expectedShape}`,
         primary: node.span,
@@ -305,7 +305,7 @@ export function refuseTypeExpressionProblems(demandPointerPath: readonly (string
   if (!parsed.ok) {
     return [
       {
-        diagnostic: createDiagnostic({
+        diagnostic: createDiagnostic({ level: "error",
           code: "malformed-type-expression",
           message: `'${describePointer(demandPointerPath)}.type: ${typeNode.value}' does not parse under SPEC.md §9.1's grammar: ${parsed.reason}`,
           primary: typeNode.span,
@@ -320,7 +320,7 @@ export function refuseTypeExpressionProblems(demandPointerPath: readonly (string
     const names = [...new Set(unresolved.map((alt) => alt.name))].join(", ");
     return [
       {
-        diagnostic: createDiagnostic({
+        diagnostic: createDiagnostic({ level: "error",
           code: "unknown-type-name",
           message: `'${describePointer(demandPointerPath)}.type: ${typeNode.value}' names an unresolvable type (${names})`,
           primary: typeNode.span,
@@ -335,7 +335,7 @@ export function refuseTypeExpressionProblems(demandPointerPath: readonly (string
 
 function depthLimitProblem(node: Node, layerRank: number, pointerPath: readonly (string | number)[]): DemandVocabularyProblem {
   return {
-    diagnostic: createDiagnostic({
+    diagnostic: createDiagnostic({ level: "error",
       code: "depth-limit-exceeded",
       message: `nested demand at '${describePointer(pointerPath)}' exceeds the ${MAX_DEMAND_DEPTH}-level limit (v0.5 FR-025)`,
       primary: node.span,

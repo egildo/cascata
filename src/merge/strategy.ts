@@ -198,13 +198,13 @@ function describeCascadeValue(node: Node): string {
  */
 function classifyUnrecognizedCascade(key: string, node: Node): Diagnostic {
   if (node.type === "scalar" && node.kind === "string" && node.value === RESERVED_STRATEGY_NAME) {
-    return createDiagnostic({
+    return createDiagnostic({ level: "error",
       code: "unimplemented-cascade-strategy",
       message: `key '${key}' declares 'cascade: merge-by-key' — reserved by SPEC.md §5.3 but not built in this version; supported strategies are 'replace' and 'append'`,
       primary: node.span,
     });
   }
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "unknown-cascade-strategy",
     message: `key '${key}' declares 'cascade: ${describeCascadeValue(node)}', which is not a strategy this version implements; supported strategies are 'replace' and 'append'`,
     primary: node.span,
@@ -225,7 +225,7 @@ export function checkAppendable(key: string, node: Node): Diagnostic | undefined
   if (node.type === "sequence") {
     return undefined;
   }
-  return createDiagnostic({
+  return createDiagnostic({ level: "error",
     code: "append-over-non-sequence",
     message: `key '${key}' is under 'cascade: append' but this value is not a sequence (got ${node.type === "scalar" ? `a ${node.kind} scalar` : `a ${node.type}`})`,
     primary: node.span,
@@ -307,7 +307,7 @@ export function resolveStrategies(layers: readonly Layer[]): StrategyResolution 
       }
       // The only remaining case: current === "append", declared === "replace" — weakening.
       diagnostics.push(
-        createDiagnostic({
+        createDiagnostic({ level: "error",
           code: "cascade-strategy-weakened",
           message: `key '${key}' cannot weaken 'cascade: append' to 'replace' — a descendant declaring 'replace' would discard every ancestor's accumulated contribution (SPEC.md §5.2)`,
           primary: declaration.cascade.span,

@@ -539,7 +539,7 @@ function typeUsageProblems(configuration: MergedConfiguration, allDecls: readonl
       return; // reachable — nothing to report.
     }
     problems.push(
-      createDiagnostic({
+      createDiagnostic({ level: "error",
         code: "unknown-type-name",
         message: `'${pointerFromPath(pointerPath)}' names '${alt.name}', declared in the pedigree but not reachable from this layer's own scope (an ancestor cannot resolve a descendant's types, or the name collided — SPEC.md §7, v0.5 FR-008)`,
         primary: span,
@@ -569,7 +569,7 @@ function typeUsageProblems(configuration: MergedConfiguration, allDecls: readonl
             for (const item of acceptNode.items) {
               if (item.type === "scalar" && item.kind === "string" && !declaredSet.includes(item.value)) {
                 problems.push(
-                  createDiagnostic({
+                  createDiagnostic({ level: "error",
                     code: "type-accept-widened",
                     message: `'${pointerFromPath([...pointerPath, "accept"])}' selects '${item.value}', which is outside the declared set [${declaredSet.join(", ")}] — selecting outside the declared set is widening (SPEC.md §5.2, v0.5 FR-013)`,
                     primary: item.span,
