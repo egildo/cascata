@@ -51,4 +51,4 @@ metaValidate(options: MetaValidateOptions): Promise<MetaValidateResult>
 | FR-016 | `metaValidate({subject: meta, metaSchema: meta})` succeeds. The fixed point. |
 | FR-017 | Every schema document in the conformance corpus passes, or its failure is triaged and reported. |
 | FR-018 | For every schema-vocabulary error the codebase already refuses, the meta-schema **agrees on the verdict**. Diagnostic *codes* may differ; each difference is reported (research.md W-4). |
-| FR-020 | `$version` is readable from the meta-schema's own pedigree. |
+| FR-020 | `$version` is readable from the meta-schema's **identity in the pedigree of a schema that adopts it** — never from the meta-schema's own pedigree, which is empty by construction (a `PedigreeEntry` carries no `$version`, and §6.1's chain excludes the entry document). Amended post-implementation: the row used to read "readable from the meta-schema's own pedigree", which `SPEC.md` §11 asserted and §15 has since corrected as impossible. |

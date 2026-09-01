@@ -82,11 +82,12 @@ describe("v0.7 part 2 FR-019 / SC-006 — the meta-schema is obtained through th
 
 describe("v0.7 part 2 FR-020 — the schema language's version, and what \"readable from the pedigree\" can actually mean", () => {
   /**
-   * **A gap in `SPEC.md` §11, found by trying to discharge FR-020.**
+   * **A gap in `SPEC.md` §11, found by trying to discharge FR-020 — since
+   * corrected in both documents (§15).**
    *
-   * §11's last clause reads "the schema language itself is versioned via
-   * the meta-schema's own pedigree", and FR-020 turns that into a MUST.
-   * Two facts make the literal reading impossible today:
+   * §11's last clause USED TO read "the schema language itself is
+   * versioned via the meta-schema's own pedigree", and FR-020 turned that
+   * into a MUST. Two facts made the literal reading impossible:
    *
    * 1. **A `PedigreeEntry` carries no version.** It is
    *    `{identity: {location, hash}, via, verified, finalAgainstForking}`.
