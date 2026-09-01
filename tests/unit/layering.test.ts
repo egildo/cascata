@@ -155,11 +155,23 @@ for (const relativeDir of NO_RESOLVE_IMPORT_DIRS) {
 
 // --- v0.7 gate 7: the host boundary (Article VI, FR-023/FR-024) -----------
 //
-// No module under ALL of src/ may import "node:fs" or call the bare
-// `fetch` identifier, except the one named exemption below. Unlike the two
-// sweeps above (a fixed, growing list of directories), this one scans
-// every file under src/ unconditionally — the boundary this article draws
-// is total, not confined to a subset of stages.
+// No module under ALL of src/ may import "node:fs" (statically or
+// dynamically), require(...) it, or call the bare `fetch` identifier,
+// except the one named exemption below. Unlike the two sweeps above (a
+// fixed, growing list of directories), this one scans every file under
+// src/ unconditionally — the boundary this article draws is total, not
+// confined to a subset of stages.
+//
+// **The static-import check below (`importsNodeFs`) only sees an
+// `ImportDeclaration`/`ExportDeclaration`'s own specifier string — a
+// dynamic `import("node:fs")` (or its CommonJS twin, `require("node:fs")`)
+// walks straight through it, since neither is a static import/export
+// statement at all.** Found by the coordinator sabotaging this gate
+// directly: a static `import` prepended to a file was caught (exactly one
+// test failed, the right one); an `async function` containing
+// `await import("node:fs")` was not caught at all — the suite passed with
+// a live filesystem escape hatch sitting in `src/validate/check.ts`.
+// `DYNAMIC_FS_IMPORT_OR_REQUIRE_PATTERN` below closes that gap.
 
 /** The shipped host — the library's one permitted exemption from gate 7 (FR-024), named explicitly rather than inferred from a pattern. */
 const HOST_BOUNDARY_EXEMPTION = "src/host/node.ts";
@@ -179,6 +191,24 @@ const NODE_FS_SPECIFIERS: ReadonlySet<string> = new Set(["node:fs", "fs"]);
 // so requiring that exactly is what tells a call apart from a sentence.
 const BARE_FETCH_CALL_PATTERN = /(?<![.\w$])fetch\(/;
 
+// A dynamic `import(...)` call or a CommonJS `require(...)` call whose
+// first argument is literally the string "node:fs" or "fs" — the two
+// call forms `importsNodeFs`'s static-specifier scan cannot see (see this
+// section's own header comment). Anchored on the call form for the
+// identical reason `BARE_FETCH_CALL_PATTERN` is: this codebase's own
+// prose and identifiers use "import" and "require" as ordinary words —
+// `requireHost`, `requireSandboxRoot`, and error text like "resolve()
+// requires 'host'..." all contain the substring "require" immediately
+// followed by a letter, never by "(". No whitespace is permitted between
+// the keyword and "(" for the same reason bare fetch requires none: real
+// call sites in this codebase are always written with no space
+// (`import("...")`, `require("...")`), so requiring that exactly is what
+// tells a call apart from a sentence — and it is why `requireHost(`
+// cannot match: the character after "require" there is "H", never "(".
+// Whitespace *inside* the parens, before the opening quote, is tolerated
+// (`import( "node:fs" )`), since nothing here needs to forbid that.
+const DYNAMIC_FS_IMPORT_OR_REQUIRE_PATTERN = /(?<![.\w$])(?:import|require)\(\s*["'](?:node:fs|fs)["']/;
+
 function importsNodeFs(filePath: string): boolean {
   return importSpecifiersOf(filePath).some((specifier) => NODE_FS_SPECIFIERS.has(specifier));
 }
@@ -188,7 +218,12 @@ function callsBareFetch(filePath: string): boolean {
   return BARE_FETCH_CALL_PATTERN.test(content);
 }
 
-describe("Principle IV / Article VI: the host boundary — no import of node:fs, no call to fetch, except the shipped host", () => {
+function callsDynamicFsImportOrRequire(filePath: string): boolean {
+  const content = readFileSync(filePath, "utf-8");
+  return DYNAMIC_FS_IMPORT_OR_REQUIRE_PATTERN.test(content);
+}
+
+describe("Principle IV / Article VI: the host boundary — no import (static or dynamic) of node:fs, no require(...) of it, no call to fetch, except the shipped host", () => {
   const allSrcFiles = listTsFiles(join(REPO_ROOT, "src"));
   const policedFiles = allSrcFiles.filter((file) => file.slice(REPO_ROOT.length + 1) !== HOST_BOUNDARY_EXEMPTION);
 
@@ -204,6 +239,9 @@ describe("Principle IV / Article VI: the host boundary — no import of node:fs,
     });
     it(`${relativeFile} does not call fetch(...)`, () => {
       expect(callsBareFetch(file), `${relativeFile} calls fetch(...) — only ${HOST_BOUNDARY_EXEMPTION} may`).toBe(false);
+    });
+    it(`${relativeFile} does not dynamically import(...) or require(...) "node:fs"`, () => {
+      expect(callsDynamicFsImportOrRequire(file), `${relativeFile} dynamically imports or requires node:fs — only ${HOST_BOUNDARY_EXEMPTION} may`).toBe(false);
     });
   }
 });
