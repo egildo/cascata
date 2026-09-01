@@ -80,7 +80,13 @@ function span(origin: ReturnType<typeof createOrigin>): SourceSpan {
  * at 15, 898 ms at 18, and past that it stops being a test and becomes a
  * denial of service. `values` therefore points at a non-recursive demand
  * in this schema, and the blowup gets its own bounded test below, where
- * it is recorded rather than hidden. See the milestone report.
+ * it is recorded rather than hidden.
+ *
+ * **v1.0 (009) bounds the walk** — a memo on `checkNamedType`,
+ * `tests/unit/composition-bound.test.ts` — and this generator is left
+ * pointing at a non-recursive `values` unchanged, so that the FR-010
+ * termination property keeps being tested on the shape it was written
+ * for rather than on the shape the bound now handles.
  */
 function recursiveSchemaLayer(): Layer {
   const nodeRef = (): Node => createMapping([["type", createStringScalar("node", span(ORIGIN_SCHEMA))]], span(ORIGIN_SCHEMA));
@@ -165,22 +171,36 @@ describe("v0.7 part 2 FR-010 — checking a guarded recursive type terminates on
     expect(typeof result.ok).toBe("boolean");
   });
 
-  it("RECORDED FINDING: keys and values both recursing into one entry is exponential in depth", () => {
+  it("RECORDED FINDING (v0.7), BOUNDED (v1.0): keys and values both recursing into one entry", () => {
     // FR-002 says both apply where both cover an entry, and both therefore
-    // descend — into the *same* child, with two demands that happen to name
-    // the same recursive type. Each level doubles the work. This test bounds
-    // itself at depth 12 (a few ms) and exists to keep the fact in the suite
-    // rather than in a comment: nothing here asserts the shape is *wrong*,
-    // only that it is what it is. See the milestone report — this is a
-    // vocabulary consequence, not an implementation slip, and settling
-    // whether §9's "both apply" ought to admit a shared-subterm optimization
-    // is a governance question, not an implementer's call.
+    // descend — into the *same* child, with two demands that name the same
+    // recursive type. v0.7 recorded that each level doubles the work.
+    //
+    // **Two corrections, both v1.0's (009).**
+    //
+    // First, the spelling. This case used to write
+    // `values: { demand: { type: node } }` — the *key-declaration* form the
+    // first v0.7 implementation took, corrected later in that same
+    // milestone to a **bare demand** (`SPEC.md` §9/§15). Under the
+    // corrected reading that value is a demand mapping whose only keyword
+    // is `demand`, which is not a demand keyword and which `checkDemand`
+    // ignores — so `values` recursed into *nothing* and this case exhibited
+    // no blow-up at all: 0.2 ms flat from depth 10 to depth 18, where the
+    // mandated spelling costs 7.4 ms and 919.8 ms. The test was guarding
+    // nothing. It is corrected here to the spelling §9 mandates, which is
+    // the one that reproduces the finding.
+    //
+    // Second, the finding itself is now **bounded**, by a memo on
+    // `checkNamedType` (v1.0 FR-004, `tests/unit/composition-bound.test.ts`).
+    // The walk is linear; the *diagnostic output* of a violating document
+    // is still 2^depth, which that file records in turn. This case keeps
+    // its place as the regression guard for the accepting document.
     const nodeRef = (): Node => createMapping([["type", createStringScalar("node", span(ORIGIN_SCHEMA))]], span(ORIGIN_SCHEMA));
     const demand = createMapping(
       [
         ["type", createStringScalar("mapping | string", span(ORIGIN_SCHEMA))],
         ["keys", createMapping([["child", createMapping([["demand", nodeRef()]], span(ORIGIN_SCHEMA))]], span(ORIGIN_SCHEMA))],
-        ["values", createMapping([["demand", nodeRef()]], span(ORIGIN_SCHEMA))],
+        ["values", nodeRef()],
       ],
       span(ORIGIN_SCHEMA),
     );
@@ -192,8 +212,11 @@ describe("v0.7 part 2 FR-010 — checking a guarded recursive type terminates on
       span(ORIGIN_SCHEMA),
     );
     const schemaLayer: Layer = { identity: { location: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
+    // Depth 20 rather than v0.7's 12: past the point the unbounded walk
+    // could reach at all (2^20), so this case now also *demonstrates* the
+    // bound rather than merely tolerating the blow-up.
     let value: Node = createStringScalar("bottom", span(ORIGIN_CONFIG));
-    for (let level = 0; level < 12; level += 1) {
+    for (let level = 0; level < 20; level += 1) {
       value = createMapping([["child", value]], span(ORIGIN_CONFIG));
     }
     const configLayer: Layer = { identity: { location: "term-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: createMapping([["root", value]], span(ORIGIN_CONFIG)) };

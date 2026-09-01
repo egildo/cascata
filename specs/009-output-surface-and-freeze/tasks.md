@@ -75,25 +75,25 @@ being true for anything that changes an existing meaning.
 
 **Independent Test**: the depth-18 case completes in a small constant multiple of the depth-10 case.
 
-- [ ] T012 [US2] `tests/unit/recursion-termination.test.ts`: correct the "RECORDED FINDING" case to
+- [x] T012 [US2] `tests/unit/recursion-termination.test.ts`: correct the "RECORDED FINDING" case to
       the **mandated** `values` spelling (a bare demand). At HEAD it writes the pre-correction
       key-declaration form, under which `values` recurses into nothing and the case is 0.2 ms flat —
       it was guarding nothing (research F-5). A **changed existing test**; reported
-- [ ] T013 [US2] `tests/unit/composition-bound.test.ts` **before the fix**: the ratio test
+- [x] T013 [US2] `tests/unit/composition-bound.test.ts` **before the fix**: the ratio test
       (FR-004), the diagnostic-identity test against a kept copy of the unbounded walk (FR-005), the
       mis-keyed-cache test (FR-006), and the depth-cap test (FR-007). Written and watched to fail /
       to be slow first
-- [ ] T014 [US2] `src/validate/check.ts`: the memo on `checkNamedType`, keyed per research D-1
+- [x] T014 [US2] `src/validate/check.ts`: the memo on `checkNamedType`, keyed per research D-1
       (`decl` → `value` → `mergedPointer` ∥ `depth` ∥ `typeHops` ∥ `usageAccept`), one cache per
       `checkConfiguration` call, threaded on `WalkContext` rather than module-level
-- [ ] T015 [US2] FR-005: the diagnostics are identical in **set and order** to the unbounded walk's,
+- [x] T015 [US2] FR-005: the diagnostics are identical in **set and order** to the unbounded walk's,
       established by keeping the unbounded walk available to the test and diffing the two
-- [ ] T016 [US2] FR-006: **prove a mis-keyed cache fails.** Drop `mergedPointer` from the key and
+- [x] T016 [US2] FR-006: **prove a mis-keyed cache fails.** Drop `mergedPointer` from the key and
       confirm a dedicated case catches it — two structurally identical subtrees at different
       pointers must not be confused
-- [ ] T017 [US2] **Sabotage**: drop `ctx.depth` from the key; confirm the depth-cap case goes red.
+- [x] T017 [US2] **Sabotage**: drop `ctx.depth` from the key; confirm the depth-cap case goes red.
       Same protocol
-- [ ] T018 [US2] `pnpm typecheck && pnpm test` green; commit `perf(validate): bound the keys+values
+- [x] T018 [US2] `pnpm typecheck && pnpm test` green; commit `perf(validate): bound the keys+values
       composition`
 
 **Checkpoint**: polynomial, identical diagnostics, a key that has been shown to be necessary.

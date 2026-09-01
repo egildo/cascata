@@ -48,6 +48,23 @@ import type { KeyFinalState } from "../merge/final.js";
 import { extend } from "../extend.js";
 
 /** v0.7 FR-002: an `ok: true` outcome carries whatever `info`-level lints were found (e.g. §5.5's `required-vacuous`) — possibly empty, never `error`-level (an `error` anywhere makes the whole check `ok: false` instead). */
+/**
+ * `checkConfiguration`'s own options — **v1.0 FR-004/FR-005**, and the
+ * only one there is.
+ *
+ * `memoize: false` disables the named-type memo, running the walk exactly
+ * as every milestone before v1.0 ran it. It is not a tuning knob and is
+ * not reachable from the public `validate()`: it exists because FR-005
+ * requires the memoized diagnostics to be *identical, in set and order*,
+ * to the unbounded walk's, and an identity claim needs both sides to be
+ * runnable. Keeping the old walk available is the strongest form of that
+ * check available, and much stronger than a fixture recording what the old
+ * walk once said.
+ */
+export interface CheckOptions {
+  readonly memoize?: boolean;
+}
+
 export type CheckOutcome = { readonly ok: true; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /** Non-recursive, single-value-in/sites-out leaf keywords. `required` is a post-merge absence check (handled separately); `items`/`keys` recurse; `type`/`accept` are handled together by the type-resolution machinery below. */
@@ -190,8 +207,96 @@ function matchesBuiltinLeaf(node: Node, name: string): boolean {
  * Every structural descent resets `typeHops` to 0, which is what lets a
  * guarded recursive type check a document as deep as the document
  * actually is, while `A: {type: B}, B: {type: A}` still stops.
+ *
+ * ## v1.0 FR-004–FR-007: this is where the `keys` + `values` blow-up is bounded
+ *
+ * §9 makes `keys` and `values` compose by intersection where both cover an
+ * entry, so both descend. Where both also name the **same** recursive type,
+ * the walk visits every subtree twice per level — **2^depth**, measured at
+ * 7.4 ms / 60.9 ms / 919.8 ms for depths 10 / 14 / 18. Legal input,
+ * unbounded work: §11 caps document *size*, and nothing caps work.
+ *
+ * **This function is the join point, and the only one.** The two arms are
+ * genuinely different demands — `keys.<name>.demand` and `values` — with
+ * different demand pointers, so nothing above here can be memoized without
+ * keying on the very thing that still differs. They re-converge exactly
+ * here, because this function rewrites the demand pointer to
+ * `["types", <name>, "demand"]` and the usage layer to `decl.layer`: both
+ * arms enter the type's body with identical arguments and diverge nowhere
+ * below it.
+ *
+ * The key is `decl` → `value` → `mergedPointer ∥ depth ∥ typeHops ∥
+ * usageAccept`. Two of those are demonstrably load-bearing and are covered
+ * by cases built to collide without them
+ * (`tests/unit/composition-bound.test.ts`): **`decl`**, since two named
+ * types can be checked against one value at one pointer, and
+ * **`usageAccept`**, since two usages can narrow one type differently at
+ * one pointer. **`mergedPointer` and `depth` are redundant *today* and are
+ * kept anyway**: `depth` is always the pointer's own segment count less one
+ * (every structural descent adds exactly one of each), and the fold places
+ * any given node object at exactly one pointer, so node identity already
+ * separates them. **Both were sabotage-tested and neither is falsifiable** —
+ * dropping `depth`, and separately dropping `mergedPointer`, leaves the
+ * entire suite green, which is `guards-that-dont-guard` in its exact form
+ * and is reported as such. They stay because those two invariants live in
+ * `src/merge/fold.ts` and in this file's own descent, are enforced by
+ * nothing, and a cache that silently depends on two unenforced properties
+ * of two other modules is the defect FR-006 exists to prevent. Recorded
+ * rather than dropped, so the next reader can disagree with it knowingly.
+ *
+ * `ctx.usageLayer` is deliberately **not** in the key: this function
+ * overwrites it with `decl.layer` before doing anything, so it cannot
+ * affect the result — and two schema layers checking one value through one
+ * type therefore share a cache entry, which is correct and is what
+ * whole-chain validation's redundancy (§5.4) has always meant. Both layers
+ * still append the violations, so the diagnostic is still reported once per
+ * layer; a cache that *deduplicated* there would be changing the answer,
+ * which FR-005 forbids as firmly as confusing two subtrees.
+ * `ctx.configuration` and `ctx.allDecls` are not in the key either — they
+ * are fixed for the life of one `checkConfiguration` call, which is exactly
+ * the cache's lifetime.
  */
 function checkNamedType(decl: TypeDeclaration, value: Node, usageAccept: readonly string[] | undefined, ctx: WalkContext, mergedPointer: string): Violation[] {
+  const memo = ctx.memo;
+  if (memo === undefined) {
+    return checkNamedTypeUncached(decl, value, usageAccept, ctx, mergedPointer);
+  }
+  let byDeclaration = memo.get(decl);
+  if (byDeclaration === undefined) {
+    byDeclaration = new Map();
+    memo.set(decl, byDeclaration);
+  }
+  let byValue = byDeclaration.get(value);
+  if (byValue === undefined) {
+    byValue = new Map();
+    byDeclaration.set(value, byValue);
+  }
+  // U+0000 as the separator because it cannot occur in an RFC 6901 pointer
+  // or in a §9.1 type name, so no two distinct key tuples can render to one
+  // string. (Two *strings* would be enough for a Map, but a collision here
+  // would be a wrong answer rather than a slow one.)
+  const key = `${mergedPointer}\u0000${ctx.depth}\u0000${ctx.typeHops}\u0000${usageAccept === undefined ? "" : usageAccept.join("\u0000")}`;
+  const hit = byValue.get(key);
+  if (hit !== undefined) {
+    return hit;
+  }
+  const computed = checkNamedTypeUncached(decl, value, usageAccept, ctx, mergedPointer);
+  byValue.set(key, computed);
+  return computed;
+}
+
+/**
+ * The body `checkNamedType` memoizes. Split out rather than guarded inline
+ * so the cache and the computation cannot drift: there is exactly one
+ * expression of what checking a named type *means*, and the wrapper above
+ * decides only whether to compute it again.
+ *
+ * **Every caller copies the returned array's elements rather than the array
+ * itself** (`extend`, or an array-literal spread), so a cached result is
+ * never appended to by a later caller. That is what makes handing the same
+ * array object back twice safe.
+ */
+function checkNamedTypeUncached(decl: TypeDeclaration, value: Node, usageAccept: readonly string[] | undefined, ctx: WalkContext, mergedPointer: string): Violation[] {
   if (ctx.typeHops > MAX_DEMAND_DEPTH) {
     return [];
   }
@@ -385,7 +490,25 @@ interface WalkContext {
    * refusal, which is the diagnostic an author actually sees.
    */
   readonly typeHops: number;
+  /**
+   * **v1.0 FR-004** — the named-type memo, one per `checkConfiguration`
+   * call, or `undefined` to run the unbounded walk. `undefined` is not a
+   * performance switch: it is what makes FR-005's identity claim testable
+   * at all (`tests/unit/composition-bound.test.ts` diffs the two walks'
+   * diagnostics on one input, and an identity claim with only one walk
+   * available is an assertion about nothing). It is reachable only through
+   * `checkConfiguration`'s own options; the public `validate()` always
+   * memoizes.
+   *
+   * Keyed by declaration identity, then by node identity, then by a string
+   * of the remaining components — `checkNamedType` says what is in the key
+   * and why each part is there.
+   */
+  readonly memo: NamedTypeMemo | undefined;
 }
+
+/** `decl → value → (mergedPointer ∥ depth ∥ typeHops ∥ usageAccept) → violations`. Lives exactly as long as one `checkConfiguration` call, which is why the configuration and the declaration set are not part of the key. */
+type NamedTypeMemo = Map<TypeDeclaration, Map<Node, Map<string, Violation[]>>>;
 
 function parentPointerOf(pointer: string): string {
   if (pointer.length === 0) {
@@ -573,7 +696,7 @@ function depthLimitViolation(node: Node, ctx: WalkContext, pointerPath: readonly
 }
 
 /** Check one schema layer's own top-level `keys.<name>.demand` against `configuration.tree`. */
-function violationsForLayer(configuration: MergedConfiguration, layer: Layer, allDecls: readonly TypeDeclaration[]): Violation[] {
+function violationsForLayer(configuration: MergedConfiguration, layer: Layer, allDecls: readonly TypeDeclaration[], memo: NamedTypeMemo | undefined): Violation[] {
   if (layer.role !== "schema") {
     return [];
   }
@@ -582,7 +705,7 @@ function violationsForLayer(configuration: MergedConfiguration, layer: Layer, al
   for (const [keyName, raw] of vocabulary) {
     const keyPointer = pointerFromPath([keyName]);
     const value = resolvePointer(configuration.tree, keyPointer);
-    extend(violations, checkDemand(raw, value, ["keys", keyName, "demand"], keyPointer, { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0 }));
+    extend(violations, checkDemand(raw, value, ["keys", keyName, "demand"], keyPointer, { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0, memo }));
   }
   return violations;
 }
@@ -925,7 +1048,7 @@ function finalDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
  * merged position, and the empty pointer is only what a `required`
  * absence needs to anchor against.
  */
-function directiveDiagnostics(configuration: MergedConfiguration, allDecls: readonly TypeDeclaration[]): Diagnostic[] {
+function directiveDiagnostics(configuration: MergedConfiguration, allDecls: readonly TypeDeclaration[], memo: NamedTypeMemo | undefined): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const subject = configuration.layers.find((layer) => layer.role === "config");
   for (const layer of configuration.layers) {
@@ -945,7 +1068,7 @@ function directiveDiagnostics(configuration: MergedConfiguration, allDecls: read
         diagnostics.push(problem.diagnostic);
       }
       const value = reservedKeyValue(subject, declaration.name);
-      const violations = checkDemand(raw, value, pointerPath, "", { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0 });
+      const violations = checkDemand(raw, value, pointerPath, "", { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0, memo });
       for (const violation of violations) {
         diagnostics.push(renderViolation(violation, { omitMergedPointer: true }));
       }
@@ -960,7 +1083,12 @@ function directiveDiagnostics(configuration: MergedConfiguration, allDecls: read
  * qualifiers, cycles, accept-widening) and value violations are found by
  * independent passes and reported together (v0.3 FR-028's precedent).
  */
-export function checkConfiguration(configuration: MergedConfiguration): CheckOutcome {
+export function checkConfiguration(configuration: MergedConfiguration, options: CheckOptions = {}): CheckOutcome {
+  // v1.0 FR-004: one memo for the whole call, which is what makes the key
+  // able to omit the configuration and the declaration set. `memoize:
+  // false` runs the unbounded walk, and exists so FR-005's "identical
+  // diagnostics" can be *checked against something* rather than asserted.
+  const memo: NamedTypeMemo | undefined = options.memoize === false ? undefined : new Map();
   const allDecls = allDeclarations(configuration);
   const knownDeclaredNames = new Set(allDecls.map((d) => d.name));
 
@@ -976,10 +1104,10 @@ export function checkConfiguration(configuration: MergedConfiguration): CheckOut
 
   const violations: Violation[] = [];
   for (const layer of configuration.layers) {
-    extend(violations, violationsForLayer(configuration, layer, allDecls));
+    extend(violations, violationsForLayer(configuration, layer, allDecls, memo));
   }
 
-  const diagnostics = [...vocabularyDiagnostics, ...violations.map((violation) => renderViolation(violation)), ...topLevelSealDiagnostics(configuration), ...finalDiagnostics(configuration), ...directiveDiagnostics(configuration, allDecls)];
+  const diagnostics = [...vocabularyDiagnostics, ...violations.map((violation) => renderViolation(violation)), ...topLevelSealDiagnostics(configuration), ...finalDiagnostics(configuration), ...directiveDiagnostics(configuration, allDecls, memo)];
   const errors = diagnostics.filter((d) => d.level === "error");
   if (errors.length > 0) {
     return { ok: false, diagnostics: errors };
