@@ -1,0 +1,7 @@
+$schema: ./schema.yaml
+$id: nope
+title: x
+directives:
+  $id:
+    demand:
+      type: int

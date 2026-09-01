@@ -1,0 +1,11 @@
+{
+  "name": "T011e (008): directives: constrains reserved keys and never promotes one to data — no $-key in the merged configuration (v0.7 FR-013, spec.md US3 Scenario 3)",
+  "cites": "v0.7 FR-013",
+  "fixtureDir": "directives/not-in-merged-tree",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": { "mapping": [["title", { "kind": "string", "value": "x" }]] }
+  }
+}

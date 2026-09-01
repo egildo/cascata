@@ -1,0 +1,20 @@
+{
+  "name": "T011c (008): a directives: entry naming something outside the six reserved keys is refused — the vocabulary is closed (v0.7 FR-011, spec.md US3 Scenario 2)",
+  "cites": "v0.7 FR-011",
+  "fixtureDir": "directives/unknown-directive-key",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-directive-key",
+        "document": "schema.yaml",
+        "line": 3,
+        "column": 5,
+        "demand": { "pointer": "/directives/notReserved", "document": "schema.yaml", "line": 3, "column": 5 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

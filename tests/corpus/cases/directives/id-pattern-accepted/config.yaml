@@ -1,0 +1,3 @@
+$schema: ./schema.yaml
+$id: cascata/thing
+title: x

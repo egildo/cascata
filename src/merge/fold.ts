@@ -228,7 +228,16 @@ function schemaContribution(schemaTree: Node): Node | undefined {
  * without this step every merged configuration would carry its own
  * `$schema` pointer as a literal top-level key alongside real data.
  */
-const RESERVED_DOCUMENT_KEYS: ReadonlySet<string> = new Set(["$id", "$version", "$adopts", "$pin", "$schema", "$extends"]);
+/**
+ * Exported since v0.7 part 2: `src/validate/directives.ts` closes the
+ * `directives:` section's own vocabulary to exactly this set (SPEC.md §9),
+ * and the two MUST be the same set. Two literals would be two lists that
+ * could drift, and drifting means either a reserved key the meta-schema
+ * cannot constrain or a `directives:` entry naming something the fold does
+ * not strip — the second of which would put a `$`-key into a merged
+ * configuration, which §9 forbids absolutely.
+ */
+export const RESERVED_DOCUMENT_KEYS: ReadonlySet<string> = new Set(["$id", "$version", "$adopts", "$pin", "$schema", "$extends"]);
 
 /** Strip SPEC.md §9's reserved document keys from a config's own top-level tree before it enters the fold. A no-op for anything that is not a mapping, or a mapping with none of those keys. */
 function stripReservedDocumentKeys(tree: Node): Node {

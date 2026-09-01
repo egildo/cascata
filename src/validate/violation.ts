@@ -126,13 +126,29 @@ export function canonicalSentence(violation: Violation): string {
   return `${base} (delegated from ${chain})`;
 }
 
-/** Render one `Violation` into a `Diagnostic` — every v0.4 additive field populated (gate 5 at full strength), `message` combining `describeReason` with the canonical sentence so a reader gets both the specific reason and the standard cross-reference in one place. */
-export function renderViolation(violation: Violation): Diagnostic {
+/**
+ * Render one `Violation` into a `Diagnostic` — every v0.4 additive field
+ * populated (gate 5 at full strength), `message` combining
+ * `describeReason` with the canonical sentence so a reader gets both the
+ * specific reason and the standard cross-reference in one place.
+ *
+ * **v0.7 part 2: `options.omitMergedPointer`.** `Diagnostic.pointer` is a
+ * pointer into the *merged configuration*, and one kind of violation has
+ * no position there at all: a `directives:` violation. Reserved keys are
+ * directives rather than data and never enter a configuration (§9), so a
+ * pointer naming one would name something that does not exist — worse
+ * than absent, because a consumer would resolve it and get nothing. The
+ * field is therefore left off, which is the posture `vocabulary.ts` has
+ * always taken for a problem found in a schema document rather than at a
+ * merged position. Optional, so no existing call site changes and no
+ * existing assertion moves.
+ */
+export function renderViolation(violation: Violation, options?: { readonly omitMergedPointer?: boolean }): Diagnostic {
   return createDiagnostic({ level: "error",
     code: CODE_FOR_REASON[violation.reason.kind],
     message: `${describeReason(violation.reason)} — ${canonicalSentence(violation)}`,
     primary: violation.valueSpan,
-    pointer: violation.mergedPointer,
+    ...(options?.omitMergedPointer === true ? {} : { pointer: violation.mergedPointer }),
     demand: { pointer: violation.demand.pointer, span: violation.demand.span },
     pedigreePosition: violation.demand.layerRank,
     ...(violation.delegatedFrom !== undefined ? { delegatedFrom: violation.delegatedFrom } : {}),

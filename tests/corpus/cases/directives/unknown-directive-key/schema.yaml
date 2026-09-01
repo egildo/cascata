@@ -1,0 +1,8 @@
+directives:
+  notReserved:
+    demand:
+      type: string
+keys:
+  title:
+    demand:
+      type: string

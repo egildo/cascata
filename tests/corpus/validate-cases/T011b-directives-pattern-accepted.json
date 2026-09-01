@@ -1,0 +1,8 @@
+{
+  "name": "T011b (008): the same directives: entry accepts a well-formed $id (v0.7 FR-011)",
+  "cites": "v0.7 FR-011",
+  "fixtureDir": "directives/id-pattern-accepted",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

@@ -1,0 +1,9 @@
+directives:
+  $id:
+    demand:
+      type: string
+      pattern: '^cascata/'
+keys:
+  title:
+    demand:
+      type: string

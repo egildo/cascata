@@ -1,0 +1,8 @@
+{
+  "name": "T011d (008): a directives: section declared by a CONFIG has no effect (v0.7 FR-014, spec.md US3 Scenario 5)",
+  "cites": "v0.7 FR-014",
+  "fixtureDir": "directives/config-directives-inert",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": { "ok": true }
+}

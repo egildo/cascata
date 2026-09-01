@@ -1,0 +1,20 @@
+{
+  "name": "T011 (008): a directives: entry constraining $id by pattern refuses a malformed one, positioned at that $id (v0.7 FR-011, spec.md US3 Scenario 1)",
+  "cites": "v0.7 FR-011",
+  "fixtureDir": "directives/id-pattern-refused",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "pattern-mismatch",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 6,
+        "demand": { "pointer": "/directives/$id/demand/pattern", "document": "schema.yaml", "line": 5, "column": 16 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

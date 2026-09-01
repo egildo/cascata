@@ -38,11 +38,12 @@ import type { DelegationHop } from "../model/reference.js";
 import { pointerFromPath, resolvePointer } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
-import { readDemandVocabulary, readKeyDeclarationDemand, readNestedKeysMapping, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
+import { readDemandVocabulary, readKeyDeclarationDemand, readNestedKeysMapping, recursiveVocabularyProblems, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
 import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, requiredViolationCause, type ViolationSite } from "./constraints.js";
 import { renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
 import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
 import { parseTypeExpression, type Alternative, type TypeExpression } from "./typeexpr.js";
+import { readDirectives, reservedKeyValue } from "./directives.js";
 import type { KeyFinalState } from "../merge/final.js";
 
 /** v0.7 FR-002: an `ok: true` outcome carries whatever `info`-level lints were found (e.g. §5.5's `required-vacuous`) — possibly empty, never `error`-level (an `error` anywhere makes the whole check `ok: false` instead). */
@@ -928,6 +929,58 @@ function finalDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
   return diagnostics;
 }
 
+// --- directives: (v0.7 part 2, SPEC.md §9 amended) ----------------------
+
+/**
+ * Every diagnostic every schema layer's own `directives:` section
+ * produces (FR-011 through FR-014, contracts/values-and-directives.md §4).
+ *
+ * The subject is the **config layer** — the document being validated —
+ * read from its own parsed tree, because reserved keys are gone from the
+ * merged configuration by then and by design (§9). "Publishing a schema is
+ * validating it as a config" (§2.6) is what makes this the right subject
+ * and not a special case: in the bootstrap the config layer *is* a schema
+ * document, and its `$id`/`$version`/`$adopts`/`$pin` are exactly the
+ * things a meta-schema has always needed to constrain and had no way to.
+ *
+ * Each entry's `demand` runs through `checkDemand` unchanged — the same
+ * one implementation every other demand in this file goes through, which
+ * is what makes §9's "the same per-key vocabulary as a `keys:` entry"
+ * true of the checking and not only of the syntax. `mergedPointer` is
+ * seeded with the empty pointer (the merged root), and the resulting
+ * violations are rendered with `omitMergedPointer`: a directive has no
+ * merged position, and the empty pointer is only what a `required`
+ * absence needs to anchor against.
+ */
+function directiveDiagnostics(configuration: MergedConfiguration, allDecls: readonly TypeDeclaration[]): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  const subject = configuration.layers.find((layer) => layer.role === "config");
+  for (const layer of configuration.layers) {
+    const { declarations, problems } = readDirectives(layer);
+    extend(diagnostics, problems);
+    if (subject === undefined) {
+      continue;
+    }
+    for (const declaration of declarations) {
+      const raw = declaration.demand;
+      if (raw === undefined) {
+        continue;
+      }
+      const pointerPath = ["directives", declaration.name, "demand"];
+      // The schema-shape pass, exactly as `keys.<name>.demand` gets one.
+      for (const problem of recursiveVocabularyProblems(raw, layer.rank, pointerPath, 0, new Set(allDecls.map((decl) => decl.name)))) {
+        diagnostics.push(problem.diagnostic);
+      }
+      const value = reservedKeyValue(subject, declaration.name);
+      const violations = checkDemand(raw, value, pointerPath, "", { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0 });
+      for (const violation of violations) {
+        diagnostics.push(renderViolation(violation, { omitMergedPointer: true }));
+      }
+    }
+  }
+  return diagnostics;
+}
+
 /**
  * Check `configuration` against every schema layer's `demand`, root to
  * leaf. Vocabulary problems (demand keywords, type entries, collisions,
@@ -953,7 +1006,7 @@ export function checkConfiguration(configuration: MergedConfiguration): CheckOut
     extend(violations, violationsForLayer(configuration, layer, allDecls));
   }
 
-  const diagnostics = [...vocabularyDiagnostics, ...violations.map(renderViolation), ...topLevelSealDiagnostics(configuration), ...finalDiagnostics(configuration)];
+  const diagnostics = [...vocabularyDiagnostics, ...violations.map((violation) => renderViolation(violation)), ...topLevelSealDiagnostics(configuration), ...finalDiagnostics(configuration), ...directiveDiagnostics(configuration, allDecls)];
   const errors = diagnostics.filter((d) => d.level === "error");
   if (errors.length > 0) {
     return { ok: false, diagnostics: errors };

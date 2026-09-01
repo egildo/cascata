@@ -151,6 +151,27 @@ export const SEALING_AUTHORITY_CODES = [
   "adoption-not-pinned",
 ] as const;
 
+/**
+ * The `directives:` section (v0.7 part 2, `SPEC.md` §9, §6.1 — amended;
+ * specs/008-metaschema-bootstrap FR-011). One code only, and the scarcity
+ * is the point: a `directives:` entry's `demand` **is** an ordinary
+ * demand, so every way its constraints can be malformed or violated
+ * already has a code (`malformed-demand-value`, `type-mismatch`,
+ * `pattern-mismatch`, `required-violated`, ...) and reusing them is what
+ * makes §9's "entries take the same per-key vocabulary as `keys:`
+ * entries" true in the diagnostics as well as in the syntax.
+ *
+ * `unknown-directive-key` is the one thing with no existing code: the
+ * section's own vocabulary is **closed to the six reserved keys**
+ * (`$id`, `$version`, `$adopts`, `$pin`, `$schema`, `$extends`), and a
+ * seventh name is a closed-vocabulary refusal about a *section*, not
+ * about a demand keyword (`unknown-demand-keyword`) or a type entry
+ * (`unknown-type-entry-keyword`). Three closed vocabularies, three codes,
+ * each naming which one was violated — Principle VI's own posture, and
+ * the reason none of the three is reused for another.
+ */
+export const DIRECTIVES_CODES = ["unknown-directive-key"] as const;
+
 /** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.5's codes are unchanged; v0.6 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
@@ -165,6 +186,7 @@ export const DIAGNOSTIC_CODES = [
   ...DELEGATION_CODES,
   ...DIAGNOSTIC_LEVEL_CODES,
   ...SEALING_AUTHORITY_CODES,
+  ...DIRECTIVES_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */
