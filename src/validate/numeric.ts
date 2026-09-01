@@ -72,19 +72,32 @@ import { parseTypeExpression, type Alternative } from "./typeexpr.js";
 /** What §17's table decides at one merged-configuration pointer. A pointer with no entry has no numeric demand at all. */
 export type NumericClass = "bigint" | "number";
 
-/** Which numeric built-ins a demand admits at one position. Neither flag set means "this demand says nothing about numbers", which is different from "this demand forbids numbers". */
-interface Admission {
+/**
+ * Which numeric built-ins a demand admits at one position. Neither flag set
+ * means "this demand says nothing about numbers", which is different from
+ * "this demand forbids numbers".
+ *
+ * **Exported from v1.1 (010 FR-016, research D-3), with the lattice and the
+ * two functions that compute it.** The type generator has to answer §17's
+ * one question — "does the accumulated demand admit `float`?" — over a
+ * position no document reaches, and it must get the *same* answer
+ * `project()` gets. Sharing the function rather than restating the rule is
+ * what makes that a property of construction: the two cannot disagree
+ * because they are the same code. Nothing about this file's behaviour
+ * changes; four names stop being private.
+ */
+export interface Admission {
   readonly int: boolean;
   readonly float: boolean;
 }
 
 const NOTHING: Admission = { int: false, float: false };
 
-function union(a: Admission, b: Admission): Admission {
+export function union(a: Admission, b: Admission): Admission {
   return { int: a.int || b.int, float: a.float || b.float };
 }
 
-function intersect(a: Admission, b: Admission): Admission {
+export function intersect(a: Admission, b: Admission): Admission {
   return { int: a.int && b.int, float: a.float && b.float };
 }
 
@@ -114,7 +127,7 @@ interface WalkContext {
  * `types.ts` refuses as a declaration but which this walk must still
  * survive, exactly as `check.ts`'s `typeHops` does for the same reason.
  */
-function admissionOfName(name: string, scopeRank: number, allDecls: readonly TypeDeclaration[], usageAccept: readonly string[] | undefined, seen: ReadonlySet<TypeDeclaration>): Admission {
+export function admissionOfName(name: string, scopeRank: number, allDecls: readonly TypeDeclaration[], usageAccept: readonly string[] | undefined, seen: ReadonlySet<TypeDeclaration>): Admission {
   const resolved = resolveTypeName(name, scopeRank, allDecls);
   if (resolved === undefined) {
     return NOTHING;
@@ -144,7 +157,7 @@ function admissionOfName(name: string, scopeRank: number, allDecls: readonly Typ
 }
 
 /** The admission of one demand mapping's own `type:` expression, at depth 0 — its alternatives unioned. Array-depth alternatives say nothing about *this* position; they are descended into by the value walk instead. */
-function admissionOfDemand(raw: RawDemand, scopeRank: number, allDecls: readonly TypeDeclaration[], usageAccept: readonly string[] | undefined, seen: ReadonlySet<TypeDeclaration>): Admission {
+export function admissionOfDemand(raw: RawDemand, scopeRank: number, allDecls: readonly TypeDeclaration[], usageAccept: readonly string[] | undefined, seen: ReadonlySet<TypeDeclaration>): Admission {
   const typeNode = raw.get("type");
   if (typeNode === undefined || typeNode.type !== "scalar" || typeNode.kind !== "string") {
     return NOTHING;

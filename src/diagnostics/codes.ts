@@ -218,6 +218,35 @@ export const DIRECTIVES_CODES = ["unknown-directive-key"] as const;
  */
 export const OUTPUT_SURFACE_CODES = ["malformed-section", "precision-narrowed"] as const;
 
+/**
+ * The accumulated demand and the emitted type (v1.1, `SPEC.md` §18 —
+ * Article VIII; specs/010-type-generator FR-004, FR-026).
+ *
+ * **`demand-unsatisfiable`** is `level: "info"` — Article VIII's own lint.
+ * Where two demands at one position admit no common value (`string` in one
+ * layer, `int` in another), the accumulated demand is empty, the emitted
+ * type is `never`, and this names both demands. It is not an `error`, and
+ * deliberately so: whole-chain validation already refuses every value at
+ * such a position, so nothing here changes an outcome. What is new is that
+ * the contradiction is visible **with no document in hand** — "the
+ * beginning of the static subsumption §5.4 promises" — and a lint is what a
+ * beginning looks like. A second, distinct code rather than a reuse of
+ * `type-mismatch`: that code says a *value* failed a demand, and there is
+ * no value here at all.
+ *
+ * **`emit-identifier-collision`** is `level: "error"` — Article VIII's
+ * "two names that escape to one identifier are a generator error, not a
+ * coin toss". Two `types:` entries whose names differ in Cascata (`a-b`
+ * and `a_b`) but escape to one TypeScript identifier cannot both be
+ * emitted, and picking one silently would make the generated type say
+ * something no schema said. The emission is refused whole. Distinct from
+ * `type-name-collision` (two *unrelated declarations* of one name, §7's
+ * namespace, unreachable in v1) because this is a collision in the
+ * **target** language's namespace, not in Cascata's: the two names are
+ * perfectly legal, and it is the escape rule that cannot keep them apart.
+ */
+export const GENERATOR_CODES = ["demand-unsatisfiable", "emit-identifier-collision"] as const;
+
 /** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.5's codes are unchanged; v0.6 only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
@@ -234,6 +263,7 @@ export const DIAGNOSTIC_CODES = [
   ...SEALING_AUTHORITY_CODES,
   ...DIRECTIVES_CODES,
   ...OUTPUT_SURFACE_CODES,
+  ...GENERATOR_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

@@ -32,17 +32,17 @@ report at the end is worth more than the diff.
 
 ## Phase 1: Setup
 
-- [ ] T001 Verify the baseline: **1039 tests / 73 files**, `pnpm typecheck` clean, tree clean,
+- [x] T001 Verify the baseline: **1039 tests / 73 files**, `pnpm typecheck` clean, tree clean,
       `grep -rn SABOTAGE src/ tests/` empty, `git log --oneline -1` is at or after `7e568f9`. Stop and
       report if any of it differs
-- [ ] T002 Re-run the probes research.md F-2..F-5 record, under the harness you will build for US6
+- [x] T002 Re-run the probes research.md F-2..F-5 record, under the harness you will build for US6
       (`ts.createProgram` over an in-memory file, `strict`, `lib.es2022.d.ts`): `number & bigint`,
       open-index-signature `&` closed, `{}` accepting `{ a: 1 }`, `{ readonly [k: string]: never }`
       rejecting it, module-scope `type Object`, `type default`, `type my-type`, a quoted `"__proto__"`
       property in type and literal, a `2^1024` bigint literal type, a 64-deep object type. Every one
       must reproduce F-2..F-5's result; **if one does not, stop and report before designing around
       it** — the plan's rules D-4 and D-6 rest on them
-- [ ] T003 `mkdir -p src/generate`; `tests/unit/layering.test.ts`: add `src/generate` to
+- [x] T003 `mkdir -p src/generate`; `tests/unit/layering.test.ts`: add `src/generate` to
       `NO_ADAPTER_IMPORT_DIRS` and `NO_RESOLVE_IMPORT_DIRS`, and add the direction rule
       `src/validate/ does not import src/generate/` beside the existing `project` one — **before the
       directory has code**, the precedent every stage has followed; confirm the "no files yet"
@@ -58,7 +58,7 @@ document in hand.
 **Independent Test**: root `type: string | string[]`, house `type: string[]`; the position carries
 exactly `string[]`.
 
-- [ ] T004 [US1] `tests/unit/accumulate.test.ts` **first**, from contracts/accumulated-demand.md §1
+- [x] T004 [US1] `tests/unit/accumulate.test.ts` **first**, from contracts/accumulated-demand.md §1
       rows 1–17 and §3's twelve edge cases, each row its own `it()`, expected values written by hand
       from the contract. Include: the §7 case (house narrows `resource` **without** restating the key
       ⇒ root's `resource` at the key; **with** restating ⇒ a `ref` with both declarations); reordering
@@ -67,32 +67,32 @@ exactly `string[]`.
       `accumulate()` runs (FR-005); root `int | float` + house `int` ⇒ `numeric { int: true, float:
       false }`; root `string` + house `int` ⇒ `type: "empty"` and exactly one `demand-unsatisfiable`
       carrying both demands' pointers, spans, layers (contract §2)
-- [ ] T005 [US1] `tests/unit/accumulate.test.ts`: the ratio test for FR-006 — `keys` and `values`
+- [x] T005 [US1] `tests/unit/accumulate.test.ts`: the ratio test for FR-006 — `keys` and `values`
       both recursing into one shared type at depths 10/15/18/24; assert the ratio across depths, never
       milliseconds. Same shape as `tests/unit/composition-bound.test.ts`
-- [ ] T006 [US1] `src/validate/vocabulary.ts`: `ParsedDemand`, `ParsedNestedKey`, and
+- [x] T006 [US1] `src/validate/vocabulary.ts`: `ParsedDemand`, `ParsedNestedKey`, and
       `parseDemand(raw: RawDemand, pointer, span): ParsedDemand` per data-model.md — **additive**;
       every existing reader keeps its signature; `refuseMalformedShapes`'s switch is the
       specification, and a shape it refuses is a programmer error here
-- [ ] T007 [US1] `src/validate/numeric.ts`: export `Admission`, `union`, `intersect`,
+- [x] T007 [US1] `src/validate/numeric.ts`: export `Admission`, `union`, `intersect`,
       `admissionOfDemand`, `admissionOfName` (research D-3). No behaviour change; `pnpm test` green
       before continuing
-- [ ] T008 [US1] `src/diagnostics/codes.ts`: `demand-unsatisfiable` (`info`) and
+- [x] T008 [US1] `src/diagnostics/codes.ts`: `demand-unsatisfiable` (`info`) and
       `emit-identifier-collision` (`error`), each in its own catalogue group with the argument for a
       new code
-- [ ] T009 [US1] `src/generate/accumulate.ts`: the tree per data-model.md — a value-free descent over
+- [x] T009 [US1] `src/generate/accumulate.ts`: the tree per data-model.md — a value-free descent over
       every schema layer's top-level `keys:` and `seal`, intersection per keyword per contract §1,
       `resolveTypeName` at the **using** layer's rank, `Admission` via T007's exports, the memo keyed
       on `(declaration set, depth, typeHops)` (research D-1), `ref` for recursion, `"empty"` + the
       lint for an empty intersection, `constant` for `final` + scalar `provide`, `provided` from
       `readKeysVocabulary`. Throws on a `config` layer
-- [ ] T010 [US1] **Sabotage**: back up `src/generate/accumulate.ts` to `/tmp`, mark with a
+- [x] T010 [US1] **Sabotage**: back up `src/generate/accumulate.ts` to `/tmp`, mark with a
       `SABOTAGE` comment, and (a) resolve names at the *leaf's* rank instead of the using layer's —
       the §7 no-restatement case must go red and nothing else; (b) OR the `seal` instead of
       "closed if any" — the weaken-closed case must go red; (c) drop the declaration set from the memo
       key — the ratio test or the two-declarations case must go red. Restore; `grep -rn SABOTAGE`
       empty; record each result for the report
-- [ ] T011 [US1] `pnpm typecheck && pnpm test` green; commit `feat(generate): the accumulated demand
+- [x] T011 [US1] `pnpm typecheck && pnpm test` green; commit `feat(generate): the accumulated demand
       — v1.1 US1`
 
 **Checkpoint**: the tree exists, is tested without any emitter, and the meta-schema accumulates to

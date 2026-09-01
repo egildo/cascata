@@ -33,10 +33,11 @@
  */
 
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
-import type { Node } from "../model/node.js";
+import type { Node, Scalar, ScalarKind } from "../model/node.js";
 import { pointerFromPath } from "../model/pointer.js";
 import type { Layer } from "../merge/provenance.js";
-import { parseTypeExpression, unresolvedAlternatives } from "./typeexpr.js";
+import type { SourceSpan } from "../model/span.js";
+import { parseTypeExpression, unresolvedAlternatives, type TypeExpression } from "./typeexpr.js";
 import { extend } from "../extend.js";
 
 /**
@@ -689,4 +690,137 @@ export function vocabularyProblemsForLayer(layer: Layer, knownDeclaredNames: Rea
     }
   }
   return problems;
+}
+
+// --- v1.1 (010) FR-001: the typed demand record -------------------------
+//
+// `RawDemand` is a `ReadonlyMap<string, Node>` and every consumer above
+// re-reads its keywords by hand, checking each one's shape at the point of
+// use. That was tolerable while there were two consumers; v1.1 adds a third
+// (`src/generate/accumulate.ts`), and a third hand re-read is where the
+// three drift apart.
+//
+// `ParsedDemand` is that read done once, typed. It is **additive**: every
+// function above keeps its signature and its behaviour, and neither
+// `check.ts` nor `numeric.ts` is migrated onto it in this milestone —
+// the first release after the freeze is the wrong moment to touch every
+// validation path for no behavioural change (research D-1, plan P-2). The
+// duplication is named rather than hidden.
+//
+// **`refuseMalformedShapes` above is this record's specification.** A
+// keyword whose value has a shape that function refuses cannot reach a
+// well-formed schema, so `parseDemand` reads a keyword only in the shape
+// that function accepts and treats every other shape as absence. That is
+// not leniency: `generateTypes()` runs the closed-vocabulary pass first
+// (v1.1 FR-030) and refuses before any of this runs, so a malformed shape
+// arriving here is a programmer error, and absence is the one reading that
+// cannot invent a demand nobody wrote.
+
+/** One `demand:` mapping read once, every keyword typed (v1.1 data-model.md). */
+export interface ParsedDemand {
+  /** Canonical alternatives (`typeexpr.ts`), or absent where no `type:` was declared or it did not parse. */
+  readonly type?: TypeExpression;
+  readonly items?: ParsedDemand;
+  readonly keys?: ReadonlyMap<string, ParsedNestedKey>;
+  readonly values?: ParsedDemand;
+  readonly required?: boolean;
+  /** Numeric scalars, kind preserved — `min: 1` and `min: 1.0` are different nodes (§4.2). */
+  readonly min?: Scalar;
+  readonly max?: Scalar;
+  readonly minLength?: bigint;
+  readonly maxLength?: bigint;
+  /** The pattern source. It compiles, or `refuseMalformedShapes` never let it here. */
+  readonly pattern?: string;
+  readonly enum?: readonly Node[];
+  readonly accept?: readonly string[];
+  readonly seal?: "open" | "closed";
+  /** The demand mapping's own position. */
+  readonly span: SourceSpan;
+  /** RFC 6901, in this demand's own layer. */
+  readonly pointer: string;
+}
+
+/** One entry of a **nested** `keys:` — §9's strictly smaller vocabulary (`demand`, `delegate`). */
+export interface ParsedNestedKey {
+  readonly demand?: ParsedDemand;
+  readonly delegate?: "allow";
+  readonly span: SourceSpan;
+}
+
+function scalarOfKinds(node: Node | undefined, kinds: readonly ScalarKind[]): Scalar | undefined {
+  if (node === undefined || node.type !== "scalar" || !kinds.includes(node.kind)) {
+    return undefined;
+  }
+  return node;
+}
+
+/**
+ * Read one raw demand mapping into a `ParsedDemand`. `pointerPath` is the
+ * full path to `raw` itself in its own document (e.g. `["keys", "tags",
+ * "demand"]`), matching every other function in this file; `span` is the
+ * demand mapping's own span.
+ *
+ * Recursion into `items`, `keys` and `values` is unbounded here on purpose:
+ * `MAX_DEMAND_DEPTH` is enforced by `recursiveVocabularyProblems` above and
+ * by `check.ts`'s own descent, both of which run before this does, and a
+ * second, differently-worded bound in a pure reader would be a second
+ * authority on the same question.
+ */
+export function parseDemand(raw: RawDemand, pointerPath: readonly (string | number)[], span: SourceSpan): ParsedDemand {
+  const typeNode = scalarOfKinds(raw.get("type"), ["string"]);
+  const parsedType = typeNode !== undefined && typeNode.kind === "string" ? parseTypeExpression(typeNode.value) : undefined;
+
+  const itemsNode = raw.get("items");
+  const valuesNode = raw.get("values");
+  const keysNode = raw.get("keys");
+  const requiredNode = scalarOfKinds(raw.get("required"), ["bool"]);
+  const minNode = scalarOfKinds(raw.get("min"), ["int", "float"]);
+  const maxNode = scalarOfKinds(raw.get("max"), ["int", "float"]);
+  const minLengthNode = scalarOfKinds(raw.get("minLength"), ["int"]);
+  const maxLengthNode = scalarOfKinds(raw.get("maxLength"), ["int"]);
+  const patternNode = scalarOfKinds(raw.get("pattern"), ["string"]);
+  const enumNode = raw.get("enum");
+  const acceptNode = raw.get("accept");
+  const sealNode = scalarOfKinds(raw.get("seal"), ["string"]);
+
+  const keys = keysNode !== undefined && keysNode.type === "mapping" ? parseNestedKeys(keysNode, pointerPath) : undefined;
+
+  return {
+    ...(parsedType !== undefined && parsedType.ok ? { type: parsedType.value } : {}),
+    ...(itemsNode !== undefined && itemsNode.type === "mapping" ? { items: parseDemand(itemsNode.entries, [...pointerPath, "items"], itemsNode.span) } : {}),
+    ...(keys !== undefined ? { keys } : {}),
+    ...(valuesNode !== undefined && valuesNode.type === "mapping" ? { values: parseDemand(valuesNode.entries, [...pointerPath, "values"], valuesNode.span) } : {}),
+    ...(requiredNode !== undefined && requiredNode.kind === "bool" ? { required: requiredNode.value } : {}),
+    ...(minNode !== undefined ? { min: minNode } : {}),
+    ...(maxNode !== undefined ? { max: maxNode } : {}),
+    ...(minLengthNode !== undefined && minLengthNode.kind === "int" ? { minLength: minLengthNode.value } : {}),
+    ...(maxLengthNode !== undefined && maxLengthNode.kind === "int" ? { maxLength: maxLengthNode.value } : {}),
+    ...(patternNode !== undefined && patternNode.kind === "string" ? { pattern: patternNode.value } : {}),
+    ...(enumNode !== undefined && enumNode.type === "sequence" ? { enum: enumNode.items } : {}),
+    ...(acceptNode !== undefined && acceptNode.type === "sequence" ? { accept: acceptNode.items.flatMap((item) => (item.type === "scalar" && item.kind === "string" ? [item.value] : [])) } : {}),
+    ...(sealNode !== undefined && sealNode.kind === "string" && (sealNode.value === "open" || sealNode.value === "closed") ? { seal: sealNode.value } : {}),
+    span,
+    pointer: pointerFromPath(pointerPath),
+  };
+}
+
+/** The plural form: one nested `keys:` mapping node into typed key declarations. */
+function parseNestedKeys(keysNode: Node, pointerPath: readonly (string | number)[]): ReadonlyMap<string, ParsedNestedKey> {
+  const result = new Map<string, ParsedNestedKey>();
+  if (keysNode.type !== "mapping") {
+    return result;
+  }
+  for (const [childName, declarationNode] of keysNode.entries) {
+    if (declarationNode.type !== "mapping") {
+      continue;
+    }
+    const demandNode = declarationNode.entries.get("demand");
+    const delegateNode = declarationNode.entries.get("delegate");
+    result.set(childName, {
+      ...(demandNode !== undefined && demandNode.type === "mapping" ? { demand: parseDemand(demandNode.entries, [...pointerPath, "keys", childName, "demand"], demandNode.span) } : {}),
+      ...(delegateNode !== undefined && delegateNode.type === "scalar" && delegateNode.kind === "string" && delegateNode.value === "allow" ? { delegate: "allow" as const } : {}),
+      span: declarationNode.span,
+    });
+  }
+  return result;
 }

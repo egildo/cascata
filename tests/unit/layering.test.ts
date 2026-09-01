@@ -65,7 +65,13 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // world-blind stage there is: it consumes a `MergedConfiguration` that is
 // already entirely in hand, and has no business knowing what format any of
 // it arrived in or where any of it came from.
-const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge", "src/validate", "src/project"];
+// **v1.1 (010 FR-032)**: `src/generate/` joins both policed sets **before
+// the directory has code in it**, the precedent every stage has followed
+// (`resolve/`+`graph/` at v0.2, `merge/` at v0.3, `validate/` at v0.4,
+// `project/` at v1.0). The accumulated demand is computed from schema
+// layers alone and the emitter is a string printer: neither has any
+// business knowing what format a layer arrived in, nor where it came from.
+const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge", "src/validate", "src/project", "src/generate"];
 
 // Matches the module specifier of any `import ... from "spec"` or
 // `export ... from "spec"` statement, static or type-only.
@@ -137,7 +143,8 @@ describe("Principle IV: format-blindness boundary — no import of src/adapters"
 // graph/ alone; v0.3 (T011, plan.md's Structure Decision) adds merge/ — the
 // first module that is both format-blind *and* location-blind. v0.4
 // (specs/004-constraint-checker/tasks.md T008) adds validate/.
-const NO_RESOLVE_IMPORT_DIRS = ["src/graph", "src/merge", "src/validate", "src/project"];
+// v1.0 adds project/; v1.1 (010) adds generate/ — see NO_ADAPTER_IMPORT_DIRS above.
+const NO_RESOLVE_IMPORT_DIRS = ["src/graph", "src/merge", "src/validate", "src/project", "src/generate"];
 
 for (const relativeDir of NO_RESOLVE_IMPORT_DIRS) {
   describe(`Principle IV: ${relativeDir}/ does not import src/resolve/`, () => {
@@ -287,6 +294,33 @@ describe("Principle IV: src/validate/ does not import src/project/ — the last 
     const relativeFile = file.slice(REPO_ROOT.length + 1);
     it(`${relativeFile} does not import from src/project`, () => {
       expect(importSpecifiersOf(file).filter((specifier) => CROSSES_PROJECT_BOUNDARY.test(specifier))).toEqual([]);
+    });
+  }
+});
+
+// --- v1.1 (010): the emitter's direction is one-way too -------------------
+//
+// `src/generate/` reads `src/validate/` — a demand is what it accumulates,
+// and reading one is validate's job (the type-expression parser, the
+// per-layer resolver, and the numeric lattice all live there). The converse
+// must never be true: validation that could see the emitter would be a
+// stage consuming a *later* stage's output, which is Principle IV's whole
+// subject. The identical rule v1.0 drew for `project/`, drawn again for the
+// same reason rather than assumed to carry over.
+
+const CROSSES_GENERATE_BOUNDARY = crossesBoundary("generate");
+
+describe("Principle IV: src/validate/ does not import src/generate/ — the emitter is downstream of validation, never upstream", () => {
+  const files = listTsFiles(join(REPO_ROOT, "src", "validate"));
+
+  it("src/validate has files — a direction test over an empty directory passes vacuously", () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  for (const file of files) {
+    const relativeFile = file.slice(REPO_ROOT.length + 1);
+    it(`${relativeFile} does not import from src/generate`, () => {
+      expect(importSpecifiersOf(file).filter((specifier) => CROSSES_GENERATE_BOUNDARY.test(specifier))).toEqual([]);
     });
   }
 });
