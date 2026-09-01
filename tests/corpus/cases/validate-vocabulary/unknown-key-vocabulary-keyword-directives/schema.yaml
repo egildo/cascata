@@ -1,0 +1,9 @@
+directives:
+  $version:
+    demand:
+      type: int
+    seal: closed
+keys:
+  title:
+    demand:
+      type: string

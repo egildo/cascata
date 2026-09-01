@@ -324,25 +324,33 @@ function refuseUnknownKeyDeclarationMembers(declarationNode: Node, layerRank: nu
 
 /**
  * Every closed-vocabulary problem in a schema layer's own **top-level**
- * `keys:` section — one declaration per named key, checked against
- * `TOP_LEVEL_KEY_DECLARATION_KEYWORDS`. A sibling walk to
+ * `keys:` and `directives:` sections — one declaration per named entry,
+ * each checked against `TOP_LEVEL_KEY_DECLARATION_KEYWORDS`. FR-012: "A
+ * `directives:` entry MUST take the same per-key vocabulary a `keys:`
+ * entry takes" — the identical closed set, so one walk over both
+ * sections' entries serves both, differing only in which top-level
+ * section name prefixes the pointer. A sibling walk to
  * `readDemandVocabulary`'s own top-level `keys:` read, but this one
  * inspects the *declaration* (`{demand, provide, cascade, final,
  * delegate}`) rather than extracting its `demand` child — the two reads
  * are independent because `readDemandVocabulary` already discards every
- * non-`demand` member before this problem could be seen there.
+ * non-`demand` member before this problem could be seen there, and it
+ * has no `directives:` counterpart at all (`directives.ts`'s own
+ * `readDirectives` does that extraction).
  */
 export function topLevelKeyDeclarationVocabularyProblems(schemaTree: Node, layerRank: number): DemandVocabularyProblem[] {
   const problems: DemandVocabularyProblem[] = [];
   if (schemaTree.type !== "mapping") {
     return problems;
   }
-  const keysNode = schemaTree.entries.get("keys");
-  if (keysNode === undefined || keysNode.type !== "mapping") {
-    return problems;
-  }
-  for (const [childName, declarationNode] of keysNode.entries) {
-    extend(problems, refuseUnknownKeyDeclarationMembers(declarationNode, layerRank, ["keys", childName], TOP_LEVEL_KEY_DECLARATION_KEYWORD_SET, "per-key", TOP_LEVEL_KEY_DECLARATION_KEYWORDS));
+  for (const sectionName of ["keys", "directives"] as const) {
+    const sectionNode = schemaTree.entries.get(sectionName);
+    if (sectionNode === undefined || sectionNode.type !== "mapping") {
+      continue;
+    }
+    for (const [childName, declarationNode] of sectionNode.entries) {
+      extend(problems, refuseUnknownKeyDeclarationMembers(declarationNode, layerRank, [sectionName, childName], TOP_LEVEL_KEY_DECLARATION_KEYWORD_SET, "per-key", TOP_LEVEL_KEY_DECLARATION_KEYWORDS));
+    }
   }
   return problems;
 }

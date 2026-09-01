@@ -1,0 +1,20 @@
+{
+  "name": "T055 (v0.7 part 2): FR-012 gives a `directives.<name>` entry the same closed per-key vocabulary a top-level `keys.<name>` entry has, and it is enforced the same way — a stray `seal:` (the pre-v0.7 per-key spelling) is refused as unknown-key-vocabulary-keyword here exactly as it is at a `keys.<name>` entry (T053).",
+  "cites": "v0.7 FR-018",
+  "fixtureDir": "validate-vocabulary/unknown-key-vocabulary-keyword-directives",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-key-vocabulary-keyword",
+        "document": "schema.yaml",
+        "line": 5,
+        "column": 11,
+        "demand": { "pointer": "/directives/$version/seal", "document": "schema.yaml", "line": 5, "column": 11 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

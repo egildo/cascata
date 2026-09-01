@@ -166,6 +166,12 @@ const REFUSED: readonly { readonly fixture: string; readonly pipeline: "ACCEPT" 
     why: "Verdicts agree — this is the hole `merge-fold/inert-vocabulary/vocabulary-ignored` and `validate-vocabulary/inert-vocabulary` used to expose, now closed. Hand-written: `unknown-key-vocabulary-keyword` (v0.7 part 2's own — src/validate/vocabulary.ts's `TOP_LEVEL_KEY_DECLARATION_KEYWORDS`), which names the closed per-key vocabulary. The meta-schema: `seal-violation` from `keyDecl`'s own `seal: closed`.",
   },
   {
+    fixture: "validate-vocabulary/unknown-key-vocabulary-keyword-directives/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["seal-violation"],
+    why: "Verdicts agree, the directives twin of validate-vocabulary/unknown-key-vocabulary-keyword (FR-012: a `directives.<name>` entry takes the identical top-level vocabulary a `keys.<name>` entry does). Hand-written: `unknown-key-vocabulary-keyword`. The meta-schema: `seal-violation`, since the meta-schema's `directives:` section values are `keyDecl` too.",
+  },
+  {
     fixture: "validate-vocabulary/unknown-keyword/schema.yaml",
     pipeline: "REFUSE",
     metaCodes: ["seal-violation"],
