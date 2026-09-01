@@ -1,0 +1,7 @@
+$id: test/root
+authority:
+  demandForkedPins: true
+keys:
+  title:
+    demand:
+      type: string

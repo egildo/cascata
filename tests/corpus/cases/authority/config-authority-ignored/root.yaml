@@ -1,0 +1,5 @@
+$id: test/root
+keys:
+  title:
+    demand:
+      type: string

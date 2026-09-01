@@ -34,6 +34,7 @@ import { createNetworkTransport, resolveFetchLimits, resolveRemoteDocument, type
 import type { Transport } from "./resolve/transport.js";
 import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, resolveAllBranches, type BranchOutcome, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
+import { checkPinningDemand } from "./graph/authority.js";
 import { foldConfiguration } from "./merge/fold.js";
 import { why as whyImpl } from "./merge/provenance.js";
 import type { MergedConfiguration } from "./merge/provenance.js";
@@ -895,14 +896,33 @@ function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDoc
  * any `error`s. Only an `error` aborts the call (v0.7 FR-002: a
  * result whose diagnostics are all `info` is still `ok: true`); every
  * `info` survives into the successful result's own `diagnostics` field.
+ *
+ * **v0.7**: also runs the `authority:` pinning-demand walk
+ * (`src/graph/authority.ts`'s `checkPinningDemand`, SPEC.md §6.3/§11)
+ * against the same `schemaDocumentsRootToLeaf` this function already
+ * computes for delegation grants — one pass, two independent findings,
+ * concatenated (v0.3 FR-028's precedent). The pedigree is built **here**,
+ * not by the caller, because `PedigreeEntry.finalAgainstForking` needs
+ * each schema's own resolved `AuthoritySection`, which only exists once
+ * this walk has run.
  */
-async function finalizeWithDelegation(graph: Graph, pedigree: Pedigree, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean): Promise<ResolveResult> {
+async function finalizeWithDelegation(graph: Graph, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean): Promise<ResolveResult> {
   const schemaDocumentsRootToLeaf = [...graph.documents.slice(1)].reverse();
+
+  const { sections: authoritySections, diagnostics: authorityDiagnostics } = checkPinningDemand(schemaDocumentsRootToLeaf);
+  const finalAgainstForkingByLocation = new Map<string, boolean>();
+  schemaDocumentsRootToLeaf.forEach((document, rank) => {
+    finalAgainstForkingByLocation.set(document.identity.location, authoritySections[rank]?.finalAgainstForking === true);
+  });
+  const pedigree = buildPedigree(graph, finalAgainstForkingByLocation);
+
   const { tree: grantTree, problems } = collectAllDelegationGrants(schemaDocumentsRootToLeaf);
   const grantErrors = problems.filter((d) => d.level === "error");
   const grantInfos = problems.filter((d) => d.level === "info");
-  if (grantErrors.length > 0) {
-    return { ok: false, diagnostics: grantErrors };
+  // authorityDiagnostics are always level:"error" today (unknown-authority-member, adoption-not-pinned) — v0.7 defines no authority-related info lint.
+  const errors = [...authorityDiagnostics, ...grantErrors];
+  if (errors.length > 0) {
+    return { ok: false, diagnostics: errors };
   }
 
   const state: DelegationState = {
@@ -987,7 +1007,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     // single-document graph and an empty pedigree.
     builder.finishVisit(entryLocation, canonicalEntry);
     const graph = buildGraph(canonicalEntry, []);
-    return finalizeWithDelegation(graph, buildPedigree(graph), sandboxRoot, remote, options.allowRemoteDelegation ?? false);
+    return finalizeWithDelegation(graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false);
   }
 
   const chainResult = await walkAdoptsChain(schemaExtraction.reference, entryLocation, builder, remote, sandboxRoot);
@@ -1001,7 +1021,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
   builder.finishVisit(entryLocation, canonicalEntry);
 
   const graph = buildGraph(canonicalEntry, chainResult.documentsLeafToRoot);
-  return finalizeWithDelegation(graph, buildPedigree(graph), sandboxRoot, remote, options.allowRemoteDelegation ?? false);
+  return finalizeWithDelegation(graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false);
 }
 
 // --- merge() — User Story 1 (v0.3, tasks.md T024) ------------------------

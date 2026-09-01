@@ -1,0 +1,4 @@
+$schema: ./root.yaml
+title: hello
+authority:
+  demandPinnedAdoption: true

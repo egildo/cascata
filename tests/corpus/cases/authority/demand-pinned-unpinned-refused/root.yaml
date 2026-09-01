@@ -1,0 +1,7 @@
+$id: test/root
+authority:
+  demandPinnedAdoption: true
+keys:
+  title:
+    demand:
+      type: string

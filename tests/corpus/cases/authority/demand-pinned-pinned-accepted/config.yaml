@@ -1,0 +1,3 @@
+$schema: ./middle.yaml
+$pin: sha256:4a5eec257d6d2af649a60a867434884baffa16f07563aa316319da63d2092c3e
+title: hello

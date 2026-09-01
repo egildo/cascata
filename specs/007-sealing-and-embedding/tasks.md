@@ -171,42 +171,42 @@ refused, a pinned one resolves.
 
 ### Conformance cases (write first)
 
-- [ ] T036 [P] [US3] Case: root demands pinned adoption, descendant adopts unpinned — refused
+- [x] T036 [P] [US3] Case: root demands pinned adoption, descendant adopts unpinned — refused
       `adoption-not-pinned`, positioned at the `$adopts`, citing the root (Acceptance Scenario 1,
       FR-017) — `tests/corpus/cases/authority/demand-pinned-unpinned-refused/`
-- [ ] T037 [P] [US3] Case: same root, descendant adopts **with** a correct `$pin` — succeeds,
+- [x] T037 [P] [US3] Case: same root, descendant adopts **with** a correct `$pin` — succeeds,
       pedigree entry `verified: true` (Acceptance Scenario 2, FR-017) —
       `tests/corpus/cases/authority/demand-pinned-pinned-accepted/`
-- [ ] T038 [P] [US3] Case: a descendant "retracts" the demand (declares nothing, or explicitly
+- [x] T038 [P] [US3] Case: a descendant "retracts" the demand (declares nothing, or explicitly
       writes `demandPinnedAdoption: false`) — demand still binds for entries below it (Acceptance
       Scenario 3, FR-018) — `tests/unit/authority.test.ts`
-- [ ] T039 [P] [US3] Case: the demand never protects the declaring document's **own** fetch
+- [x] T039 [P] [US3] Case: the demand never protects the declaring document's **own** fetch
       (Acceptance Scenario 4, FR-019, §11's inherent limit) — `tests/unit/authority.test.ts`
-- [ ] T040 [P] [US3] Case: `finalAgainstForking: true` — recorded and queryable, **zero**
+- [x] T040 [P] [US3] Case: `finalAgainstForking: true` — recorded and queryable, **zero**
       diagnostics produced (Acceptance Scenario 5, FR-020) —
       `tests/corpus/cases/authority/final-against-forking-recorded/`
-- [ ] T041 [P] [US3] Case: an `authority:` member this version does not implement — refused at its
+- [x] T041 [P] [US3] Case: an `authority:` member this version does not implement — refused at its
       own position, naming what is supported (Acceptance Scenario 6, FR-016) —
       `tests/corpus/cases/authority/unknown-authority-member/`
-- [ ] T042 [P] [US3] Case: `authority:` declared by a **config** — no effect (FR-021) —
+- [x] T042 [P] [US3] Case: `authority:` declared by a **config** — no effect (FR-021) —
       `tests/corpus/cases/authority/config-authority-ignored/`
-- [ ] T043 [P] [US3] Case: a root demanding pinned adoption that is itself reached unpinned (Edge
+- [x] T043 [P] [US3] Case: a root demanding pinned adoption that is itself reached unpinned (Edge
       Cases — the inherent limit "from the inside") — same fixture family as T039, asserted
       explicitly rather than left implicit
 
 ### Implementation for User Story 3
 
-- [ ] T044 [US3] `src/diagnostics/codes.ts`: add `unknown-authority-member`, `adoption-not-pinned`
-- [ ] T045 [US3] `src/graph/authority.ts` (new): `readAuthoritySection(schemaTree): { section: AuthoritySection; diagnostics: Diagnostic[] }` — closed vocabulary, `unknown-authority-member` for anything else
-- [ ] T046 [US3] `src/graph/authority.ts`: `checkPinningDemand(pedigree, schemaTrees)` — single
+- [x] T044 [US3] `src/diagnostics/codes.ts`: add `unknown-authority-member`, `adoption-not-pinned`
+- [x] T045 [US3] `src/graph/authority.ts` (new): `readAuthoritySection(schemaTree): { section: AuthoritySection; diagnostics: Diagnostic[] }` — closed vocabulary, `unknown-authority-member` for anything else
+- [x] T046 [US3] `src/graph/authority.ts`: `checkPinningDemand(pedigree, schemaTrees)` — single
       root-to-leaf walk per research.md D5: check-then-arm ordering, no retraction mechanism needed
       (FR-018 falls out of there being no `false`-branch semantics)
-- [ ] T047 [US3] `src/graph/pedigree.ts`: `PedigreeEntry.finalAgainstForking: boolean`, populated from
+- [x] T047 [US3] `src/graph/pedigree.ts`: `PedigreeEntry.finalAgainstForking: boolean`, populated from
       each schema's own `readAuthoritySection` result
-- [ ] T048 [US3] `src/index.ts`: wire `readAuthoritySection`/`checkPinningDemand` into `resolve()`
+- [x] T048 [US3] `src/index.ts`: wire `readAuthoritySection`/`checkPinningDemand` into `resolve()`
       after the pedigree is built (schema documents only — never the config's own tree, FR-021 by
       construction)
-- [ ] T049 [US3] Sabotage: break the check-then-arm ordering (arm before checking the declaring
+- [x] T049 [US3] Sabotage: break the check-then-arm ordering (arm before checking the declaring
       document's own `via`) — confirm T039 fails; restore. Record in the report.
 
 **Checkpoint**: US2 + US3 both land. Independent of US4-US6; safe to commit here.
