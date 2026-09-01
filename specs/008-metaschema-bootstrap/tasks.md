@@ -189,6 +189,19 @@ the list of what it *planned*.
       (constitution gate 3, matching how `seal`'s and `final`'s rows were discharged in part 1)
 - [x] T054 `tests/unit/recursion-termination.test.ts`: record the `keys` + `values` composition
       blowup (2^depth) as a bounded test rather than a comment
+- [x] T056 **The totality fix was incomplete, and the same `RangeError` was still reachable.**
+      T050 fixed the two call-site spreads the property test reached and did not sweep for
+      siblings; four remained. Found in review: a 3 MB schema whose named type carries a
+      200,000-entry `accept:` made `load()` **throw** from `src/validate/types.ts`. All six sites now
+      go through one shared `src/extend.ts`, and
+      `tests/unit/validate-totality.test.ts` adds a **mechanical sweep** forbidding any call-site
+      spread anywhere under `src/`, with an explicitly-empty exemption list — because fixing what a
+      probe happens to reach is not fixing a class of defect
+- [x] T057 **The quadratic in `Parser.parseUnion`.** A 907 KB, 130,000-alternative union cost 68
+      seconds and returned normally — legal input, unbounded work. Cause exact:
+      `alternatives = [...alternatives, ...more]` copies the whole list once per `|`. Measured at a
+      clean 4x per doubling before, 2x after; the 68-second `load()` is now 594 ms. Guarded by a
+      ratio test, sabotage-verified at 69.7 s
 - [x] T055 `README.md`: sweep the derived artifact. It documented the surface as of v0.6 and said
       three times that `seal`/`final` "remain unread anywhere in the library, deferred to v0.7" —
       false since part 1. Added a v0.7 section for both parts

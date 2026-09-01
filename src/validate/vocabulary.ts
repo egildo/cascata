@@ -37,6 +37,7 @@ import type { Node } from "../model/node.js";
 import { pointerFromPath } from "../model/pointer.js";
 import type { Layer } from "../merge/provenance.js";
 import { parseTypeExpression, unresolvedAlternatives } from "./typeexpr.js";
+import { extend } from "../extend.js";
 
 /**
  * §9's closed `demand` keyword list (v0.4 FR-005). Order is declaration
@@ -411,20 +412,6 @@ export function refuseTypeExpressionProblems(demandPointerPath: readonly (string
     ];
   }
   return [];
-}
-
-/**
- * Append every element of `source` to `target`. A spread call
- * (`target.push(...source)`) throws `RangeError` past roughly 125,000
- * elements, and a schema-shape pass over a large document can produce
- * more than that — see `src/validate/check.ts`'s own `extend` for the
- * measured case and why this is a totality defect rather than a style
- * question.
- */
-function extend<T>(target: T[], source: readonly T[]): void {
-  for (const item of source) {
-    target.push(item);
-  }
 }
 
 function depthLimitProblem(node: Node, layerRank: number, pointerPath: readonly (string | number)[]): DemandVocabularyProblem {

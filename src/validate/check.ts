@@ -45,6 +45,7 @@ import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cyc
 import { parseTypeExpression, type Alternative, type TypeExpression } from "./typeexpr.js";
 import { readDirectives, reservedKeyValue } from "./directives.js";
 import type { KeyFinalState } from "../merge/final.js";
+import { extend } from "../extend.js";
 
 /** v0.7 FR-002: an `ok: true` outcome carries whatever `info`-level lints were found (e.g. §5.5's `required-vacuous`) — possibly empty, never `error`-level (an `error` anywhere makes the whole check `ok: false` instead). */
 export type CheckOutcome = { readonly ok: true; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -68,31 +69,6 @@ function runSimpleLeafCheck(keyword: DemandKeyword, keywordValue: Node, target: 
       return checkEnum(keywordValue, target);
     default:
       return [];
-  }
-}
-
-/**
- * Append every element of `source` to `target` — `target.push(...source)`
- * written as a loop, deliberately.
- *
- * **A spread call is not safe here** and this is not a style preference.
- * `f(...array)` passes one argument per element, and V8 throws
- * `RangeError: Maximum call stack size exceeded` past roughly 125,000 of
- * them. Every accumulation in this file is over a *document*'s own
- * violations, and a document is allowed to be 8 MB (`ParseLimits.maxBytes`,
- * §11): a sequence of 200,000 items each failing one `items` demand is a
- * legitimate document — 800 KB of YAML — and it made `validate()`
- * **throw** rather than return 200,000 diagnostics. Found in v0.7 part 2
- * by the FR-010 termination property test, which reached the same limit
- * from a different direction; present since v0.5, and independent of
- * anything that milestone added. `validate()` returning a verdict for
- * every finite document is the same totality posture v0.1 legislated for
- * `parse()` (contracts/parse-api.md), and a `RangeError` escaping it is a
- * defect regardless of how the array got large.
- */
-function extend<T>(target: T[], source: readonly T[]): void {
-  for (const item of source) {
-    target.push(item);
   }
 }
 

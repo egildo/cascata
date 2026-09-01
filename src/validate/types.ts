@@ -40,6 +40,7 @@ import { pointerFromPath } from "../model/pointer.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import { BUILTIN_TYPE_NAMES, parseTypeExpression, type BuiltinTypeName } from "./typeexpr.js";
 import type { RawDemand } from "./vocabulary.js";
+import { extend } from "../extend.js";
 
 const BUILTIN_TYPE_NAME_SET: ReadonlySet<string> = new Set(BUILTIN_TYPE_NAMES);
 
@@ -158,7 +159,7 @@ export function readTypeDeclarations(layer: Layer): { readonly declarations: rea
 export function allDeclarations(configuration: MergedConfiguration): readonly TypeDeclaration[] {
   const all: TypeDeclaration[] = [];
   for (const layer of configuration.layers) {
-    all.push(...readTypeDeclarations(layer).declarations);
+    extend(all, readTypeDeclarations(layer).declarations);
   }
   return all;
 }
@@ -349,11 +350,11 @@ export function cycleDiagnostics(declarations: readonly TypeDeclaration[]): read
     if (typeNode !== undefined && typeNode.type === "scalar" && typeNode.kind === "string") {
       const parsed = parseTypeExpression(typeNode.value);
       if (parsed.ok) {
-        names.push(...parsed.value.alternatives.map((alt) => alt.name));
+        extend(names, parsed.value.alternatives.map((alt) => alt.name));
       }
     }
     if (decl.accept !== undefined) {
-      names.push(...decl.accept);
+      extend(names, decl.accept);
     }
     return names;
   }

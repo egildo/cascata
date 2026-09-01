@@ -25,6 +25,7 @@
 import type { Node } from "../model/node.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import type { GraphDocument } from "./build.js";
+import { extend } from "../extend.js";
 
 /** §6.3's per-schema governance declarations — a closed vocabulary of two booleans (FR-016). */
 export interface AuthoritySection {
@@ -127,7 +128,7 @@ export function checkPinningDemand(schemaDocumentsRootToLeaf: readonly GraphDocu
       );
     }
     const { section, diagnostics: memberDiagnostics } = readAuthoritySection(document.tree, rank);
-    diagnostics.push(...memberDiagnostics);
+    extend(diagnostics, memberDiagnostics);
     sections.push(section);
     if (section.demandPinnedAdoption === true) {
       demandedBy = { location: document.identity.location };

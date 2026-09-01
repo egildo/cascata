@@ -44,6 +44,7 @@ import { resource as resourceImpl, type ResolvedResource } from "./validate/reso
 import type { DelegationHop } from "./model/reference.js";
 import { createMapping } from "./model/node.js";
 import { collectDelegationGrants, isAbsoluteDelegatedPath, isDelegationSandboxEscape, mergeGrantTrees, type DelegationGrantNode } from "./resolve/delegate.js";
+import { extend } from "./extend.js";
 
 export type { Diagnostic, RelatedSpan } from "./diagnostics/diagnostic.js";
 export type { DiagnosticCode } from "./diagnostics/codes.js";
@@ -895,7 +896,7 @@ function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDoc
   schemaDocumentsRootToLeaf.forEach((document, rank) => {
     const collected = collectDelegationGrants(document.tree, document.identity.location, rank);
     tree = mergeGrantTrees(tree, collected.tree);
-    problems.push(...collected.problems);
+    extend(problems, collected.problems);
   });
   return { tree, problems };
 }

@@ -50,6 +50,7 @@ import type { Node } from "../model/node.js";
 import type { SourceSpan } from "../model/span.js";
 import type { DocumentIdentity } from "../model/identity.js";
 import type { Reference, ReferenceAuthority, ReferenceKind } from "../model/reference.js";
+import { extend } from "../extend.js";
 
 // These were four structurally identical redeclarations until model/reference.ts and
 // model/identity.ts gave both layers one source of truth. The aliases are kept so this
@@ -288,7 +289,7 @@ export async function resolveAllBranches<C, T, F>(candidates: readonly C[], reso
     if (outcome.ok) {
       values.push(outcome.value);
     } else {
-      failures.push(...outcome.failures);
+      extend(failures, outcome.failures);
     }
   }
   if (failures.length > 0) {
