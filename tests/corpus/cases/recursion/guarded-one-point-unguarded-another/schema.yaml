@@ -1,0 +1,15 @@
+types:
+  a:
+    demand:
+      type: b
+  b:
+    demand:
+      type: mapping
+      keys:
+        down:
+          demand:
+            type: a
+keys:
+  tree:
+    demand:
+      type: a

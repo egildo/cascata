@@ -1,0 +1,21 @@
+{
+  "name": "T007c (008): a cycle guarded at one point and unguarded at another is accepted, and checks (v0.7 FR-009, spec.md US2 Scenario 4)",
+  "cites": "v0.7 FR-009",
+  "fixtureDir": "recursion/guarded-one-point-unguarded-another",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 4,
+        "column": 11,
+        "pointer": "/tree/down/down",
+        "demand": { "pointer": "/types/b/demand/type", "document": "schema.yaml", "line": 7, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

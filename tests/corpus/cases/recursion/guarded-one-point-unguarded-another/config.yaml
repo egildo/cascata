@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+tree:
+  down:
+    down: 7

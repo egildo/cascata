@@ -70,6 +70,31 @@ function runSimpleLeafCheck(keyword: DemandKeyword, keywordValue: Node, target: 
   }
 }
 
+/**
+ * Append every element of `source` to `target` — `target.push(...source)`
+ * written as a loop, deliberately.
+ *
+ * **A spread call is not safe here** and this is not a style preference.
+ * `f(...array)` passes one argument per element, and V8 throws
+ * `RangeError: Maximum call stack size exceeded` past roughly 125,000 of
+ * them. Every accumulation in this file is over a *document*'s own
+ * violations, and a document is allowed to be 8 MB (`ParseLimits.maxBytes`,
+ * §11): a sequence of 200,000 items each failing one `items` demand is a
+ * legitimate document — 800 KB of YAML — and it made `validate()`
+ * **throw** rather than return 200,000 diagnostics. Found in v0.7 part 2
+ * by the FR-010 termination property test, which reached the same limit
+ * from a different direction; present since v0.5, and independent of
+ * anything that milestone added. `validate()` returning a verdict for
+ * every finite document is the same totality posture v0.1 legislated for
+ * `parse()` (contracts/parse-api.md), and a `RangeError` escaping it is a
+ * defect regardless of how the array got large.
+ */
+function extend<T>(target: T[], source: readonly T[]): void {
+  for (const item of source) {
+    target.push(item);
+  }
+}
+
 // --- Declaring context ------------------------------------------------
 
 /** Which document/layer/pointer actually wrote the demand keyword a `RawSite` reports on — the usage's own, or (once resolution crosses into a named type) the type's own declaring position (v0.5 FR-007). */
@@ -156,83 +181,79 @@ function matchesBuiltinLeaf(node: Node, name: string): boolean {
  * declaring layer's scope** — never the usage's — and, if the type
  * declares `accept` (narrowed by `usageAccept`, defaulting to its full
  * declared set), the value must additionally match at least one narrowed
- * alternative. Every site produced here declares at the type's own
- * position (FR-007's "exactly as if written inline at the usage").
- * `depth` guards against a pathological reference chain even though
- * `types.ts`'s own cycle detection should already have refused a genuine
- * cycle — belt and suspenders, matching v0.1's own layered depth
- * defenses.
+ * alternative. Every violation produced here is attributed to the type's
+ * own position (FR-007's "exactly as if written inline at the usage").
+ *
+ * **v0.7 part 2: this function delegates the whole demand to
+ * `checkDemand`.** Until this milestone it re-implemented a *subset* of
+ * that walk by hand — `type`, the simple leaf keywords, `seal`, `accept` —
+ * and silently checked nothing at all for `keys`, `items`, `values` and
+ * `required` inside a named type. The v0.5 comment that stood here called
+ * that a scope decision ("no worked example exercises it"), which was true
+ * then and is fatal now: the meta-schema's central construct is the
+ * recursive named type `demand`, whose entire content is a `keys:`
+ * mapping. A meta-schema checked by the old code would have passed
+ * everything, including documents it was written to refuse — a green
+ * fixed point proving nothing. Found by probe before any of this milestone
+ * was written; the three `tests/corpus/cases/recursion/` cases are that
+ * probe, and they returned `ok: true` against the old code.
+ *
+ * Delegating rather than duplicating is what keeps the two walks from
+ * drifting: there is now exactly one implementation of "check a demand
+ * against a value", and a named type differs from an inline demand only in
+ * **which layer and pointer it declares from**.
+ *
+ * `ctx.typeHops` — not `ctx.depth` — bounds this recursion. The two count
+ * different things and §7's guarded-recursion rule is precisely the
+ * distinction: `depth` counts **structural** levels consumed (`keys`,
+ * `items`, `values`), and a recursion that consumes them is *productive*
+ * and terminates on any finite document; `typeHops` counts named-type
+ * resolutions **since the last structural level**, and a recursion that
+ * consumes none of those is *unguarded* and would not terminate at all.
+ * Every structural descent resets `typeHops` to 0, which is what lets a
+ * guarded recursive type check a document as deep as the document
+ * actually is, while `A: {type: B}, B: {type: A}` still stops.
  */
-function checkNamedType(decl: TypeDeclaration, value: Node, usageAccept: readonly string[] | undefined, allDecls: readonly TypeDeclaration[], depth: number): readonly RawSite[] {
-  if (depth > MAX_DEMAND_DEPTH) {
+function checkNamedType(decl: TypeDeclaration, value: Node, usageAccept: readonly string[] | undefined, ctx: WalkContext, mergedPointer: string): Violation[] {
+  if (ctx.typeHops > MAX_DEMAND_DEPTH) {
     return [];
   }
-  const sites: RawSite[] = [];
-  const typeDeclaring: DeclaringContext = { layer: decl.layer, layerRank: decl.layerRank, pointerPath: ["types", decl.name, "demand"] };
-
-  const typeNode = decl.demand.get("type");
-  if (typeNode !== undefined) {
-    sites.push(...checkTypeExpressionOnValue(typeNode, value, decl.layerRank, allDecls, { layer: decl.layer, layerRank: decl.layerRank, pointerPath: [...typeDeclaring.pointerPath, "type"] }, depth + 1));
-  }
-  for (const [keyword, node] of decl.demand) {
-    if (keyword === "type" || !SIMPLE_LEAF_KEYWORDS.has(keyword)) {
-      continue;
-    }
-    const declaring: DeclaringContext = { layer: decl.layer, layerRank: decl.layerRank, pointerPath: [...typeDeclaring.pointerPath, keyword] };
-    for (const base of runSimpleLeafCheck(keyword as DemandKeyword, node, value)) {
-      sites.push(siteAt(base, declaring, node.span));
-    }
-  }
-  // `required` and `items` inside a *type's own* demand are not
-  // exercised by any Acceptance Scenario and are out of scope for this
-  // milestone's own worked examples (§7 never shows a type declaring
-  // them) — a scope decision, not a citation gap. `seal` (v0.7) IS
-  // checked, using `decl.demand` wholesale (its own `keys` sibling, read
-  // by `sealClosedSites` below) — the meta-schema needs a named type
-  // whose own demand is a closed struct, and this is the minimum reading
-  // of `keys` that makes that meaningful: this type's own declared
-  // children, not a recursive walk into their own further nesting (which
-  // stays out of scope here for the identical reason `items`/`required`
-  // do — no worked example exercises it).
-  const sealDeclaring: DeclaringContext = { layer: decl.layer, layerRank: decl.layerRank, pointerPath: [...typeDeclaring.pointerPath, "seal"] };
-  const sealSpan = decl.demand.get("seal")?.span ?? decl.span;
-  for (const site of sealClosedSites(decl.demand, value)) {
-    sites.push(siteAt(site, sealDeclaring, sealSpan));
-  }
+  const typeCtx: WalkContext = { ...ctx, usageLayer: decl.layer, typeHops: ctx.typeHops + 1 };
+  const violations: Violation[] = [...checkDemand(decl.demand, value, ["types", decl.name, "demand"], mergedPointer, typeCtx)];
 
   const declaredAccept = decl.accept;
   if (declaredAccept !== undefined && declaredAccept.length > 0) {
     const narrowed = usageAccept ?? declaredAccept;
-    const matchesAny = narrowed.some((altName) => matchesResolvedName(altName, value, decl.layerRank, allDecls, depth + 1));
+    const matchesAny = narrowed.some((altName) => matchesResolvedName(altName, value, typeCtx, mergedPointer));
     if (!matchesAny) {
-      const declaring: DeclaringContext = { layer: decl.layer, layerRank: decl.layerRank, pointerPath: [...typeDeclaring.pointerPath.slice(0, -1), "accept"] };
-      sites.push(mismatchSite(value, `one of [${narrowed.join(", ")}]`, declaring, decl.span));
+      const declaring: DeclaringContext = { layer: decl.layer, layerRank: decl.layerRank, pointerPath: ["types", decl.name, "accept"] };
+      violations.push(toViolation(ctx.configuration, mergedPointer, mismatchSite(value, `one of [${narrowed.join(", ")}]`, declaring, decl.span)));
     }
   }
-  return sites;
+  return violations;
 }
 
-/** Whether `value` matches `name` resolved from `usageLayerRank`'s scope — boolean only, for existential union/accept membership checks that do not need detailed attribution. */
-function matchesResolvedName(name: string, value: Node, usageLayerRank: number, allDecls: readonly TypeDeclaration[], depth: number): boolean {
-  const resolved = resolveTypeName(name, usageLayerRank, allDecls);
+/** Whether `value` matches `name` resolved from `ctx.usageLayer`'s scope — boolean only, for existential union/accept membership checks that do not need detailed attribution. */
+function matchesResolvedName(name: string, value: Node, ctx: WalkContext, mergedPointer: string): boolean {
+  const resolved = resolveTypeName(name, ctx.usageLayer.rank, ctx.allDecls);
   if (resolved === undefined) {
     return false;
   }
   if (typeof resolved === "string") {
     return matchesBuiltinLeaf(value, resolved);
   }
-  return checkNamedType(resolved, value, undefined, allDecls, depth).length === 0;
+  return checkNamedType(resolved, value, undefined, ctx, mergedPointer).length === 0;
 }
 
-function alternativeMatchesBoolean(alt: Alternative, value: Node, usageLayerRank: number, allDecls: readonly TypeDeclaration[], depth: number): boolean {
+function alternativeMatchesBoolean(alt: Alternative, value: Node, ctx: WalkContext, mergedPointer: string): boolean {
   if (alt.depth === 0) {
-    return matchesResolvedName(alt.name, value, usageLayerRank, allDecls, depth);
+    return matchesResolvedName(alt.name, value, ctx, mergedPointer);
   }
   if (value.type !== "sequence") {
     return false;
   }
   const inner: Alternative = { name: alt.name, depth: alt.depth - 1 };
-  return value.items.every((item) => alternativeMatchesBoolean(inner, item, usageLayerRank, allDecls, depth));
+  return value.items.every((item) => alternativeMatchesBoolean(inner, item, ctx, mergedPointer));
 }
 
 /**
@@ -256,28 +277,32 @@ function alternativeMatchesBoolean(alt: Alternative, value: Node, usageLayerRank
  * precedent forbids — v0.4's own `parseTypeDemand === undefined -> []`
  * skip is the direct ancestor of this rule, generalized to reachability.
  */
-function checkSingleAlternative(alt: Alternative, value: Node, usageLayerRank: number, allDecls: readonly TypeDeclaration[], usageAccept: readonly string[] | undefined, usageDeclaring: DeclaringContext, usageSpan: Node["span"], depth: number): readonly RawSite[] {
+function checkSingleAlternative(alt: Alternative, value: Node, ctx: WalkContext, usageAccept: readonly string[] | undefined, usageDeclaring: DeclaringContext, usageSpan: Node["span"], mergedPointer: string): Violation[] {
   if (alt.depth === 0) {
-    const resolved = resolveTypeName(alt.name, usageLayerRank, allDecls);
+    const resolved = resolveTypeName(alt.name, ctx.usageLayer.rank, ctx.allDecls);
     if (resolved === undefined) {
       return [];
     }
     if (typeof resolved === "string") {
-      return matchesBuiltinLeaf(value, resolved) ? [] : [mismatchSite(value, alt.name, usageDeclaring, usageSpan)];
+      return matchesBuiltinLeaf(value, resolved) ? [] : [toViolation(ctx.configuration, mergedPointer, mismatchSite(value, alt.name, usageDeclaring, usageSpan))];
     }
-    return checkNamedType(resolved, value, usageAccept, allDecls, depth);
+    return checkNamedType(resolved, value, usageAccept, ctx, mergedPointer);
   }
   if (value.type !== "sequence") {
-    return [mismatchSite(value, describeAlternative(alt), usageDeclaring, usageSpan)];
+    return [toViolation(ctx.configuration, mergedPointer, mismatchSite(value, describeAlternative(alt), usageDeclaring, usageSpan))];
   }
   const inner: Alternative = { name: alt.name, depth: alt.depth - 1 };
-  const sites: RawSite[] = [];
+  const violations: Violation[] = [];
+  // v0.7 part 2: the element index used to ride along as a `pointerSuffix`
+  // and be spliced onto the anchor by `toViolation`. It is now folded into
+  // `mergedPointer` one step earlier, which is the identical string
+  // computed at the position that knows the index — and is what lets this
+  // whole path deal in `Violation`s, so `checkNamedType` can hand its work
+  // to `checkDemand`.
   value.items.forEach((item, index) => {
-    for (const site of checkSingleAlternative(inner, item, usageLayerRank, allDecls, usageAccept, usageDeclaring, usageSpan, depth)) {
-      sites.push({ ...site, pointerSuffix: [index, ...site.pointerSuffix] });
-    }
+    extend(violations, checkSingleAlternative(inner, item, ctx, usageAccept, usageDeclaring, usageSpan, `${mergedPointer}${pointerFromPath([index])}`));
   });
-  return sites;
+  return violations;
 }
 
 /**
@@ -290,11 +315,7 @@ function checkSingleAlternative(alt: Alternative, value: Node, usageLayerRank: n
  * no Acceptance Scenario exercises detailed attribution through a union
  * of named types.
  */
-function checkTypeExpressionOnValue(typeNode: Node, value: Node, usageLayerRank: number, allDecls: readonly TypeDeclaration[], usageDeclaring: DeclaringContext, depth: number): readonly RawSite[] {
-  return checkTypeExpressionWithAccept(typeNode, value, usageLayerRank, allDecls, undefined, usageDeclaring, depth);
-}
-
-function checkTypeExpressionWithAccept(typeNode: Node, value: Node, usageLayerRank: number, allDecls: readonly TypeDeclaration[], usageAccept: readonly string[] | undefined, usageDeclaring: DeclaringContext, depth: number): readonly RawSite[] {
+function checkTypeExpressionWithAccept(typeNode: Node, value: Node, ctx: WalkContext, usageAccept: readonly string[] | undefined, usageDeclaring: DeclaringContext, mergedPointer: string): Violation[] {
   if (typeNode.type !== "scalar" || typeNode.kind !== "string") {
     return [];
   }
@@ -317,15 +338,15 @@ function checkTypeExpressionWithAccept(typeNode: Node, value: Node, usageLayerRa
   if (expr.alternatives.length === 1) {
     const alt = expr.alternatives[0];
     if (alt !== undefined) {
-      return checkSingleAlternative(alt, value, usageLayerRank, allDecls, usageAccept, usageDeclaring, typeNode.span, depth);
+      return checkSingleAlternative(alt, value, ctx, usageAccept, usageDeclaring, typeNode.span, mergedPointer);
     }
   }
 
-  const matches = expr.alternatives.some((alt) => alternativeMatchesBoolean(alt, value, usageLayerRank, allDecls, depth));
+  const matches = expr.alternatives.some((alt) => alternativeMatchesBoolean(alt, value, ctx, mergedPointer));
   if (matches) {
     return [];
   }
-  return [mismatchSite(value, describeExpression(expr), usageDeclaring, typeNode.span)];
+  return [toViolation(ctx.configuration, mergedPointer, mismatchSite(value, describeExpression(expr), usageDeclaring, typeNode.span))];
 }
 
 // --- Turning sites into diagnostics -----------------------------------
@@ -371,7 +392,22 @@ interface WalkContext {
   readonly configuration: MergedConfiguration;
   readonly usageLayer: Layer;
   readonly allDecls: readonly TypeDeclaration[];
+  /** Structural levels consumed so far — one per `keys`/`items`/`values` descent. Bounded by `MAX_DEMAND_DEPTH` (v0.5 FR-025). */
   readonly depth: number;
+  /**
+   * v0.7 part 2, `SPEC.md` §7 (amended): named-type resolutions **since
+   * the last structural level was consumed**, bounded by
+   * `MAX_DEMAND_DEPTH`. This is §7's guarded-recursion rule made
+   * operational rather than merely asserted. A type reaching itself
+   * through `keys`/`items`/`values` is *productive*: each traversal
+   * consumes a level of the value, so the reset below means a guarded
+   * recursion can never accumulate hops and checks a document as deep as
+   * the document actually is. A type reaching itself through type
+   * expressions alone consumes nothing, never resets, and stops here —
+   * belt-and-suspenders behind `types.ts`'s own `unresolvable-type-cycle`
+   * refusal, which is the diagnostic an author actually sees.
+   */
+  readonly typeHops: number;
 }
 
 function parentPointerOf(pointer: string): string {
@@ -422,10 +458,7 @@ function checkDemand(raw: RawDemand, value: Node | undefined, demandPointerPath:
     }
     if (keyword === "type") {
       const declaring: DeclaringContext = { ...usageDeclaringBase, pointerPath: [...demandPointerPath, "type"] };
-      const sites = checkTypeExpressionWithAccept(keywordValue, value, ctx.usageLayer.rank, ctx.allDecls, usageAccept, declaring, ctx.depth);
-      for (const site of sites) {
-        violations.push(toViolation(ctx.configuration, mergedPointer, site));
-      }
+      extend(violations, checkTypeExpressionWithAccept(keywordValue, value, ctx, usageAccept, declaring, mergedPointer));
       continue;
     }
     if (SIMPLE_LEAF_KEYWORDS.has(keyword)) {
@@ -436,15 +469,15 @@ function checkDemand(raw: RawDemand, value: Node | undefined, demandPointerPath:
       continue;
     }
     if (keyword === "items") {
-      violations.push(...checkNestedItems(keywordValue, value, demandPointerPath, mergedPointer, ctx));
+      extend(violations, checkNestedItems(keywordValue, value, demandPointerPath, mergedPointer, ctx));
       continue;
     }
     if (keyword === "keys") {
-      violations.push(...checkNestedKeys(keywordValue, value, demandPointerPath, mergedPointer, ctx));
+      extend(violations, checkNestedKeys(keywordValue, value, demandPointerPath, mergedPointer, ctx));
       continue;
     }
     if (keyword === "values") {
-      violations.push(...checkNestedValues(keywordValue, value, demandPointerPath, mergedPointer, ctx));
+      extend(violations, checkNestedValues(keywordValue, value, demandPointerPath, mergedPointer, ctx));
       continue;
     }
     if (keyword === "seal") {
@@ -472,7 +505,7 @@ function checkNestedItems(itemsDeclaration: Node, value: Node, demandPointerPath
   }
   const violations: Violation[] = [];
   value.items.forEach((item, index) => {
-    violations.push(...checkDemand(itemsDeclaration.entries, item, [...demandPointerPath, "items"], `${mergedPointer}${pointerFromPath([index])}`, { ...ctx, depth: ctx.depth + 1 }));
+    extend(violations, checkDemand(itemsDeclaration.entries, item, [...demandPointerPath, "items"], `${mergedPointer}${pointerFromPath([index])}`, { ...ctx, depth: ctx.depth + 1, typeHops: 0 }));
   });
   return violations;
 }
@@ -489,7 +522,7 @@ function checkNestedKeys(keysDeclaration: Node, value: Node, demandPointerPath: 
   for (const [childName, childRaw] of nested) {
     const childPointer = `${mergedPointer}${pointerFromPath([childName])}`;
     const childValue = value.entries.get(childName);
-    violations.push(...checkDemand(childRaw, childValue, [...demandPointerPath, "keys", childName, "demand"], childPointer, { ...ctx, depth: ctx.depth + 1 }));
+    extend(violations, checkDemand(childRaw, childValue, [...demandPointerPath, "keys", childName, "demand"], childPointer, { ...ctx, depth: ctx.depth + 1, typeHops: 0 }));
   }
   return violations;
 }
@@ -535,7 +568,7 @@ function checkNestedValues(valuesDeclaration: Node, value: Node, demandPointerPa
   // iteration order — and therefore diagnostic order — is deterministic
   // without sorting anything here (v0.5 FR-010's own argument).
   for (const [childName, childValue] of value.entries) {
-    violations.push(...checkDemand(entryRaw, childValue, [...demandPointerPath, "values", "demand"], `${mergedPointer}${pointerFromPath([childName])}`, { ...ctx, depth: ctx.depth + 1 }));
+    extend(violations, checkDemand(entryRaw, childValue, [...demandPointerPath, "values", "demand"], `${mergedPointer}${pointerFromPath([childName])}`, { ...ctx, depth: ctx.depth + 1, typeHops: 0 }));
   }
   return violations;
 }
@@ -574,7 +607,7 @@ function violationsForLayer(configuration: MergedConfiguration, layer: Layer, al
   for (const [keyName, raw] of vocabulary) {
     const keyPointer = pointerFromPath([keyName]);
     const value = resolvePointer(configuration.tree, keyPointer);
-    violations.push(...checkDemand(raw, value, ["keys", keyName, "demand"], keyPointer, { configuration, usageLayer: layer, allDecls, depth: 0 }));
+    extend(violations, checkDemand(raw, value, ["keys", keyName, "demand"], keyPointer, { configuration, usageLayer: layer, allDecls, depth: 0, typeHops: 0 }));
   }
   return violations;
 }
@@ -890,7 +923,7 @@ function finalProvideDiagnostics(configuration: MergedConfiguration, keyName: st
 function finalDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   for (const [keyName, finalState] of configuration.finalState) {
-    diagnostics.push(...finalProvideDiagnostics(configuration, keyName, finalState));
+    extend(diagnostics, finalProvideDiagnostics(configuration, keyName, finalState));
   }
   return diagnostics;
 }
@@ -907,17 +940,17 @@ export function checkConfiguration(configuration: MergedConfiguration): CheckOut
 
   const vocabularyDiagnostics: Diagnostic[] = [];
   for (const layer of configuration.layers) {
-    vocabularyDiagnostics.push(...vocabularyProblemsForLayer(layer, knownDeclaredNames));
+    extend(vocabularyDiagnostics, vocabularyProblemsForLayer(layer, knownDeclaredNames));
   }
-  vocabularyDiagnostics.push(...collisionDiagnostics(allDecls));
-  vocabularyDiagnostics.push(...builtinCollisionDiagnostics(allDecls));
-  vocabularyDiagnostics.push(...qualifierCollisionDiagnostics(configuration));
-  vocabularyDiagnostics.push(...cycleDiagnostics(allDecls));
-  vocabularyDiagnostics.push(...typeUsageProblems(configuration, allDecls, knownDeclaredNames));
+  extend(vocabularyDiagnostics, collisionDiagnostics(allDecls));
+  extend(vocabularyDiagnostics, builtinCollisionDiagnostics(allDecls));
+  extend(vocabularyDiagnostics, qualifierCollisionDiagnostics(configuration));
+  extend(vocabularyDiagnostics, cycleDiagnostics(allDecls));
+  extend(vocabularyDiagnostics, typeUsageProblems(configuration, allDecls, knownDeclaredNames));
 
   const violations: Violation[] = [];
   for (const layer of configuration.layers) {
-    violations.push(...violationsForLayer(configuration, layer, allDecls));
+    extend(violations, violationsForLayer(configuration, layer, allDecls));
   }
 
   const diagnostics = [...vocabularyDiagnostics, ...violations.map(renderViolation), ...topLevelSealDiagnostics(configuration), ...finalDiagnostics(configuration)];

@@ -303,16 +303,37 @@ export function resolveTypeName(name: string, usageLayerRank: number, declaratio
 }
 
 /**
- * FR-009: refuse a cycle among type definitions rather than follow it.
- * Walks each declaration's own `demand.type` and `accept` alternatives —
- * the two places a type can name another type — resolved from that
- * declaration's own layer scope (a type's own references resolve in its
- * own declaring context, same as any other usage). Nested `keys`/`items`
- * type references are not walked for cycle detection: no Acceptance
- * Scenario exercises a cycle reachable only through nested structure, and
- * walking arbitrary nesting here would duplicate `check.ts`'s own
- * recursive walk for a case not required to work end-to-end — recorded
- * as a scope decision, not a citation gap.
+ * v0.5 FR-009: refuse a cycle among type definitions rather than follow
+ * it. **v0.7 part 2 (`SPEC.md` §7, amended; §15) makes what this walk
+ * traverses the law rather than a scope decision.**
+ *
+ * It walks each declaration's own `demand.type` and `accept` alternatives
+ * — resolved from that declaration's own layer scope — and deliberately
+ * does **not** descend into `keys`, `items`, or `values`. Those two sets
+ * are exactly §7's two categories:
+ *
+ * - A cycle closed through `type:`/`accept:` alone is **unguarded**. It
+ *   consumes nothing, has no fixpoint any value can reach, and is refused
+ *   here as `unresolvable-type-cycle`.
+ * - A cycle closed through at least one of `keys`/`items`/`values` is
+ *   **guarded**, therefore productive: every traversal consumes a level of
+ *   the document being checked, so it terminates on any finite value. It
+ *   is not a cycle this function has anything to say about, and it is
+ *   accepted — which is why nothing below descends into structure.
+ *
+ * FR-009's subtle case falls out with no special handling: a loop that is
+ * unguarded at one link (`A → B` by alias) and guarded at another
+ * (`B → A` through `keys`) is **accepted**, because the walk from `A`
+ * reaches `B` and then finds nothing to follow — one structural level
+ * anywhere makes the whole loop productive.
+ *
+ * The v0.5 comment that stood here recorded the same traversal as "no
+ * Acceptance Scenario exercises a cycle reachable only through nested
+ * structure". True at the time; from v0.7 part 2 it is the rule, and the
+ * behaviour is unchanged because the rule was already drawn in the right
+ * place. Termination is enforced independently, and belt-and-suspenders,
+ * by `check.ts`'s `WalkContext.typeHops` — this function is the
+ * diagnostic an author sees, not the thing that stops the recursion.
  */
 export function cycleDiagnostics(declarations: readonly TypeDeclaration[]): readonly Diagnostic[] {
   const byName = new Map<string, TypeDeclaration>();

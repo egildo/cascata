@@ -1,0 +1,21 @@
+{
+  "name": "T007 (008): a type reaching itself through keys checks a five-level document and terminates (v0.7 FR-007, spec.md US2 Scenario 1)",
+  "cites": "v0.7 FR-007",
+  "fixtureDir": "recursion/guarded-via-keys",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 7,
+        "column": 18,
+        "pointer": "/tree/child/child/child/child/label",
+        "demand": { "pointer": "/types/node/demand/keys/label/demand/type", "document": "schema.yaml", "line": 11, "column": 19 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

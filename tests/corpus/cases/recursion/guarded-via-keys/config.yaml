@@ -1,0 +1,7 @@
+$schema: ./schema.yaml
+tree:
+  child:
+    child:
+      child:
+        child:
+          label: 5

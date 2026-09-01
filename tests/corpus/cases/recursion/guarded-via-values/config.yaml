@@ -1,0 +1,5 @@
+$schema: ./schema.yaml
+tree:
+  a:
+    b:
+      c: 1

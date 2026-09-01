@@ -1,0 +1,21 @@
+{
+  "name": "T007b (008): a type reaching itself through values recurses to the depth the document nests (v0.7 FR-007)",
+  "cites": "v0.7 FR-007",
+  "fixtureDir": "recursion/guarded-via-values",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 5,
+        "column": 10,
+        "pointer": "/tree/a/b/c",
+        "demand": { "pointer": "/types/node/demand/type", "document": "schema.yaml", "line": 4, "column": 13 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

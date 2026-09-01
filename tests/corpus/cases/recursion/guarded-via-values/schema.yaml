@@ -1,0 +1,11 @@
+types:
+  node:
+    demand:
+      type: mapping
+      values:
+        demand:
+          type: node
+keys:
+  tree:
+    demand:
+      type: node

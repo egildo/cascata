@@ -413,6 +413,20 @@ export function refuseTypeExpressionProblems(demandPointerPath: readonly (string
   return [];
 }
 
+/**
+ * Append every element of `source` to `target`. A spread call
+ * (`target.push(...source)`) throws `RangeError` past roughly 125,000
+ * elements, and a schema-shape pass over a large document can produce
+ * more than that — see `src/validate/check.ts`'s own `extend` for the
+ * measured case and why this is a totality defect rather than a style
+ * question.
+ */
+function extend<T>(target: T[], source: readonly T[]): void {
+  for (const item of source) {
+    target.push(item);
+  }
+}
+
 function depthLimitProblem(node: Node, layerRank: number, pointerPath: readonly (string | number)[]): DemandVocabularyProblem {
   return {
     diagnostic: createDiagnostic({ level: "error",
@@ -445,7 +459,7 @@ export function recursiveVocabularyProblems(raw: RawDemand, layerRank: number, d
     if (depth + 1 > MAX_DEMAND_DEPTH) {
       problems.push(depthLimitProblem(itemsNode, layerRank, nextPath));
     } else {
-      problems.push(...recursiveVocabularyProblems(itemsNode.entries, layerRank, nextPath, depth + 1, knownDeclaredNames));
+      extend(problems, recursiveVocabularyProblems(itemsNode.entries, layerRank, nextPath, depth + 1, knownDeclaredNames));
     }
   }
 
@@ -456,7 +470,7 @@ export function recursiveVocabularyProblems(raw: RawDemand, layerRank: number, d
     } else {
       const nested = readNestedKeysMapping(keysNode);
       for (const [childName, childRaw] of nested) {
-        problems.push(...recursiveVocabularyProblems(childRaw, layerRank, [...demandPointerPath, "keys", childName, "demand"], depth + 1, knownDeclaredNames));
+        extend(problems, recursiveVocabularyProblems(childRaw, layerRank, [...demandPointerPath, "keys", childName, "demand"], depth + 1, knownDeclaredNames));
       }
     }
   }
@@ -468,7 +482,7 @@ export function recursiveVocabularyProblems(raw: RawDemand, layerRank: number, d
     } else {
       const valuesRaw = readKeyDeclarationDemand(valuesNode);
       if (valuesRaw !== undefined) {
-        problems.push(...recursiveVocabularyProblems(valuesRaw, layerRank, [...demandPointerPath, "values", "demand"], depth + 1, knownDeclaredNames));
+        extend(problems, recursiveVocabularyProblems(valuesRaw, layerRank, [...demandPointerPath, "values", "demand"], depth + 1, knownDeclaredNames));
       }
     }
   }
