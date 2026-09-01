@@ -46,6 +46,7 @@
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Host, HostReadResult } from "../resolve/host.js";
 import type { RecordingOutcome, Transport } from "../resolve/transport.js";
 
@@ -184,4 +185,28 @@ export function createNodeTransport(maxBytes: number = 8 * 1024 * 1024): Transpo
       return { kind: "response", response: { status: response.status, headers, body } };
     },
   };
+}
+
+// --- The shipped meta-schema's location (v0.7 part 2) -------------------
+
+/**
+ * Where the meta-schema this package ships sits on disk, as an absolute
+ * path — pass it as `metaValidate`'s `metaSchema`.
+ *
+ * **Path resolution belongs on this side of the seam, and only this side.**
+ * `SPEC.md` §16 forbids the *library* touching storage; the library
+ * proper therefore takes a location string and asks its host for the
+ * bytes, knowing nothing about where a package lives. Computing that
+ * string means knowing this module's own URL, which is knowledge about
+ * storage layout and belongs to the host — the same division as
+ * `canonicalize`: the host says *which thing is at this location*, and
+ * only the library decides what to do about it.
+ *
+ * This function reads nothing. It is a path, not a file, and a caller
+ * with its own storage (a bundler, a browser, a VFS) is expected to pass
+ * its own location instead — which is the point of `metaValidate` taking
+ * one at all rather than defaulting to this.
+ */
+export function nodeMetaSchemaLocation(): string {
+  return fileURLToPath(new URL("../../meta/cascata.meta.yaml", import.meta.url));
 }

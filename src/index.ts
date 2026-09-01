@@ -1188,6 +1188,100 @@ export type LoadResult = { readonly ok: true; readonly configuration: MergedConf
  * `resolve`, `merge`, `validate`, `why`) remain public (FR-034) — this
  * function is the ordinary path, not the only one.
  */
+// --- metaValidate() — v0.7 part 2, the meta-schema bootstrap ------------
+//
+// SPEC.md §2.6 ("publishing a schema = validating it as a config"), §9,
+// §11; specs/008-metaschema-bootstrap FR-016 through FR-019,
+// contracts/meta-schema.md §4.
+
+/** What `metaValidate` needs: a host, and two locations it reads through that host. */
+export interface MetaValidateOptions {
+  /** The seam. Both documents are read through it and no other way (FR-019). */
+  readonly host: Host;
+  /** Location of the document under test — a schema, judged as a config. */
+  readonly subject: string;
+  /** Location of the meta-schema. `cascata/host/node`'s `nodeMetaSchemaLocation()` is where the shipped one lives; a caller with its own storage passes its own location, which is the point of the seam. */
+  readonly metaSchema: string;
+}
+
+/** A verdict, with any `info` lints alongside a successful one — `LoadResult`'s own contract (§10, v0.7 FR-002). */
+export type MetaValidateResult = { readonly ok: true; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] };
+
+/**
+ * Validate a schema document against a meta-schema — the self-hosting
+ * call (§2.6: "publishing a schema = validating it as a config").
+ *
+ * **The meta-schema is obtained through the host seam, never as a bundled
+ * constant** (FR-019). That is not ceremony: it is the one document that
+ * would have been exempt from the article governing every other, and §16
+ * names this bootstrap as `load()`'s reason for existing. A host with no
+ * filesystem serves it exactly as well as one with a disk.
+ *
+ * **Available, not automatic** (research.md D-2). This is deliberately not
+ * wired into `load()`. Running the meta-schema on every resolution would
+ * double the work of every one of them and change the diagnostics of every
+ * schema written in the last six milestones; §2.6 frames self-hosting as a
+ * *publishing* act, and this is that act. Whether it becomes the default
+ * is a v1.0 question, decided with the vocabulary freeze. **A judgment
+ * call, not a citation** — flagged here rather than buried.
+ *
+ * **No reference resolution happens.** The subject's own `$schema` and
+ * `$adopts` are inert data, not links to follow: a meta-schema judges one
+ * document's *shape*, which is all a meta-schema can judge (research.md
+ * W-3 — it cannot express that a `provide` satisfies its own key's
+ * demands, nor any row of §5.2's monotonicity table, nor §7's namespace
+ * resolution; all three stay hand-written checks). Following the subject's
+ * links would also mean judging it against its own ancestors instead of
+ * against the meta-schema, which is a different question entirely.
+ *
+ * The two documents become two layers — the meta-schema as the schema
+ * layer, the subject as the config layer — folded by the real `fold()` and
+ * judged by the real `validate()`. There is no second implementation of
+ * anything (FR-033's own posture, applied here).
+ */
+export async function metaValidate(options: MetaValidateOptions): Promise<MetaValidateResult> {
+  if (options === null || typeof options !== "object" || typeof options.host !== "object" || options.host === null || typeof options.host.read !== "function") {
+    throw new TypeError("metaValidate() requires 'host' (SPEC.md Article VI) — see cascata/host/node's createNodeHost()");
+  }
+  const documents: GraphDocument[] = [];
+  // Entry first, then the schema chain leaf-to-root — `Graph`'s own order
+  // contract, which `deriveLayers` reverses into the root-to-leaf ranks
+  // `validate()` walks. Building it this way rather than assembling
+  // `Layer`s by hand is what keeps this one call site honest: it produces
+  // the same shape `resolve()` produces, and `merge()` does the rest.
+  for (const location of [options.subject, options.metaSchema]) {
+    const read = await options.host.read(location);
+    if (!read.ok) {
+      return {
+        ok: false,
+        diagnostics: [
+          createDiagnostic({
+            level: "error",
+            code: "document-unreachable",
+            message: `Document at '${location}' is not readable: ${read.reason}`,
+            primary: createSourceSpan({ origin: createOrigin(location, location), start: 0, end: 0, line: 1, column: 1, documentLength: 0 }),
+          }),
+        ],
+      };
+    }
+    const parsed = parse(read.bytes, { origin: createOrigin(location, location) });
+    if (!parsed.ok) {
+      return { ok: false, diagnostics: parsed.diagnostics };
+    }
+    documents.push({ identity: createDocumentIdentity(location, read.bytes), tree: parsed.tree, verified: false });
+  }
+  const entry = documents[0];
+  if (entry === undefined) {
+    throw new Error("Internal error: metaValidate read no documents");
+  }
+  const merged = foldConfiguration({ entry, documents }, [], new Map());
+  if (!merged.ok) {
+    return { ok: false, diagnostics: merged.diagnostics };
+  }
+  const validated = validate(merged.configuration);
+  return validated.ok ? { ok: true, diagnostics: validated.diagnostics } : { ok: false, diagnostics: validated.diagnostics };
+}
+
 export async function load(entryPath: string, options: LoadOptions): Promise<LoadResult> {
   const resolved = await resolve(entryPath, options);
   if (!resolved.ok) {

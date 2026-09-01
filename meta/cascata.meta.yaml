@@ -1,0 +1,206 @@
+# The Cascata meta-schema — the document that describes schema documents,
+# written in the language it describes.
+#
+# SPEC.md §2.6 (self-hosting), §9 (the v1 vocabulary), §11 ("the schema
+# language itself is versioned via the meta-schema's own pedigree"), §14
+# item 7. Milestone: specs/008-metaschema-bootstrap, FR-015 through FR-020.
+#
+# It is a DOCUMENT, not a constant. Nothing under `src/` embeds its text:
+# it is read through the `Host` seam like any other document (FR-019), and
+# `cascata/host/node`'s `nodeMetaSchemaLocation()` is only where the
+# shipped copy happens to sit. Self-hosting means the library loads its
+# own meta-schema through its own seam, and a meta-schema exempt from the
+# article governing every other document would not be self-hosting.
+#
+# Meta-validation is AVAILABLE, NOT AUTOMATIC (`metaValidate()`;
+# research.md D-2). Publishing a schema is validating it as a config
+# (§2.6) — a publishing act, not something every `load()` pays for.
+#
+# Two things it cannot say, both recorded rather than hidden:
+#
+#   1. §9.1's leaf type-expression grammar is not regular, so `typeExpr`
+#      below is a deliberate SUPERSET. See its own comment.
+#   2. It checks ONE DOCUMENT'S SHAPE. It cannot state that a `provide`
+#      satisfies its own key's demands, nor any row of §5.2's monotonicity
+#      table, nor that a type name resolves (§7). Those are relations —
+#      between two parts of a document, or between documents — and they
+#      remain hand-written checks. Passing this meta-schema is necessary
+#      for a schema to be well-formed and nowhere near sufficient.
+
+$id: cascata/meta
+$version: 1
+
+# A schema document has no top-level keys beyond those declared below.
+# Unreachable before v0.7: nothing could close a document's top level, and
+# `seal` was a per-key keyword while a document root is not a key (§15).
+seal: closed
+
+types:
+
+  # ---- leaf aliases -------------------------------------------------------
+
+  # §9.1's DSL, e.g. "string | resource[]". The grammar is not regular
+  # (`Primary := "(" Union ")"`), so this `pattern` is a deliberate
+  # SUPERSET, governed by one rule: it must accept every string the grammar
+  # accepts. Over-acceptance is safe — the parser is the authority and
+  # refuses the rest; a false rejection would put two authorities in
+  # contradiction. In practice the only difference is that parenthesis
+  # balance is unchecked.
+  #
+  # Established, not assumed: expressions generated from §9.1's own
+  # productions, with whitespace injected at every legal position, are all
+  # accepted — zero false rejects (tests/unit/metaschema.test.ts).
+  #
+  # CORRECTED against draft-meta-schema.yaml. The draft wrote the qualifier
+  # separator as a bare `/`, with no whitespace allowed around it — and
+  # `src/validate/typeexpr.ts`'s tokenizer skips whitespace EVERYWHERE,
+  # including there, so `core / resource` parses and the draft's pattern
+  # rejected it. That is a **false rejection**, the one thing W-1's
+  # governing rule forbids absolutely: it would put the pattern and the
+  # parser in contradiction, each authoritative and each saying the
+  # opposite. Folding the separator into a single `[\s/]+` boundary class
+  # fixes it, over-accepts a little more (`a b` now matches, which the
+  # parser still refuses — safe, by the same rule), and stays linear:
+  # 0.05 ms on 16k spaces, unchanged from the draft's own figure.
+  #
+  # DO NOT "simplify" this pattern. The obvious whitespace-tolerant form —
+  # several adjacent `\s*` groups — is QUADRATIC, measured at 4x per
+  # doubling of input (16k spaces took 404ms). Whitespace is folded into
+  # the structural character classes here precisely so that exactly one
+  # quantifier consumes each boundary. See research.md W-1.
+  typeExpr:
+    demand:
+      type: string
+      pattern: '^[\s(]*[A-Za-z_][A-Za-z0-9_-]*(?:[\s/]+[A-Za-z_][A-Za-z0-9_-]*)?[\s)]*(?:\[[\s]*\][\s)]*)*(?:\|[\s(]*[A-Za-z_][A-Za-z0-9_-]*(?:[\s/]+[A-Za-z_][A-Za-z0-9_-]*)?[\s)]*(?:\[[\s]*\][\s)]*)*)*$'
+
+  # One type name, as `accept:` lists them. A bare `Name` in §9.1's grammar
+  # — no `[]`, no `|` — so it is strictly narrower than `typeExpr`.
+  # One type name, as `accept:` lists them.
+  #
+  # DELIBERATELY UNPATTERNED, and this is a finding rather than an
+  # omission. `accept:` names are resolved by `resolveTypeName` against the
+  # author-chosen keys of a `types:` section — and a YAML mapping key can
+  # be anything, including a name §9.1's grammar could never spell
+  # (`my type`). Such a type is declarable and usable through `accept:`
+  # while being unusable in any `type:` expression. Constraining `typeName`
+  # by §9.1's `Name` production here would therefore falsely reject a
+  # schema the implementation accepts — the same contradiction `typeExpr`'s
+  # superset rule exists to prevent, arrived at from the other direction.
+  # Reported; not settled here.
+  typeName:
+    demand: { type: string }
+
+  # ---- a demand: §9's closed keyword set ----------------------------------
+  # Recursive, via `items`, `keys`, and `values` — every cycle is guarded by
+  # a structural level, which is exactly what §7's amended rule permits and
+  # is why this milestone needed that amendment before it could write this
+  # entry at all.
+  demand:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        type:      { demand: { type: typeExpr } }
+        required:  { demand: { type: bool } }
+        min:       { demand: { type: "int | float" } }
+        max:       { demand: { type: "int | float" } }
+        minLength: { demand: { type: int, min: 0 } }
+        maxLength: { demand: { type: int, min: 0 } }
+        pattern:   { demand: { type: string } }
+        enum:      { demand: { type: sequence } }
+        accept:    { demand: { type: "typeName[]" } }
+        seal:      { demand: { type: string, enum: [open, closed] } }
+        items:     { demand: { type: demand } }
+        keys:      { demand: { type: mapping, values: { demand: { type: nestedKeyDecl } } } }
+        values:    { demand: { type: nestedKeyDecl } }
+
+  # ---- one entry of a top-level `keys:` or `directives:` section ----------
+  # The FULL per-key vocabulary. Governance keywords live here and only here.
+  keyDecl:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        demand:   { demand: { type: demand } }
+        provide:  { demand: {} }                 # any value at all — see research.md W-2
+        cascade:  { demand: { type: string, enum: [replace, append] } }
+        final:    { demand: { type: bool } }
+        delegate: { demand: { type: string, enum: [allow] } }
+
+  # ---- one entry of a NESTED `keys:` (or of `values:`) --------------------
+  # A strictly smaller vocabulary than keyDecl, and the meta-schema is what
+  # forced the distinction into the open — SPEC.md §9 had claimed a parity
+  # that never existed. Settled (§15): `provide`, `cascade` and `final`
+  # state a LAYER'S AUTHORITY over a key, which means something only where a
+  # schema declares a key of its own; a nested key is part of a value's
+  # SHAPE, and shape is what `demand` is for. `delegate` nests because §8's
+  # grant is per key at any depth — the considered exception, not a loose
+  # end.
+  nestedKeyDecl:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        demand:   { demand: { type: demand } }
+        delegate: { demand: { type: string, enum: [allow] } }
+
+  # ---- one entry of the `types:` section ----------------------------------
+  typeDecl:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        demand: { demand: { type: demand } }
+        accept: { demand: { type: "typeName[]" } }
+
+keys:
+
+  types:
+    demand: { type: mapping, values: { demand: { type: typeDecl } } }
+
+  keys:
+    demand: { type: mapping, values: { demand: { type: keyDecl } } }
+
+  # Names restricted to the six reserved keys by `keys` + `seal: closed`.
+  # `values` alone would have constrained the shapes and not the names,
+  # which is research.md D-3's whole point: `values` says what shape,
+  # `seal` says which keys.
+  directives:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        $id:      { demand: { type: keyDecl } }
+        $version: { demand: { type: keyDecl } }
+        $adopts:  { demand: { type: keyDecl } }
+        $pin:     { demand: { type: keyDecl } }
+        $schema:  { demand: { type: keyDecl } }
+        $extends: { demand: { type: keyDecl } }
+
+  authority:
+    demand:
+      type: mapping
+      seal: closed
+      keys:
+        demandPinnedAdoption: { demand: { type: bool } }
+        finalAgainstForking:  { demand: { type: bool } }
+
+  # A schema's own top-level `seal`, as data, from the meta-schema's side.
+  # Note the name appears twice in this document at two different levels: as
+  # a demand keyword inside `types.demand`, and as a schema key here. Both
+  # are correct, both are legal, and the collision of spellings is confusing
+  # enough to deserve the comment (research.md W-5).
+  seal:
+    demand: { type: string, enum: [open, closed] }
+
+# The reserved directives. §6.1's pin syntax and §9's "single string
+# scalar" rule for `$adopts`/`$schema`, stated declaratively for the first
+# time — until v0.7 they existed only as hand-written checks with no schema
+# able to say them.
+directives:
+  $id:      { demand: { type: string } }
+  $version: { demand: { type: int } }
+  $adopts:  { demand: { type: string } }
+  $pin:     { demand: { type: string, pattern: '^sha256:[0-9a-f]{64}$' } }
+  $schema:  { demand: { type: string } }
+  $extends: { demand: { type: string } }
