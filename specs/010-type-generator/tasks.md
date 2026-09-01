@@ -170,25 +170,25 @@ rows 2–4.
 
 **Independent Test**: the meta-schema's six types; `demand` is a recursive alias TypeScript accepts.
 
-- [ ] T022 [US4] `tests/unit/generate-types.test.ts` **first**: one declaration ⇒ bare alias; two
+- [x] T022 [US4] `tests/unit/generate-types.test.ts` **first**: one declaration ⇒ bare alias; two
       layers ⇒ `core_resource` and `house_resource`, each usage pointing where §7 resolves it; same
       qualifier twice ⇒ `<q>_<rank>_<name>`; `default` ⇒ `$default`; `my-type` ⇒ `$my_type`;
       `a-b` + `a_b` ⇒ `emit-identifier-collision` and no source; `Object` ⇒ bare `Object` and the
       text compiles (F-5); a two-declaration `ref` ⇒ inline body with `@intersects`; recursion
       re-entering a two-declaration set ⇒ the synthesized `_and_` alias; `accept` narrowing `url|path`
       ⇒ `string` + JSDoc; the meta-schema ⇒ six aliases, compiled. Each compiled
-- [ ] T023 [US4] `src/generate/identifiers.ts`: `aliasName(name)` and the `$`-escape; the fixed
+- [x] T023 [US4] `src/generate/identifiers.ts`: `aliasName(name)` and the `$`-escape; the fixed
       reserved list (predefined type names + ECMAScript reserved words); `qualifiedAlias(decl,
       declarationsOfName)`. Never reference a global type anywhere in `emit.ts` — grep the emitter
       for `Readonly<`, `Record<`, `Array<` and assert none in a test
-- [ ] T024 [US4] `src/generate/emit.ts`: declarations in emission order, `ref` spelling per rows
+- [x] T024 [US4] `src/generate/emit.ts`: declarations in emission order, `ref` spelling per rows
       22–23, the synthesized alias for recursive multi-declaration sets, collision detection ⇒
       diagnostic and no source
-- [ ] T025 [US4] **Sabotage** (same protocol): (a) emit `A & B` for a two-declaration `ref` — the
+- [x] T025 [US4] **Sabotage** (same protocol): (a) emit `A & B` for a two-declaration `ref` — the
       case whose bodies have distinct numeric classes must fail to compile (`never`); (b) drop the
       `$` from the escape — the `a-b`/`a_b` collision is no longer detected against a bare `a_b`, and
       that case goes red. Restore; record
-- [ ] T026 [US4] `pnpm typecheck && pnpm test` green; commit `feat(generate): named types — v1.1 US4`
+- [x] T026 [US4] `pnpm typecheck && pnpm test` green; commit `feat(generate): named types — v1.1 US4`
 
 **Checkpoint**: the meta-schema's generated type is six aliases, `demand` self-referencing, compiled.
 
