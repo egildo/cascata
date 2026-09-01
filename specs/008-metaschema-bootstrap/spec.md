@@ -261,6 +261,16 @@ other milestone.
   `SPEC.md`. Flagging governance defects is the implementer's duty; amending governance is not the
   implementer's call.
 
+**Documented examples are executed** (§5.3, §7, W-6)
+
+- **FR-021a**: Every fenced YAML example in `SPEC.md`, `README.md`, and `specs/**/*.md` MUST be
+  parsed by the project's own parser in a test. An example deliberately abbreviated with an ellipsis
+  MUST have the ellipsis substituted with plausible content and its **skeleton** parsed, never
+  skipped — skipping is how a broken block hides. This exists because five of `SPEC.md`'s worked
+  examples were malformed YAML for six milestones (§15, W-6): they were prose that had never been
+  run, and no executed fixture happened to use the form that breaks. An example is worth what
+  executing it costs.
+
 **Invariants**
 
 - **FR-022**: No existing test is weakened.
@@ -291,6 +301,8 @@ other milestone.
 - **SC-007**: All tests from v0.1–v0.7 part 1 remain green, unmodified in substance.
 - **SC-008**: The milestone report enumerates the vocabulary frictions found while writing the
   meta-schema. An empty list is a failed milestone, not a clean one.
+- **SC-009**: Every YAML example in the repository's documentation parses, verified by a test that
+  fails when a deliberately-broken example is introduced.
 
 ## Assumptions
 
