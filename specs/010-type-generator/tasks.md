@@ -145,18 +145,18 @@ contract rows 1–5, 15–21.
 
 **Independent Test**: root `int | float`, house `int` ⇒ `bigint`.
 
-- [ ] T018 [US3] `tests/unit/generate-leaves.test.ts` **first**: rows 1–5, 15–21 and §6's `enum`
+- [x] T018 [US3] `tests/unit/generate-leaves.test.ts` **first**: rows 1–5, 15–21 and §6's `enum`
       cases (`[1, 2.5]` under `int | float` ⇒ `1 | 2.5`; `[1, 1.0]` ⇒ `1`; `[1]` under `int` ⇒ `1n`;
       `2n**64n`; a mapping member ⇒ accumulated type + JSDoc), `final` scalar ⇒ literal, `final`
       mapping ⇒ accumulated type, `string` carries no `| null`/`| undefined`, `"empty"` ⇒ `never`,
       the SC-001 case with the narrower layer **both** earlier and later in the chain. Each emitted
       text compiled
-- [ ] T019 [US3] `src/generate/emit.ts`: leaves — §17's question over `numeric`, built-ins, unions,
+- [x] T019 [US3] `src/generate/emit.ts`: leaves — §17's question over `numeric`, built-ins, unions,
       literal spelling per row 19 (bigint `<digits>n` only where row 3 applies), constants, `never`
-- [ ] T020 [US3] **Sabotage** (same protocol): swap `bigint` for `number` where the class is
+- [x] T020 [US3] **Sabotage** (same protocol): swap `bigint` for `number` where the class is
       `bigint` — the SC-001 case and the `[1]`-under-`int` case go red; the `int | float` cases do not.
       Record — this is also FR-037's sabotage, repeated under the oracle in US6
-- [ ] T021 [US3] `pnpm typecheck && pnpm test` green; commit `feat(generate): leaves — v1.1 US3`
+- [x] T021 [US3] `pnpm typecheck && pnpm test` green; commit `feat(generate): leaves — v1.1 US3`
 
 **Checkpoint**: `generate(accumulate(layers))` on a chain with numeric, enum, and constant demands
 emits text the compiler accepts and the cases pin.
