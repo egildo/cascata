@@ -1,0 +1,5 @@
+$schema: ./schema.yaml
+mode: staging
+keys:
+  mode:
+    seal: closed

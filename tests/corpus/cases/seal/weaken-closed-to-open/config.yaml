@@ -1,0 +1,3 @@
+$schema: ./house.yaml
+network:
+  host: example.com

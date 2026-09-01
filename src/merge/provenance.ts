@@ -101,6 +101,7 @@ import type { DocumentIdentity } from "../model/identity.js";
 import type { SourceSpan } from "../model/span.js";
 import type { Pedigree } from "../graph/pedigree.js";
 import type { DelegationHop } from "../model/reference.js";
+import type { KeySealState } from "./seal.js";
 
 /**
  * One document participating in the fold, with its place in precedence
@@ -189,6 +190,15 @@ export interface MergedConfiguration {
    * and carrying the breadcrumb on every diagnostic built from it.
    */
   readonly delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]>;
+  /**
+   * **v0.7 additive field** — the whole-stack `seal`/`final` resolution
+   * (`src/merge/seal.ts`'s `resolveSeal`, SPEC.md §6.3), keyed by top-level
+   * key name. `src/validate/check.ts` consumes this to refuse an
+   * undeclared child under `seal: closed` and a config setting a `final`+
+   * `provide` key — checks that need the **merged** tree, so they cannot
+   * run inside `resolveSeal` itself (which only ever sees schema trees).
+   */
+  readonly sealState: ReadonlyMap<string, KeySealState>;
 }
 
 // --- Building the record during the fold — User Story 3 (T044–T046) -------

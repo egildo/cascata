@@ -1,0 +1,6 @@
+keys:
+  mode:
+    demand:
+      type: string
+    provide: production
+    final: true

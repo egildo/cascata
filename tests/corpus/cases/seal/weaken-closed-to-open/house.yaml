@@ -1,0 +1,4 @@
+$adopts: ./root.yaml
+keys:
+  network:
+    seal: open

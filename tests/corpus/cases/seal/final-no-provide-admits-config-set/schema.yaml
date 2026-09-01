@@ -1,0 +1,5 @@
+keys:
+  mode:
+    demand:
+      type: string
+    final: true

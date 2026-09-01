@@ -1,0 +1,4 @@
+$adopts: ./root.yaml
+keys:
+  title:
+    final: true

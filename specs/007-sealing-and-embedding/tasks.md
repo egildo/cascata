@@ -98,63 +98,63 @@ strictly narrower demand is refused despite the narrowing.
 
 ### Conformance cases (write first)
 
-- [ ] T014 [P] [US2] Case: `seal: closed` refuses an undeclared child key, positioned at the child
+- [x] T014 [P] [US2] Case: `seal: closed` refuses an undeclared child key, positioned at the child
       (Acceptance Scenario 1, FR-007) — `tests/corpus/cases/seal/closed-refuses-undeclared-child/`
-- [ ] T015 [P] [US2] Case: `seal: open` (default) admits the same undeclared child (Acceptance
+- [x] T015 [P] [US2] Case: `seal: open` (default) admits the same undeclared child (Acceptance
       Scenario 2, FR-008) — `tests/corpus/cases/seal/open-admits-undeclared-child/`
-- [ ] T016 [P] [US2] Case: ancestor `open`, descendant `closed` — legal, takes effect from the
+- [x] T016 [P] [US2] Case: ancestor `open`, descendant `closed` — legal, takes effect from the
       descendant downward (Acceptance Scenario 3, FR-009) — `tests/corpus/cases/seal/tighten-open-to-closed/`
-- [ ] T017 [P] [US2] Case: ancestor `closed`, descendant `open` — refused as `seal-weakened`
+- [x] T017 [P] [US2] Case: ancestor `closed`, descendant `open` — refused as `seal-weakened`
       (Acceptance Scenario 4, FR-009) — `tests/corpus/cases/seal/weaken-closed-to-open/`
-- [ ] T018 [P] [US2] Case: ancestor `final`, descendant restates the **same** key with a strictly
+- [x] T018 [P] [US2] Case: ancestor `final`, descendant restates the **same** key with a strictly
       **narrower** demand — refused (`final-key-redeclared`), the discriminating case FR-010 names
       explicitly (Acceptance Scenario 5) — `tests/corpus/cases/seal/final-refuses-narrowing/`
-- [ ] T019 [P] [US2] Case: `final` + `provide`, config sets the key — refused (`final-key-set`,
+- [x] T019 [P] [US2] Case: `final` + `provide`, config sets the key — refused (`final-key-set`,
       Acceptance Scenario 6, FR-011) — `tests/corpus/cases/seal/final-provide-refuses-config-set/`
-- [ ] T020 [P] [US2] Case: `final` **without** `provide`, config sets the key — accepted (Acceptance
+- [x] T020 [P] [US2] Case: `final` **without** `provide`, config sets the key — accepted (Acceptance
       Scenario 7, FR-012) — `tests/corpus/cases/seal/final-no-provide-admits-config-set/`
-- [ ] T021 [P] [US2] Case: `final` + `provide` + `required: true` — `info` lint `required-vacuous`
+- [x] T021 [P] [US2] Case: `final` + `provide` + `required: true` — `info` lint `required-vacuous`
       (Acceptance Scenario 8, FR-013, §5.5 verbatim) — `tests/corpus/cases/seal/final-provide-required-vacuous/`
-- [ ] T022 [P] [US2] Case: `seal`/`final` declared by a **config** — no effect (Acceptance Scenario 9,
+- [x] T022 [P] [US2] Case: `seal`/`final` declared by a **config** — no effect (Acceptance Scenario 9,
       FR-014) — `tests/corpus/cases/seal/config-seal-final-ignored/`
-- [ ] T023 [P] [US2] Case: `seal: closed` on a key whose demand is not a mapping — accepted, inert
+- [x] T023 [P] [US2] Case: `seal: closed` on a key whose demand is not a mapping — accepted, inert
       (Edge Cases) — `tests/corpus/cases/seal/closed-on-non-mapping/`
-- [ ] T024 [P] [US2] Case: `final` on a key an ancestor already sealed `final` — refused
+- [x] T024 [P] [US2] Case: `final` on a key an ancestor already sealed `final` — refused
       (`final-key-redeclared`, restating v0.7's own reading of the Edge Case: redundant is still a
       declaration) — `tests/corpus/cases/seal/final-on-already-final/`
-- [ ] T025 [P] [US2] Case: `final` declared in the entry schema (no descendants) — legal, vacuous
+- [x] T025 [P] [US2] Case: `final` declared in the entry schema (no descendants) — legal, vacuous
       (Edge Cases) — `tests/corpus/cases/seal/final-in-leaf-schema/`
-- [ ] T026 [P] [US2] Property test: `seal: open → closed` is a legal monotone tightening; `closed →
+- [x] T026 [P] [US2] Property test: `seal: open → closed` is a legal monotone tightening; `closed →
       open` never is — add to `tests/unit/monotonicity.test.ts`'s table
-- [ ] T027 [P] [US2] Property test: `final` refuses **every** redeclaration shape (`demand`,
+- [x] T027 [P] [US2] Property test: `final` refuses **every** redeclaration shape (`demand`,
       `provide`, `cascade`, `seal`, `final`), not only widenings — add to
       `tests/unit/monotonicity.test.ts`'s table, generated across all five shapes
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] `src/diagnostics/codes.ts`: add `unknown-seal-value`, `seal-violation`,
+- [x] T028 [US2] `src/diagnostics/codes.ts`: add `unknown-seal-value`, `seal-violation`,
       `seal-weakened`, `final-key-redeclared`, `final-key-set`, `required-vacuous` to a new
       `SEALING_CODES` array
-- [ ] T029 [US2] `src/merge/strategy.ts`: `readKeysVocabulary`/`KeyVocabulary` gain `seal`/`final`
+- [x] T029 [US2] `src/merge/strategy.ts`: `readKeysVocabulary`/`KeyVocabulary` gain `seal`/`final`
       raw nodes (siblings to `provide`/`cascade`, top-level keys only — research.md D4's scope
       decision)
-- [ ] T030 [US2] `src/merge/seal.ts` (new): `resolveSeal(layers): { readonly state: ReadonlyMap<string, KeySealState>; readonly diagnostics: Diagnostic[] }` — mirrors `resolveStrategies`'s shape: `unknown-seal-value`, tightening `open→closed`, refusing `closed→open` as `seal-weakened`, and refusing **any** redeclaration of a `final` key as `final-key-redeclared` once set
-- [ ] T031 [US2] `src/merge/fold.ts` / `src/merge/fold.ts`'s `foldConfiguration`: call `resolveSeal`
+- [x] T030 [US2] `src/merge/seal.ts` (new): `resolveSeal(layers): { readonly state: ReadonlyMap<string, KeySealState>; readonly diagnostics: Diagnostic[] }` — mirrors `resolveStrategies`'s shape: `unknown-seal-value`, tightening `open→closed`, refusing `closed→open` as `seal-weakened`, and refusing **any** redeclaration of a `final` key as `final-key-redeclared` once set
+- [x] T031 [US2] `src/merge/fold.ts` / `src/merge/fold.ts`'s `foldConfiguration`: call `resolveSeal`
       alongside `resolveStrategies`, concatenate diagnostics (FR-028's v0.3 precedent, same pattern);
       stash the resolved seal state onto `MergedConfiguration` (a new field, e.g. `sealState`) for
       `src/validate/check.ts` to consume
-- [ ] T032 [US2] `src/validate/check.ts`: extend the recursive `keys`/`items` walk with a
+- [x] T032 [US2] `src/validate/check.ts`: extend the recursive `keys`/`items` walk with a
       `seal: closed` check — for a key whose resolved seal is `closed` and whose accumulated
       `demand.keys` vocabulary is non-empty, refuse every present-but-undeclared child
       (`seal-violation`, positioned at the child)
-- [ ] T033 [US2] `src/validate/check.ts`: `final`+`provide` check — if the resolved seal state's
+- [x] T033 [US2] `src/validate/check.ts`: `final`+`provide` check — if the resolved seal state's
       `final.hasProvide` is true and the **config layer's own span** contributes the value at that
       key's pointer (not the schema's `provide` span), refuse `final-key-set`; if the config did
       **not** override it and `required: true` is also declared, emit the `required-vacuous` `info`
       lint instead
-- [ ] T034 [US2] Sabotage: break `seal-weakened`'s refusal (let `closed→open` silently tighten
+- [x] T034 [US2] Sabotage: break `seal-weakened`'s refusal (let `closed→open` silently tighten
       instead) — confirm T017 fails; restore. Record in the milestone report.
-- [ ] T035 [US2] Sabotage: break `final-key-redeclared` to only fire on widenings — confirm T018
+- [x] T035 [US2] Sabotage: break `final-key-redeclared` to only fire on widenings — confirm T018
       fails (this is FR-010's own named discriminating case; if a pre-existing test already caught
       it, say so and explain why T018 still adds value or does not). Restore. Record in the report.
 

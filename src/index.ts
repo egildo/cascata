@@ -1075,7 +1075,9 @@ export const why = whyImpl;
 // additive field) already carries what this stage needs to read each
 // schema layer's own tree.
 
-export type ValidateResult = { readonly ok: true; readonly certified: MergedConfiguration } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+export type ValidateResult =
+  | { readonly ok: true; readonly certified: MergedConfiguration; readonly diagnostics: readonly Diagnostic[] }
+  | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /**
  * Certify `configuration` against every layer's `demand`, or refuse with
@@ -1083,11 +1085,15 @@ export type ValidateResult = { readonly ok: true; readonly certified: MergedConf
  * behavioral contract). Never mutates `configuration` (FR-034); never
  * performs I/O or reference resolution (FR-035) — every document it needs
  * is already on `configuration.layers`.
+ *
+ * **v0.7 FR-002**: `ok: true`'s own `diagnostics` carries whatever `info`
+ * lints were found (e.g. §5.5's `required-vacuous`) — possibly empty. A
+ * successful certification is never made to discard its own lints.
  */
 export function validate(configuration: MergedConfiguration): ValidateResult {
   const outcome = checkConfiguration(configuration);
   if (!outcome.ok) {
     return { ok: false, diagnostics: outcome.diagnostics };
   }
-  return { ok: true, certified: configuration };
+  return { ok: true, certified: configuration, diagnostics: outcome.diagnostics };
 }

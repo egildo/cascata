@@ -1,0 +1,9 @@
+keys:
+  network:
+    demand:
+      type: mapping
+      keys:
+        host:
+          demand:
+            type: string
+    seal: closed

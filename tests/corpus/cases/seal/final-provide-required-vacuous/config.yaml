@@ -1,0 +1,2 @@
+$schema: ./schema.yaml
+title: a config that never mentions 'mode' at all

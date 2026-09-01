@@ -1,0 +1,6 @@
+$adopts: ./root.yaml
+keys:
+  title:
+    demand:
+      type: string
+      minLength: 3
