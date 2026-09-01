@@ -1,0 +1,20 @@
+{
+  "name": "T053 (v0.7 part 2): a top-level `keys.<name>` declaration carrying a member outside SPEC.md §9's closed per-key vocabulary (demand, provide, cascade, final, delegate) is refused at its own position — closing the one closed vocabulary in the language that had no `unknown-...` refusal behind it (Constitution Principle VI). `seal:` is the concrete case that motivated it: the spelling moved into `demand` earlier in v0.7 and was, until now, silently accepted here.",
+  "cites": "v0.7 FR-018",
+  "fixtureDir": "validate-vocabulary/unknown-key-vocabulary-keyword",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-key-vocabulary-keyword",
+        "document": "schema.yaml",
+        "line": 5,
+        "column": 11,
+        "demand": { "pointer": "/keys/name/seal", "document": "schema.yaml", "line": 5, "column": 11 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

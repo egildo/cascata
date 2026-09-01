@@ -1,5 +1,5 @@
 {
-  "name": "T017a: demand, seal, final, and delegate on a key have no effect — the key still merges via provide alone",
+  "name": "T017a: demand, final, and delegate on a key have no effect on the fold — the key still merges via provide alone. (A per-key 'seal:' used to sit alongside these; that was the pre-v0.7 spelling, from before 'seal' moved into 'demand' -- SPEC.md Sec9/Sec15 -- and it is now refused by validate()'s per-key vocabulary closure, so it no longer belongs in a merge()-only fixture about keywords merge ignores. Removed; see validate-vocabulary/unknown-key-vocabulary-keyword for that refusal's own coverage.)",
   "cites": "v0.3 FR-002",
   "fixtureDir": "merge-fold/inert-vocabulary/vocabulary-ignored",
   "entry": "config.yaml",

@@ -679,6 +679,13 @@ may also carry a **top-level `seal`**, governing the config's own top level.
 all, and a `final` key carrying `provide` is a constant the config cannot set either. `authority:` is
 a fourth top-level section holding `demandPinnedAdoption` and `finalAgainstForking`.
 
+The **per-key vocabulary is closed**, exactly like `demand`'s own and a `types:` entry's own: a
+top-level `keys.<name>` (or `directives.<name>`, FR-012) takes `demand`, `provide`, `cascade`,
+`final`, `delegate` and nothing else; a nested `keys:` child takes `demand`/`delegate` only. A member
+outside the applicable set is `unknown-key-vocabulary-keyword` — closed later than the other two
+(v0.7 part 2), found by the meta-schema bootstrap holding hand-written code to the same closure §9
+already states and Constitution Principle VI already requires.
+
 ### The host seam and `load()`
 
 `resolve()` and `load()` **require** a `host` (`Host`: `read`, `canonicalize`, `cacheRead`,
@@ -789,6 +796,7 @@ Extends every catalogue above, unchanged.
 | `unknown-authority-member` | An `authority:` member outside `demandPinnedAdoption`/`finalAgainstForking` |
 | `adoption-not-pinned` | An unpinned adoption in a pedigree whose root demanded `demandPinnedAdoption` (§6.3, §11) |
 | `unknown-directive-key` | A `directives:` entry naming something outside the six reserved keys (§9, v0.7 part 2) |
+| `unknown-key-vocabulary-keyword` | A key declaration carrying a member outside its own closed per-key vocabulary — the full five (`demand`, `provide`, `cascade`, `final`, `delegate`) at a top-level `keys.<name>`/`directives.<name>`, or `demand`/`delegate` only at a nested `keys:` child (§9, v0.7 part 2) |
 
 
 ## Scripts

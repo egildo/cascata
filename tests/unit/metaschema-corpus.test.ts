@@ -112,12 +112,6 @@ const REFUSED: readonly { readonly fixture: string; readonly pipeline: "ACCEPT" 
     why: "DIVERGENCE. `keys: not-a-mapping-value`. Every section reader in this codebase treats a non-mapping section as 'nothing to read, never an error' — a posture documented since v0.3. The meta-schema says a `keys:` section is a mapping and refuses. The meta-schema is right and the posture is a hole; changing it would be a governance decision, not an implementer's.",
   },
   {
-    fixture: "merge-fold/inert-vocabulary/vocabulary-ignored/schema.yaml",
-    pipeline: "ACCEPT",
-    metaCodes: ["seal-violation"],
-    why: "DIVERGENCE. The fixture carries a **per-key** `seal: closed` — the pre-v0.7 spelling, from before `seal` moved into the `demand` vocabulary (§9/§15, v0.7 part 1). Nothing in the implementation closes a top-level key declaration's vocabulary, so the stale keyword is silently inert. The meta-schema's `keyDecl` is `seal: closed` over {demand, provide, cascade, final, delegate} and is the first thing in six milestones to notice.",
-  },
-  {
     fixture: "merge-policy/cross-category/schema.yaml",
     pipeline: "REFUSE",
     metaCodes: ["enum-violated"],
@@ -127,7 +121,7 @@ const REFUSED: readonly { readonly fixture: string; readonly pipeline: "ACCEPT" 
     fixture: "merge-policy/reserved/schema.yaml",
     pipeline: "REFUSE",
     metaCodes: ["enum-violated"],
-    why: "Verdicts agree, and this is the sharpest code divergence of the fourteen. Hand-written: `unimplemented-cascade-strategy` — `merge-by-key` is *reserved by §5.3*, so an author writing it is early, not wrong, and the code says so. The meta-schema flattens that to `enum-violated`, losing the distinction v0.3 built two codes to preserve.",
+    why: "Verdicts agree, and this is the sharpest code divergence in the table. Hand-written: `unimplemented-cascade-strategy` — `merge-by-key` is *reserved by §5.3*, so an author writing it is early, not wrong, and the code says so. The meta-schema flattens that to `enum-violated`, losing the distinction v0.3 built two codes to preserve.",
   },
   {
     fixture: "merge-policy/unknown/bad-string/schema.yaml",
@@ -160,22 +154,28 @@ const REFUSED: readonly { readonly fixture: string; readonly pipeline: "ACCEPT" 
     why: "Verdicts agree. Hand-written: `unknown-demand-keyword` + `malformed-demand-value` + `unknown-type-name`. The meta-schema catches the first two shapes and cannot see the third at all — `unknown-type-name` is name *resolution*, which is relational and outside what a meta-schema can express (research.md W-3).",
   },
   {
-    fixture: "validate-vocabulary/inert-vocabulary/schema.yaml",
-    pipeline: "ACCEPT",
-    metaCodes: ["seal-violation"],
-    why: "DIVERGENCE, the twin of merge-fold/inert-vocabulary: a stale per-key `seal: closed`, inert because no hand-written check closes a key declaration's vocabulary.",
-  },
-  {
     fixture: "validate-vocabulary/malformed-value/schema.yaml",
     pipeline: "REFUSE",
     metaCodes: ["type-mismatch"],
     why: "Verdicts agree. Hand-written: `malformed-demand-value`, three of them. The meta-schema: three `type-mismatch`es, at the same three positions.",
   },
   {
+    fixture: "validate-vocabulary/unknown-key-vocabulary-keyword/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["seal-violation"],
+    why: "Verdicts agree — this is the hole `merge-fold/inert-vocabulary/vocabulary-ignored` and `validate-vocabulary/inert-vocabulary` used to expose, now closed. Hand-written: `unknown-key-vocabulary-keyword` (v0.7 part 2's own — src/validate/vocabulary.ts's `TOP_LEVEL_KEY_DECLARATION_KEYWORDS`), which names the closed per-key vocabulary. The meta-schema: `seal-violation` from `keyDecl`'s own `seal: closed`.",
+  },
+  {
     fixture: "validate-vocabulary/unknown-keyword/schema.yaml",
     pipeline: "REFUSE",
     metaCodes: ["seal-violation"],
     why: "Verdicts agree. Hand-written: `unknown-demand-keyword`. The meta-schema: `seal-violation` from `demand`'s own `seal: closed` — the same closed vocabulary, said twice in two languages, which is what self-hosting looks like when it works.",
+  },
+  {
+    fixture: "validate-vocabulary/unknown-nested-key-vocabulary-keyword/schema.yaml",
+    pipeline: "REFUSE",
+    metaCodes: ["seal-violation"],
+    why: "Verdicts agree, the nested twin of validate-vocabulary/unknown-key-vocabulary-keyword. Hand-written: `unknown-key-vocabulary-keyword`, fired against the smaller `{demand, delegate}` nested vocabulary this time. The meta-schema: `seal-violation` from `nestedKeyDecl`'s own `seal: closed`.",
   },
   {
     fixture: "values/values-key-declaration-refused/schema.yaml",
@@ -245,18 +245,27 @@ describe("v0.7 part 2 FR-018 — the verdicts agree; the codes are where the han
     expect(disagreements).toEqual([]);
   });
 
-  it("exactly four divergences, and every one is the meta-schema being STRICTER than the pipeline", () => {
+  it("exactly two divergences, and each is the meta-schema being STRICTER than the pipeline", () => {
     const divergences = REFUSED.filter((row) => row.pipeline === "ACCEPT");
-    expect(divergences.map((row) => row.fixture)).toEqual([
-      "merge-fold/inert-vocabulary/keys-not-a-mapping/schema.yaml",
-      "merge-fold/inert-vocabulary/vocabulary-ignored/schema.yaml",
-      "validate-types/non-mapping-section/schema.yaml",
-      "validate-vocabulary/inert-vocabulary/schema.yaml",
-    ]);
-    // Two holes, two fixtures each: a non-mapping top-level section is read
-    // as "nothing", and a top-level key declaration's vocabulary is not
-    // closed. Both are the implementation being laxer than §9, not the
-    // meta-schema being wrong — see the milestone report.
+    expect(divergences.map((row) => row.fixture)).toEqual(["merge-fold/inert-vocabulary/keys-not-a-mapping/schema.yaml", "validate-types/non-mapping-section/schema.yaml"]);
+    // One hole, two fixtures (a top-level `keys:`/`types:` section that is
+    // not a mapping is read as "nothing", never an error, throughout this
+    // codebase) — the implementation being laxer than §9, not the
+    // meta-schema being wrong.
+    //
+    // A second hole used to live here too: a top-level key declaration's
+    // vocabulary was not closed, which `merge-fold/inert-vocabulary/
+    // vocabulary-ignored/schema.yaml` and `validate-vocabulary/
+    // inert-vocabulary/schema.yaml` each exposed via a stale per-key
+    // `seal:` (the pre-v0.7 spelling). v0.7 part 2 closed it —
+    // `unknown-key-vocabulary-keyword`, `src/validate/vocabulary.ts` — so
+    // the two fixtures were corrected to drop the stale keyword (they are
+    // about vocabulary the *pipeline ignores*, not vocabulary it refuses)
+    // and dropped from this table: both now pass the meta-schema and the
+    // pipeline in agreement, no divergence left to record. Their own
+    // refusal has its own dedicated coverage instead — see
+    // `validate-vocabulary/unknown-key-vocabulary-keyword` and
+    // `validate-vocabulary/unknown-nested-key-vocabulary-keyword`.
     for (const row of divergences) {
       expect(row.why.startsWith("DIVERGENCE")).toBe(true);
     }

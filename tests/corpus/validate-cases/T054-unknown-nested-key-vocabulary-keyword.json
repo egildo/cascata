@@ -1,0 +1,20 @@
+{
+  "name": "T054 (v0.7 part 2): a NESTED `keys:` child declaration carries only `demand`/`delegate` (SPEC.md §15's 'nested vs. top-level key declarations') — `provide`, legal at a top-level `keys.<name>`, is refused at a nested position, which is exactly what tells the two closed vocabularies apart rather than sharing one.",
+  "cites": "v0.7 FR-018",
+  "fixtureDir": "validate-vocabulary/unknown-nested-key-vocabulary-keyword",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unknown-key-vocabulary-keyword",
+        "document": "schema.yaml",
+        "line": 9,
+        "column": 20,
+        "demand": { "pointer": "/keys/parent/demand/keys/child/provide", "document": "schema.yaml", "line": 9, "column": 20 },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

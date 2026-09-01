@@ -2,5 +2,4 @@ keys:
   name:
     demand:
       type: string
-    seal: closed
     final: true

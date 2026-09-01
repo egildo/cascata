@@ -64,6 +64,18 @@ export const MERGE_POLICY_CODES = ["unknown-cascade-strategy", "unimplemented-ca
  * `unimplemented-cascade-strategy` vs. `unknown-cascade-strategy` in v0.3:
  * `accept`, `format`, and `types:` are named by §7/§9 and arrive in v0.5,
  * so an author writing them is early, not wrong.
+ *
+ * **`unknown-key-vocabulary-keyword` joins this list in v0.7 part 2**
+ * (`SPEC.md` §9, Constitution Principle VI). It polices a **key
+ * declaration** itself — `keys.<name>` (the full `{demand, provide,
+ * cascade, final, delegate}` five, shared by `directives.<name>` per
+ * FR-012) or a nested `keys:` child (`{demand, delegate}` only) — where
+ * `unknown-demand-keyword` polices the `demand:` mapping *inside* one.
+ * Distinct from both `unknown-demand-keyword` and
+ * `unknown-type-entry-keyword` for the same reason those two are
+ * distinct from each other: three closed vocabularies, three codes, each
+ * naming which one was violated (`src/validate/vocabulary.ts`'s own
+ * `TOP_LEVEL_KEY_DECLARATION_KEYWORDS` doc has the finding this closes).
  */
 export const VALIDATE_VOCABULARY_CODES = [
   "unknown-demand-keyword",
@@ -72,6 +84,7 @@ export const VALIDATE_VOCABULARY_CODES = [
   "malformed-demand-value",
   "malformed-type-expression",
   "unknown-type-name",
+  "unknown-key-vocabulary-keyword",
 ] as const;
 
 /**

@@ -97,6 +97,39 @@ const UNIMPLEMENTED_DEMAND_KEYWORDS: ReadonlySet<string> = new Set<string>([]);
 export const MAX_DEMAND_DEPTH = 64;
 
 /**
+ * §9's **per-key vocabulary** — a second closed list, distinct from
+ * `DEMAND_KEYWORDS` above: this one governs a *key declaration* itself
+ * (`keys.<name>: { demand, provide, cascade, final, delegate }`), not
+ * the `demand:` mapping inside it. A **top-level** declaration (a
+ * schema's own `keys.<name>`, or a `directives.<name>` entry, which
+ * FR-012 gives the identical vocabulary) carries the full five; a
+ * **nested** one (a `keys:` demand keyword's own children, at any depth)
+ * carries only `demand`/`delegate` — §15's "Nested vs. top-level key
+ * declarations" settled the split, on the ground that `provide`,
+ * `cascade`, and `final` state a layer's *authority over a key*, which
+ * means something only where a schema declares a key of its own.
+ *
+ * **Added in v0.7 part 2, closing a hole nothing had noticed in six
+ * milestones**: §9 states this list as closed, and Principle VI requires
+ * closure, but until now nothing refused a member outside it — the one
+ * closed vocabulary in the language with no `unknown-…` refusal behind
+ * it, while `DEMAND_KEYWORDS` (`unknown-demand-keyword`) and a
+ * `types.<name>` entry's own vocabulary (`unknown-type-entry-keyword`,
+ * `types.ts`) both already have one. Found by the meta-schema bootstrap:
+ * two corpus fixtures had carried a per-key `seal:` — the spelling that
+ * moved into `demand` earlier in v0.7 (this file's own `DEMAND_KEYWORDS`
+ * doc) — and kept passing, silently, for a reason neither was written
+ * for.
+ */
+export const TOP_LEVEL_KEY_DECLARATION_KEYWORDS = ["demand", "provide", "cascade", "final", "delegate"] as const;
+
+/** The strictly smaller vocabulary a *nested* key declaration carries (§15, above). */
+export const NESTED_KEY_DECLARATION_KEYWORDS = ["demand", "delegate"] as const;
+
+const TOP_LEVEL_KEY_DECLARATION_KEYWORD_SET: ReadonlySet<string> = new Set(TOP_LEVEL_KEY_DECLARATION_KEYWORDS);
+const NESTED_KEY_DECLARATION_KEYWORD_SET: ReadonlySet<string> = new Set(NESTED_KEY_DECLARATION_KEYWORDS);
+
+/**
  * The unqualified local name inside a possibly-qualified `type:`
  * alternative (`core/resource` -> `resource`; `resource` -> `resource`
  * unchanged) — `TypeDeclaration.name` and `knownDeclaredNames`
@@ -248,6 +281,68 @@ export function refuseUnknownOrUnimplementedKeywords(demandPointerPath: readonly
         }),
       });
     }
+  }
+  return problems;
+}
+
+/**
+ * Refuse every member of one **key declaration** mapping (a top-level
+ * `keys.<name>`/`directives.<name>` entry, or a nested `keys:` demand's
+ * own child) that falls outside `allowed` — `TOP_LEVEL_KEY_DECLARATION_KEYWORDS`
+ * or `NESTED_KEY_DECLARATION_KEYWORDS` above — mirroring
+ * `refuseUnknownOrUnimplementedKeywords` and `types.ts`'s own
+ * `TYPE_ENTRY_KEYWORDS` check in shape, message style, and position: one
+ * diagnostic per stray member, at that member's own value span, naming
+ * the closed list it was measured against.
+ *
+ * `declarationNode` that is not itself a mapping contributes nothing —
+ * the same "not a mapping -> nothing" posture every section reader in
+ * this file already uses; a non-mapping declaration has no members to
+ * examine, and is either legal (an empty key with no vocabulary at all)
+ * or some other check's problem to raise.
+ */
+function refuseUnknownKeyDeclarationMembers(declarationNode: Node, layerRank: number, declarationPointerPath: readonly (string | number)[], allowed: ReadonlySet<string>, closedListLabel: string, closedListNames: readonly string[]): DemandVocabularyProblem[] {
+  const problems: DemandVocabularyProblem[] = [];
+  if (declarationNode.type !== "mapping") {
+    return problems;
+  }
+  for (const [member, valueNode] of declarationNode.entries) {
+    if (!allowed.has(member)) {
+      problems.push({
+        diagnostic: createDiagnostic({ level: "error",
+          code: "unknown-key-vocabulary-keyword",
+          message: `'${describePointer(declarationPointerPath)}.${member}' is not one of SPEC.md §9's closed ${closedListLabel} keywords (${closedListNames.join(", ")})`,
+          primary: valueNode.span,
+          demand: { pointer: pointerFromPath([...declarationPointerPath, member]), span: valueNode.span },
+          pedigreePosition: layerRank,
+        }),
+      });
+    }
+  }
+  return problems;
+}
+
+/**
+ * Every closed-vocabulary problem in a schema layer's own **top-level**
+ * `keys:` section — one declaration per named key, checked against
+ * `TOP_LEVEL_KEY_DECLARATION_KEYWORDS`. A sibling walk to
+ * `readDemandVocabulary`'s own top-level `keys:` read, but this one
+ * inspects the *declaration* (`{demand, provide, cascade, final,
+ * delegate}`) rather than extracting its `demand` child — the two reads
+ * are independent because `readDemandVocabulary` already discards every
+ * non-`demand` member before this problem could be seen there.
+ */
+export function topLevelKeyDeclarationVocabularyProblems(schemaTree: Node, layerRank: number): DemandVocabularyProblem[] {
+  const problems: DemandVocabularyProblem[] = [];
+  if (schemaTree.type !== "mapping") {
+    return problems;
+  }
+  const keysNode = schemaTree.entries.get("keys");
+  if (keysNode === undefined || keysNode.type !== "mapping") {
+    return problems;
+  }
+  for (const [childName, declarationNode] of keysNode.entries) {
+    extend(problems, refuseUnknownKeyDeclarationMembers(declarationNode, layerRank, ["keys", childName], TOP_LEVEL_KEY_DECLARATION_KEYWORD_SET, "per-key", TOP_LEVEL_KEY_DECLARATION_KEYWORDS));
   }
   return problems;
 }
@@ -457,6 +552,16 @@ export function recursiveVocabularyProblems(raw: RawDemand, layerRank: number, d
     if (depth + 1 > MAX_DEMAND_DEPTH) {
       problems.push(depthLimitProblem(keysNode, layerRank, [...demandPointerPath, "keys"]));
     } else {
+      // Each child of a nested `keys:` is itself a key declaration
+      // (§15's "Nested vs. top-level key declarations") — closed to
+      // `NESTED_KEY_DECLARATION_KEYWORDS`, not the top-level five. Checked
+      // here, alongside `readNestedKeysMapping`'s own `demand` extraction,
+      // rather than folded into that function: that function is a pure
+      // read reused by `check.ts`'s value-checking pass, which has no use
+      // for a closed-vocabulary refusal.
+      for (const [childName, declarationNode] of keysNode.entries) {
+        extend(problems, refuseUnknownKeyDeclarationMembers(declarationNode, layerRank, [...demandPointerPath, "keys", childName], NESTED_KEY_DECLARATION_KEYWORD_SET, "nested-key", NESTED_KEY_DECLARATION_KEYWORDS));
+      }
       const nested = readNestedKeysMapping(keysNode);
       for (const [childName, childRaw] of nested) {
         extend(problems, recursiveVocabularyProblems(childRaw, layerRank, [...demandPointerPath, "keys", childName, "demand"], depth + 1, knownDeclaredNames));
@@ -481,15 +586,21 @@ export function recursiveVocabularyProblems(raw: RawDemand, layerRank: number, d
  * Every closed-vocabulary problem in one schema layer's own top-level
  * `keys.<name>.demand` declarations, recursively (v0.5 FR-017's
  * collect-all discipline applied across the whole layer, at every
- * nesting depth). `layer.role !== "schema"` contributes nothing (FR-003).
- * The `types:` section itself is `src/validate/types.ts`'s job, not this
- * function's — it is validated once per pedigree there, not per key here.
+ * nesting depth), plus every top-level `keys.<name>` **declaration's own**
+ * closed-vocabulary problem (v0.7 part 2 — `topLevelKeyDeclarationVocabularyProblems`,
+ * this file's own `TOP_LEVEL_KEY_DECLARATION_KEYWORDS` doc). `layer.role
+ * !== "schema"` contributes nothing (FR-003). The `types:` section itself
+ * is `src/validate/types.ts`'s job, not this function's — it is validated
+ * once per pedigree there, not per key here.
  */
 export function vocabularyProblemsForLayer(layer: Layer, knownDeclaredNames: ReadonlySet<string>): Diagnostic[] {
   if (layer.role !== "schema") {
     return [];
   }
   const problems: Diagnostic[] = [];
+  for (const problem of topLevelKeyDeclarationVocabularyProblems(layer.tree, layer.rank)) {
+    problems.push(problem.diagnostic);
+  }
   const vocabulary = readDemandVocabulary(layer.tree);
   for (const [keyName, raw] of vocabulary) {
     for (const problem of recursiveVocabularyProblems(raw, layer.rank, ["keys", keyName, "demand"], 0, knownDeclaredNames)) {

@@ -2,7 +2,6 @@ keys:
   network:
     demand:
       type: mapping
-    seal: closed
     final: true
     delegate: allow
     provide:

@@ -1,0 +1,9 @@
+keys:
+  parent:
+    demand:
+      type: mapping
+      keys:
+        child:
+          demand:
+            type: string
+          provide: fallback
