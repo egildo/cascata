@@ -136,22 +136,22 @@ array.
 **Independent Test**: one schema, two configs differing only in `30` vs `30.0` under `int | float`;
 the same JS type.
 
-- [ ] T026 [US4] `tests/corpus/cases/numeric/` + `tests/unit/numeric-projection.test.ts` **first**,
+- [x] T026 [US4] `tests/corpus/cases/numeric/` + `tests/unit/numeric-projection.test.ts` **first**,
       from contracts/numeric-projection.md, expected values derived by hand: the four table rows,
       the discriminating `30`/`30.0` pair, accumulation across layers in **both** orders, the
       inexact lint, **the absence of the lint where exact** (FR-020), `int | string` (research D-5),
       arrays, named types, and nested `keys`
-- [ ] T027 [US4] `src/diagnostics/codes.ts`: `precision-narrowed`, `level: "info"`
-- [ ] T028 [US4] `src/validate/numeric.ts`: `collectNumericDemands` — the second walk (research
+- [x] T027 [US4] `src/diagnostics/codes.ts`: `precision-narrowed`, `level: "info"`
+- [x] T028 [US4] `src/validate/numeric.ts`: `collectNumericDemands` — the second walk (research
       D-3), sharing every reader with `check.ts` and reusing US2's memo
-- [ ] T029 [US4] `src/project/value.ts`: consume the map; `int` → `bigint` unless the admission
+- [x] T029 [US4] `src/project/value.ts`: consume the map; `int` → `bigint` unless the admission
       contains `float`; the round-trip exactness test with its `isFinite` guard (research F-3);
       the lint at the **value's** own span and pointer
-- [ ] T030 [US4] FR-021: decided from the accumulated demand, order-independently
-- [ ] T031 [US4] **Sabotage**: swap the exactness test for `Number.isSafeInteger`; confirm the
+- [x] T030 [US4] FR-021: decided from the accumulated demand, order-independently
+- [x] T031 [US4] **Sabotage**: swap the exactness test for `Number.isSafeInteger`; confirm the
       **absence** case (FR-020, a 2^60 value under `int | float`) goes red and the firing case does
       not. This is the sabotage that proves FR-020 earns its place. Same protocol
-- [ ] T032 [US4] `pnpm typecheck && pnpm test` green; commit `feat(project): the numeric rule`
+- [x] T032 [US4] `pnpm typecheck && pnpm test` green; commit `feat(project): the numeric rule`
 
 **Checkpoint**: the demand decides; the lint is narrow and has been shown to be narrow.
 

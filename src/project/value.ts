@@ -32,11 +32,15 @@
  *    silently approximated. `tests/unit/value-view.test.ts` asserts the
  *    limit in both directions.
  *
- * 3. **Scalars project by lexical kind here** — an `int` is a `bigint` at
- *    every magnitude, which is §17's "no numeric demand" row and the only
- *    row this file decides on its own. The other three rows need the
- *    *accumulated* demand and arrive with `src/validate/numeric.ts` in the
- *    next user story; the seam is `projectScalar` below and nothing else.
+ * 3. **The demand decides the numeric type, not the document.** `kind` is
+ *    lexical — `30` is an int and `30.0` is a float — so a faithful
+ *    projection would let a config author's punctuation decide whether the
+ *    consuming application sees `bigint` or `number` under an unchanged
+ *    schema. `src/validate/numeric.ts` computes the accumulated admission
+ *    per pointer; `projectScalar` below reads it, and emits §17's
+ *    `precision-narrowed` lint where a normalization would actually drop a
+ *    digit — never on the shape, because "a lint that cried on every
+ *    `int | float` key would be ignored within a week".
  *
  * 4. **Iterative, not recursive.** FR-014: projection must not throw on any
  *    legal document. A recursive walk overflows the stack a few thousand
@@ -55,8 +59,9 @@
 
 import type { MergedConfiguration } from "../merge/provenance.js";
 import type { Mapping, Node, Sequence } from "../model/node.js";
-import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import { pointerFromPath } from "../model/pointer.js";
+import { collectNumericDemands, type NumericClass } from "../validate/numeric.js";
 
 /**
  * A configuration as ordinary JS data (Article VII).
@@ -86,17 +91,66 @@ export interface ProjectionResult<T = unknown> {
 type Task = { readonly kind: "visit"; readonly node: Node; readonly pointer: string } | { readonly kind: "mapping"; readonly keys: readonly string[] } | { readonly kind: "sequence"; readonly length: number };
 
 /**
- * Project one scalar by its lexical `kind` (§4.2): an `int` is a `bigint`
- * at every magnitude, exactly, which is §17's "no numeric demand" row.
+ * Whether converting `value` to a double loses information.
  *
- * **This is the seam the numeric rule plugs into**, and it is deliberately
- * the only place a scalar becomes a JS value. §17's other three rows —
- * `int` → `bigint`, `float`/`int | float` → `number`, plus the
- * `precision-narrowed` lint — are decided from the *accumulated* demand
- * rather than from the node, and arrive here in the next user story.
+ * **The round trip, not `Number.isSafeInteger`.** 2^53, 3·2^52 and 2^60 are
+ * all exactly representable as doubles and all fail `isSafeInteger`, so
+ * that predicate would fire the lint on values that lose nothing — "a lint
+ * that cried on the shape rather than the value would be ignored within a
+ * week" (§17), one layer down from where the article says it. Found by
+ * probe before any of this was written (research.md F-3), and the case that
+ * catches it is FR-020's required *absence* assertion.
+ *
+ * The `isFinite` guard is equally load-bearing rather than defensive:
+ * `Number(2n ** 1024n)` is `Infinity`, and `BigInt(Infinity)` **throws**
+ * `RangeError` — which under Article VI would be a legal document making
+ * `load()` throw.
  */
-function projectScalar(node: Node & { readonly type: "scalar" }): ConfigValue {
-  return node.value;
+function narrowsInexactly(value: bigint): boolean {
+  const asNumber = Number(value);
+  if (!Number.isFinite(asNumber)) {
+    return true;
+  }
+  return BigInt(asNumber) !== value;
+}
+
+/**
+ * Project one scalar, consulting the accumulated numeric demand at its own
+ * pointer (§17's table, `contracts/numeric-projection.md` §1).
+ *
+ * A pointer **absent** from `numeric` is the table's fourth row — "no
+ * numeric demand", projected faithfully by lexical kind, which for an
+ * `int` is `bigint` at every magnitude. Absence is the honest spelling of
+ * "nothing was promised"; an enum member for it would invite this function
+ * to forget one of three cases.
+ *
+ * Only an `int`-kind scalar can be affected. A `float` is a `number` under
+ * every demand — there is none under which an IEEE-754 double becomes
+ * exact — and a `float` value under `type: int` is a *validation* refusal
+ * that never reaches a successful projection.
+ */
+function projectScalar(node: Node & { readonly type: "scalar" }, pointer: string, numeric: ReadonlyMap<string, NumericClass>, diagnostics: Diagnostic[]): ConfigValue {
+  if (node.kind !== "int" || numeric.get(pointer) !== "number") {
+    return node.value;
+  }
+  if (narrowsInexactly(node.value)) {
+    diagnostics.push(
+      createDiagnostic({
+        level: "info",
+        code: "precision-narrowed",
+        // §17: the diagnostic "names the key and both values" — both, so
+        // an author can see exactly what they lose.
+        message: `'${pointer}' is ${node.value} in the document, and the accumulated demand admits 'float' — a consumer receives ${Number(node.value)}, which is not the same number (SPEC.md §17, v1.0 FR-019)`,
+        // Principle III's never-phasing obligation: the position is the
+        // offending construct's own — the value's, not that of the demand
+        // that caused the narrowing.
+        primary: node.span,
+        pointer,
+        demand: { pointer, span: node.span },
+      }),
+    );
+  }
+  return Number(node.value);
 }
 
 /**
@@ -108,6 +162,7 @@ function projectScalar(node: Node & { readonly type: "scalar" }): ConfigValue {
  * `why()` keeps answering by RFC 6901 pointer.
  */
 export function project<T = unknown>(configuration: MergedConfiguration): ProjectionResult<T> {
+  const numeric = collectNumericDemands(configuration);
   const diagnostics: Diagnostic[] = [];
   const results: ConfigValue[] = [];
   const tasks: Task[] = [{ kind: "visit", node: configuration.tree, pointer: "" }];
@@ -142,7 +197,7 @@ export function project<T = unknown>(configuration: MergedConfiguration): Projec
     }
     const node = task.node;
     if (node.type === "scalar") {
-      results.push(projectScalar(node));
+      results.push(projectScalar(node, task.pointer, numeric, diagnostics));
       continue;
     }
     if (node.type === "mapping") {

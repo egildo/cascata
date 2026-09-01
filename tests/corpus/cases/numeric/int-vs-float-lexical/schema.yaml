@@ -1,0 +1,5 @@
+$id: numeric/lexical
+keys:
+  port:
+    demand:
+      type: int | float

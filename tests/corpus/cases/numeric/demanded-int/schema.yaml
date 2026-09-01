@@ -1,0 +1,5 @@
+$id: numeric/exact
+keys:
+  id:
+    demand:
+      type: int
