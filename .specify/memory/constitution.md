@@ -1,6 +1,35 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.2.1 → 1.3.0
+Bump rationale: MINOR — two sections materially expanded, none removed or
+redefined; prior compliance is unaffected.
+
+Modified principles:
+  - III. Provenance Is Structural — the phased diagnostic obligation gains a
+    fourth field, the **level** (`error` | `info`), arriving with v0.7. SPEC.md
+    §5.5 has mandated an info-level lint since it was written and §8.1 now
+    mandates a second, while the Diagnostic type carried no level at all, so
+    every diagnostic was a refusal and neither lint was implementable. Found by
+    reading rather than by shipping — the same ratification failure Principle V's
+    corollary names.
+  - IV. Pipeline Stages Are Isolated and Format-Blind — absorbs SPEC.md Article
+    VI's world-blindness. The library performs no I/O; this makes that a
+    *tested* boundary rather than a documented intention, exactly as
+    format-blindness already is. A shipped host is exempt by construction: it
+    lives on the far side of the seam and is named in the test.
+
+Modified sections:
+  - Development Workflow & Quality Gates — gate 5 names the level; gate 7 is new
+    and enforces the I/O boundary.
+
+Not amended, deliberately: the Dependency policy still lists `picomatch`, which
+v0.5 stopped using when `glob` was dropped (SPEC.md §15). The list is a ceiling
+("limited to..."), so using fewer than it permits needs no amendment, and
+CLAUDE.md already records that ruling.
+
+Prior report (v1.2.1) follows.
+
 Version change: 1.2.0 → 1.2.1
 Bump rationale: PATCH — clarification, no obligation changed. "Provenance is
 built into the merge engine from its first commit" read as a commit-ordering
@@ -117,8 +146,11 @@ What a diagnostic MUST carry is **phased**, because the full error contract name
 exist yet. From the first milestone: a **code**, a **human sentence**, and a **primary span**, whose
 origin identifies the document — so every diagnostic is already traceable to a layer. As the
 constructs arrive, so do their obligations: an **RFC 6901 pointer** and the **violated demand** once
-the constraint checker exists (v0.4), a **delegation breadcrumb** once delegation does (v0.6), and a
-**pedigree position** once the pedigree carries meaning for subsumption (v0.4).
+the constraint checker exists (v0.4), a **delegation breadcrumb** once delegation does (v0.6), a
+**pedigree position** once the pedigree carries meaning for subsumption (v0.4), and a **level**
+(`error` | `info`, `SPEC.md` §10) once anything but a refusal can be reported (v0.7). A level is not
+an optional embellishment on a lint: an `info` MUST carry every field an `error` of the same
+milestone carries, because a lint diagnosed worse than a refusal is a lint nobody acts on.
 
 Stating the finished contract as a blanket MUST — which this principle did until v1.2.0 — makes it
 unsatisfiable by every milestone that precedes v0.4, which is not a standard but a standing failure.
@@ -134,7 +166,7 @@ sequencing question and not this principle's business; whether the fold is *able
 An engine that would have to be rebuilt to carry provenance has already failed this principle, on
 the commit that built it.
 
-### IV. Pipeline Stages Are Isolated and Format-Blind
+### IV. Pipeline Stages Are Isolated, Format-Blind, and World-Blind
 
 The stages of `SPEC.md` §3 — resolve → parse → graph build → merge → validate → freeze — MUST
 each consume only the previous stage's output, and MUST each be testable in isolation from
@@ -143,9 +175,24 @@ hand-constructed inputs without touching the filesystem or a parser.
 From graph-build onward, no module may branch on source format, inspect a file extension, or
 import a format adapter. Adapters MUST NOT be reachable except across the resolve/parse boundary.
 
+**The library performs no I/O** (`SPEC.md` Article VI). No module under `src/` may import
+`node:fs`, call `fetch`, or open a socket. Everything the library needs from outside the call it was
+given, it asks its **host** for: bytes at a location, and the canonical identity of a location. This
+is a **tested** boundary, in the same file and by the same means as format-blindness — not a
+convention, and not a promise the code makes about itself.
+
+One exemption exists and is named explicitly in that test: the **shipped host**, which lives on the
+far side of the seam and is a separate entry point rather than part of the library's own import
+graph. A host is *supposed* to do I/O; that is what makes it a host. The exemption is what proves
+the boundary is real rather than what weakens it — the same posture as the one documented cast on
+`yaml`'s AST types.
+
 Rationale: format-blindness is what makes "a fragment may be in a different format than its
-parent" trivially true instead of a feature someone has to build. The same isolation is what
-lets the merge engine be tested without YAML at all.
+parent" trivially true instead of a feature someone has to build. World-blindness is what makes
+`SPEC.md` §8.4's remote opt-in and §11's sandbox promises structural instead of self-policed — a
+host that does not answer has denied the request, and no schema can appeal. Together they are what
+lets merge, validation, and provenance be tested with no filesystem, no network, and no YAML at
+all.
 
 ### V. Citations Are Test Oracles (NON-NEGOTIABLE)
 
@@ -242,8 +289,11 @@ question open. Every generated spec names the `SPEC.md` article it implements (P
 5. Every new diagnostic carries a code, a sentence, and a primary span whose origin names its
    document — plus whichever of the phased fields in Principle III the milestone's own
    constructs make available. Before v0.4 that is code + sentence + span; the gate is not
-   satisfied by a diagnostic lacking a position, at any milestone.
+   satisfied by a diagnostic lacking a position, at any milestone. From v0.7 the set includes a
+   **level**, and an `info` is held to the same fields as an `error`.
 6. No import crosses the format-blindness boundary of Principle IV.
+7. No import crosses the **host boundary** of Principle IV: nothing under `src/` reaches
+   `node:fs`, `fetch`, or a socket, save the shipped host named by the boundary test itself.
 
 **Complexity.** Any deviation from a principle MUST appear in the plan's Complexity Tracking with
 the simpler alternative named and the reason it was rejected. An undocumented deviation is a
@@ -268,4 +318,4 @@ and re-runs it after. Every code review verifies the six gates above. Principles
 NON-NEGOTIABLE (I, V) admit no Complexity-Tracking exception: a change that violates them is
 rejected, not justified.
 
-**Version**: 1.2.1 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-08-31
+**Version**: 1.3.0 | **Ratified**: 2026-08-29 | **Last Amended**: 2026-09-01

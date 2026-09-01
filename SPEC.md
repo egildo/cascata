@@ -116,11 +116,14 @@ The model discards comments, quoting style, indentation, anchor names, and autho
 | Enums / unions | Shrink the set | Add members |
 | Ranges / predicates | Tighten; add new predicates (conjunction) | Loosen; remove |
 | `required` | Add | Remove |
-| Struct openness | Open → closed | Closed → open |
+| Struct openness (`seal`) | `open` → `closed` | `closed` → `open` |
 | Defaults (`provide`) | Replace with any value satisfying accumulated demands | Provide a value violating any ancestor demand |
 | `cascade: append` arrays | Append provisions | Remove inherited items (not an operation in v1) |
 | `cascade` strategy itself | Tighten toward accumulation (`replace` → `append`) | Weaken away from it (`append` → `replace`): a descendant declaring `replace` for a key an ancestor made `append` discards every ancestor's contribution, which the row above forbids absolutely. **A strategy governs from the layer that declares it, downward** — authority flows one way (§2.3), so declaring `append` accumulates the declaring layer's contribution and every later one onto whatever the fold had already produced, and does not reach back to re-combine layers that had already settled under `replace`. Once a key accumulates, it keeps accumulating from that point on. |
 | Types (named) | Narrow inherited type (tightens every usage) | Widen or redefine under `adopts` |
+| `values` | Declare it where absent; tighten a declared one | Loosen it; remove it |
+| `final` | Declare it (freezes the key from the declaring layer downward) | Un-declare it; declare *anything* for a key an ancestor sealed `final` |
+| `$pin` demanded by a root | Demand it where an ancestor did not | Retract an ancestor's demand for it |
 
 ### 5.3 Merge strategies
 
@@ -204,8 +207,27 @@ A **fork**: severs substitutability, mints a new root of trust, may change rules
 
 ### 6.3 Sealing / authority
 
-- Per key: `seal: open | closed`, `final` (no override at all), `cascade` strategy — declared by the **ancestor**.
-- Per schema: a root may declare itself `final` against forking of its published identity (the text can be copied; the name cannot be claimed).
+Everything here is declared by an **ancestor** and binds **from the declaring layer downward** — the same one-way flow §5.2 gives cascade strategies and §7 gives type narrowing, for the same reason (§2.3).
+
+**Per key.**
+
+- **`seal: open | closed`** — struct openness, the keyword behind §5.2's row. `closed` on a key demanding a mapping refuses any child key the accumulated `keys` vocabulary does not declare. `open` is the default. Openness narrows one way: a descendant may close what an ancestor left open, never reopen what an ancestor closed.
+- **`final`** — the key is sealed against *every* further declaration. Two consequences, and they are different:
+  - **No descendant schema layer may declare that key at all** — not `demand`, not `provide`, not `cascade`, not `seal`, not `delegate`. Restating a `final` key is refused even when the restatement would be a legal narrowing, because `final` is the ancestor saying the question is closed, not that it must be answered more tightly.
+  - **A `final` key carrying `provide` is a constant.** The provided value is the value; a *config* setting that key is refused. This is §5.5's **pinned constant** pattern, and it is where that section's info-level lint ("`required` is vacuous under `final provide`") fires. A `final` key carrying **no** `provide` freezes the demand only — the config still supplies the value, it simply cannot be governed further.
+- **`cascade`** — §5.2, unchanged.
+
+**Per schema**, declared in an `authority:` section — a fourth top-level section beside `types`, `keys`, and `directives` (§9). It is its own section rather than a pair of new reserved `$`-keys because the reserved list is closed at six and is depended on by the resolver, the fold's stripping rule, and the meta-schema alike; and rather than a corner of `directives:`, because *constraining* a directive and *asserting* governance are two jobs, and one section doing both is the vocabulary conflation Principle VI exists to prevent.
+
+```yaml
+$id: site-builder/core
+authority:
+  demandPinnedAdoption: true
+  finalAgainstForking: true
+```
+
+- **A root may demand pinned adoption** (`demandPinnedAdoption`). §11 parks this power here, and this is where it lands: a published root legislates that every descendant adopting it must carry a `$pin`, and an unpinned adoption in that pedigree is refused. The mechanism (verify whenever present) has shipped since v0.2; this is the legislation that makes it mandatory, and it is authority flowing downward like everything else in this article. One limit is inherent, not chosen, and §11 states it: a root's demand is readable only *after* that root has been fetched, so it hardens every subsequent resolution but not the first. A lockfile closes that gap; this does not pretend to.
+- **A root may declare itself `final` against forking** (`finalAgainstForking`) of its published identity — the text can be copied; the name cannot be claimed. `$extends` is a future keyword (§6.2), so in v1 this declaration is **recorded and queryable but enforces nothing yet**. It is stated now rather than later so that a root published today can bind a fork attempted tomorrow — a declaration that only becomes available with the keyword it governs would arrive too late for every schema already in the world.
 
 ---
 
@@ -231,6 +253,8 @@ Laws:
 - **Parameters are constraint selectors, never computation.** A parameter may only choose among or tighten the type's declared alternatives. Selecting a subset of a union is narrowing, so parameterization is itself monotone and statically checkable. No template language.
 - **Types cascade.** A descendant may redeclare an inherited type name, and doing so **narrows that type from the declaring layer downward** — the declaring layer's own usages and every layer below it, never an ancestor's. Authority flows one way (§2.3); this is the identical rule §5.2 states for cascade strategies, for the identical reason. House-defaults ergonomics — "our `resource` is URLs only; nothing served off local disk" — therefore bind the house and everything beneath it, while an ancestor's own usage of the name keeps meaning what that ancestor declared. Widening or redefining remains illegal under `adopts` and needs no separate refusal: an ancestor's demand resolves the *ancestor's* declaration, and whole-chain validation (§5.4) applies it regardless, so a widening is inert exactly where it would otherwise do harm. Proving that a redeclaration narrows, with no data present, is static subsumption (§5.4 item 2, v1.x).
 - **One flat namespace per pedigree; a collision between *unrelated* declarations is an error.** Two declarations of one name standing in an ancestor/descendant relation are **not** a collision — they are the narrowing the law above describes. Because v1 `$adopts` takes exactly one parent (§6.1), every pedigree is a chain and every pair of layers is related, so **collision is unreachable in v1** and is reserved for future multi-adoption, where two unrelated ancestors may each declare a name. Qualified names (`core/resource` — the qualifier being the last segment of the declaring document's `$id`) restrict resolution to declarations from documents carrying that qualifier, and are the escape hatch. They pin one specific declaration exactly when qualifiers are distinct, which is the case worth designing for; where two layers in one chain share a qualifier *and* a type name, the second is a narrowing of the first like any other, and the **nearest** wins there too. No silent shadowing: unqualified or qualified, a name always resolves to the nearest declaration at or above the layer that names it, and the same reference read from two different layers may therefore name two different declarations — which is the point, since that is what "narrows from the declaring layer downward" means.
+
+- **Recursion is permitted when it is *guarded*.** A type whose definition reaches itself through at least one structural level — `keys`, `items`, or `values` — is **productive**: each traversal consumes a level of the value being checked, so checking terminates on any finite document, bounded further by the demand-depth cap. A type that reaches itself through **type expressions alone** (`A: { demand: { type: B } }`, `B: { demand: { type: A } }`) is *unguarded*: it consumes nothing, has no fixpoint any value can reach, and stays refused as `unresolvable-type-cycle`. This is the standard contractive-recursion rule, and Cascata needs it for a reason it cannot dodge — the meta-schema (§9) describes a vocabulary that nests into itself, so a language whose types cannot recurse cannot describe its own schemas, and self-hosting (§2.6) would be unreachable. Amended in v0.7, where the bootstrap ran into a blanket cycle refusal that was written for the unguarded case and fired on both (§15).
 
 #### Worked narrowing
 
@@ -286,6 +310,8 @@ keys:
 
 Without schema governance every string is ambiguous (filename-as-data vs. instruction-to-load); systems that guess accumulate heuristics and CVEs. Here the schema disambiguates: **mentioning a file (a `resource` value) and loading a file (`delegate`) are different constructs with different keywords.** This is the data/code boundary.
 
+The razor cuts the schema author too. At a key granted `delegate: allow`, a string is an *instruction*, so an **inline** string can never be matched against that key's own `demand` — it is loaded first, and what the demand then sees is the fragment. A key that grants delegation while demanding a leaf shape an inline string would have satisfied (`type: string` being the plain case) is therefore not what its author is likely to think it is. It is not, however, unusable: a fragment document whose whole content is a string scalar satisfies such a demand exactly. So it earns an **info-level lint** naming what will happen, not a refusal — §5.5's precedent, and the same reasoning: the pattern is legitimate, the lint teaches. Recorded as an open Edge Case in v0.6 and settled in v0.7 (§15).
+
 ### 8.2 Transclusion, not cascade
 
 A delegated file is a **fragment**: a branch grafted into its parent's tree, belonging to the parent's **layer**. It carries no `$schema`, starts no pedigree, creates no merge boundary. `$`-keys in fragments are **forbidden** in v1. One line tells the whole story: *the cascade composes vertically across documents; delegation composes horizontally within one document.* A config with twelve fragments is semantically identical to the same config written inline — same node tree, same validation, same merge. That identity is the feature.
@@ -332,9 +358,13 @@ Reserved document keys: `$id`, `$version`, `$adopts`, `$pin`, `$schema` (config-
 
 **`$adopts` and `$schema` are single string scalars.** A sequence value is refused — not as a malformed value, but with a diagnostic saying v1 adopts exactly one parent (§6.1), because that is the shape multi-adoption will take when C3 linearization lands and an author writing it early deserves to be told which version they are ahead of. Two `$adopts` keys in one mapping are already impossible: duplicate keys are refused (§4.2).
 
-Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, `keys`, plus JSON-Schema-named leaf constraints: `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`), `provide`, `cascade: replace | append`, `seal: open | closed`, `final`, `delegate: allow`. **`keys` and `items` both nest to arbitrary depth**: `keys` constrains a mapping value's own children the way the schema's top-level `keys:` constrains the config's own top level, and `items` constrains a sequence value's own elements; either may recurse into further `keys`/`items` beneath it, to whatever depth the data actually nests.
+Schema vocabulary per key: `demand` (`type`, `items`, `required`, `accept`, `keys`, `values`, plus JSON-Schema-named leaf constraints: `min`, `max`, `minLength`, `maxLength`, `pattern`, `enum`), `provide`, `cascade: replace | append`, `seal: open | closed`, `final`, `delegate: allow`. **`keys`, `items`, and `values` all nest to arbitrary depth**: `keys` constrains a mapping value's own *named* children the way the schema's top-level `keys:` constrains the config's own top level, `items` constrains a sequence value's own elements, and `values` constrains **every** entry of a mapping whatever its key is; any of them may recurse into further `keys`/`items`/`values` beneath it, to whatever depth the data actually nests.
 
-Top-level schema sections: `types`, `keys`.
+**`values` is to a mapping what `items` is to a sequence** — the construct for a mapping whose keys are the author's to choose rather than the schema's to enumerate. Where a key is named by `keys` *and* covered by `values`, both apply: demands compose by intersection and always have (§5.1), so there is no precedence rule to invent. `values` alone says nothing about *which* keys may appear — that is `seal`'s question, and the two are orthogonal: `values` with `seal: open` means "any key you like, each shaped like this"; adding `keys` entries under `seal: closed` restricts the set to those named. Added in v0.7 because the meta-schema's own `keys:` section is exactly a mapping of author-chosen names, and nothing in the vocabulary could describe it (§15).
+
+Top-level schema sections: `types`, `keys`, `directives`, `authority`. The last two arrive in v0.7; `authority` holds the per-schema governance declarations of §6.3 and is described there.
+
+**`directives` constrains the reserved `$`-keys**, and exists because they are a different category rather than in spite of it. Reserved keys are directives, not data: they govern how a document is found and what governs it, and they do not appear in a merged configuration (above). A meta-schema constraining them through `keys:` would therefore be constraining something the pipeline has already, correctly, removed. `directives:` is a separate section whose vocabulary is **closed to the six reserved keys** and whose entries take the same per-key vocabulary as `keys:` entries. This is what lets the meta-schema say that `$pin` matches `^sha256:[0-9a-f]{64}$` and that `$adopts` is a single string (§9's own rule, until now enforced only by hand-written code) without any reserved key ever re-entering the data plane. Added in v0.7 for the bootstrap (§15).
 
 ### Worked chain
 
@@ -376,6 +406,7 @@ styles:
 
 - Every error carries: the violated demand (with its declaring layer + span, as a JSON Pointer per RFC 6901 into that document), the offending value (layer + span, delegation breadcrumb included), and the accumulated pedigree position.
 - Canonical error sentence: `constraint from house.yaml:7 (/keys/styles/demand) rejected value from conf.network.yaml:3 (delegated from site.yaml:12)`.
+- **Diagnostics carry a level: `error` or `info`.** An `error` is a refusal — it decides the outcome, and a result carrying one is not a configuration. An `info` is a **lint**: it teaches and never changes the verdict. Two levels, not three: every lint this document mandates (§5.5's vacuous `required`, §8.1's inline string at a delegating key) is a "this does not mean what you think" observation about a *legitimate* construct, and nothing yet cited needs a middle rank. A third level may be added when something needs it; adding one that nothing fires is the vocabulary inflation Principle VI forbids. Levels are part of the contract, so an `info` carries the same position, pointer, and pedigree data an `error` does — a lint with a worse diagnostic than a refusal would be a lint nobody acts on.
 - Machine-readable error output uses RFC 6901 pointers throughout — do not invent a path syntax.
 - `tool why <config> <pointer>` answers "where did this value come from and what did it override" (the `git config --show-origin` / DevTools struck-through-rule feature). Built into the merge engine from day one; nearly free there, nearly impossible to retrofit.
 
@@ -383,7 +414,7 @@ styles:
 
 ## 11. Security Model (summary)
 
-- **Remote schemas: HTTPS, always.** Pinning by content hash (`$pin`, SHA-256 over the exact bytes, §6.1) is **verified whenever a pin is present**, and verification is absolute: mismatched bytes are refused and never enter the graph. Whether a pin is *required* is not the library's decision but the pedigree's — authority flows downward (§2.3), and a published root legislates what its descendants must do, here as everywhere. v1 ships the mechanism; the legislation (a root demanding pinned adoption) belongs with sealing and authority (§6.3). An unpinned reference is therefore fetched on TLS alone, and **an unpinned remote link MUST be reportable**, so a root's demand is auditable and an author can see what they are trusting unverified. One limit is inherent rather than chosen: a root's demand can only be read after that root has been fetched, so it hardens every subsequent resolution but not the first — which is what a lockfile closes. Immutable content-addressed cache per RFC 9111 semantics; lockfile-friendly.
+- **Remote schemas: HTTPS, always.** Pinning by content hash (`$pin`, SHA-256 over the exact bytes, §6.1) is **verified whenever a pin is present**, and verification is absolute: mismatched bytes are refused and never enter the graph. Whether a pin is *required* is not the library's decision but the pedigree's — authority flows downward (§2.3), and a published root legislates what its descendants must do, here as everywhere. v0.2 shipped the mechanism; **the legislation lands in §6.3 at v0.7**, where a root may demand pinned adoption and an unpinned link in its pedigree is refused. An unpinned reference is therefore fetched on TLS alone, and **an unpinned remote link MUST be reportable**, so a root's demand is auditable and an author can see what they are trusting unverified. One limit is inherent rather than chosen: a root's demand can only be read after that root has been fetched, so it hardens every subsequent resolution but not the first — which is what a lockfile closes. Immutable content-addressed cache per RFC 9111 semantics; lockfile-friendly.
 - A remote schema can never trigger local file reads outside the sandbox (delegation rules, §8.4) nor remote delegation without user opt-in. **This is structural, not self-policed**: the library performs no I/O of its own and can read only what its host answers (Article VI), so a host that declines has denied it and no schema can appeal. The sandbox rules below remain in force as defence in depth, so that a permissive host still gets every guarantee.
 - YAML custom tags rejected; parse depth/size capped; duplicate keys rejected.
 - The schema language itself is versioned via the meta-schema's own pedigree.
@@ -446,7 +477,7 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 4. **v0.4** — Constraint checker (closed vocabulary), whole-chain validation, error contract; `tool certify`.
 5. **v0.5** — Types (`types` section, selector parameters, namespace collision errors); nested demands (`keys` implemented, `items` generalized from one level to arbitrary depth, per §9's amendment).
 6. **v0.6** — Delegation (transclusion, sandbox, positional validation, breadcrumbs).
-7. **v0.7** — Sealing/governance (`seal`, `final`, cascade limits) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer) + **the embedding surface**: the host seam of Article VI, the one-call `load()`, and `resource` values resolved against their declaring document rather than merely shape-checked. The embedding surface belongs *here* rather than at v1.0 because the meta-schema bootstrap is its first real consumer — self-hosting means the library loads its own meta-schema through its own seam, which is the embedding story exercising itself.
+7. **v0.7** — Sealing/governance (`seal`, `final`, a root demanding pinned adoption, a root final against forking) + **the embedding surface** (the host seam of Article VI, the one-call `load()`, `resource` values resolved against their declaring document rather than merely shape-checked) + **meta-schema bootstrap** (self-hosting; do this early — every vocabulary wart becomes a wart you personally suffer). The embedding surface belongs *here* rather than at v1.0 because the meta-schema bootstrap is its first real consumer — self-hosting means the library loads its own meta-schema through its own seam, which is the embedding story exercising itself. **Planning the bootstrap made good on its own justification before any code was written**: three vocabulary warts (no construct for author-chosen keys, no recursive types, no way to constrain the reserved keys) and one unimplementable obligation (§5.5's lint, against a `Diagnostic` with no severity) surfaced from trying to write the meta-schema and are settled in §15. `values`, guarded recursion, `directives:`, and diagnostic levels are therefore part of this milestone. Cascade limits are **already shipped** — `cascade-strategy-weakened` landed in v0.3 — and leave the list.
 8. **v1.0** — Freeze the constitution; typed TS output surface.
 9. **v1.x** — JSON Schema 2020-12 exporter; static subsumption lint; JSON adapter; TOML adapter (run against `toml-test`).
 10. **Future** — `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
@@ -596,6 +627,93 @@ All initial open questions are resolved; amendments are integrated into the arti
   non-goal, which §8.4 and §11 had already contradicted by gating it behind a user opt-in rather than
   forbidding it. See §1, §3, §11, §14, Article VI.
 
+- **A mapping whose keys the schema cannot enumerate** → settled: **`values`, a sibling to `keys`.**
+  `keys` names children one at a time, which describes every mapping whose shape the schema knows and
+  no mapping whose keys are the author's to choose. The meta-schema's own `keys:` section is the
+  second kind, so the language could not describe its own central construct — found while planning
+  v0.7, before any code, which is the bootstrap earning its place in the roadmap. `values` constrains
+  every entry regardless of key, exactly as `items` constrains every element of a sequence; the
+  parallel is the argument for the name. Rejected: a reserved `"*"` inside `keys`, which collides with
+  a literal key named `*` and needs an escape rule — a heuristic, and §8.1's razor exists to keep
+  heuristics out of exactly this decision. Composition needed no new rule: where `keys` and `values`
+  both cover an entry, demands intersect (§5.1). Orthogonal to `seal`, which answers *which* keys may
+  appear rather than what shape they take. See §9, §5.2.
+
+- **Recursive types** → settled: **guarded recursion is legal; only unguarded cycles are refused.**
+  v0.5 refused every type reachable from itself as `unresolvable-type-cycle`, which is right for
+  `A → B → A` through type expressions alone — that has no fixpoint any value can reach — and wrong
+  for a type that reaches itself through `keys`, `items`, or `values`. The latter is *productive*:
+  every traversal consumes a level of the document being checked, so it terminates on any finite
+  value. The blanket rule was written for the unguarded case and fired on both, and nothing noticed
+  because no milestone before the bootstrap needed a recursive type. The meta-schema needs one
+  unavoidably: a key declaration contains a demand, a demand contains `keys`, and `keys` contains key
+  declarations. A language whose types cannot recurse cannot describe its own schemas, which makes
+  §2.6 unreachable. See §7.
+
+- **Constraining the reserved `$`-keys** → settled: **a third top-level section, `directives:`, closed
+  to the six of them.** Reserved keys are directives rather than data and are stripped before a
+  configuration is produced (§9) — correctly, and it means a meta-schema constraining them through
+  `keys:` would be constraining something the pipeline has already removed. Two ways out: give the
+  schema-as-config path a mode where reserved keys survive the fold, or give them their own section.
+  The mode was rejected because it makes one pipeline mean two things, which is precisely what §16's
+  determinism law forbids and what §3's stage isolation is for. `directives:` keeps the data plane
+  exactly as it is and puts the constraints where the category boundary already ran. Its payoff is
+  immediate and not only bootstrap-shaped: `$adopts` is a single string and `$pin` is
+  `sha256:<64 hex>` (§6.1, §9), rules that until now existed only as hand-written checks in the
+  implementation with no schema able to state them. See §9, §6.1.
+
+- **Diagnostic severity** → settled: **two levels, `error` and `info`.** §5.5 has mandated an
+  info-level lint since it was written, and §8.1 now mandates a second; the `Diagnostic` type had no
+  level at all, so every diagnostic was a refusal and neither lint could be implemented. This was a
+  requirement ratified as a MUST against a component that could not satisfy it — the failure mode
+  Principle V's ratification corollary names, found here by reading rather than by shipping. Two
+  levels because both mandated lints are the same kind of thing: a "this does not mean what you
+  think" observation about a construct that is legitimate. A third rank is added when something needs
+  it, not in advance. Consequence for §16: "a configuration or diagnostics, never both" was written
+  when every diagnostic was fatal, and now means *never a configuration and errors* — lints ride
+  along with a successful result, because a result that must be thrown away to read its warnings is a
+  result whose warnings nobody reads. See §10, §5.5, §8.1, §16.
+
+- **`delegate: allow` at a key demanding a leaf shape** → settled: **info-level lint, not a refusal.**
+  Left as an unanswered Edge Case by v0.6. At a granted key a string is an instruction (§8), so an
+  *inline* string never reaches that key's own `demand` — which makes `delegate: allow` beside
+  `demand: { type: string }` almost certainly not what its author meant. Almost: a fragment document
+  whose entire content is a string scalar satisfies such a demand exactly, so the schema is
+  surprising rather than unusable, and refusing it would overstate the case. The lint follows §5.5's
+  precedent for the same reason that section gives — the pattern is legitimate, the lint teaches. It
+  matters now rather than at leisure because the meta-schema is written in this same vocabulary. See
+  §8.1, §10.
+
+- **How far the host boundary reaches** → settled: **bytes, canonical identity, and the cache; the
+  Node host ships as a separate entry point.** Article VI said the library never opens a file, and
+  v0.6 opened files in three places — the local read, `realpath` for the sandbox check, and the
+  on-disk cache. Only the first is obviously a read, which is why the other two survived the article
+  being written. All three move behind the host. Canonical identity is the interesting one: it looks
+  like meaning, and the article forbids the host supplying meaning. It is supply — only the host knows
+  how its storage names things — and the division holds precisely where it matters: the host says
+  *which thing is at this location*, the library compares identities and decides *whether it is
+  confined*. A host that lies about identity can defeat confinement, which is the right place for that
+  trust, since a host that lies can equally answer with different bytes. And the article does not
+  forbid Cascata shipping a host: it forbids the *library* doing I/O. Shipping a Node host on the far
+  side of the seam is what keeps the ordinary embedder from writing a filesystem adapter to read a
+  file, while importing the library proper still cannot touch a disk. See §16, §11.
+
+- **Sealing, fully stated** → settled: **`final` closes the question, and closes it for the config too
+  when it carries a `provide`.** §6.3 was three lines and left `final` glossed as "no override at
+  all", which does not say *by whom*. Settled in two parts, because they are two facts: no descendant
+  **schema** layer may declare a `final` key at all — not even a legal narrowing, since `final` says
+  the question is closed rather than that it must be answered more tightly — and a `final` key that
+  also carries `provide` is a constant the **config** cannot set either, which is what makes §5.5's
+  pinned-constant pattern real and gives that section's vacuous-`required` lint something to fire on.
+  A `final` key without `provide` freezes only the demand. §6.3's two per-schema powers land at v0.7
+  as well, in a new top-level `authority:` section rather than as new reserved `$`-keys — the
+  reserved list is closed at six and the resolver, the fold's stripping rule and the meta-schema all
+  depend on it — and rather than inside `directives:`, since constraining a directive and asserting
+  governance are two jobs. They are: a root demanding pinned adoption (§11 parked it here
+  explicitly), and a root declaring itself final against forking — the latter **recorded and queryable but enforcing nothing** until
+  `$extends` exists (§6.2), stated now rather than with that keyword so a root published today can
+  bind a fork attempted tomorrow. See §6.3, §5.5, §11, §5.2.
+
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
 
 ---
@@ -608,13 +726,15 @@ Cascata is **embedded, not run**. Everything the library needs from outside the 
 
 Laws:
 
-- **The library performs no I/O.** It never opens a file or a socket. It requests a document by location and receives bytes or a refusal. Where those bytes come from is the host's problem, and deliberately not the library's.
+- **The library performs no I/O.** It never opens a file or a socket. It requests a document by location and receives bytes or a refusal. Where those bytes come from is the host's problem, and deliberately not the library's. **Three things this covers that are easy to miss**, all of them library I/O in v0.6 and none of them obviously a "read": resolving a location to its canonical identity (symlink following, which the sandbox check needs), storing and retrieving cached remote documents, and the network fetch itself — already behind an injectable transport since v0.2, which is half the seam and the half that proves the shape works.
 - **The host boundary is the capability boundary.** A library that cannot read except by asking cannot exceed what its host grants. §8.4's remote-delegation opt-in and §11's sandbox promises are therefore *structural* rather than self-policed: a host that does not answer has denied the request, and no schema can appeal. The library's own sandbox rules remain in force as defence in depth, so a permissive host still gets every guarantee. This is §2.3 and Principle VI's "capabilities are granted, never ambient" made load-bearing rather than aspirational.
 - **Some refusals never reach the host.** The library's own policy — sandbox confinement, a missing user opt-in — refuses *before* asking, and that is the defence-in-depth this article requires rather than an exception to it. A refusal the library made itself and a refusal the host answered with are different events and carry different diagnostics; both are refusals, and neither throws.
 - **A refusal is data, not an exception.** A host declining to supply a document yields a diagnostic like any other refusal, carrying the position of the reference that asked for it. **Programmer errors throw** — a caller omitting a required option is a bug in the calling code, not a fact about the world. Nothing about the state of the world throws.
 - **Everything above resolution is world-blind.** §3's pipeline is format-blind from graph-build onward; it is world-blind from the same point. Merge, validation, and provenance are pure functions of documents already in hand. That is what lets them be tested without a filesystem, and what makes §5.4's whole-chain validation "trivially correct even under merge-engine bugs" true rather than hopeful.
 - **The host supplies bytes, never meaning.** It answers *what is at this location* — never *is this allowed*, *what format is this*, or *does this satisfy the schema*. Policy stays in the library; supply stays in the host. Two hosts must never be able to disagree about what one configuration means.
-- **One call.** The ordinary embedding is a single `load()` from a launching point to a validated configuration or a set of diagnostics, never both. The staged functions stay public for tools that need to step through the pipeline, but no tool should have to assemble the ordinary path itself, and none should have to rediscover how a path relates to the document that declared it.
+- **Canonical identity is supply, not meaning.** The host answers *which thing is at this location* — following symlinks, normalizing case where the filesystem does — because only the host knows how its storage names things. It never answers *whether that thing is inside the sandbox*: the library compares the identities the host returned and reaches the verdict itself. This is the line the previous law draws, applied to the one case where it is genuinely tempting to hand the whole question over. A host that lies about identity can defeat confinement, and that is the correct place for that trust to sit — a host that lies can simply answer with different bytes.
+- **A shipped host is not a violation of the law.** The library performs no I/O; a *host* is supposed to. Cascata therefore ships a Node host as a **separate entry point**, so that the ordinary embedder is not made to write a filesystem adapter to read a file, and so that importing the library proper still cannot touch a disk. The seam is real precisely because the default implementation sits on the other side of it.
+- **One call.** The ordinary embedding is a single `load()` from a launching point to a validated configuration or a set of **errors**, never both. The staged functions stay public for tools that need to step through the pipeline, but no tool should have to assemble the ordinary path itself, and none should have to rediscover how a path relates to the document that declared it. **"Never both" is about errors, not about diagnostics**: an `info` lint (§10) describes a configuration that is valid, so a successful `load()` returns the configuration *with* whatever lints it earned. A result that had to be discarded to see its warnings would guarantee nobody reads them.
 - **Determinism across hosts.** Given the same documents, every host gets the same tree, the same provenance, and the same diagnostics in the same order. A host may decide *whether* the library sees a document; it may never influence what that document means.
 
 ---
