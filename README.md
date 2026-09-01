@@ -329,7 +329,9 @@ instead. As of v0.3, `demand`, `seal`, `final`, and `delegate` were read by noth
 ignored, not guessed at (`SPEC.md` §9, v0.3 FR-002) — **stale as a claim about the library overall**:
 `demand` is read by `validate()` since v0.4, and `delegate` is read (and grafts fragments) as part of
 `resolve()` since v0.6. `merge()` itself still reads neither — folding stays exactly what v0.3 built —
-only `seal`/`final` remain genuinely unread anywhere, deferred to v0.7. See Delegation above.
+`seal` and `final` are read as of v0.7 — `seal` by `validate()` (it moved into the `demand`
+vocabulary, `SPEC.md` §9 amended) and `final` by the fold's own whole-stack resolution. See v0.7
+below, and Delegation above.
 
 ```typescript
 import { resolve, merge, why } from "cascata";
@@ -472,7 +474,9 @@ A **config** declaring its own `cascade` produces no diagnostic — it is ignore
 policy comes from schemas only (v0.3 FR-015). A schema using `demand` or `delegate` produces nothing
 *at this stage* — `merge()` itself still reads neither, exactly as v0.3 built it — but both are read
 elsewhere: `demand` by `validate()` (v0.4) and `delegate` by `resolve()` (v0.6, Delegation above).
-Only `seal`/`final` remain unread anywhere in the library, deferred to v0.7 (v0.3 FR-002).
+`seal` and `final` are read as of v0.7, though still not by `merge()`'s fold itself: `seal` is a
+`demand` keyword `validate()` checks, and `final` is resolved whole-stack alongside `cascade`. See
+v0.7 below.
 
 ### `validate(configuration)`
 
@@ -531,8 +535,9 @@ if (result.ok) {
 
 ### `demand` vocabulary (`SPEC.md` §9, contracts/demand-vocabulary.md)
 
-Ten closed keywords, **all implemented as of v0.5**: `type`, `items`, `keys`, `required`, `min`,
-`max`, `minLength`, `maxLength`, `pattern`, `enum`. `format` is **not** in the list — `SPEC.md` §15
+Thirteen closed keywords, all implemented: `type`, `items`, `keys`, `values`, `required`, `min`,
+`max`, `minLength`, `maxLength`, `pattern`, `enum`, `accept`, `seal`. `seal` (v0.7) and `values`
+(v0.7 part 2) are the two most recent — see v0.7 below for both. `format` is **not** in the list — `SPEC.md` §15
 dropped it in favor of `type: url`/`path`, so it is `unknown-demand-keyword` like any other
 typo. `type` is SPEC.md §9.1's leaf DSL — unions (`|`), arrays (`T[]`, binding tighter than `|`),
 parentheses — resolving against the model's own kinds, `url`/`path`, and any name declared in
@@ -545,8 +550,9 @@ ready for the expansion/sandbox/determinism story §14's Future list parks it be
 cap (v0.5 FR-025) — a document deep enough to trip that bound never reaches `validate()` in the first
 place, since `resolve()` refuses it first (see `tests/unit/validate-depth-limit.test.ts`'s own header
 comment for why this milestone's depth guard is exercised by a hand-built `MergedConfiguration`, not
-a file fixture). `seal` and `final` remain unread, unchanged from v0.3's posture — `delegate` no
-longer does; see Delegation above.
+a file fixture). `seal` is read here as of v0.7 — it is a `demand` keyword now, not a per-key one
+— and `final` is read by the fold; see v0.7 below. `delegate` is read by `resolve()`; see Delegation
+above.
 
 ```typescript
 keys:
@@ -652,7 +658,139 @@ violations (found checking the merged tree against a well-formed demand).
 | `type-accept-widened` (v0.5) | A usage's `accept` naming an alternative the referenced type never declared (FR-013) |
 
 A demand restated identically by a nearer layer, satisfied, and a key no demand mentions both produce
-zero diagnostics — schema silence is permission (FR-021) until `seal: closed` arrives in v0.7.
+zero diagnostics — schema silence is permission (FR-021) unless the position declares
+`seal: closed` (v0.7), which turns silence into refusal for any key the vocabulary does not name.
+
+## v0.7 — sealing, authority, the host seam, `load()`, and the meta-schema
+
+v0.7 shipped in two parts. Part 1 built sealing/governance and the embedding surface; part 2 is the
+meta-schema bootstrap, which exists so that "every vocabulary wart becomes a wart you personally
+suffer" (`SPEC.md` §14 item 7).
+
+### `seal`, `final`, `authority:`
+
+`seal: open | closed` is a **`demand` keyword**, not a per-key one (`SPEC.md` §9/§6.3, amended in
+v0.7; §15). It constrains a mapping value's *shape* — it composes by intersection
+(`open ∩ closed = closed`) and narrows monotonically, which is what every demand does and what no
+governance keyword does — so it nests wherever demands nest and works inside a named type. A schema
+may also carry a **top-level `seal`**, governing the config's own top level.
+
+`final: true` is per key, and closes the question: no descendant schema layer may declare that key at
+all, and a `final` key carrying `provide` is a constant the config cannot set either. `authority:` is
+a fourth top-level section holding `demandPinnedAdoption` and `finalAgainstForking`.
+
+### The host seam and `load()`
+
+`resolve()` and `load()` **require** a `host` (`Host`: `read`, `canonicalize`, `cacheRead`,
+`cacheWrite`). The library performs no I/O of its own (`SPEC.md` §16, Article VI) — enforced
+mechanically by `tests/unit/layering.test.ts`, which refuses any `node:fs` import or bare `fetch`
+call anywhere under `src/` except the one named exemption, `src/host/node.ts`.
+
+```typescript
+import { load } from "cascata";
+import { createNodeHost, createNodeTransport } from "cascata/host/node";
+
+const result = await load("./site.yaml", {
+  sandboxRoot: process.cwd(),
+  host: createNodeHost({ cacheDir: ".cascata-cache" }),
+  transport: createNodeTransport(),   // omit for a purely local resolution
+});
+```
+
+`load()` composes `resolve()` → `merge()` → `validate()`; the staged calls stay public. Diagnostics
+now carry a **level**: an `error` decides the outcome, an `info` is a lint that teaches and rides
+along with a successful result.
+
+### `values` (v0.7 part 2, `SPEC.md` §9 amended)
+
+The construct for a mapping whose keys are the **author's** to choose rather than the schema's to
+enumerate — what `items` is to a sequence, `values` is to a mapping.
+
+```yaml
+keys:
+  environments:
+    demand:
+      type: mapping
+      values:                       # every entry, whatever its key
+        demand:
+          type: mapping
+          keys:
+            url: { demand: { type: url, required: true } }
+```
+
+Its value is a **key declaration** (`{ demand?, delegate? }`), not a bare demand mapping — `values`
+is the un-named form of a `keys` entry, which is what keeps the two composable. Where `keys` names an
+entry and `values` also covers it, **both** apply: demands compose by intersection (§5.1) and there is
+no precedence rule to invent. `values` is orthogonal to `seal`: `values` says what shape, `seal` says
+which keys. Against a non-mapping value it is a no-op — the shape refusal belongs to `type`.
+
+### Guarded recursion (`SPEC.md` §7 amended)
+
+A type reaching itself through at least one of `keys`, `items`, or `values` is **productive** — every
+traversal consumes a level of the document — and is accepted. A type reaching itself through type
+expressions alone consumes nothing and is still `unresolvable-type-cycle`. A cycle guarded at one
+point and unguarded at another is accepted: one structural level anywhere makes the loop productive.
+
+### `directives:` (v0.7 part 2, `SPEC.md` §9 amended)
+
+The third top-level section, whose vocabulary is **closed to the six reserved keys** and whose entries
+take the same per-key vocabulary a `keys:` entry takes. Reserved keys are directives rather than data
+and never appear in a merged configuration — so a meta-schema constraining them through `keys:` would
+be constraining something the pipeline has already, correctly, removed.
+
+```yaml
+directives:
+  $pin:     { demand: { type: string, pattern: '^sha256:[0-9a-f]{64}$' } }
+  $adopts:  { demand: { type: string } }
+```
+
+This is what lets a schema *state* two rules `SPEC.md` §6.1 and §9 have asserted since they were
+written and that had, until now, no expression outside hand-written code. `directives:` never
+promotes a reserved key to data; the fold's stripping rule is unchanged.
+
+### `metaValidate(options)` — self-hosting
+
+```typescript
+import { metaValidate } from "cascata";
+import { createNodeHost, nodeMetaSchemaLocation } from "cascata/host/node";
+
+const result = await metaValidate({
+  host: createNodeHost(),
+  subject: "./my-schema.yaml",
+  metaSchema: nodeMetaSchemaLocation(),
+});
+```
+
+`meta/cascata.meta.yaml` is the meta-schema: the document that describes schema documents, written in
+the language it describes, and it **validates against itself**. It is a document, not a constant —
+obtained through the `Host` seam like any other, because the one document that could most easily have
+been exempted from Article VI is the one that must not be.
+
+Meta-validation is **available, not automatic**: `load()` does not run it. `SPEC.md` §2.6 frames
+self-hosting as "publishing a schema = validating it as a config" — a publishing act — and making it
+the default is a v1.0 question, decided with the vocabulary freeze.
+
+Two things it cannot do, both deliberate. §9.1's leaf type-expression grammar is not regular, so
+`typeExpr`'s `pattern` is a **superset** governed by one rule: it must accept every string the grammar
+accepts. And it checks **one document's shape** — it cannot state that a `provide` satisfies its own
+key's demands, nor any row of §5.2's monotonicity table, nor that a type name resolves. Those stay
+hand-written checks, so passing the meta-schema is necessary and nowhere near sufficient.
+
+### v0.7 diagnostic codes
+
+Extends every catalogue above, unchanged.
+
+| Code | Raised when |
+| --- | --- |
+| `seal-violation` | A key the accumulated `keys` vocabulary does not declare, at a position sealed `closed` (§6.3, §9) |
+| `final-key-redeclared` | A descendant schema layer declaring anything for a key an ancestor sealed `final` |
+| `final-key-set` | A config setting a key that is `final` with `provide` — the pinned constant (§5.5, §6.3) |
+| `required-vacuous` | **`info`** — `required` under a `final provide`, which guarantees nothing `final` does not already (§5.5) |
+| `delegate-inline-string-loaded` | **`info`** — `delegate: allow` at a key demanding a leaf shape an inline string would have satisfied (§8.1) |
+| `unknown-authority-member` | An `authority:` member outside `demandPinnedAdoption`/`finalAgainstForking` |
+| `adoption-not-pinned` | An unpinned adoption in a pedigree whose root demanded `demandPinnedAdoption` (§6.3, §11) |
+| `unknown-directive-key` | A `directives:` entry naming something outside the six reserved keys (§9, v0.7 part 2) |
+
 
 ## Scripts
 
