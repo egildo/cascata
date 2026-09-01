@@ -418,6 +418,7 @@ styles:
 - Every error carries: the violated demand (with its declaring layer + span, as a JSON Pointer per RFC 6901 into that document), the offending value (layer + span, delegation breadcrumb included), and the accumulated pedigree position.
 - Canonical error sentence: `constraint from house.yaml:7 (/keys/styles/demand) rejected value from conf.network.yaml:3 (delegated from site.yaml:12)`.
 - **Diagnostics carry a level: `error` or `info`.** An `error` is a refusal — it decides the outcome, and a result carrying one is not a configuration. An `info` is a **lint**: it teaches and never changes the verdict. Two levels, not three: every lint this document mandates (§5.5's vacuous `required`, §8.1's inline string at a delegating key) is a "this does not mean what you think" observation about a *legitimate* construct, and nothing yet cited needs a middle rank. A third level may be added when something needs it; adding one that nothing fires is the vocabulary inflation Principle VI forbids. Levels are part of the contract, so an `info` carries the same position, pointer, and pedigree data an `error` does — a lint with a worse diagnostic than a refusal would be a lint nobody acts on.
+- **One violated demand at one position is one diagnostic.** Where a walk reaches the same demand and the same value by more than one path — which §9's `keys` + `values` composition makes ordinary, since both may cover an entry and both may recurse into one shared type — the diagnostic is reported **once**. This is a statement about multiplicity, on which this section had been silent; it changes nothing a diagnostic *carries*. It is written down because the silence was not free: at v1.0 a 296-byte configuration, legal and well inside §11's depth cap, reported a single violation 2^depth times and exhausted memory at depth 24. Every copy was byte-identical in every field a consumer can read, so nothing was being communicated by the repetition (§15).
 - Machine-readable error output uses RFC 6901 pointers throughout — do not invent a path syntax.
 - `tool why <config> <pointer>` answers "where did this value come from and what did it override" (the `git config --show-origin` / DevTools struck-through-rule feature). Built into the merge engine from day one; nearly free there, nearly impossible to retrofit.
 
@@ -727,6 +728,55 @@ The bootstrap (§14 item 7) was scheduled before this point precisely so that th
   vocabulary to be able to name a grammar, which is a v1+ question and is parked in §14 rather than
   papered over. See §9.1, §14.
 
+- **One violation, reported 2^depth times** → settled: **a diagnostic is emitted once per violated
+  demand per position**, and §10 now says so. Found by v1.0's implementer, who could satisfy the
+  milestone's bound on the *walk* and not on the *output*, and said so plainly rather than reporting
+  the half that worked.
+
+  §9 says `keys` and `values` both apply where both cover an entry, and demands intersect. That is
+  right and is not what changed. The consequence nobody had traced: where both arms recurse into one
+  shared type, a violation at depth *d* is returned by each arm and doubles at every level up — so a
+  **296-byte** configuration, legal and well inside §11's depth cap of 64, produced 1,048,576
+  diagnostics at depth 20 and exhausted memory at depth 24. Verified independently, not taken on
+  report.
+
+  Settled as a **correction rather than a meaning change**, which is what let it land before the
+  freeze rather than costing v2.0: §10 legislates what a diagnostic *carries* — the violated demand,
+  the offending value, the pedigree position — and its canonical sentence describes one sentence per
+  violation. It was silent on multiplicity. All 2^d copies were byte-identical across every field a
+  consumer can read (code, demand, level, message, pedigree position, pointer, primary span, related
+  spans), so the repetition communicated nothing and removing it takes nothing away. What was there
+  was an artifact of one walk reaching one `(demand, value)` pair by two paths.
+
+  One implementation note that belongs with the rule, because it is not obvious and getting it wrong
+  reproduces the fault: **deduplicating at the end does not help.** The exhaustion happens while the
+  lists are being assembled and concatenated up the recursion, long before any final pass. The
+  identity must be applied as results accumulate. See §10, §9.
+
+- **Article VII, corrected and generalized by its first implementation** → settled. The article was
+  written days before it was built and had never been implemented against; five of its clauses needed
+  work, and the milestone's own requirements needed more.
+
+  **The generalization, and the only one of these that is an addition rather than a correction:** the
+  numeric rule was a table of three spellings — `int`, `float`, `int | float` — which left every
+  mixed union (`int | string`, `float | null`) to an implementer's judgment. Restated as the question
+  it always was, **"does the accumulated demand admit `float`?"**, the three rows become consequences
+  and every future union is settled in advance. `int | string` admits no float and yields `bigint`,
+  so an author who wrote `int` and later widened does not silently lose exactness.
+
+  **The corrections.** Keys are *inserted* in canonical order and cannot be *enumerated* in it —
+  ECMA-262 hoists array-index keys to the front of every object, so `10, 2, b, a` enumerates
+  `2, 10, a, b` regardless; the article now names this rather than leaving it to be debugged, and
+  this milestone's own FR-009 had asserted the impossible version. The deep-immutability clause cited
+  "the same means … including the `Map`-shaped hazard", describing a hazard a projection cannot have,
+  since a mapping becomes an object and no `Map` survives. The undemanded-key row said "typed
+  `unknown`", which cannot be a v1.0 obligation at all: `load<T>()` types the whole configuration
+  with one caller-supplied `T`, so per-key typing is the v1.x generator's statement. And the article
+  named neither the projection as a stage nor a function for it, while requiring it be reachable
+  without `load()`; it is `project()`, and it depends on `merge()` rather than on `validate()`.
+  Finally, `null`-versus-absence and the precision lint's *position* were both raised in the
+  milestone's Edge Cases and answered nowhere; both are now stated. See §17, §10.
+
 - **What v1.0 freezes, what a consumer receives, and where the type generator goes** → settled, and
   the three answers are one decision seen from three sides.
 
@@ -907,21 +957,29 @@ Seven milestones produced a positioned, frozen `Node` tree and no way to read it
 
 Laws:
 
-- **The ordinary consumer receives a value, not a tree.** Mappings project to **null-prototype objects** whose keys are inserted in §4.2's canonical order; sequences to arrays; scalars to their JS equivalents. `Object.create(null)` rather than `{}` because a configuration key is author-controlled and `__proto__` is not a key anyone should be able to set by writing it in YAML.
+- **The ordinary consumer receives a value, not a tree.** Mappings project to **null-prototype objects** whose keys are inserted in §4.2's canonical order. *Inserted*, not enumerated: ECMA-262 hoists every array-index key — a canonical numeric string in `[0, 2^32−2]` — to the front of any object and orders those numerically, so a mapping with keys `10, 2, b, a` enumerates `2, 10, a, b` no matter how it was built. This is a property of the host language, not a choice, and it is named here so it is found by reading rather than by debugging. A consumer needing canonical order over numeric keys reads the node tree, which has it unconditionally. Sequences project to arrays; sequences to arrays; scalars to their JS equivalents. `Object.create(null)` rather than `{}` because a configuration key is author-controlled and `__proto__` is not a key anyone should be able to set by writing it in YAML.
 - **The value view is a projection, never a replacement.** The node tree remains available on the same result. Spans, provenance, and pedigree live there, and `why()` still answers by RFC 6901 pointer. A consumer who needs a position has not lost one; a consumer who needs a value no longer pays for positions they will not read.
 - **The demand decides the numeric type, not the document.** `kind` is lexical — `30` is an int and `30.0` is a float — so a *faithful* projection would let a config author's punctuation decide whether the consuming application sees `bigint` or `number`, under an unchanged schema. That is backwards: this project's thesis is that the schema demands and the config provides, and the output type is part of what is demanded. Therefore, per key, from the **accumulated** demand:
 
-  | accumulated demand | value | reason |
+  **The question is "does the accumulated demand admit `float`?"** — not "which of these spellings is it?". Stated that way it settles every union, including the mixed ones a table of spellings would miss (`int | string`, `float | null`, and whatever v1.x adds):
+
+  | the accumulated demand | value | reason |
   |---|---|---|
-  | `int` | `bigint` | exact at any magnitude (§4.2) |
-  | `float` | `number` | IEEE-754 is what was asked for |
-  | `int \| float` | `number` | the schema declared a float acceptable here |
-  | no numeric demand | faithful, typed `unknown` | no contract to consult, so nothing is promised |
+  | admits `float` | `number` | the schema declared a float acceptable here |
+  | admits `int` but not `float` | `bigint` | exact at any magnitude (§4.2) |
+  | admits neither | projected faithfully by lexical kind | not a numeric key; no contract to consult |
+
+  The three original rows are consequences: `int` → `bigint`, `float` → `number`, `int | float` → `number`. `int | string` admits no float and therefore yields `bigint` — an author who wrote `int` and later widened to `int | string` does not silently lose exactness. **The generalized rule was added at v1.0**, from an implementer's report that a table of spellings left every mixed union to a judgment call (§15).
+
+  Where a key has no numeric demand, **nothing is promised about its type**: a caller's `T` says `unknown` there, and the v1.x generator will emit that. At v1.0 `load<T>()` types the whole configuration with one caller-supplied `T`, so per-key typing is the generator's statement to make, not this version's.
 
   A schema author who needs exactness above 2^53 writes `type: int`, which is one line, discoverable, and the only place the decision belongs.
 - **Normalization never loses a digit silently.** Where `int | float` projects an integer that is not exactly representable as a double, an **info**-level diagnostic (§10) says so, naming the key and both values. It fires on actual loss, not on every `int | float` key — a lint that cried on the shape rather than the value would be ignored within a week.
 - **`load<T>()`'s `T` is the caller's claim, and the library never checks it.** Validation enforces the *schema* against the value; it cannot enforce the caller's belief about what the schema says. A `T` that disagrees with its schema is a bug in the calling code, and the v1.x generator (§14) exists to remove the guesswork by deriving `T` from the schema chain. Until then the mismatch is real and is named here rather than discovered.
-- **The value is deeply immutable**, by the same means and to the same depth as the tree (§4.1's freeze), including the `Map`-shaped hazard `src/model/freeze.ts` exists to close.
+- **The value is deeply immutable**, to the same depth as the tree — but not by the same means, and the difference matters. A mapping becomes an object, so no `Map` survives a projection and `Object.freeze` is sufficient; the tree needs a Proxy precisely because `Object.freeze` does nothing to a `Map` (§4.1). This clause said "by the same means … including the `Map`-shaped hazard" until v1.0, describing a hazard the projection cannot have.
+- **The projection is a stage, and has a name.** `project()` takes a merged configuration and returns a value; it reads accumulated demands from the configuration's own layers, so it depends on `merge()` and not on `validate()`. `load()` places it after validation because that is where a *successful* configuration exists, not because of a data dependency. Per Principle IV it consumes only the previous stage's output and is reachable without `load()`.
+- **A present key set to `null` is a present property whose value is `null`**; an absent key is an absent property. §4.2's three-way distinction between absent, null, and empty survives the projection intact.
+- **The precision lint is anchored at the offending value**, carrying that value's own span and pointer — not the demand's. A lint the consumer cannot locate in their own file is a lint they cannot act on (Principle III).
 
 ---
 

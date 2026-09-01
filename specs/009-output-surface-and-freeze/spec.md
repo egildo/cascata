@@ -190,12 +190,23 @@ otherwise reach into the consuming application's type system.
 - **FR-001**: A top-level `types:`, `keys:`, `directives:`, or `authority:` whose value is not a
   mapping MUST be refused at that node's own position, by one rule covering all four.
 - **FR-002**: An omitted section MUST remain legal.
-- **FR-003**: The meta-schema/pipeline divergence table MUST reach **zero** rows, asserted by count.
+- **FR-003**: The meta-schema/pipeline **divergence** rows — those where the pipeline accepts what the meta-schema refuses — MUST reach **zero**, asserted by count. The `REFUSED` table is unaffected and keeps its rows; the original wording said "the divergence table" and read as though it meant both.
 
 **Bounded composition** (§9, §11)
 
-- **FR-004**: `keys` + `values` composition over a shared recursive type MUST be polynomial,
-  established by a ratio test across depths, not a wall-clock threshold.
+> **Amended 2026-09-01, post-implementation.** FR-004 as first written could not be satisfied and the
+> implementer proved it: bounding the *walk* does not bound the *output*, because each arm returns the
+> same violation and it doubles at every level. FR-004a is the missing half. FR-003 and FR-009 were
+> wrong as written; SC-007 was made false by a correct change. All four are corrected here, and the
+> underlying rules are in `SPEC.md` §10 and §17 (§15).
+
+- **FR-004**: the `keys` + `values` **walk** MUST be polynomial, established by a ratio test across
+  depths, not a wall-clock threshold.
+- **FR-004a**: the **output** MUST be bounded too. One violated demand at one position MUST yield
+  exactly one diagnostic (`SPEC.md` §10, amended). The identity MUST be applied **as results
+  accumulate** — deduplicating at the end does not help, because the exhaustion happens while the
+  lists are being assembled. A 296-byte configuration at depth 24 MUST NOT exhaust memory; a test
+  MUST pin that specific case.
 - **FR-005**: Diagnostics MUST be identical — same set, same order — to the unbounded walk's.
 - **FR-006**: Any cache key MUST distinguish subtrees that differ by pointer, layer, or depth, and a
   test MUST prove a mis-keyed cache fails.
@@ -204,7 +215,7 @@ otherwise reach into the consuming application's type system.
 **The value view** (Article VII)
 
 - **FR-008**: Mappings MUST project to **null-prototype** objects, sequences to arrays.
-- **FR-009**: Keys MUST enumerate in §4.2's canonical order.
+- **FR-009**: Keys MUST be **inserted** in §4.2's canonical order. They cannot be made to *enumerate* in it — ECMA-262 hoists array-index keys to the front of every object — and the original wording asserted the impossible (`SPEC.md` §17, amended).
 - **FR-010**: A key named `__proto__` MUST become an ordinary own property, polluting nothing.
 - **FR-011**: The projection MUST be deeply immutable.
 - **FR-012**: The node tree MUST remain available on the same result, and `why()` MUST still answer by
@@ -256,7 +267,7 @@ otherwise reach into the consuming application's type system.
 - **SC-005**: Two configs differing only in `30` versus `30.0`, under one `int | float` demand, project
   the **same** JS type.
 - **SC-006**: An inexact normalization lints; an exact one does not.
-- **SC-007**: All 901 pre-existing tests remain green, unmodified in substance.
+- **SC-007**: All 901 pre-existing tests remain green. Two are modified in substance and both are **strengthenings**: the case that asserted a non-mapping `types:` section "contributes nothing" now asserts the refusal US1 exists to add, and a recursion-termination case was written with a spelling that made it guard nothing. A milestone that closes a silent acceptance cannot leave the case asserting the silence untouched; the original wording forbade its own success.
 - **SC-008**: `package.json` reads `1.0.0` and every documented YAML example parses.
 
 ## Assumptions
