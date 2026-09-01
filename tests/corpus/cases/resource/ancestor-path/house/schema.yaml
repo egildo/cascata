@@ -1,0 +1,5 @@
+keys:
+  stylesheet:
+    demand:
+      type: path
+    provide: assets/theme.css

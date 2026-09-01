@@ -1,0 +1,7 @@
+keys:
+  logo:
+    demand:
+      type: path
+  homepage:
+    demand:
+      type: url

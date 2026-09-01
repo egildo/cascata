@@ -1,0 +1,9 @@
+keys:
+  network:
+    demand:
+      type: mapping
+      keys:
+        cert:
+          demand:
+            type: path
+    delegate: allow

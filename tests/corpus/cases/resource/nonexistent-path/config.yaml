@@ -1,0 +1,2 @@
+$schema: ./schema.yaml
+asset: does/not/exist.css
