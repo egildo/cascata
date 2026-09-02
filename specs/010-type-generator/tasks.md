@@ -326,11 +326,11 @@ silently into an earlier phase. Empty at planning time, by definition.
 
 ## Phase 10: Close-out
 
-- [ ] T045 `grep -rn SABOTAGE src/ tests/` empty
-- [ ] T046 `pnpm typecheck && pnpm test` green; tree clean; all seven constitution gates; `git diff
+- [x] T045 `grep -rn SABOTAGE src/ tests/` empty
+- [x] T046 `pnpm typecheck && pnpm test` green; tree clean; all seven constitution gates; `git diff
       --stat 7e568f9 -- tests/` shows **no pre-existing test file modified** except
       `layering.test.ts` and `doc-examples.test.ts`, both by addition
-- [ ] T047 The report: every place Article VIII, the contracts, or the spec was silent, contradictory,
+- [x] T047 The report: every place Article VIII, the contracts, or the spec was silent, contradictory,
       or wrong (research W-1..W-6 confirmed or overturned, plus anything new); every invention; every
       sabotage and what it revealed; every mixed oracle case and why; the oracle's timings; whether
       the emitted mapping is safe to ship as a permanent promise — and if not, which row
