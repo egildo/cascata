@@ -11,18 +11,18 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { discoverCaseFiles, loadCases, runCases, type AdapterRegistry } from "./runner.js";
-import { parseYamlInput } from "./yaml-adapter.js";
+import { discoverCaseFiles, loadCases, runCases } from "./runner.js";
+import { ADAPTERS } from "./adapters.js";
 
 const CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "cases");
 
 // format -> adapter, selected by each case's `format` field (runner
-// contract point 3). JSON and TOML adapters join this registry, unchanged,
-// when they arrive (§14 v1.x) — this is the one line User Story 3 (T051)
-// is really about.
-const adapters: AdapterRegistry = {
-  yaml: (input, origin, limits) => parseYamlInput(input, { origin, limits }),
-};
+// contract point 3). The registry moved to `./adapters.js` at v1.2, when
+// the JSON adapter joined it and three other whole-corpus tests turned out
+// to need the same map (specs/011-json-adapter research P-6). The runner
+// itself is still format-blind, exactly as User Story 3 (T051) intended:
+// the TOML adapter joins by adding one line to that file.
+const adapters = ADAPTERS;
 
 describe("conformance corpus", () => {
   const caseFiles = discoverCaseFiles(CASES_DIR);

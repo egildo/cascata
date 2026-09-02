@@ -61,7 +61,7 @@ import {
 import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span.js";
 import { resolveAlias, isMergeKeyPair, mergeSources } from "./expand.js";
 import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsupportedTagDiagnostic } from "./floor.js";
-import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "./limits.js";
+import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "../limits.js";
 import { findFirstInvalidUtf8ByteOffset, locateByteOffset } from "../encoding.js";
 
 // `yaml` merges each of these classes with a `.Parsed` namespace member

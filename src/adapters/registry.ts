@@ -21,7 +21,7 @@
  */
 
 import { parseYamlBytes } from "./yaml/parse.js";
-import type { ParseLimits } from "./yaml/limits.js";
+import type { ParseLimits } from "./limits.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { Node } from "../model/node.js";
 import type { Origin } from "../model/span.js";

@@ -7,7 +7,7 @@
  * document deep enough to trip `MAX_DEMAND_DEPTH=64` cannot be built
  * through `resolve()`: every document `resolve()` reads goes through
  * `parseYamlBytes`/`parseYaml` with v0.1's own `DEFAULT_LIMITS.maxDepth`
- * (`src/adapters/yaml/limits.ts`) — also 64, but counting *every* raw
+ * (`src/adapters/limits.ts`) — also 64, but counting *every* raw
  * YAML mapping/sequence nesting level, not semantic `keys`/`items` steps.
  * Each semantic step costs at least 1 raw YAML level (a bare `items`
  * chain, the cheapest encoding) and the semantic demand itself already

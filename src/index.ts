@@ -20,7 +20,7 @@
  */
 
 import { parseYaml, parseYamlBytes } from "./adapters/yaml/parse.js";
-import type { ParseLimits } from "./adapters/yaml/limits.js";
+import type { ParseLimits } from "./adapters/limits.js";
 import { formatForLocation } from "./adapters/registry.js";
 import { createDiagnostic, type Diagnostic } from "./diagnostics/diagnostic.js";
 import type { Node } from "./model/node.js";
@@ -54,7 +54,7 @@ export { nodesEqual } from "./model/equality.js";
 export type { Mapping, Node, Scalar, ScalarKind, ScalarValueOf, Sequence } from "./model/node.js";
 export { createOrigin, createSourceSpan } from "./model/span.js";
 export type { Origin, SourceSpan } from "./model/span.js";
-export type { ParseLimits } from "./adapters/yaml/limits.js";
+export type { ParseLimits } from "./adapters/limits.js";
 export type { Reference, ReferenceAuthority, ReferenceKind } from "./resolve/reference.js";
 export type { Graph, GraphDocument, GraphDocumentIdentity, GraphReference } from "./graph/build.js";
 export type { Pedigree, PedigreeEntry } from "./graph/pedigree.js";

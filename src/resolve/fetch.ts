@@ -49,7 +49,7 @@ export const DEFAULT_FETCH_LIMITS: FetchLimits = {
   maxBytes: 8 * 1024 * 1024,
 };
 
-/** Fill in any limit a caller did not specify with the default, the same shape `resolveLimits` (v0.1, adapters/yaml/limits.ts) uses. */
+/** Fill in any limit a caller did not specify with the default, the same shape `resolveLimits` (v0.1, adapters/limits.ts) uses. */
 export function resolveFetchLimits(overrides: Partial<FetchLimits> | undefined): FetchLimits {
   return {
     maxRedirects: overrides?.maxRedirects ?? DEFAULT_FETCH_LIMITS.maxRedirects,

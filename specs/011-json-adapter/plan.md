@@ -22,8 +22,9 @@ three whole-corpus tests that ignore a case's `format`, and the `Host` export.
 2. **The UTF-8 validator already exists**, module-private in the YAML adapter, and is the kind of
    code that is wrong the second time it is written. It is extracted, unchanged (P-2).
 3. **`totality`, `hermetic` and `entry-parity` feed every corpus case to the YAML adapter**,
-   whatever the case's `format` says. Adding a JSON case to the shared directory would have fed JSON
-   to the YAML parser; `entry-parity` would have failed (P-6).
+   whatever the case's `format` says. Measured after the cases landed: all 23 accepting JSON text
+   cases are accepted by the YAML adapter too, so nothing fails — `entry-parity` simply asserts its
+   property about the wrong adapter, twice, and about the new one never (P-6).
 4. **`src/index.ts` never uses its own registry** — both parse-at-location sites compare the format
    to the literal `"yaml"`. Without changing them, registering the JSON adapter changes nothing that
    a consumer can reach (P-7).
@@ -43,7 +44,8 @@ registry, and three new unit suites: parity, the packet fixture, and the adapter
 properties.
 
 **Scale/Scope**: 24 FRs. New files: `src/adapters/json/{scan,parse}.ts`,
-`src/adapters/encoding.ts`, `tests/corpus/{json-adapter,adapters}.ts`,
+`src/adapters/encoding.ts`, `src/adapters/limits.ts` (moved from `yaml/`),
+`tests/corpus/{json-adapter,adapters}.ts`,
 `tests/unit/{json-adapter,json-yaml-parity,packet-fixture}.test.ts`,
 `tests/fixtures/packet/20221030_203857_1265d2.packet.json`, and the corpus cases. Changed:
 `src/adapters/registry.ts`, `src/adapters/yaml/parse.ts` (imports moved out, no logic touched),
@@ -78,13 +80,14 @@ leans on, before any conclusion about them was written down.
 | **Taken ahead of its §14 position** (item 11, after v1.2's exporter) | a consumer exists now: an archive host that renders a photograph's metadata as JSON and cannot be built until Cascata reads it. §15's freeze rule permits an addition at any time, and the adapter and the exporter are independent — neither reads the other's output | doing the exporter first would delay the only thing anyone is waiting for, and would not make the adapter one line simpler |
 | **A hand-written parser rather than `JSON.parse`** | `JSON.parse` yields no positions and no `bigint`s. §4.1 makes an unpositioned node unconstructible and §4.2 makes integers exact; a `JSON.parse` tree can satisfy neither | using `JSON.parse` and then re-scanning the text to attach positions is a second parser wearing a disguise, and one that must agree with the first about every token boundary |
 | **Extracting the UTF-8 validator out of `yaml/parse.ts`** | it is shared, security-relevant, and exactly right today | duplicating it makes two things that must stay identical; importing it from the YAML adapter makes one sibling depend on another |
-| **Changing three existing tests** | they ignore the `format` field they were given (P-6) | leaving them would feed JSON documents to the YAML parser, which `entry-parity` would fail on and the other two would pass vacuously |
+| **Changing three existing tests** | they ignore the `format` field they were given (P-6) | leaving them would keep feeding JSON documents to the YAML parser, which — measured — passes, so the new adapter's bytes/text parity would be untested while looking tested |
 
 ## Structure Decision
 
 ```
 src/adapters/
   encoding.ts        # UTF-8 well-formedness + byte->line/column, shared by both adapters
+  limits.ts          # SPEC.md §11's caps, moved up from yaml/ for the same reason
   registry.ts        # + the json entry, + .json in formatForLocation
   json/
     scan.ts          # the byte cursor: offset, line, code-point column, and the token primitives

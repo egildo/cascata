@@ -2,6 +2,13 @@
  * Resource limits — SPEC.md §11, contracts/parse-api.md's "Limits" table,
  * research D7.
  *
+ * Written for the YAML adapter in v0.1 and living in `yaml/limits.ts` until
+ * v1.2, when the JSON adapter needed the identical caps. SPEC.md §11 is
+ * about *documents*, not about YAML, so the module moved up one level
+ * beside `encoding.ts` rather than being imported across from one adapter
+ * into its sibling (specs/011-json-adapter research P-2 makes the same
+ * argument for the UTF-8 validator). Not a line of it changed.
+ *
  * §4.2/§11 mandate that depth and size be capped but name no numbers; the
  * defaults here are research D7's proposals, generous against real
  * configuration documents and hostile to pathological ones. Both are
@@ -9,8 +16,8 @@
  * `src/index.ts`'s `ParseOptions.limits`.
  */
 
-import { createDiagnostic, type Diagnostic } from "../../diagnostics/diagnostic.js";
-import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span.js";
+import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
+import { createSourceSpan, type Origin, type SourceSpan } from "../model/span.js";
 
 export interface ParseLimits {
   readonly maxDepth: number;

@@ -54,6 +54,12 @@ into `json/parse.ts`. That makes the JSON adapter depend on the YAML adapter, wh
 between two siblings that share nothing but a byte-level concern — the shared concern deserves its
 own module.
 
+**The same argument caught a second module during implementation.** `yaml/limits.ts` holds
+`SPEC.md` §11's depth and size caps, which are about *documents* and not about YAML at all; the JSON
+adapter needs exactly them. It moves to `src/adapters/limits.ts`, unchanged, rather than being
+imported across from one adapter into its sibling. `ParseLimits` is a public type and keeps its
+name; only the internal path moved.
+
 ### P-3: the number grammar must be the parser's own
 
 RFC 8259 §6: `number = [ minus ] int [ frac ] [ exp ]`, `int = zero / ( digit1-9 *DIGIT )`. The
@@ -95,9 +101,23 @@ and changing it for one input is a worse trade than one honest unit test.
 `tests/unit/totality.test.ts`, `tests/unit/hermetic.test.ts` and `tests/unit/entry-parity.test.ts`
 each call `loadCases(CASES_DIR)` and then `parseYamlInput`/`parseText` on **every** case, ignoring
 the case's own `format` field. Adding JSON cases to the same directory therefore feeds JSON text to
-the YAML parser. For `totality` and `hermetic` that is harmless but meaningless (they assert only
-"does not throw"); for `entry-parity` it is a real failure risk, since it asserts the parse
-*succeeds*.
+the YAML parser.
+
+**Measured, after the cases landed, rather than predicted:** all 23 accepting text-sourced JSON
+cases are *also* accepted by the YAML adapter, so none of the three tests fails. JSON is very nearly
+a YAML 1.2 subset, and this corpus does not happen to contain a document that separates them. The
+first draft of this finding said `entry-parity` "would have failed"; that was a prediction, and it
+was wrong. Corrected here rather than quietly deleted, because the reason to fix the three tests is
+not that they break — it is worse than that:
+
+- `entry-parity` claims to assert that an adapter's bytes and text entry points produce identical
+  trees. For 23 JSON cases it asserts that about the **YAML** adapter, twice, and about the JSON
+  adapter not at all. The property the JSON adapter needs was untested and looked tested.
+- `totality` and `hermetic` assert only "does not throw", so they pass for the same accidental
+  reason and cover the new adapter not at all.
+- A future JSON case that YAML *does* reject — a `\/` escape in an odd position, a JSON-only number
+  spelling, anything the two grammars disagree about — would fail with a message naming the JSON
+  case, and the reader would look for the bug in the JSON adapter, which would not be involved.
 
 **Decision:** make all three dispatch on `testCase.format`, through one shared
 `tests/corpus/adapters.ts`. This is a strengthening, not a weakening: each test's property — totality,
