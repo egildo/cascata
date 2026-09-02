@@ -265,23 +265,23 @@ trip compiles, and the sabotage was watched going red.
 
 **Goal**: the `ts` lane, the README, `CLAUDE.md`, the version.
 
-- [ ] T039 [US7] `tests/unit/doc-examples.test.ts`: the `ts generated` lane per
+- [x] T039 [US7] `tests/unit/doc-examples.test.ts`: the `ts generated` lane per
       contracts/soundness-oracle.md §3 — pair detection, `accumulate`+`generate` on the YAML as a
       single-layer schema, trimmed equality, count floor of 1, a synthetic-mismatch meta-test; the
       YAML lane untouched
-- [ ] T040 [US7] `README.md`: v1.1 row in the milestone table; a `generate` section with one
+- [x] T040 [US7] `README.md`: v1.1 row in the milestone table; a `generate` section with one
       `yaml` block and its `ts generated` pair (write the `ts` by hand from the contract, then let
       the lane confirm); `generateTypes()` under the public surface; the two new codes in the
       catalogue; the named limits (closedness at literals; ranges as JSDoc); the freeze note extended
       to the emitted mapping
-- [ ] T041 [US7] `CLAUDE.md`: the layering line gains `src/generate/` (may import `validate/`,
+- [x] T041 [US7] `CLAUDE.md`: the layering line gains `src/generate/` (may import `validate/`,
       `merge/`, `model/`, `diagnostics/`; not adapters, `resolve/`, `graph/`, `host/`; `validate/`
       may not import it). The traps list gains: `{}` admits everything; excess-property checks apply
       to literals only; `number & bigint` is `never`
-- [ ] T042 [US7] Sweep `specs/**/contracts/*.md` and `specs/009/*.md` for "the generator" as future
+- [x] T042 [US7] Sweep `specs/**/contracts/*.md` and `specs/009/*.md` for "the generator" as future
       tense; correct in place citing v1.1
-- [ ] T043 [US7] `package.json`: version `1.1.0`
-- [ ] T044 [US7] `pnpm typecheck && pnpm test` green; commit `docs(generate): v1.1 — the README pair,
+- [x] T043 [US7] `package.json`: version `1.1.0`
+- [x] T044 [US7] `pnpm typecheck && pnpm test` green; commit `docs(generate): v1.1 — the README pair,
       CLAUDE.md, version 1.1.0 — US7`
 
 ---
@@ -315,6 +315,8 @@ silently into an earlier phase. Empty at planning time, by definition.
       oracle's closedness claim guarded nothing: removing closedness from the emitter entirely left
       the whole sweep green. Four hand-built cases added to the oracle, and both seal sabotages now
       go red against them
+- [x] T055 [US7] The future-tense sweep reached `src/` too, not only `specs/`: `src/index.ts` and
+      `src/project/value.ts` both told a reader the generator had not shipped yet. Corrected in place
 - [x] T054 [US5] `resolve()`'s body became `resolveEntry()`, parameterised on which key the entry's
       own outgoing reference comes from and on whether delegation grafts. A schema entry carries
       `$adopts`, not the `$schema` `resolve()` looks for, so `generateTypes()` would otherwise have

@@ -56,7 +56,7 @@ if (result.ok) {
 ```
 
 `T` is the caller's claim and the library never checks it (Article VII). Deriving it from the schema
-chain is the v1.x generator's job (§14).
+chain is the v1.x generator's job (§14) — **shipped at v1.1 as `generateTypes()`** (specs/010-type-generator).
 
 ## Expected outcomes
 

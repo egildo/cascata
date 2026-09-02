@@ -25,8 +25,9 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { parse } from "../../src/index.js";
+import { accumulate, generate, parse } from "../../src/index.js";
 import { createOrigin } from "../../src/model/span.js";
+import type { Layer } from "../../src/merge/provenance.js";
 
 const REPO_ROOT = join(__dirname, "..", "..");
 const ENCODER = new TextEncoder();
@@ -178,5 +179,137 @@ describe("SC-009 — the sweep fails when a deliberately-broken example is intro
     expect(used).toEqual([]);
     expect(ELLIPSIS_MARKERS.some((marker) => body.includes(marker))).toBe(true);
     // Which is precisely the condition the second test above turns into a failure.
+  });
+});
+
+
+// --- v1.1 (010) FR-039 — the `ts generated` lane -----------------------------
+//
+// A fenced ```yaml block **immediately** followed by a fenced block whose
+// info string is `ts generated` is a pair: the YAML is a single-layer
+// schema, and the `ts` block is what `generate()` must produce for it, byte
+// for byte after trimming. The `generated` word is the marker, so an
+// ordinary ```ts block in the documentation — a consumer snippet, an API
+// signature — is not compared against anything.
+//
+// **The YAML lane above is untouched** (FR-042), and cannot be otherwise:
+// its own fence pattern captures the info string as `\w*`, so a
+// ```ts generated fence never matched it in the first place. This lane
+// brings its own scanner rather than generalizing that one.
+
+interface GeneratedPair {
+  readonly file: string;
+  readonly line: number;
+  readonly yaml: string;
+  readonly expected: string;
+}
+
+/** Every fenced block, with its info string and its position, so "immediately followed by" can be decided on the text between them. */
+function fencedBlocks(text: string): readonly { readonly info: string; readonly body: string; readonly line: number; readonly start: number; readonly end: number }[] {
+  const blocks: { info: string; body: string; line: number; start: number; end: number }[] = [];
+  const fence = /^```([^\n]*)\r?\n([\s\S]*?)^```[ \t]*$/gm;
+  let match = fence.exec(text);
+  while (match !== null) {
+    blocks.push({
+      info: (match[1] ?? "").trim(),
+      body: match[2] ?? "",
+      line: text.slice(0, match.index).split("\n").length,
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+    match = fence.exec(text);
+  }
+  return blocks;
+}
+
+function generatedPairs(text: string, file: string): readonly GeneratedPair[] {
+  const blocks = fencedBlocks(text);
+  const pairs: GeneratedPair[] = [];
+  blocks.forEach((block, index) => {
+    const next = blocks[index + 1];
+    if (next === undefined || next.info !== "ts generated") {
+      return;
+    }
+    const info = block.info.toLowerCase();
+    if (info !== "yaml" && info !== "yml") {
+      return;
+    }
+    // "Immediately followed": only whitespace between the two fences.
+    if (text.slice(block.end, next.start).trim() !== "") {
+      return;
+    }
+    pairs.push({ file, line: block.line, yaml: block.body, expected: next.body });
+  });
+  return pairs;
+}
+
+/** What `generate()` produces for one documented schema, read as a single layer. */
+function generatedFor(pair: GeneratedPair): string {
+  const label = `${relative(REPO_ROOT, pair.file)}:${pair.line}`;
+  const origin = createOrigin(label, label);
+  const parsed = parse(ENCODER.encode(pair.yaml), { origin });
+  if (!parsed.ok) {
+    throw new Error(`${label}: the paired YAML does not parse: ${parsed.diagnostics.map((d) => d.message).join("; ")}`);
+  }
+  const layer: Layer = { identity: { location: label, hash: "0".repeat(64) }, role: "schema", rank: 0, tree: parsed.tree };
+  return generate(accumulate([layer]).tree).source;
+}
+
+describe("v1.1 FR-039 / SC-008 — every documented `ts generated` block is what the generator actually produces", () => {
+  const pairs = documentationFiles().flatMap((file) => generatedPairs(readFileSync(file, "utf-8"), file));
+
+  it("finds the pairs at all — a lane that finds nothing passes vacuously", () => {
+    expect(pairs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("every paired schema is a single layer — a documented pair with `$adopts` would be showing half a chain", () => {
+    const adopting = pairs.filter((pair) => /^\$adopts:/m.test(pair.yaml)).map((pair) => `${relative(REPO_ROOT, pair.file)}:${pair.line}`);
+    expect(adopting).toEqual([]);
+  });
+
+  for (const pair of pairs) {
+    const label = `${relative(REPO_ROOT, pair.file)}:${pair.line}`;
+    it(`the pair at ${label} matches the generator`, () => {
+      expect(generatedFor(pair).trim()).toBe(pair.expected.trim());
+    });
+  }
+});
+
+describe("FR-039 — the lane's own sensitivity, proven on a synthetic mismatch", () => {
+  const SCHEMA = ["```yaml", "keys:", "  a:", "    demand: { type: string }", "```", ""].join("\n");
+
+  it("a pair whose `ts` block disagrees with the generator FAILS", () => {
+    const broken = `${SCHEMA}${["```ts generated", "export type Configuration = { readonly a?: number };", "```", ""].join("\n")}`;
+    const pairs = generatedPairs(broken, "synthetic.md");
+    expect(pairs).toHaveLength(1);
+    const pair = pairs[0];
+    if (pair === undefined) {
+      throw new Error("expected one pair");
+    }
+    expect(generatedFor(pair).trim()).not.toBe(pair.expected.trim());
+  });
+
+  it("and the same pair passes once the `ts` block says what the generator says — so it is the mismatch being caught, not the pairing", () => {
+    const pairs = generatedPairs(`${SCHEMA}${["```ts generated", "PLACEHOLDER", "```", ""].join("\n")}`, "synthetic.md");
+    const pair = pairs[0];
+    if (pair === undefined) {
+      throw new Error("expected one pair");
+    }
+    const actual = generatedFor(pair).trim();
+    const fixed = generatedPairs(`${SCHEMA}${["```ts generated", actual, "```", ""].join("\n")}`, "synthetic.md")[0];
+    if (fixed === undefined) {
+      throw new Error("expected one pair");
+    }
+    expect(generatedFor(fixed).trim()).toBe(fixed.expected.trim());
+  });
+
+  it("a `ts` block WITHOUT the `generated` marker is not a pair — not every documented TypeScript is generator output", () => {
+    const notAPair = `${SCHEMA}${["```ts", "const x: unknown = 1;", "```", ""].join("\n")}`;
+    expect(generatedPairs(notAPair, "synthetic.md")).toEqual([]);
+  });
+
+  it("a `ts generated` block separated from its YAML by prose is not a pair either", () => {
+    const separated = `${SCHEMA}\nSome prose in between.\n\n${["```ts generated", "export type Configuration = unknown;", "```", ""].join("\n")}`;
+    expect(generatedPairs(separated, "synthetic.md")).toEqual([]);
   });
 });

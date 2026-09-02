@@ -32,10 +32,13 @@ where the two milestones' code sits side by side, which is `src/index.ts` and `s
   model** (`Scalar`/`Mapping`/`Sequence`/`Node`). One documented cast exists, on `yaml`'s own AST
   types, in `src/adapters/yaml/expand.ts`.
 - **The format-blindness boundary is enforced by a test**, not by convention. `src/model/`,
-  `src/diagnostics/`, `src/resolve/`, `src/graph/`, `src/merge/`, `src/validate/` and `src/project/`
-  may not import adapters; `graph/`, `merge/`, `validate/` and `project/` may not import `resolve/`;
-  `validate/` may not import `project/` (the last stage is downstream of every other, never
-  upstream). See `tests/unit/layering.test.ts`. Never weaken any of it for convenience.
+  `src/diagnostics/`, `src/resolve/`, `src/graph/`, `src/merge/`, `src/validate/`, `src/project/` and
+  `src/generate/` may not import adapters; `graph/`, `merge/`, `validate/`, `project/` and
+  `generate/` may not import `resolve/`; `validate/` may not import `project/` **or** `generate/`
+  (the last stages are downstream of every other, never upstream). `src/generate/` may import
+  `validate/`, `merge/`, `model/` and `diagnostics/`, and imports no compiler: `typescript` is a
+  devDependency and the emitter is a string printer, invoked in memory by the oracle under `tests/`
+  and nowhere else. See `tests/unit/layering.test.ts`. Never weaken any of it for convenience.
 - **Positions are structural.** A node without a span must be unconstructible, not merely
   discouraged. Same for a `Reference`.
 
@@ -102,7 +105,19 @@ section of a report has been worth more than the diff.
   `Number(2n ** 1024n)` is `Infinity` and `BigInt(Infinity)` throws.
 - **`Object.create(null)` is what makes `__proto__` an ordinary key.** On `{}`, `o["__proto__"] = v`
   sets the prototype and creates no own property at all — silently, and a configuration key is
-  author-controlled.
+  author-controlled. This bit v1.1 again, in a *test fixture*: an object literal written to exercise
+  the literal writer had five own properties instead of six, and the assertion was right.
+- **TypeScript's `{}` admits every non-nullish value**, so it is never the type of "a mapping with no
+  keys". That is `{ readonly [key: string]: never }`.
+- **TypeScript's excess-property check fires on object literals only.** A value reaching a closed
+  type through a variable is accepted structurally. It is why the soundness oracle writes literals,
+  and why `seal: closed` is a partial promise in the emitted type rather than a total one.
+- **`number & bigint` is `never`, and an open index signature survives `&` with a closed object
+  type.** Both are why v1.1 emits from one accumulated tree rather than joining per-layer emissions:
+  `&` preserves neither the numeric rule nor a seal.
+- **`url` and `path` are refinements of `string` (§7), not siblings of it.** A rule that intersects
+  built-ins "only with themselves" makes `string ∩ (url | path)` empty and turns §7's own worked
+  `resource` into `never`. The corpus caught it; nothing else would have.
 
 ## Conventions
 

@@ -8,10 +8,11 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.0.** All eight milestones of `SPEC.md` §14's roadmap have shipped, and the specification is
-frozen: from this release a *correction* to `SPEC.md` is always permitted, an *addition* is permitted
-while no existing meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze
-rule).
+**v1.1.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
+frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
+meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 is the
+first release under that freeze, and it is an addition: Article VIII, the accumulated demand and the
+TypeScript type generator.
 
 | | |
 | --- | --- |
@@ -23,8 +24,9 @@ rule).
 | **v0.6** | delegation: a fragment grafted into its parent's tree, sandboxed, positionally validated, with a breadcrumb on every diagnostic |
 | **v0.7** | sealing and authority (`seal`, `final`, `authority:`), the host seam and `load()`, and the meta-schema bootstrap — the language describing itself and validating against itself |
 | **v1.0** | **the output surface** — `project()` and `load<T>()`, the value a consumer actually reads (`SPEC.md` Article VII) — plus the freeze |
+| **v1.1** | **the accumulated demand, and the TypeScript type generator** — `accumulate()` and `generate()`, `generateTypes()`, and soundness against the validator as the conformance rule (`SPEC.md` Article VIII) |
 
-Full detail lives in `specs/001-…` through `specs/009-…`, each with its own `spec.md`, `plan.md`,
+Full detail lives in `specs/001-…` through `specs/010-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
 the same surface.
 
@@ -51,7 +53,7 @@ if (result.ok) {
 ```
 
 `T` is the caller's claim and the library never checks it (Article VII). Deriving it from the schema
-chain is the v1.x generator's job (`SPEC.md` §14).
+chain is the generator's job (`SPEC.md` §14), and `generateTypes()` does it from v1.1 — see below.
 
 ## Install
 
@@ -907,8 +909,9 @@ JSON.stringify(value, (_key, x) => (typeof x === "bigint" ? x.toString() : x)); 
 `LoadResult<T = unknown>` carries `value` beside `configuration`. **`T` is the caller's claim and the
 library performs no check of it** — validation enforces the schema against the value and cannot
 enforce a belief about what the schema says. A `T` that disagrees with its schema is a bug in the
-calling code; the v1.x TypeScript generator (`SPEC.md` §14) exists to remove the guesswork by
-deriving `T` from the schema chain.
+calling code; **v1.1's `generateTypes()` (below) removes the guesswork by deriving `T` from the
+schema chain.** `load<T>()` itself is unchanged: a `T` the generator wrote is still, to `load()`, a
+claim.
 
 ### v1.0 diagnostic codes
 
@@ -936,6 +939,141 @@ exhausted memory; every copy was identical in every field a consumer can read, s
 communicated nothing. Two genuinely different violations at one position are still two: a different
 code, a different demand pointer, or a different declaring layer each keeps them apart, and each has
 its own case in `tests/unit/composition-bound.test.ts`.
+
+## v1.1 — the accumulated demand, and the TypeScript type generator
+
+`SPEC.md` **Article VIII (§18)**. Article VII made the consuming application's `T` the caller's
+claim; this is the generator that replaces the claim with a derivation — and the thing it derives
+from, which turns out to be the more durable of the two.
+
+### `accumulate(layers, options?)` — the artifact
+
+For every position a schema chain can describe, the **intersection of every demand any layer places
+there**, each named type resolved in the scope of the layer that used it (§7). Computed from schema
+layers alone: no configuration takes part, and positions are *shapes* — `values` and `items` denote
+every entry and every element, not the entries and elements of some document.
+
+It is a stage in its own right (Principle IV) and is reachable with no emitter in sight, from
+`cascata/generate`. A future JSON Schema exporter is a second printer over the same tree, never a
+second walk.
+
+A named type is recorded as a **reference**, never unrolled, which is the whole termination
+argument: guarded recursion stops because a reference has no body to descend into. The one shape
+that still needs a memo is a reference to a declaration *set* — §7's narrowing chain, which is
+intersected body with body — and without it the two-layer recursive case does not terminate at all.
+
+### `generate(tree)` — the printer
+
+Takes the tree, returns `{ source, diagnostics }`, performs **no I/O**. The caller writes the text
+where it belongs, or does not.
+
+```yaml
+$id: site-builder/core
+seal: closed
+keys:
+  name:
+    demand: { type: string, required: true }
+  port:
+    demand: { type: int }
+  styles:
+    demand: { type: "string[]" }
+  features:
+    demand:
+      type: mapping
+      values: { type: bool }
+```
+
+```ts generated
+// Generated by Cascata — do not edit. Regenerate from the schema chain.
+
+export type core = {
+  readonly features?: {
+    readonly [key: string]: boolean;
+  };
+  readonly name: string;
+  readonly port?: bigint;
+  readonly styles?: readonly string[];
+};
+```
+
+**That pair is executed.** `tests/unit/doc-examples.test.ts` finds every fenced `yaml` block
+immediately followed by a fenced `ts generated` block, runs the generator on the YAML, and fails if
+the two disagree — so the example above cannot go stale (`SPEC.md` §15's own lesson about
+documentation that has never been run).
+
+Read it row by row: `name` is `required`, so the property is **non-optional**; `port` demands `int`
+and not `float`, so it is `bigint` and stays exact above 2^53 (§17); `styles` is `readonly`, as every
+emitted array and property is; `features` names no keys, so it is an index signature; and the
+schema's own top-level `seal: closed` is why the root carries none.
+
+`min`, `max`, `minLength`, `maxLength`, `pattern` and `accept` change **no type** and are emitted as
+JSDoc naming the constraint and its declaring layer. **JSDoc is output, not contract**: its presence
+and wording may change without a version bump. The types may not.
+
+### `generateTypes(schemaLocation, options)` — the one call
+
+```typescript
+import { generateTypes } from "cascata";
+import { createNodeHost } from "cascata/host/node";
+
+const result = await generateTypes("./schema/project.yaml", { host: createNodeHost(), sandboxRoot: process.cwd() });
+if (result.ok) {
+  await fs.writeFile("./generated/config.d.ts", result.source);   // the caller writes; the library never does
+  result.diagnostics;                                              // info lints, e.g. demand-unsatisfiable
+}
+```
+
+Resolves `schemaLocation` as the launching point and treats **every document it reaches as a schema
+layer** — the entry is the leaf schema, so its chain starts at its own `$adopts`, and its own `keys:`
+govern the root. Runs the same closed-vocabulary pass `validate()` runs before any value check, so a
+schema the language refuses is never emitted from. Returns
+`{ ok: true, source, tree, diagnostics } | { ok: false, diagnostics }` — never both, and never a
+throw for a fact about the world (Article VI). `rootName` names the root alias; the default is the
+leaf `$id`'s qualifier, else `Configuration`.
+
+`accumulate` and `generate` are exported from the package root **and** from `cascata/generate`,
+declared like `cascata/host/node`.
+
+### Soundness is the conformance rule, and the validator is the oracle
+
+> Every configuration that validation accepts, projected by Article VII, inhabits the type generated
+> from its schema chain.
+
+`tests/unit/generate-oracle.test.ts` asserts exactly that, over the whole validate corpus and over
+the meta-schema against itself: every accepting case is projected, written as a TypeScript literal,
+and typechecked in memory against the emitted type. The generator therefore has **no expected
+outputs written by hand** except the executed pair above.
+
+### Named limits
+
+Three, each of them the host type system's rather than the generator's, and each named rather than
+discovered:
+
+- **Closedness is checked by TypeScript at object literals only.** A value carrying extra keys that
+  reaches a closed type *through a variable* is accepted structurally. The emitted type is exact; the
+  compiler's enforcement is partial.
+- **Ranges, lengths and patterns have no type.** The JSDoc above is the whole story.
+- **`url` and `path` both emit `string`.** An `accept` selector between them is therefore invisible
+  in the type and survives in JSDoc — so a configuration refused for a malformed URL, or for an
+  `accept` subset, may still typecheck. The oracle lists every such case by name rather than
+  excusing the category.
+
+### v1.1 diagnostic codes
+
+Extends every catalogue above, unchanged.
+
+| Code | Raised when |
+| --- | --- |
+| `demand-unsatisfiable` | **`info`** — two demands at one position admit no common value (`string` in one layer, `int` in another). The position accumulates to `never` and the lint names both demands. Whole-chain validation already refuses every value there; this is the first time the contradiction is visible with **no document in hand** (§18) |
+| `emit-identifier-collision` | Two type names that escape to one TypeScript identifier. The emission is refused whole — "a generator error, not a coin toss" (§18) |
+
+### The emitted mapping is a compatibility promise
+
+Every row of the mapping from accumulated demand to TypeScript ships under §15's freeze rule from
+this release: a *correction* stays permitted, an *addition* stays permitted while no existing row
+changes meaning, and changing a row requires v2.0. The rows are listed in
+`specs/010-type-generator/contracts/emitted-type.md` §1. JSDoc, as above, is explicitly outside that
+promise.
 
 ## Scripts
 

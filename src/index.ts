@@ -1257,9 +1257,10 @@ export type LoadResult<T = unknown> =
        * ordinary JS data. `T` is the **caller's claim** and the library
        * performs no check of it whatsoever; validation enforces the schema
        * against the value and cannot enforce a belief about what the schema
-       * says. Deriving `T` from the schema chain is the v1.x generator's
-       * job (§14), and until it ships the mismatch is a real cost, named
-       * here rather than discovered.
+       * says. Deriving `T` from the schema chain is the generator's job
+       * (§14, §18), and from v1.1 `generateTypes()` does it — but `load()`
+       * still checks nothing, so a `T` the generator wrote is, here, a
+       * claim like any other.
        */
       readonly value: T;
       readonly diagnostics: readonly Diagnostic[];

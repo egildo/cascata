@@ -80,7 +80,7 @@ export interface ProjectionResult<T = unknown> {
    * checks it** (Article VII): validation enforces the *schema* against the
    * value and cannot enforce the caller's belief about what the schema
    * says. A `T` that disagrees with its schema is a bug in the calling
-   * code, and the v1.x generator (§14) exists to remove the guesswork by
+   * code, and the generator (§14, §18 — shipped at v1.1) removes the guesswork by
    * deriving `T` from the schema chain.
    */
   readonly value: T;

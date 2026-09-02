@@ -61,7 +61,8 @@ load<T = unknown>(entryPath: string, options: LoadOptions): Promise<LoadResult<T
   (`JSON.stringify(v, (_, x) => typeof x === "bigint" ? x.toString() : x)`), or a schema that demands
   `float` where a JSON round trip matters.
 - **A `T` that disagrees with its schema is a caller bug the library cannot catch.** Article VII says
-  so and names the v1.x generator as the fix. Until then it is a real cost, stated rather than
+  so and names the v1.x generator as the fix, **which shipped at v1.1** (specs/010-type-generator).
+  Until v1.1 it was a real cost, stated rather than
   discovered.
 - **`null` is a value; absence is not.** A key the documents set to `null` is a present property whose
   value is `null`. A key nobody set is absent from the object entirely. §4.2's three-way distinction
