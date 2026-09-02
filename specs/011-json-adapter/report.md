@@ -188,3 +188,50 @@ sees. The agent's report also noted that `deno check` against `dist/index.js` by
 emitted JavaScript and never reads a sibling `.d.ts`; only the packed-tarball path measures the
 published surface. That is a fact about Deno, not about Cascata, but it is the reason the original
 "Host is not exported" measurement was made the way it was.
+
+## Assessment — 2026-09-02, in Cascata's own venue
+
+Read by Egildo through Claude Fable 5.1; every claim above re-measured rather than relayed. Typecheck
+clean, 82 files / 1494 tests green, `SABOTAGE` grep empty, `layering.test.ts` byte-identical to
+`v1.1.0`, every pre-existing test changed only to dispatch on its case's format. Probed by hand against
+the YAML adapter: identical depth cap (65 nested sequences accepted, 66 refused), identical BOM byte
+offsets, identical byte spans on an astral key with a non-ASCII value, identical `-0`. A sabotage of
+`duplicate-key` detection turned exactly its two corpus cases red. The `doc-examples` fence claim was
+checked against the old regex and README's fence positions and is true.
+
+### What the assessment found
+
+**The registry claim had no test that could fail.** Rewiring `parseAtLocation` to hand `.json` bytes
+to `parseYamlBytes` left all 1494 tests green: every JSON document any test resolves through the public
+surface is also valid YAML, so the wrong adapter gives the right tree. The parity test's "goes through
+the registry" case checks only the unreachable side — the exact shape of defect this milestone
+diagnosed in the registry, reproduced in its own test. The code was right (`a: 1` at `/doc.json` is
+refused through `resolve()`); the guard was missing. Added: `tests/unit/json-registry-guard.test.ts`,
+four cases over both parse-at-location sites (entry and grafted fragment), each paired with the same
+bytes at a `.yaml` location so the refusal is provably the adapter's. Sabotage of both sites turns the
+two `.json` cases red. Recorded incidentally: a fragment that will not parse has been reported at the
+delegation site as `document-unreachable` with the adapter's diagnostics as `related` since v0.6, so
+the fragment case reads the adapter's identity off the related label.
+
+**This report misdescribed its key test.** "The claim that matters most to the consumer … is
+`tests/unit/packet-fixture.test.ts`: it loads the recorded exiftool output through an in-memory host"
+was false: that test calls `parseJsonBytes` directly and never touches `resolve()` or a host. The
+consumer's actual path, a `.json` location through `load()`, is exercised by `json-yaml-parity.test.ts`
+and now guarded by the test above. The sentence is left standing above so the correction is legible.
+
+**§14 named two milestones v1.2.** Item 10 still read "v1.2 — JSON Schema exporter" beside item 11's
+"shipped at v1.2". Egildo's ruling: the exporter is **v1.3**. Corrected in `SPEC.md` §14 items 10 and
+11, `spec.md`, and `plan.md`.
+
+### The five questions, ruled
+
+1. **Freeze reading** — the §15 entry is an addition and a correction; no existing meaning changes.
+2. **D-6** — kept: an empty `.json` document is refused. RFC 8259 admits no empty text, and admitting
+   one would be Cascata inventing grammar. Article VI's law is about hosts, as read.
+3. **Merge, tag, push** — yes, after the guard test and the §14 correction: merged to `main`, tagged
+   `v1.2.0`, pushed. The archive's tarball now names a version a tag carries.
+4. **The `doc-examples` fix** — kept as is; the test file's own comment is the record.
+5. **Unreachable floor rules** — the corpus's nearest-legal-document is the right record. No table.
+
+Every other decision the agent took (D-3, D-4, D-5, `parse()` YAML-only, `limits.ts` moved, the
+version number) stands as made.
