@@ -21,7 +21,7 @@
 
 import { parseYaml, parseYamlBytes } from "./adapters/yaml/parse.js";
 import type { ParseLimits } from "./adapters/limits.js";
-import { formatForLocation } from "./adapters/registry.js";
+import { adapterForFormat, formatForLocation, type AdapterParseOutcome } from "./adapters/registry.js";
 import { createDiagnostic, type Diagnostic } from "./diagnostics/diagnostic.js";
 import type { Node } from "./model/node.js";
 import { freeze } from "./model/freeze.js";
@@ -60,6 +60,17 @@ export type { Graph, GraphDocument, GraphDocumentIdentity, GraphReference } from
 export type { Pedigree, PedigreeEntry } from "./graph/pedigree.js";
 export type { FetchLimits } from "./resolve/fetch.js";
 export type { Recording, RecordedFailure, RecordedFailureKind, RecordedResponse, RecordingOutcome, Transport } from "./resolve/transport.js";
+/**
+ * The host seam (SPEC.md Article VI, §16), exported at v1.2 as a
+ * **correction** (§15). Both types have existed since v0.7 and `Host`
+ * already appears in `LoadOptions`, but neither name was reachable from
+ * the package: a consumer writing the host Article VI obliges them to
+ * write could not say what they were implementing. Measured against the
+ * published surface with `deno check`, which reported
+ * "declares 'Host' locally, but it is not exported". Nothing about either
+ * type changed; only its reachability.
+ */
+export type { Host, HostReadResult } from "./resolve/host.js";
 export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord, WhyResult } from "./merge/provenance.js";
 
 /** The result of one `parse()`/`parseText()` call. Never both a tree and diagnostics. */
@@ -264,14 +275,29 @@ function phantomSpan(origin: Origin): ReturnType<typeof createSourceSpan> {
   return createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: 0 });
 }
 
-/** Parse `bytes` at `location` via whatever `src/adapters/registry.ts` selects for it — the one call in this file that crosses into `src/adapters/`. `undefined` format (an unrecognized extension) is folded into the same "cannot be used as a document" outcome as a read failure — see the milestone report: no diagnostic code in this milestone's catalogue distinguishes "wrong format" from "unreachable". */
-function parseAtLocation(bytes: Uint8Array, location: string): ReturnType<typeof parseYamlBytes> {
+/**
+ * Parse `bytes` at `location` via whatever `src/adapters/registry.ts`
+ * selects for it — the one call in this file that crosses into
+ * `src/adapters/`. An unrecognized extension, or a recognized format with
+ * no registered adapter, is folded into the same "cannot be used as a
+ * document" outcome as a read failure — see the v0.2 milestone report: no
+ * diagnostic code in the catalogue distinguishes "wrong format" from
+ * "unreachable".
+ *
+ * **v1.2**: this looks the adapter up instead of comparing the format to
+ * the literal `"yaml"`, which is what it did from v0.2 until the JSON
+ * adapter arrived (specs/011-json-adapter research P-7). The registry
+ * existed the whole time; nothing consulted it, so registering an adapter
+ * changed nothing a caller could reach.
+ */
+function parseAtLocation(bytes: Uint8Array, location: string): AdapterParseOutcome {
   const origin = createOrigin(location, location);
   const format = formatForLocation(location);
-  if (format === undefined || format !== "yaml") {
+  const adapter = format === undefined ? undefined : adapterForFormat(format);
+  if (adapter === undefined) {
     return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
   }
-  return parseYamlBytes(bytes, origin);
+  return adapter.parseBytes(bytes, origin);
 }
 
 /**
@@ -795,8 +821,16 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   state.graftCounter += 1;
   const graftId = `${location} #graft=${state.graftCounter}`;
   const origin = createOrigin(graftId, location);
+  // Looked up in the registry rather than compared to `"yaml"` (v1.2,
+  // specs/011-json-adapter research P-7) — a delegated fragment may be in
+  // a different format than the document that grafts it, which is what
+  // §3's format-blindness has promised since before there were two.
   const format = formatForLocation(location);
-  const reparsed = format === "yaml" ? parseYamlBytes(bytes, origin) : { ok: false as const, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
+  const fragmentAdapter = format === undefined ? undefined : adapterForFormat(format);
+  const reparsed: AdapterParseOutcome =
+    fragmentAdapter !== undefined
+      ? fragmentAdapter.parseBytes(bytes, origin)
+      : { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
   if (!reparsed.ok) {
     state.tracker.exit();
     return {

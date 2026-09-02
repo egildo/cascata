@@ -26,6 +26,7 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { accumulate, generate, parse } from "../../src/index.js";
+import { parseJsonBytes } from "../../src/adapters/json/parse.js";
 import { createOrigin } from "../../src/model/span.js";
 import type { Layer } from "../../src/merge/provenance.js";
 
@@ -61,18 +62,58 @@ interface Block {
  * guessing at which of those is "really YAML" would make the sweep's scope
  * depend on a heuristic rather than on what the author wrote.
  */
-function yamlBlocks(text: string, file: string): Block[] {
+/**
+ * Every fenced block whose info string *begins* with one of `tags`.
+ *
+ * **The trailing `[^\r\n]*` is load-bearing, and its absence was a latent
+ * defect this file carried from v0.7 until v1.2.** The pattern used to end
+ * the opening fence with `[ \t]*\r?\n`, which does not match an info
+ * string of more than one word — and this README has one, ` ```ts
+ * generated `, introduced by v1.1's own lane. A fence the regex fails to
+ * recognize as an *opener* is then matched as the *closer* of the previous
+ * block, so every fence after it pairs with the wrong partner and the
+ * parity is inverted for the rest of the file.
+ *
+ * Nothing failed, because every `yaml` block in the repository happens to
+ * sit before that fence. Found at v1.2 by adding a ```json block after it
+ * and watching the sweep report zero blocks in a file that plainly
+ * contained one. Any `yaml` example added to the back half of `README.md`
+ * would have been silently skipped, which is exactly the failure mode this
+ * whole file exists to prevent.
+ */
+function blocksTagged(text: string, file: string, tags: ReadonlySet<string>): Block[] {
   const blocks: Block[] = [];
-  const fence = /^```(\w*)[ \t]*\r?\n([\s\S]*?)^```/gm;
+  const fence = /^```(\w*)[^\r\n]*\r?\n([\s\S]*?)^```/gm;
   let match = fence.exec(text);
   while (match !== null) {
     const tag = (match[1] ?? "").toLowerCase();
-    if (tag === "yaml" || tag === "yml") {
+    if (tags.has(tag)) {
       blocks.push({ file, line: text.slice(0, match.index).split("\n").length, body: match[2] ?? "" });
     }
     match = fence.exec(text);
   }
   return blocks;
+}
+
+function yamlBlocks(text: string, file: string): Block[] {
+  return blocksTagged(text, file, new Set(["yaml", "yml"]));
+}
+
+/**
+ * The `json` lane (v1.2, specs/011-json-adapter FR-023). The reasoning is
+ * the one this file opens with, applied to a second grammar: an example is
+ * worth what executing it costs, and a documented JSON document nobody has
+ * ever parsed is prose. Same tag-driven scope, same failure mode, a
+ * different adapter — this one calls `parseJsonBytes` directly, because
+ * the public `parse()` is hard-wired to YAML (011 spec.md, Out of Scope).
+ *
+ * No substitution machinery here: the abbreviation rules above exist for
+ * blocks `SPEC.md` actually abbreviates, and no JSON block in this
+ * repository does. An abbreviated JSON block would fail, loudly, which is
+ * the same answer the YAML lane gives an uncovered ellipsis.
+ */
+function jsonBlocks(text: string, file: string): Block[] {
+  return blocksTagged(text, file, new Set(["json"]));
 }
 
 /**
@@ -139,6 +180,37 @@ describe("v0.7 part 2 FR-021a / SC-009 — every documented YAML example parses"
       expect(result.ok, result.ok ? "ok" : `${result.diagnostics.map((d) => `${d.code}: ${d.message}`).join("; ")}\n---\n${text}`).toBe(true);
     });
   }
+});
+
+describe("v1.2 (011) FR-023 — every documented JSON example parses", () => {
+  const blocks = documentationFiles().flatMap((file) => jsonBlocks(readFileSync(file, "utf-8"), file));
+
+  it("finds the blocks at all — a sweep that finds nothing passes vacuously", () => {
+    expect(blocks.length).toBeGreaterThanOrEqual(2);
+  });
+
+  for (const block of blocks) {
+    const label = `${relative(REPO_ROOT, block.file)}:${block.line}`;
+    it(`parses ${label}`, () => {
+      const origin = createOrigin(label, label);
+      const result = parseJsonBytes(ENCODER.encode(block.body), origin);
+      expect(result.ok, result.ok ? "ok" : `${result.diagnostics.map((d) => `${d.code}: ${d.message}`).join("; ")}\n---\n${block.body}`).toBe(true);
+    });
+  }
+
+  it("catches a deliberately broken JSON example — a trailing comma, which every JavaScript author's fingers produce", () => {
+    const broken = ["```json", '{ "a": 1, }', "```", ""].join("\n");
+    const found = jsonBlocks(broken, "synthetic.md");
+    expect(found).toHaveLength(1);
+    const origin = createOrigin("synthetic.md", "synthetic.md");
+    expect(parseJsonBytes(ENCODER.encode(found[0]?.body ?? ""), origin).ok).toBe(false);
+  });
+
+  it("and accepts the same example with the comma removed — so it is the break being caught, not the block", () => {
+    const fixed = ["```json", '{ "a": 1 }', "```", ""].join("\n");
+    const origin = createOrigin("synthetic.md", "synthetic.md");
+    expect(parseJsonBytes(ENCODER.encode(jsonBlocks(fixed, "synthetic.md")[0]?.body ?? ""), origin).ok).toBe(true);
+  });
 });
 
 describe("SC-009 — the sweep fails when a deliberately-broken example is introduced", () => {

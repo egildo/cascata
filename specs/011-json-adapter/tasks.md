@@ -47,24 +47,27 @@ read off RFC 8259's grammar, never from a parser's output.
 
 ## Phase 3 — The parser (FR-001, FR-002)
 
-- [ ] **T015** `src/adapters/json/scan.ts` — the byte cursor and its position triple. (research P-1)
-- [ ] **T016** `src/adapters/json/parse.ts` — values, objects, arrays, strings, numbers, literals;
+- [x] **T015** `src/adapters/json/scan.ts` — the byte cursor and its position triple. (research P-1)
+- [x] **T016** `src/adapters/json/parse.ts` — values, objects, arrays, strings, numbers, literals;
   the depth cap checked before descending and an iterative skip for a refused value (research D-4);
   duplicate-key detection with both spans; the one-value-then-end rule.
-- [ ] **T017** Corpus green. `pnpm typecheck` clean.
-- [ ] **T018** Commit.
+- [x] **T017** Corpus green. `pnpm typecheck` clean.
+- [x] **T018** Commit.
 
 ## Phase 4 — The seam (FR-015, FR-016, FR-017, FR-019)
 
-- [ ] **T019** `src/adapters/registry.ts`: the `json` entry and `.json` in `formatForLocation`.
-- [ ] **T020** `src/index.ts`: both parse-at-location sites dispatch through `adapterForFormat`
+- [x] **T019** `src/adapters/registry.ts`: the `json` entry and `.json` in `formatForLocation`.
+- [x] **T020** `src/index.ts`: both parse-at-location sites dispatch through `adapterForFormat`
   (research P-7).
-- [ ] **T021** `src/index.ts`: `export type { Host, HostReadResult }`. (FR-017)
-- [ ] **T022** `tests/unit/{totality,hermetic,entry-parity}.test.ts` dispatch on `testCase.format`
+- [x] **T021** `src/index.ts`: `export type { Host, HostReadResult }`. (FR-017)
+- [x] **T022** `tests/unit/{totality,hermetic,entry-parity}.test.ts` dispatch on `testCase.format`
   (research P-6).
-- [ ] **T023** `tests/corpus/coverage.test.ts` gains a JSON section. (FR-024)
-- [ ] **T024** `tests/unit/doc-examples.test.ts` gains a `json` lane. (FR-023)
-- [ ] **T025** `tests/unit/layering.test.ts` untouched and green. Commit.
+- [x] **T023** `tests/corpus/coverage.test.ts` gains a JSON section. (FR-024)
+- [x] **T024** `tests/unit/doc-examples.test.ts` gains a `json` lane. (FR-023) — and, found by adding
+  it, the sweep's fence regex could not recognize a multi-word info string (` ```ts generated `),
+  which inverted fence parity for the rest of `README.md`. Fixed; the YAML lane keeps every block it
+  had.
+- [x] **T025** `tests/unit/layering.test.ts` untouched and green. Commit.
 
 ## Phase 5 — The motivating consumer, and verification
 

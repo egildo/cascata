@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from "vitest";
 import { parse, parseText } from "../../src/index.js";
+import { parseJsonBytes, parseJsonText } from "../../src/adapters/json/parse.js";
 import { loadCases } from "../corpus/runner.js";
 import { identicalTrees } from "./tree-equality.js";
 
@@ -35,8 +36,14 @@ describe("entry parity (FR-004): parse(bytes) === parseText(text) for valid UTF-
       const origin = { id: testCase.name, label: testCase.name };
       const bytes = new TextEncoder().encode(text);
 
-      const fromText = parseText(text, { origin, limits: testCase.limits });
-      const fromBytes = parse(bytes, { origin, limits: testCase.limits });
+      // v1.2: the case's own format decides which pair of entry points is
+      // compared. Until the JSON adapter arrived this was `parse`/`parseText`
+      // unconditionally, and those two are hard-wired to YAML — so 23 JSON
+      // cases would have asserted this property of the YAML adapter twice
+      // and of the JSON adapter never (011 research P-6). Measured: they
+      // all pass that way, which is why nothing caught it.
+      const fromText = testCase.format === "json" ? parseJsonText(text, origin, testCase.limits) : parseText(text, { origin, limits: testCase.limits });
+      const fromBytes = testCase.format === "json" ? parseJsonBytes(bytes, origin, testCase.limits) : parse(bytes, { origin, limits: testCase.limits });
 
       expect(fromText.ok).toBe(true);
       expect(fromBytes.ok).toBe(true);

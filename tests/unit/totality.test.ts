@@ -12,6 +12,7 @@ import { parseText } from "../../src/index.js";
 import type { Expect } from "../corpus/case.js";
 import { sourceOf } from "../corpus/case.js";
 import { loadCases } from "../corpus/runner.js";
+import { adapterForCase } from "../corpus/adapters.js";
 import { parseYamlInput } from "../corpus/yaml-adapter.js";
 
 const CASES_DIR = new URL("../corpus/cases", import.meta.url).pathname;
@@ -30,10 +31,15 @@ describe("totality: parse()/parseText() never throw for bad input", () => {
   for (const testCase of cases) {
     it(`does not throw on ${testCase.name}`, () => {
       const origin = { id: testCase.name, label: testCase.name };
-      expect(() => parseYamlInput(sourceOf(testCase), { origin, limits: testCase.limits })).not.toThrow();
+      // v1.2: dispatched on the case's own `format`. Until the JSON
+      // adapter arrived this read `parseYamlInput` unconditionally, which
+      // was invisible with one format and would have asserted totality of
+      // the wrong adapter with two (specs/011-json-adapter research P-6).
+      const adapter = adapterForCase(testCase);
+      expect(() => adapter(sourceOf(testCase), origin, testCase.limits)).not.toThrow();
       const equalTo = equalToOf(testCase.expect);
       if (equalTo !== undefined) {
-        expect(() => parseText(equalTo, { origin, limits: testCase.limits })).not.toThrow();
+        expect(() => adapter(equalTo, origin, testCase.limits)).not.toThrow();
       }
     });
   }

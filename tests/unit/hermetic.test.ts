@@ -49,7 +49,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sourceOf } from "../corpus/case.js";
 import { loadCases } from "../corpus/runner.js";
-import { parseYamlInput } from "../corpus/yaml-adapter.js";
+import { adapterForCase } from "../corpus/adapters.js";
 import { loadResolveCase } from "../corpus/resolve-case.js";
 import { runResolveCase } from "../corpus/resolve-runner.js";
 
@@ -118,7 +118,9 @@ describe("hermetic: no network access", () => {
       expect(cases.length).toBeGreaterThan(0);
       for (const testCase of cases) {
         const origin = { id: testCase.name, label: testCase.name };
-        expect(() => parseYamlInput(sourceOf(testCase), { origin, limits: testCase.limits })).not.toThrow();
+        // v1.2: through the case's own adapter, so hermeticity is asserted
+        // of every adapter rather than of one (011 research P-6).
+        expect(() => adapterForCase(testCase)(sourceOf(testCase), origin, testCase.limits)).not.toThrow();
       }
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });

@@ -8,11 +8,12 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.1.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
+**v1.2.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
 frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
-meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 is the
-first release under that freeze, and it is an addition: Article VIII, the accumulated demand and the
-TypeScript type generator.
+meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
+first release under that freeze and v1.2 is the second; both are additions — Article VIII's
+accumulated demand and type generator, then a second format adapter. Nothing a schema meant before
+either release means anything else after it.
 
 | | |
 | --- | --- |
@@ -25,8 +26,9 @@ TypeScript type generator.
 | **v0.7** | sealing and authority (`seal`, `final`, `authority:`), the host seam and `load()`, and the meta-schema bootstrap — the language describing itself and validating against itself |
 | **v1.0** | **the output surface** — `project()` and `load<T>()`, the value a consumer actually reads (`SPEC.md` Article VII) — plus the freeze |
 | **v1.1** | **the accumulated demand, and the TypeScript type generator** — `accumulate()` and `generate()`, `generateTypes()`, and soundness against the validator as the conformance rule (`SPEC.md` Article VIII) |
+| **v1.2** | **the JSON adapter** — a second format, hand-written against RFC 8259, selected for `.json` by the registry v0.2 built for it; format-blindness stops being a claim about the architecture and becomes an observed fact about two live adapters |
 
-Full detail lives in `specs/001-…` through `specs/010-…`, each with its own `spec.md`, `plan.md`,
+Full detail lives in `specs/001-…` through `specs/011-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
 the same surface.
 
@@ -1075,6 +1077,122 @@ changes meaning, and changing a row requires v2.0. The rows are listed in
 `specs/010-type-generator/contracts/emitted-type.md` §1. JSDoc, as above, is explicitly outside that
 promise.
 
+## v1.2 — the JSON adapter
+
+**`SPEC.md` §14 item 11, §12's RFC 8259 row.** A second format adapter, taken ahead of its roadmap
+position because a consumer needed it (see `specs/011-json-adapter/plan.md`'s Complexity Tracking).
+An addition under the freeze rule: a `.json` location that was unreadable becomes readable, and no
+existing document changes meaning.
+
+### Reading a JSON document
+
+Nothing new to call. `load()` and `resolve()` select an adapter by extension, and `.json` now
+selects this one. A cascade may mix formats freely — a `.json` document may `$adopts` a `.yaml` one,
+a delegated fragment may be in a different format than the document that grafts it — which is what
+§3's format-blindness has promised since before there were two formats to be blind about.
+
+```typescript
+import { load } from "cascata";
+import { createNodeHost } from "cascata/host/node.js";
+
+const result = await load("./settings.json", { host: createNodeHost(), sandboxRoot: process.cwd() });
+```
+
+`parse()` and `parseText()` are **not** affected: both remain hard-wired to YAML. Giving them a
+`format` option would be a surface addition with its own `SPEC.md` §15 entry, and nothing has needed
+one — the registry is reached through `resolve()`/`load()`, which is where a location exists to
+select on.
+
+### The model a JSON document produces
+
+```json
+{
+  "port": 8080,
+  "ratio": 0.5,
+  "big": 99999999999999999999999999999999,
+  "flags": [true, false],
+  "absent": null,
+  "nothing": {}
+}
+```
+
+- `port` is `int 8080n` — a `bigint`. `ratio` is `float 0.5`.
+- `big` is an **exact** 32-digit `int`. This is why the adapter is hand-written: `JSON.parse` gives
+  a rounded double and no positions, and §4.1 makes an unpositioned node unconstructible.
+- `absent` is a *present* key whose value is the null scalar; `nothing` is a present, empty mapping.
+  §4.2's three-way null/absent/empty distinction survives intact.
+- Entries iterate in canonical (code-point) order — `absent, big, flags, nothing, port, ratio` — not
+  in the order they were written, exactly as a YAML mapping does.
+- Every node carries a span whose offsets are **bytes**, whose line is 1-based, and whose column
+  counts **code points**. The parser scans the byte array directly, so there is no UTF-16 index to
+  convert and no offset table to get wrong.
+
+**Numbers take their kind lexically** (§4.2), from RFC 8259 §6's grammar:
+
+| written | kind | value | |
+|---|---|---|---|
+| `2` | int | `2n` | no fraction, no exponent |
+| `2.0` | float | `2` | a fraction makes it a float, whatever its value |
+| `1e2` | float | `100` | so does an exponent |
+| `-0` | int | `0n` | the same answer the YAML adapter gives `-0` |
+| `-0.0` | float | `-0` | |
+| `01`, `+1`, `.5`, `1.`, `0x10`, `Infinity`, `NaN` | — | refused | RFC 8259 permits none of them |
+
+The grammar check is the parser's own scan, never `BigInt()` or `Number()`: `BigInt("0007")` is
+`7n`, so delegating would silently accept a leading zero the standard forbids.
+
+### What it refuses
+
+| Code | Refuses |
+|---|---|
+| `malformed-document` | any violation of RFC 8259's grammar, at the offending byte: an unquoted or single-quoted key, a trailing comma, a control character unescaped inside a string, an unknown escape, a number spelling JSON does not have, a document that is empty or contains more than one value |
+| `duplicate-key` | the same key twice in one object — RFC 8259 §4 permits it, `SPEC.md` §4.2 refuses it, never last-wins — with the first occurrence attached as a `related` span |
+| `invalid-encoding` | bytes that are not well-formed UTF-8, at the offending byte offset; and a `\uXXXX` escape naming an unpaired surrogate, at the escape |
+| `depth-limit-exceeded` | nesting past `maxDepth`, at the value that crossed it |
+| `size-limit-exceeded` | input larger than `maxBytes`, refused before parsing at all |
+
+**No new diagnostic code.** Every way a JSON document can be wrong is a hazard something already had
+a name for, and a sixth code would have said less rather than more
+(`specs/011-json-adapter/data-model.md`).
+
+**Four floor rules are unreachable, not merely unused**: JSON's grammar has no non-string key, no
+tag, no document separator and no alias, so `non-string-key`, `unsupported-tag`,
+`multiple-documents` and `alias-cycle` cannot be produced. The corpus carries the nearest legal
+document for each — `{"1": true}`, `"!!binary"`, `"---"`, `"&a"` — so a reader looking for them
+finds an answer rather than a silence.
+
+### Named limits
+
+- **An empty file is not a JSON document.** `JSON-text = ws value ws` has no production for no value
+  at all, so an empty or whitespace-only `.json` file is `malformed-document`. An empty `.yaml` file
+  is still a `null` document, because YAML says it is. The two adapters differ about *their own
+  grammars*, which is not what §16's determinism law forbids — that law is about two **hosts**
+  disagreeing about one document.
+- **A number too large for a double becomes `Infinity`.** RFC 8259 §6 leaves range to the
+  implementation, and `1e400` parses as `float Infinity` — the same answer the YAML adapter already
+  gives `1e400` and `.inf`. An *integer* of any size stays exact, so this is reachable only by
+  writing an exponent.
+- **A BOM is ignored**, exactly as in YAML: a single leading `EF BB BF` is removed and contributes
+  zero bytes and zero columns, so a document with one has the same spans as the same document
+  without.
+
+### `Host` and `HostReadResult` are exported
+
+A **correction**, not an addition (`SPEC.md` §15). Both types have existed since v0.7 and `Host`
+already appeared in `LoadOptions`, but neither name was reachable from the package — so a consumer
+writing the host Article VI obliges them to write could not name the interface they were
+implementing. Measured against the published surface with `deno check`, which said
+"declares 'Host' locally, but it is not exported". Nothing about either type changed.
+
+```typescript
+import type { Host, HostReadResult } from "cascata";
+
+class MyHost implements Host {
+  async read(location: string): Promise<HostReadResult> { /* … */ }
+  // canonicalize, cacheRead, cacheWrite
+}
+```
+
 ## Scripts
 
 ```bash
@@ -1090,6 +1208,11 @@ each case is a JSON file naming its input and the outcome it must produce (an ex
 expected diagnostic list, or — for the one decision needing it — a second document the first must be
 model-equal to). Adding a case is adding a file; no runner or adapter code changes. `tests/corpus/
 coverage.test.ts` asserts every §4.2 decision has the cases FR-023 requires.
+
+Each case names its own `format`, and since v1.2 there are two: `yaml` and `json`. The `json-*`
+directories hold the RFC 8259 family, and the coverage test carries a second table for them — the
+two adapters do not refuse the same things, so folding them into one table would have hidden four
+rules JSON's grammar cannot even express.
 
 `resolve()`'s own conformance corpus lives alongside it: `tests/corpus/resolve-cases/` holds one JSON
 descriptor per case (fixture documents under `tests/corpus/cases/`, expected outcome as a `Graph`/
