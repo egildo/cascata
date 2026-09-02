@@ -71,19 +71,23 @@ read off RFC 8259's grammar, never from a parser's output.
 
 ## Phase 5 — The motivating consumer, and verification
 
-- [ ] **T026** Record the exiftool rendering as
+- [x] **T026** Record the exiftool rendering as
   `tests/fixtures/packet/20221030_203857_1265d2.packet.json`, byte for byte, and note its provenance
   in the test that reads it. (FR-022)
-- [ ] **T027** `tests/unit/packet-fixture.test.ts` — no diagnostics; the `/0/XMP-mwg-rs:RegionInfo`
+- [x] **T027** `tests/unit/packet-fixture.test.ts` — no diagnostics; the `/0/XMP-mwg-rs:RegionInfo`
   subtree equals a hand-written tree; parsing twice gives identical trees.
-- [ ] **T028** `tests/unit/json-yaml-parity.test.ts` — three documents through `resolve()` in both
+- [x] **T028** `tests/unit/json-yaml-parity.test.ts` — three documents through `resolve()` in both
   formats, `nodesEqual` both ways. (FR-021)
-- [ ] **T029** `tests/unit/json-adapter.test.ts` — the properties no corpus case can carry:
+- [x] **T029** `tests/unit/json-adapter.test.ts` — the properties no corpus case can carry:
   `1e400` → `float Infinity`; a 10,000-deep nesting is a diagnostic and not a `RangeError`; totality
   over a list of adversarial inputs.
-- [ ] **T030** Sabotage runs: duplicate-key detection, the bigint path, the code-point column, the
-  depth cap. Each broken, the specific test observed red, restored.
-  `grep -rn SABOTAGE src/ tests/` clean. Commit.
+- [x] **T030** Five sabotage runs, each broken, the specific tests observed red, restored:
+  duplicate-key detection (2 cases red), the exact-integer path (3 red, across the corpus, the unit
+  suite and the parity test), the code-point column (the 3 `json-unicode` cases), the depth cap
+  (6 red — and the two ten-thousand-bracket documents came back as a real `RangeError`, so the cap
+  is a genuine second line of defence and not a decoration), and `.json` in `formatForLocation`
+  (the whole parity suite, refused as `document-unreachable`).
+  `grep -rn SABOTAGE src/ tests/` clean.
 
 ## Phase 6 — Documentation
 
