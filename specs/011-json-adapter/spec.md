@@ -25,7 +25,7 @@ milestone's one *correction* is `Host`/`HostReadResult` being exported from the 
 FR-017 and §15's entry.
 
 **Taken ahead of its roadmap position, deliberately.** §14 lists the JSON adapter in item 11 (v1.x)
-after item 10's JSON Schema exporter (v1.2). Taking it earlier is permitted — an addition changes no
+after item 10's JSON Schema exporter (v1.2 then; v1.3 since this milestone took the number). Taking it earlier is permitted — an addition changes no
 meaning, and the exporter and the adapter are independent — and the reason is a consumer that exists
 now: an archive tool whose host renders a photograph's metadata as JSON bytes and cannot be built
 until Cascata can read them. The constitution's Sequencing gate asks that a reorder state why in
