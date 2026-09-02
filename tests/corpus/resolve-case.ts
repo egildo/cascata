@@ -116,7 +116,35 @@ export interface ResolveCase {
    * and a leading `~/` expands (the case sets `homeDir` for that).
    */
   readonly schema?: string;
+  /**
+   * Optional: the host namespace this case runs against (v1.4 FR-001) —
+   * a map from a scheme'd reference text (`"beltype:document"`) to the
+   * fixture-relative path the host locates it at. The runner wraps
+   * `createNodeHost()` with a `locate` backed by exactly this map, so a
+   * case can exercise a namespace the shipped host does not have without
+   * either inventing a second host format or letting the namespace leak
+   * between cases. Absent for every case that names no scheme.
+   */
+  readonly identities?: Readonly<Record<string, string>>;
   readonly expect: ResolveExpect;
+}
+
+/** Parse a case's optional `identities` map (v1.4 FR-001) into a plain string-to-string record, refusing anything else. Built entry by entry rather than asserted, so the loader's own type is earned the way every other field's is. */
+function parseIdentities(raw: unknown, source: string): Readonly<Record<string, string>> | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (!isPlainObject(raw)) {
+    fail(source, `'identities' must be an object if present`);
+  }
+  const identities: Record<string, string> = {};
+  for (const [reference, location] of Object.entries(raw)) {
+    if (typeof location !== "string") {
+      fail(source, `'identities.${reference}' must be a string, got ${JSON.stringify(location)}`);
+    }
+    identities[reference] = location;
+  }
+  return identities;
 }
 
 function fail(source: string, reason: string): never {
@@ -268,7 +296,7 @@ function parseExpect(raw: unknown, source: string): ResolveExpect {
   fail(source, `'expect.ok' must be true or false`);
 }
 
-const CITES_PATTERN = /^v(0\.2|1\.3) FR-\d+$/;
+const CITES_PATTERN = /^v(0\.2|1\.3|1\.4) FR-\d+$/;
 
 /** Load and validate one resolve-conformance case from `file`. `fixtureDir` resolves relative to `file`'s directory, per each case's own `fixtureDir` field. */
 export function loadResolveCase(file: string): ResolveCase {
@@ -292,6 +320,7 @@ export function loadResolveCase(file: string): ResolveCase {
   if (schemaRaw !== undefined && typeof schemaRaw !== "string") {
     fail(file, `'schema' must be a string if present, got ${JSON.stringify(schemaRaw)}`);
   }
+  const identities = parseIdentities(raw["identities"], file);
   const maxChainLengthRaw = raw["maxChainLength"];
   if (maxChainLengthRaw !== undefined && (typeof maxChainLengthRaw !== "number" || !Number.isInteger(maxChainLengthRaw))) {
     fail(file, `'maxChainLength' must be an integer if present, got ${JSON.stringify(maxChainLengthRaw)}`);
@@ -308,5 +337,6 @@ export function loadResolveCase(file: string): ResolveCase {
     ...(typeof homeDirRaw === "string" ? { homeDir: homeDirRaw } : {}),
     ...(typeof maxChainLengthRaw === "number" ? { maxChainLength: maxChainLengthRaw } : {}),
     ...(typeof schemaRaw === "string" ? { schema: schemaRaw } : {}),
+    ...(identities !== undefined ? { identities } : {}),
   };
 }

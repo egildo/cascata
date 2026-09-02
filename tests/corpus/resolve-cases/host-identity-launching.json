@@ -1,0 +1,26 @@
+{
+  "name": "v1.4 FR-001: a launching schema naming an identity in the host's own namespace is located by the host and governs the entry",
+  "cites": "v1.4 FR-001",
+  "fixtureDir": "host-identity",
+  "entry": "venue/config.yaml",
+  "sandboxRoot": "venue",
+  "schema": "beltype:document",
+  "identities": { "beltype:document": "package/root.yaml" },
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "venue/config.yaml", "hash": "80ab8032f40d108949d109d652b7580a17b262570505f111a730928efba8d949" },
+      { "location": "package/root.yaml", "hash": "1ef0a9b7b890d4c34521adc37f14d2175db15b92ae6a4bdbdf48a341c863ee12" }
+    ],
+    "pedigree": [
+      {
+        "location": "package/root.yaml",
+        "hash": "1ef0a9b7b890d4c34521adc37f14d2175db15b92ae6a4bdbdf48a341c863ee12",
+        "kind": "schema",
+        "authority": "config-authored",
+        "verified": false,
+        "via": { "document": "venue/config.yaml", "line": 1, "column": 1, "start": 0, "end": 0 }
+      }
+    ]
+  }
+}

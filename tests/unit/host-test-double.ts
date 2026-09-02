@@ -14,6 +14,13 @@ export interface InMemoryHostOptions {
   readonly canonical?: ReadonlyMap<string, string>;
   /** When true, `canonicalize` returns its input unchanged for any location not explicitly listed in `canonical` — the common case for a flat in-memory filesystem with no symlinks. */
   readonly canonicalizeIsIdentity?: boolean;
+  /**
+   * The host's own namespace (v1.4 FR-001): reference text -> the
+   * location it names. **Supplying this is what gives the host a
+   * `locate` method at all** — omit it and the instance has none, which
+   * is every host written before v1.4 and the case FR-004 needs to pin.
+   */
+  readonly identities?: ReadonlyMap<string, string>;
 }
 
 /** A `Host` backed entirely by an in-memory map — no `node:fs`, ever. Tracks every call it received, so a test can assert *what was asked*, not just what came back. */
@@ -22,6 +29,9 @@ export class InMemoryHost implements Host {
   readonly canonicalizes: string[] = [];
   readonly cacheReads: string[] = [];
   readonly cacheWrites: string[] = [];
+  readonly locates: string[] = [];
+  /** Present only when the constructor was given `identities` — see that option's own doc. */
+  locate?: (reference: string) => Promise<string | undefined>;
 
   private readonly files: ReadonlyMap<string, Uint8Array>;
   private readonly canonical: ReadonlyMap<string, string>;
@@ -32,6 +42,13 @@ export class InMemoryHost implements Host {
     this.files = options?.files ?? new Map();
     this.canonical = options?.canonical ?? new Map();
     this.canonicalizeIsIdentity = options?.canonicalizeIsIdentity ?? true;
+    const identities = options?.identities;
+    if (identities !== undefined) {
+      this.locate = async (reference: string): Promise<string | undefined> => {
+        this.locates.push(reference);
+        return identities.get(reference);
+      };
+    }
   }
 
   async read(location: string): Promise<HostReadResult> {

@@ -1,0 +1,17 @@
+{
+  "name": "v1.4 FR-004: a scheme the host does not own is still unsupported-scheme, at the reference's own position",
+  "cites": "v1.4 FR-004",
+  "fixtureDir": "host-identity",
+  "entry": "venue/unclaimed.yaml",
+  "sandboxRoot": "venue",
+  "identities": { "beltype:document": "package/root.yaml" },
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "unsupported-scheme",
+        "primary": { "document": "venue/unclaimed.yaml", "line": 1, "column": 10, "start": 9, "end": 20 }
+      }
+    ]
+  }
+}

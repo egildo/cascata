@@ -1,0 +1,6 @@
+$id: beltype/document
+keys:
+  title:
+    demand:
+      type: string
+    provide: Untitled

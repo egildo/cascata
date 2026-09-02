@@ -1,0 +1,34 @@
+{
+  "name": "v1.4 FR-001/FR-003: a venue schema's $adopts naming a host identity is located, and the located document is not sandbox-checked though it sits outside the root",
+  "cites": "v1.4 FR-003",
+  "fixtureDir": "host-identity",
+  "entry": "venue/adopting.yaml",
+  "sandboxRoot": "venue",
+  "identities": { "beltype:document": "package/root.yaml" },
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "venue/adopting.yaml", "hash": "3f5d4ceea64270f9568fc73e10862602a4ca8f003124e55b1083d0880e97dbf1" },
+      { "location": "venue/venue.yaml", "hash": "7b4bc004f6bb019123666649ca00d5fc77118801edf81d3bcbdabd77cf351b97" },
+      { "location": "package/root.yaml", "hash": "1ef0a9b7b890d4c34521adc37f14d2175db15b92ae6a4bdbdf48a341c863ee12" }
+    ],
+    "pedigree": [
+      {
+        "location": "package/root.yaml",
+        "hash": "1ef0a9b7b890d4c34521adc37f14d2175db15b92ae6a4bdbdf48a341c863ee12",
+        "kind": "adopts",
+        "authority": "schema-authored",
+        "verified": false,
+        "via": { "document": "venue/venue.yaml", "line": 1, "column": 10, "start": 9, "end": 25 }
+      },
+      {
+        "location": "venue/venue.yaml",
+        "hash": "7b4bc004f6bb019123666649ca00d5fc77118801edf81d3bcbdabd77cf351b97",
+        "kind": "schema",
+        "authority": "config-authored",
+        "verified": false,
+        "via": { "document": "venue/adopting.yaml", "line": 1, "column": 10, "start": 9, "end": 21 }
+      }
+    ]
+  }
+}

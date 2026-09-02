@@ -8,6 +8,7 @@
 import { join, relative } from "node:path";
 import { resolve, type Graph, type GraphDocument, type Pedigree } from "../../src/index.js";
 import { createNodeHost } from "../../src/host/node.js";
+import type { Host } from "../../src/resolve/host.js";
 import type { ExpectedGraphDocument, ExpectedPedigreeEntry, ExpectedResolveDiagnostic, ExpectedResolveSpan, ResolveCase } from "./resolve-case.js";
 
 export interface ResolveCaseResult {
@@ -126,8 +127,27 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
  * `finally` even if `resolve()` throws, so one case's override can never
  * leak into another's — cases can run in the same process/worker.
  */
-async function resolveWithHomeOverride(entryPath: string, sandboxRoot: string, homeDir: string | undefined, maxChainLength: number | undefined, schema: string | undefined): Promise<Awaited<ReturnType<typeof resolve>>> {
-  const options = { host: createNodeHost(), sandboxRoot, ...(maxChainLength === undefined ? {} : { maxChainLength }), ...(schema === undefined ? {} : { schema }) };
+function hostForCase(fixtureDir: string, identities: Readonly<Record<string, string>> | undefined): Host {
+  const host = createNodeHost();
+  if (identities === undefined) {
+    return host;
+  }
+  // v1.4 FR-001: the shipped Node host owns no namespace, so a case that
+  // exercises one supplies its own — the fixture-relative paths of its
+  // `identities` map, resolved against the case's own fixture directory.
+  // Every other method is the real host's, so a located document is read,
+  // canonicalized and cached exactly as a path-named one is.
+  return {
+    ...host,
+    async locate(reference: string): Promise<string | undefined> {
+      const target = identities[reference];
+      return target === undefined ? undefined : join(fixtureDir, target);
+    },
+  };
+}
+
+async function resolveWithHomeOverride(entryPath: string, sandboxRoot: string, homeDir: string | undefined, maxChainLength: number | undefined, schema: string | undefined, host: Host): Promise<Awaited<ReturnType<typeof resolve>>> {
+  const options = { host, sandboxRoot, ...(maxChainLength === undefined ? {} : { maxChainLength }), ...(schema === undefined ? {} : { schema }) };
   if (homeDir === undefined) {
     return resolve(entryPath, options);
   }
@@ -150,7 +170,7 @@ export async function runResolveCase(testCase: ResolveCase): Promise<ResolveCase
   const sandboxRoot = join(testCase.fixtureDir, testCase.sandboxRoot);
   const homeDir = testCase.homeDir === undefined ? undefined : join(testCase.fixtureDir, testCase.homeDir);
 
-  const result = await resolveWithHomeOverride(entryPath, sandboxRoot, homeDir, testCase.maxChainLength, testCase.schema);
+  const result = await resolveWithHomeOverride(entryPath, sandboxRoot, homeDir, testCase.maxChainLength, testCase.schema, hostForCase(testCase.fixtureDir, testCase.identities));
 
   if (testCase.expect.ok) {
     if (!result.ok) {
