@@ -91,8 +91,15 @@ read off RFC 8259's grammar, never from a parser's output.
 
 ## Phase 6 — Documentation
 
-- [ ] **T031** `README.md`: a `### JSON adapter` section beside the YAML one, and the dependency
+- [x] **T031** `README.md`: a `### JSON adapter` section beside the YAML one, and the dependency
   policy line left alone (nothing was added).
-- [ ] **T032** `SPEC.md` §14: item 11's JSON adapter ticked as shipped. §15: one entry recording the
-  addition, the early take, and the `Host`/`HostReadResult` export correction.
-- [ ] **T033** `pnpm typecheck`, `pnpm test`, `pnpm build`. Commit.
+- [x] **T032** `SPEC.md` §14: item 11's JSON adapter ticked as shipped at v1.2. §15: one entry
+  recording the addition, the early take, the two adapters differing about their own grammars, the
+  absence of a new diagnostic code, and the `Host`/`HostReadResult` export correction.
+- [x] **T033** `pnpm typecheck`, `pnpm test` (1494), `pnpm build`; `package.json` to 1.2.0. Verified
+  the built package the way its consumer will use it: `pnpm pack`, installed into a Deno project
+  with `nodeModulesDir: "manual"`, `deno check` clean on a class implementing `Host`, and a
+  `load()` on a virtual `.packet.json` answered by a stub host returning the packet as a value with
+  exact `bigint`s. (`deno check` against `dist/index.js` by raw path sees no type-only export at
+  all — it type-checks the emitted JS and never reads the sibling `.d.ts` — so the tarball path is
+  the only measurement that means anything here.)

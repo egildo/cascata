@@ -493,7 +493,7 @@ A lossy compiler from Cascata schemas to JSON Schema 2020-12 (flattens the casca
 8. **v1.0** — **Freeze this document** (see §15's freeze rule) + **the output surface** (Article VII): the value view a consumer actually reads, and `load<T>()`. Also closes the two holes v0.7 recorded rather than fixed — a non-mapping top-level `keys:`/`types:` section silently ignored, and the exponential `keys`+`values` composition over a shared recursive type.
 9. **v1.1** — **The accumulated demand, and the TypeScript type generator** (Article VIII): a value-free stage that intersects every layer's demands per position, and an emitter that writes it as the `T` that `load<T>()` consumes. The tree is the artifact; the emitter is a translation of it.
 10. **v1.2** — **JSON Schema 2020-12 exporter**, a second emitter over the same tree (§12's "accumulated intersection"); Ajv as its test oracle only, never a runtime dependency.
-11. **v1.x** — static subsumption lint (the same tree, compared rather than emitted); JSON adapter; TOML adapter (run against `toml-test`). The TS generator sat **here rather than at v1.0** because it is the same shape of artifact as the JSON Schema exporter beside it — a translation of accumulated demands into a foreign type system — and freezing one while deferring its sibling would have been incoherent. It also has by far the larger surface to freeze: `load<T>()` is one signature, while a generator's *output format* makes every emitted construct a compatibility promise. Split into two milestones at v1.1 so that the tree is built once, under the first emitter, and the second inherits it.
+11. **v1.x** — static subsumption lint (the same tree, compared rather than emitted); **JSON adapter — shipped at v1.2**, ahead of item 10's exporter, because a consumer needed it and an addition needs no turn in the queue (§15); TOML adapter (run against `toml-test`). The TS generator sat **here rather than at v1.0** because it is the same shape of artifact as the JSON Schema exporter beside it — a translation of accumulated demands into a foreign type system — and freezing one while deferring its sibling would have been incoherent. It also has by far the larger surface to freeze: `load<T>()` is one signature, while a generator's *output format* makes every emitted construct a compatibility promise. Split into two milestones at v1.1 so that the tree is built once, under the first emitter, and the second inherits it.
 12. **Future** — closing §9.1's self-hosting gap (the meta-schema approximates the leaf type-expression grammar with a superset `pattern` because the constraint vocabulary cannot name a grammar; §15); `$extends` fork mode; `merge-by-key`; CST layer for write-back; delegation parameters; remote delegation opt-in; multi-`$adopts` via C3 linearization (§6.1); `provide` retraction (monotone-legal, needs syntax; §5.5); `glob` as a type, which needs **expansion** semantics, a sandbox story, and a determinism story before it can mean anything (§15).
 
 ---
@@ -977,6 +977,41 @@ The bootstrap (§14 item 7) was scheduled before this point precisely so that th
   called from nowhere**, so `unknown-type-entry-keyword` and a non-mapping `types.<name>.demand`
   are catalogued codes with a dead path — a pre-existing defect of `validate()`, left for its own
   milestone because fixing it changes what `validate()` refuses. See §18, §7, §17, §10.
+
+- **The JSON adapter, and the host seam's own types** → added at v1.2 as an **addition** and a
+  **correction**, respectively. The addition is §14 item 11's JSON adapter, taken ahead of item 10's
+  JSON Schema exporter: the two are independent, an addition changes no existing meaning, and a
+  consumer existed for one and not the other — an archive host that renders a photograph's metadata
+  as JSON bytes at a location no file occupies. §12's RFC 8259 row was the oracle and needed no
+  change. Three things the milestone found, recorded rather than smoothed:
+
+  **The registry was real and nothing was plugged into it.** `src/adapters/registry.ts` was written
+  at v0.2 explicitly so a second adapter could join with no change to `resolve/` or `graph/`, and
+  that held exactly. But the orchestrator that consults it never did: both of `src/index.ts`'s
+  parse-at-location sites read the format and then compared it to the literal `"yaml"`, so
+  registering an adapter changed nothing a caller could reach until both were made to look it up. A
+  seam is not proved by the code on its own side of it.
+
+  **Two adapters may differ about their own grammars.** JSON's `JSON-text = ws value ws` has no
+  production for an empty document and YAML's has one, so an empty `.json` file is refused and an
+  empty `.yaml` file is a null document. §16's determinism law is not violated: that law forbids two
+  **hosts** disagreeing about one document, not two grammars differing about what each admits. Named
+  here because it is the first place the question could be asked at all.
+
+  **No new diagnostic code, and four floor rules unreachable.** Every way a JSON document can be
+  wrong is a hazard that already had a name — `malformed-document` for the grammar,
+  `duplicate-key`, `invalid-encoding` (including an unpaired `\uXXXX` surrogate, which is text that
+  cannot be UTF-8), and the two caps. And `non-string-key`, `unsupported-tag`,
+  `multiple-documents` and `alias-cycle` cannot be produced from this grammar at all; the corpus
+  carries the nearest legal document for each so the silence is an answer rather than an omission.
+
+  The **correction** is that `Host` and `HostReadResult` are now exported from the public surface.
+  Article VI obliges an embedder to write a host, and until v1.2 neither name was reachable from the
+  package — measured against the published surface with `deno check`, which said "declares 'Host'
+  locally, but it is not exported". Both types have existed since v0.7 and `Host` already appeared in
+  `LoadOptions`; nothing about either changed, only its reachability. A specification that names an
+  obligation whose vocabulary it does not publish has misdescribed its own implementation, which is
+  what a correction is for. See §12, §14, §16, §4.2, §11.
 
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
 
