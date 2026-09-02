@@ -1,0 +1,42 @@
+{
+  "name": "json-unicode/line-and-column-across-newlines",
+  "cites": "§4.1",
+  "format": "json",
+  "input": "{\n  \"a\": 1,\n  \"b\": \"é\"\n}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "string",
+            "value": "é"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/a",
+        "line": 2,
+        "column": 8,
+        "start": 9,
+        "end": 10
+      },
+      {
+        "pointer": "/b",
+        "line": 3,
+        "column": 8,
+        "start": 19,
+        "end": 23
+      }
+    ]
+  }
+}

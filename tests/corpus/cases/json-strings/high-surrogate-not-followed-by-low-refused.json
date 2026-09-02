@@ -1,0 +1,17 @@
+{
+  "name": "json-strings/high-surrogate-not-followed-by-low-refused",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"s\":\"\\ud83dA\"}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "invalid-encoding",
+        "line": 1,
+        "column": 7,
+        "start": 6,
+        "end": 12
+      }
+    ]
+  }
+}

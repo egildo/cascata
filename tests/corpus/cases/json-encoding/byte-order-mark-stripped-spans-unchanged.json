@@ -1,0 +1,52 @@
+{
+  "name": "json-encoding/byte-order-mark-stripped-spans-unchanged",
+  "cites": "§4.2",
+  "format": "json",
+  "inputBytes": [
+    239,
+    187,
+    191,
+    123,
+    34,
+    97,
+    34,
+    58,
+    49,
+    44,
+    34,
+    98,
+    34,
+    58,
+    50,
+    125
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/b",
+        "line": 1,
+        "column": 12,
+        "start": 11,
+        "end": 12
+      }
+    ]
+  }
+}

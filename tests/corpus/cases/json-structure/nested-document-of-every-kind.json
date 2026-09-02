@@ -1,0 +1,128 @@
+{
+  "name": "json-structure/nested-document-of-every-kind",
+  "cites": "§4.1",
+  "format": "json",
+  "input": "{\"m\":{\"b\":true,\"f\":1.5,\"i\":7,\"n\":null,\"s\":\"x\"},\"q\":[1,\"two\",null,[],{}]}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "m",
+          {
+            "mapping": [
+              [
+                "b",
+                {
+                  "kind": "bool",
+                  "value": true
+                }
+              ],
+              [
+                "f",
+                {
+                  "kind": "float",
+                  "value": 1.5
+                }
+              ],
+              [
+                "i",
+                {
+                  "kind": "int",
+                  "value": "7"
+                }
+              ],
+              [
+                "n",
+                {
+                  "kind": "null"
+                }
+              ],
+              [
+                "s",
+                {
+                  "kind": "string",
+                  "value": "x"
+                }
+              ]
+            ]
+          }
+        ],
+        [
+          "q",
+          {
+            "sequence": [
+              {
+                "kind": "int",
+                "value": "1"
+              },
+              {
+                "kind": "string",
+                "value": "two"
+              },
+              {
+                "kind": "null"
+              },
+              {
+                "sequence": []
+              },
+              {
+                "mapping": []
+              }
+            ]
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "",
+        "line": 1,
+        "column": 1,
+        "start": 0,
+        "end": 72
+      },
+      {
+        "pointer": "/m/b",
+        "line": 1,
+        "column": 11,
+        "start": 10,
+        "end": 14
+      },
+      {
+        "pointer": "/m/f",
+        "line": 1,
+        "column": 20,
+        "start": 19,
+        "end": 22
+      },
+      {
+        "pointer": "/m/n",
+        "line": 1,
+        "column": 34,
+        "start": 33,
+        "end": 37
+      },
+      {
+        "pointer": "/q/1",
+        "line": 1,
+        "column": 55,
+        "start": 54,
+        "end": 59
+      },
+      {
+        "pointer": "/q/3",
+        "line": 1,
+        "column": 66,
+        "start": 65,
+        "end": 67
+      },
+      {
+        "pointer": "/q/4",
+        "line": 1,
+        "column": 69,
+        "start": 68,
+        "end": 70
+      }
+    ]
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "json-structure/empty-key-and-proto-key-are-ordinary-keys",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"\":1,\"__proto__\":2}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "__proto__",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/",
+        "line": 1,
+        "column": 5,
+        "start": 4,
+        "end": 5
+      },
+      {
+        "pointer": "/__proto__",
+        "line": 1,
+        "column": 19,
+        "start": 18,
+        "end": 19
+      }
+    ]
+  }
+}

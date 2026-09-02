@@ -1,0 +1,27 @@
+{
+  "name": "json-encoding/invalid-utf8-in-byte-stream-refused",
+  "cites": "§4.2",
+  "format": "json",
+  "inputBytes": [
+    123,
+    34,
+    97,
+    34,
+    58,
+    34,
+    195,
+    34,
+    125
+  ],
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "invalid-encoding",
+        "line": 1,
+        "column": 7,
+        "start": 6,
+        "end": 7
+      }
+    ]
+  }
+}

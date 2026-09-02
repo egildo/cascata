@@ -1,0 +1,91 @@
+{
+  "name": "json-numbers/lexical-kind-int-and-float",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"e\":1e2,\"f\":2.0,\"i\":12,\"neg\":-12,\"negf\":-1.5,\"zero\":0}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "e",
+          {
+            "kind": "float",
+            "value": 100.0
+          }
+        ],
+        [
+          "f",
+          {
+            "kind": "float",
+            "value": 2.0
+          }
+        ],
+        [
+          "i",
+          {
+            "kind": "int",
+            "value": "12"
+          }
+        ],
+        [
+          "neg",
+          {
+            "kind": "int",
+            "value": "-12"
+          }
+        ],
+        [
+          "negf",
+          {
+            "kind": "float",
+            "value": -1.5
+          }
+        ],
+        [
+          "zero",
+          {
+            "kind": "int",
+            "value": "0"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/e",
+        "line": 1,
+        "column": 6,
+        "start": 5,
+        "end": 8
+      },
+      {
+        "pointer": "/f",
+        "line": 1,
+        "column": 14,
+        "start": 13,
+        "end": 16
+      },
+      {
+        "pointer": "/i",
+        "line": 1,
+        "column": 22,
+        "start": 21,
+        "end": 23
+      },
+      {
+        "pointer": "/neg",
+        "line": 1,
+        "column": 31,
+        "start": 30,
+        "end": 33
+      },
+      {
+        "pointer": "/negf",
+        "line": 1,
+        "column": 42,
+        "start": 41,
+        "end": 45
+      }
+    ]
+  }
+}

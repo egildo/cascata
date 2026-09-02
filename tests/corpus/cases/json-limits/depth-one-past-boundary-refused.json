@@ -1,0 +1,20 @@
+{
+  "name": "json-limits/depth-one-past-boundary-refused",
+  "cites": "§11",
+  "format": "json",
+  "input": "{\"a\":{\"b\":{\"c\":1}}}",
+  "limits": {
+    "maxDepth": 2
+  },
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "depth-limit-exceeded",
+        "line": 1,
+        "column": 16,
+        "start": 15,
+        "end": 16
+      }
+    ]
+  }
+}

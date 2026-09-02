@@ -1,0 +1,17 @@
+{
+  "name": "json-numbers/underscore-separator-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"a\":1_000}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 7,
+        "start": 6,
+        "end": 7
+      }
+    ]
+  }
+}

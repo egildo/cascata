@@ -1,0 +1,26 @@
+{
+  "name": "json-duplicate-keys/same-key-in-nested-objects-accepted",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"a\":{\"a\":1}}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "mapping": [
+              [
+                "a",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

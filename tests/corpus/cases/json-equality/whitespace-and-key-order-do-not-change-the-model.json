@@ -1,0 +1,9 @@
+{
+  "name": "json-equality/whitespace-and-key-order-do-not-change-the-model",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"a\":1,\"b\":[1,2]}",
+  "expect": {
+    "equalTo": "{\n  \"b\" : [ 1 , 2 ]  ,\n  \"a\" : 1\n}\n"
+  }
+}

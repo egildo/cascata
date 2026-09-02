@@ -1,0 +1,17 @@
+{
+  "name": "json-numbers/leading-zero-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"a\":01}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 7,
+        "start": 6,
+        "end": 7
+      }
+    ]
+  }
+}

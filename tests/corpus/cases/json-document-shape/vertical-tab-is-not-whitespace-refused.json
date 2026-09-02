@@ -1,0 +1,17 @@
+{
+  "name": "json-document-shape/vertical-tab-is-not-whitespace-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"a\":1}\u000b",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 8,
+        "start": 7,
+        "end": 8
+      }
+    ]
+  }
+}

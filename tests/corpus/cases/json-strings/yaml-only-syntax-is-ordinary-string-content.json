@@ -1,0 +1,40 @@
+{
+  "name": "json-strings/yaml-only-syntax-is-ordinary-string-content",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"s\":\"!!binary\",\"t\":\"---\",\"u\":\"&a\",\"v\":\"*a\"}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "s",
+          {
+            "kind": "string",
+            "value": "!!binary"
+          }
+        ],
+        [
+          "t",
+          {
+            "kind": "string",
+            "value": "---"
+          }
+        ],
+        [
+          "u",
+          {
+            "kind": "string",
+            "value": "&a"
+          }
+        ],
+        [
+          "v",
+          {
+            "kind": "string",
+            "value": "*a"
+          }
+        ]
+      ]
+    }
+  }
+}

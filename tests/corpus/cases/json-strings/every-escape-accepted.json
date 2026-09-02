@@ -1,0 +1,28 @@
+{
+  "name": "json-strings/every-escape-accepted",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"s\":\"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u0041\"}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "s",
+          {
+            "kind": "string",
+            "value": "\"\\/\b\f\n\r\tA"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/s",
+        "line": 1,
+        "column": 6,
+        "start": 5,
+        "end": 29
+      }
+    ]
+  }
+}

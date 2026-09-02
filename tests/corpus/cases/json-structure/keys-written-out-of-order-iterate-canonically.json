@@ -1,0 +1,40 @@
+{
+  "name": "json-structure/keys-written-out-of-order-iterate-canonically",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"z\":1,\"a\":2,\"10\":3,\"2\":4}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "10",
+          {
+            "kind": "int",
+            "value": "3"
+          }
+        ],
+        [
+          "2",
+          {
+            "kind": "int",
+            "value": "4"
+          }
+        ],
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ],
+        [
+          "z",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    }
+  }
+}

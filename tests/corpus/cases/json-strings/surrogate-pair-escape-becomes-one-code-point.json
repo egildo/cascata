@@ -1,0 +1,26 @@
+{
+  "name": "json-strings/surrogate-pair-escape-becomes-one-code-point",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"emoji\":\"\\ud83d\\ude00\",\"bmp\":\"\\u00e9\"}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "bmp",
+          {
+            "kind": "string",
+            "value": "é"
+          }
+        ],
+        [
+          "emoji",
+          {
+            "kind": "string",
+            "value": "😀"
+          }
+        ]
+      ]
+    }
+  }
+}

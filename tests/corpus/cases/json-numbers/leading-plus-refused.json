@@ -1,0 +1,17 @@
+{
+  "name": "json-numbers/leading-plus-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"a\":+1}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 6,
+        "start": 5,
+        "end": 6
+      }
+    ]
+  }
+}

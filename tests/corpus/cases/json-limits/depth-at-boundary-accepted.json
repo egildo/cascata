@@ -1,0 +1,29 @@
+{
+  "name": "json-limits/depth-at-boundary-accepted",
+  "cites": "§11",
+  "format": "json",
+  "input": "{\"a\":{\"b\":1}}",
+  "limits": {
+    "maxDepth": 2
+  },
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "mapping": [
+              [
+                "b",
+                {
+                  "kind": "int",
+                  "value": "1"
+                }
+              ]
+            ]
+          }
+        ]
+      ]
+    }
+  }
+}

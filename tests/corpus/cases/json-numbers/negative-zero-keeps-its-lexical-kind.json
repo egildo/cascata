@@ -1,0 +1,26 @@
+{
+  "name": "json-numbers/negative-zero-keeps-its-lexical-kind",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"f\":-0.0,\"i\":-0}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "f",
+          {
+            "kind": "float",
+            "value": -0.0
+          }
+        ],
+        [
+          "i",
+          {
+            "kind": "int",
+            "value": "0"
+          }
+        ]
+      ]
+    }
+  }
+}

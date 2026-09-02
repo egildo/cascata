@@ -1,0 +1,17 @@
+{
+  "name": "json-numbers/exponent-without-digits-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"a\":1e}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 8,
+        "start": 7,
+        "end": 8
+      }
+    ]
+  }
+}

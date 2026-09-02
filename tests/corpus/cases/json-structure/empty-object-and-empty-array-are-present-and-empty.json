@@ -1,0 +1,40 @@
+{
+  "name": "json-structure/empty-object-and-empty-array-are-present-and-empty",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"e\":{},\"a\":[]}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "sequence": []
+          }
+        ],
+        [
+          "e",
+          {
+            "mapping": []
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/e",
+        "line": 1,
+        "column": 6,
+        "start": 5,
+        "end": 7
+      },
+      {
+        "pointer": "/a",
+        "line": 1,
+        "column": 13,
+        "start": 12,
+        "end": 14
+      }
+    ]
+  }
+}

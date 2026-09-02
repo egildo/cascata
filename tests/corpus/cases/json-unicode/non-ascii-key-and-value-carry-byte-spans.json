@@ -1,0 +1,49 @@
+{
+  "name": "json-unicode/non-ascii-key-and-value-carry-byte-spans",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"café\":\"日本\",\"z\":true}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "café",
+          {
+            "kind": "string",
+            "value": "日本"
+          }
+        ],
+        [
+          "z",
+          {
+            "kind": "bool",
+            "value": true
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "",
+        "line": 1,
+        "column": 1,
+        "start": 0,
+        "end": 27
+      },
+      {
+        "pointer": "/café",
+        "line": 1,
+        "column": 9,
+        "start": 9,
+        "end": 17
+      },
+      {
+        "pointer": "/z",
+        "line": 1,
+        "column": 18,
+        "start": 22,
+        "end": 26
+      }
+    ]
+  }
+}

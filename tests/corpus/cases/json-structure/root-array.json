@@ -1,0 +1,40 @@
+{
+  "name": "json-structure/root-array",
+  "cites": "§4.1",
+  "format": "json",
+  "input": "[1,2,3]",
+  "expect": {
+    "tree": {
+      "sequence": [
+        {
+          "kind": "int",
+          "value": "1"
+        },
+        {
+          "kind": "int",
+          "value": "2"
+        },
+        {
+          "kind": "int",
+          "value": "3"
+        }
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "",
+        "line": 1,
+        "column": 1,
+        "start": 0,
+        "end": 7
+      },
+      {
+        "pointer": "/2",
+        "line": 1,
+        "column": 6,
+        "start": 5,
+        "end": 6
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "json-unicode/astral-key-column-counts-code-points",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"a😀b\":1}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a😀b",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/a😀b",
+        "line": 1,
+        "column": 8,
+        "start": 10,
+        "end": 11
+      }
+    ]
+  }
+}

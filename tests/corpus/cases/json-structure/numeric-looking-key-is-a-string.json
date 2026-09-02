@@ -1,0 +1,26 @@
+{
+  "name": "json-structure/numeric-looking-key-is-a-string",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"1\":true,\"2.5\":false}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "1",
+          {
+            "kind": "bool",
+            "value": true
+          }
+        ],
+        [
+          "2.5",
+          {
+            "kind": "bool",
+            "value": false
+          }
+        ]
+      ]
+    }
+  }
+}

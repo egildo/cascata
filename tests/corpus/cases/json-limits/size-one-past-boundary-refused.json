@@ -1,0 +1,20 @@
+{
+  "name": "json-limits/size-one-past-boundary-refused",
+  "cites": "§11",
+  "format": "json",
+  "input": "{\"a\":1}",
+  "limits": {
+    "maxBytes": 6
+  },
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "size-limit-exceeded",
+        "line": 1,
+        "column": 1,
+        "start": 0,
+        "end": 0
+      }
+    ]
+  }
+}

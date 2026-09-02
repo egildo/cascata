@@ -1,0 +1,17 @@
+{
+  "name": "json-document-shape/whitespace-only-document-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "  \n ",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 2,
+        "column": 2,
+        "start": 4,
+        "end": 4
+      }
+    ]
+  }
+}

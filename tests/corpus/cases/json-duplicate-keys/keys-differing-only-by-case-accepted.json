@@ -1,0 +1,26 @@
+{
+  "name": "json-duplicate-keys/keys-differing-only-by-case-accepted",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"a\":1,\"A\":2}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "A",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ],
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    }
+  }
+}

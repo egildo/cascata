@@ -1,0 +1,35 @@
+{
+  "name": "json-numbers/big-integers-are-exact",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"big\":99999999999999999999999999999999,\"past2to53\":9007199254740993}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "big",
+          {
+            "kind": "int",
+            "value": "99999999999999999999999999999999"
+          }
+        ],
+        [
+          "past2to53",
+          {
+            "kind": "int",
+            "value": "9007199254740993"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/big",
+        "line": 1,
+        "column": 8,
+        "start": 7,
+        "end": 39
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "json-encoding/legitimate-replacement-character-accepted",
+  "cites": "§4.2",
+  "format": "json",
+  "inputBytes": [
+    123,
+    34,
+    97,
+    34,
+    58,
+    34,
+    239,
+    191,
+    189,
+    34,
+    125
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "string",
+            "value": "�"
+          }
+        ]
+      ]
+    }
+  }
+}

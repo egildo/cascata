@@ -1,0 +1,17 @@
+{
+  "name": "json-document-shape/two-adjacent-values-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "[1][2]",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 4,
+        "start": 3,
+        "end": 4
+      }
+    ]
+  }
+}

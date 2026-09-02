@@ -1,0 +1,17 @@
+{
+  "name": "json-strings/unterminated-string-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"s\":\"unterminated}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 20,
+        "start": 19,
+        "end": 19
+      }
+    ]
+  }
+}

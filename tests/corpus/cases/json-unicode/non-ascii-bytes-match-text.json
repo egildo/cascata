@@ -1,0 +1,40 @@
+{
+  "name": "json-unicode/non-ascii-bytes-match-text",
+  "cites": "§4.2",
+  "format": "json",
+  "inputBytes": [
+    123,
+    34,
+    99,
+    97,
+    102,
+    195,
+    169,
+    34,
+    58,
+    49,
+    125
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "café",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/café",
+        "line": 1,
+        "column": 9,
+        "start": 9,
+        "end": 10
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "json-numbers/bare-fraction-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"a\":.5}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 6,
+        "start": 5,
+        "end": 6
+      }
+    ]
+  }
+}

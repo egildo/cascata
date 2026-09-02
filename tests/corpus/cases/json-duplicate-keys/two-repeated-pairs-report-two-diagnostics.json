@@ -1,0 +1,42 @@
+{
+  "name": "json-duplicate-keys/two-repeated-pairs-report-two-diagnostics",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"a\":1,\"a\":2,\"b\":3,\"b\":4}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "duplicate-key",
+        "line": 1,
+        "column": 8,
+        "start": 7,
+        "end": 10,
+        "related": [
+          {
+            "label": "first occurrence",
+            "line": 1,
+            "column": 2,
+            "start": 1,
+            "end": 4
+          }
+        ]
+      },
+      {
+        "code": "duplicate-key",
+        "line": 1,
+        "column": 20,
+        "start": 19,
+        "end": 22,
+        "related": [
+          {
+            "label": "first occurrence",
+            "line": 1,
+            "column": 14,
+            "start": 13,
+            "end": 16
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "json-strings/raw-control-character-in-string-refused",
+  "cites": "§12",
+  "format": "json",
+  "input": "{\"s\":\"a\nb\"}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 8,
+        "start": 7,
+        "end": 8
+      }
+    ]
+  }
+}

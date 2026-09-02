@@ -1,0 +1,40 @@
+{
+  "name": "json-numbers/every-exponent-spelling-is-a-float",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"a\":1E2,\"b\":1e+2,\"c\":1e-2,\"d\":0e0}",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "float",
+            "value": 100.0
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "float",
+            "value": 100.0
+          }
+        ],
+        [
+          "c",
+          {
+            "kind": "float",
+            "value": 0.01
+          }
+        ],
+        [
+          "d",
+          {
+            "kind": "float",
+            "value": 0.0
+          }
+        ]
+      ]
+    }
+  }
+}

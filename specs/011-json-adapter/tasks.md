@@ -17,32 +17,33 @@ any order. Every task cites the FR it discharges.
 Every expected value derived by hand: byte offsets counted from the document's own bytes, kinds
 read off RFC 8259's grammar, never from a parser's output.
 
-- [ ] **T004 [P]** `json-structure/` — a nested document with objects, arrays and every scalar kind;
+- [x] **T004 [P]** `json-structure/` — a nested document with objects, arrays and every scalar kind;
   `{}` and `[]`; a root scalar; a root array; an empty key; a `__proto__` key. (US1, FR-014)
-- [ ] **T005 [P]** `json-numbers/` — every lexical kind with spans: `0`, `-0`, `12`, `2.0`, `-0.0`,
+- [x] **T005 [P]** `json-numbers/` — every lexical kind with spans: `0`, `-0`, `12`, `2.0`, `-0.0`,
   `1e2`, `1E2`, `1e+2`, `1e-2`, `0e0`, a 32-digit integer. Refusals: `01`, `+1`, `.5`, `1.`, `1e`,
   `Infinity`, `NaN`, `0x10`. (US2, FR-008, FR-009)
-- [ ] **T006 [P]** `json-strings/` — every escape; a surrogate-pair escape; a legitimate U+FFFD;
+- [x] **T006 [P]** `json-strings/` — every escape; a surrogate-pair escape; a legitimate U+FFFD;
   refusals for an unknown escape, a raw control byte, an unpaired high surrogate escape, an
   unpaired low surrogate escape. (FR-010)
-- [ ] **T007 [P]** `json-unicode/` — non-ASCII keys and values with **byte** spans and **code-point**
+- [x] **T007 [P]** `json-unicode/` — non-ASCII keys and values with **byte** spans and **code-point**
   columns asserted, including an astral character; the same document as bytes and as text
   (`bytes-parity`'s shape). (FR-012)
-- [ ] **T008 [P]** `json-duplicate-keys/` — the refusal with both spans; a nested object where the
+- [x] **T008 [P]** `json-duplicate-keys/` — the refusal with both spans; a nested object where the
   outer and inner both use the key (legal); a near-miss where two keys differ only by case. (FR-007)
-- [ ] **T009 [P]** `json-encoding/` — invalid UTF-8 at a byte offset (`inputBytes`); a BOM stripped
+- [x] **T009 [P]** `json-encoding/` — invalid UTF-8 at a byte offset (`inputBytes`); a BOM stripped
   with spans unchanged; a legitimate U+FFFD accepted. (FR-003, FR-004)
-- [ ] **T010 [P]** `json-limits/` — depth at the boundary and one past; size at the boundary and one
+- [x] **T010 [P]** `json-limits/` — depth at the boundary and one past; size at the boundary and one
   past. (FR-013)
-- [ ] **T011 [P]** `json-document-shape/` — empty input; whitespace only; trailing content; two
+- [x] **T011 [P]** `json-document-shape/` — empty input; whitespace only; trailing content; two
   values; an unterminated object; a document containing `---` and `&a`/`*a` as ordinary content (the
   accepting cases for YAML's unreachable floor rules). (US4, FR-005, FR-006)
-- [ ] **T012 [P]** `json-equality/` — an `equalTo` pair proving the single definition of equality:
+- [x] **T012 [P]** `json-equality/` — an `equalTo` pair proving the single definition of equality:
   two documents differing only in whitespace and key order parse to model-equal trees. (FR-014)
-- [ ] **T013** `tests/corpus/json-adapter.ts` and `tests/corpus/adapters.ts`; register `json` in
-  `tests/corpus/corpus.test.ts`. Observe every new case **fail**, and record which failures are the
-  expected "no adapter" ones.
-- [ ] **T014** Commit the cases and the shim, red.
+- [x] **T013** Observe the whole family **fail**: the runner refuses an unregistered format loudly
+  (`names format 'json', which has no registered adapter`), which is the red this discipline wants.
+  The shim and the registry line land with the parser rather than here, so that no commit in the
+  history fails `pnpm typecheck` on an import of a module that does not exist yet.
+- [x] **T014** Commit the cases, red.
 
 ## Phase 3 — The parser (FR-001, FR-002)
 

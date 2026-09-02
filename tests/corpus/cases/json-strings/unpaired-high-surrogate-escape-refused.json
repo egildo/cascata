@@ -1,0 +1,17 @@
+{
+  "name": "json-strings/unpaired-high-surrogate-escape-refused",
+  "cites": "§4.2",
+  "format": "json",
+  "input": "{\"s\":\"\\ud800\"}",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "invalid-encoding",
+        "line": 1,
+        "column": 7,
+        "start": 6,
+        "end": 12
+      }
+    ]
+  }
+}
