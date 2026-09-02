@@ -215,6 +215,29 @@ export interface ResolveOptions {
    * Defaults to `false`.
    */
   readonly allowRemoteDelegation?: boolean;
+  /**
+   * **v1.3 FR-001 — the launching schema.** Consulted only when the entry
+   * document names no `$schema` of its own; an authored `$schema` always
+   * wins (FR-002). Read exactly as if the entry had written
+   * `$schema: <schema>`: a relative text resolves against the entry
+   * document's directory, a leading `~/` expands, an `https://` text is
+   * fetched through `transport`, and the reference counts as
+   * **config-authored** — the embedder supplying it is the same consent
+   * §8.1 reads into a config's own reference — so it is exempt from the
+   * sandbox (FR-003). A launching schema that cannot be read is a
+   * `document-unreachable` anchored at the entry document, never a throw
+   * (FR-004). Ignored by `generateTypes()`, whose entry is a schema and
+   * whose "no `$adopts`" case is simply the root of the chain. Omitted,
+   * an entry with no `$schema` is what it has always been: a
+   * single-document graph with an empty pedigree (v0.2 FR-011).
+   *
+   * Exists for an embedder whose documents are not written by Cascata's
+   * authors at all — a Markdown file's frontmatter, which may well name
+   * nothing — and whose tool knows which schema governs such a document.
+   * The alternative was rewriting the entry's bytes to insert a line,
+   * which breaks every span the embedder relies on for diagnostics.
+   */
+  readonly schema?: string;
 }
 
 /**
@@ -1028,7 +1051,7 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: str
  * pinned, cycle-checked and sandbox-checked by the identical code (FR-033's
  * own posture, applied a stage earlier).
  */
-async function resolveEntry(entryPath: string, options: ResolveOptions, entryReference: (tree: Node) => ExtractedReference, graftDelegation: boolean): Promise<ResolveResult> {
+async function resolveEntry(entryPath: string, options: ResolveOptions, entryReference: (tree: Node) => ExtractedReference, graftDelegation: boolean, launchingSchema: string | undefined): Promise<ResolveResult> {
   requireSandboxRoot(options);
   requireHost(options);
   const host = options.host;
@@ -1087,15 +1110,27 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
     builder.abandonVisit(entryLocation);
     return { ok: false, diagnostics: [multipleAdoptionDiagnostic(schemaExtraction)] };
   }
+  let candidate: Reference;
   if (schemaExtraction.kind === "none") {
-    // Legal: no $schema at all (spec.md's Edge Cases; T023) — a
-    // single-document graph and an empty pedigree.
-    builder.finishVisit(entryLocation, canonicalEntry);
-    const graph = buildGraph(canonicalEntry, []);
-    return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false, graftDelegation);
+    if (launchingSchema === undefined) {
+      // Legal: no $schema at all (spec.md's Edge Cases; T023) — a
+      // single-document graph and an empty pedigree.
+      builder.finishVisit(entryLocation, canonicalEntry);
+      const graph = buildGraph(canonicalEntry, []);
+      return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false, graftDelegation);
+    }
+    // v1.3 FR-001: the embedder's launching schema stands in for the
+    // `$schema` line the entry did not write. Config-authored, because the
+    // embedder's option is consent the way a config's own reference is
+    // (§8.1); anchored at a phantom span in the entry document, because
+    // no position in any document wrote it — the same convention the
+    // unreadable-entry diagnostic above uses for "reached by nothing".
+    candidate = createReference({ text: launchingSchema, span: phantomSpan(entryOrigin), kind: "schema", authority: "config-authored" });
+  } else {
+    candidate = schemaExtraction.reference;
   }
 
-  const chainResult = await walkAdoptsChain(host, schemaExtraction.reference, entryLocation, builder, remote, sandboxRoot);
+  const chainResult = await walkAdoptsChain(host, candidate, entryLocation, builder, remote, sandboxRoot);
   if (!chainResult.ok) {
     // Aborting the whole call — no further use of `builder` follows, so
     // `entryLocation`'s frame is left on the (about to be discarded)
@@ -1116,7 +1151,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
  * chain, and delegation grafts.
  */
 export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
-  return resolveEntry(entryPath, options, extractSchemaReference, true);
+  return resolveEntry(entryPath, options, extractSchemaReference, true, options.schema);
 }
 
 // --- merge() — User Story 1 (v0.3, tasks.md T024) ------------------------
@@ -1459,7 +1494,7 @@ export type GenerateTypesResult =
  * `sandboxRoot`, exactly as `load()` does.
  */
 export async function generateTypes(schemaLocation: string, options: GenerateTypesOptions): Promise<GenerateTypesResult> {
-  const resolved = await resolveEntry(schemaLocation, options, extractAdoptsReference, false);
+  const resolved = await resolveEntry(schemaLocation, options, extractAdoptsReference, false, undefined);
   if (!resolved.ok) {
     return { ok: false, diagnostics: resolved.diagnostics };
   }
