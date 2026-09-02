@@ -207,8 +207,10 @@ become reachable through one exported function, additive. `generateTypes()` live
   `number`, `bigint`, `boolean`, `symbol`, `object`, `any`, `unknown`, `never`, `undefined`, `void`,
   `null` — and the ECMAScript reserved words, `default` and `class` among them). Otherwise the alias is
   `$` followed by the name with every character outside `[A-Za-z0-9_]` replaced by `_`. `$` never
-  begins a §9.1 identifier, so an escaped name can never collide with a bare one; two *escaped* names
-  can collide (`a-b`, `a_b`), and that is FR-026's generator error.
+  begins a §9.1 identifier, so an escaped name can never collide with a bare one — `a-b` (→ `$a_b`)
+  and a bare `a_b` coexist; two *escaped* names can collide (`a-b` and `a b`, both → `$a_b`), and
+  that is FR-026's generator error. *The first draft of this sentence gave `a-b`/`a_b` as the
+  colliding pair, contradicting its own previous clause; the implementer caught it.*
 - **Qualified aliases.** Where a chain declares a name more than once, every declaration is emitted
   as `<qualifier>_<name>` (the qualifier being §7's, escaped by the same rule); where two declaring
   layers share a qualifier, `<qualifier>_<rank>_<name>`.

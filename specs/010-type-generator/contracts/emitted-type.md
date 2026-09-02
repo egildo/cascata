@@ -17,7 +17,7 @@ that ships it.** §2 (JSDoc) is not.
 | 7 | `items: D` | `readonly D[]` | FR-013 |
 | 8 | `keys` | `{ readonly k: T; … }`, keys in §4.2 code-point order | FR-009 |
 | 9 | key `required` or `provided` | non-optional; else `k?: T` | FR-010 |
-| 10 | `values: D` | `readonly [key: string]: D` beside the properties | FR-011 |
+| 10 | `values: D` | `readonly [key: string]: D` beside the properties, its type widened with every declared sibling's type and with `undefined` where any sibling is optional — TypeScript requires an index signature to subsume its siblings (TS2411), so `D | undefined` in the ordinary case (Phase 9 T048; a correction to this row and to FR-018 as first written) | FR-011 |
 | 11 | `keys` and `values` both naming `k` | `k`'s type is the intersection position (§1 of the other contract), not `T & D` | FR-011 |
 | 12 | `seal: open`, no `values` | `readonly [key: string]: unknown` | FR-012 |
 | 13 | `seal: closed`, keys declared | no index signature (enforced by TypeScript at object literals only — §4) | FR-012 |
@@ -85,7 +85,8 @@ a version bump.
 | key `__proto__` | `readonly "__proto__": …`, and the oracle literal `{ "__proto__": … }` typechecks |
 | type named `default` | `export type $default = …` |
 | type named `my-type` | `export type $my_type = …` |
-| types `a-b` and `a_b` | `emit-identifier-collision` |
+| types `a-b` and `a_b` | **no** collision — `a_b` is bare, `a-b` escapes to `$a_b`, and `$` never begins a §9.1 identifier (the reason `$` was chosen); the case asserts they coexist |
+| types `a-b` and `a b` | `emit-identifier-collision` — two *escaped* names meeting at `$a_b` |
 | type named `Object` | `export type Object = …`, bare |
 | `enum: [1, 2.5]` under `int \| float` | `1 \| 2.5` |
 | `enum: [1, 1.0]` under `int \| float` | `1` (the two members project to one literal; JSDoc lists both) |

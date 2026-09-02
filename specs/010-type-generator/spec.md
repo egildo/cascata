@@ -338,7 +338,10 @@ derived artifacts first.
 - **FR-017**: `string`, `url`, `path` ⇒ `string`; `bool` ⇒ `boolean`; `null` ⇒ `null`; a union ⇒ a
   union.
 - **FR-018**: A `null` in the emitted type MUST come only from a `null` alternative; `undefined` MUST
-  never appear in a value type.
+  never appear in a property's own type. *Amended post-implementation:* an index signature beside an
+  optional sibling carries `undefined`, because TypeScript requires the index type to subsume its
+  siblings; the original wording forbade what the compiler requires (Phase 9 T048, `SPEC.md` §18
+  corrected).
 - **FR-019**: An `enum` of scalars MUST emit a kind-aware literal union following the position's
   numeric class; any non-scalar member MUST yield the accumulated type with no literal.
 - **FR-020**: `final: true` with a scalar `provide` MUST emit that constant's literal type; a non-scalar
@@ -385,8 +388,12 @@ derived artifacts first.
   as a TypeScript literal MUST typecheck against the generated root type, in memory, with the count of
   cases asserted.
 - **FR-035**: For every validate-corpus case refused solely for `type-mismatch`, `required-violated`,
-  `seal-violation`, or `enum-violated`, the projected configuration MUST fail to typecheck; a case
-  refused for range, length, or pattern MAY pass, and the contract MUST say so.
+  `seal-violation`, or `enum-violated`, the projected configuration MUST fail to typecheck **where the
+  refused property is expressible as a type**; the cases where it is not (`url`/`path` refinements;
+  `required` at a position whose type is `unknown`) MUST be listed by name in the oracle, never
+  skipped; a case refused for range, length, or pattern MAY pass, and the contract MUST say so.
+  *Amended post-implementation:* seven of twenty-two type-shaped refusals typecheck, and the original
+  wording asserted none would (`SPEC.md` §18 corrected).
 - **FR-036**: `meta/cascata.meta.yaml` projected MUST typecheck against the type generated from itself.
 - **FR-037**: The oracle MUST be proven able to fail: a sabotage of the numeric emission MUST turn at
   least one case red, and the report MUST say which.
@@ -426,7 +433,8 @@ derived artifacts first.
 - **SC-003**: A closed mapping emits no index signature; an open one emits `unknown`.
 - **SC-004**: The meta-schema's projection typechecks against the type generated from the meta-schema.
 - **SC-005**: Every `ok: true` validate-corpus case passes the soundness oracle; every case refused
-  solely for a type-shaped reason fails it; the counts are asserted.
+  solely for a type-shaped reason fails it **except the seven a type cannot express, pinned by name**;
+  all three counts are asserted.
 - **SC-006**: Swapping `bigint` for `number` in the emitter turns the oracle red.
 - **SC-007**: All 1039 pre-existing tests remain green, none modified in substance. If one must
   change, the report says which and why, and a passing suite achieved by relaxing an assertion is a
