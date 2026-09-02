@@ -8,12 +8,14 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.3.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
+**v1.4.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
 frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
 meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
-first release under that freeze, v1.2 the second, v1.3 the third; all three are additions — Article VIII's
-accumulated demand and type generator, then a second format adapter, then the launching schema. Nothing a schema meant before
-either release means anything else after it.
+first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth; every one of them is an
+addition — Article VIII's accumulated demand and type generator, then a second format adapter, then the
+launching schema, then a namespace the host can own. Nothing a schema meant before any of those releases
+means anything else after it. v1.4 carries one *correction* beside its addition: a `sandboxRoot` naming a
+filesystem root now contains what is under it.
 
 | | |
 | --- | --- |
@@ -28,6 +30,7 @@ either release means anything else after it.
 | **v1.1** | **the accumulated demand, and the TypeScript type generator** — `accumulate()` and `generate()`, `generateTypes()`, and soundness against the validator as the conformance rule (`SPEC.md` Article VIII) |
 | **v1.2** | **the JSON adapter** — a second format, hand-written against RFC 8259, selected for `.json` by the registry v0.2 built for it; format-blindness stops being a claim about the architecture and becomes an observed fact about two live adapters |
 | **v1.3** | **the launching schema** — `resolve()`/`load()` accept `schema`, a stand-in for the `$schema` line an entry did not write, consulted only when the entry names none; built for an embedder whose entry is a Markdown file's frontmatter |
+| **v1.4** | **host-resolvable identity** — an optional `Host.locate` lets a host own a URI scheme, so `$adopts: beltype:document` names a document by identity rather than by a path that differs on every machine; plus the correction that `sandboxRoot: "/"` contains everything under it |
 
 Full detail lives in `specs/001-…` through `specs/011-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
@@ -756,6 +759,27 @@ const result = await load("./index.md.frontmatter.yaml", {
 });
 ```
 
+**Host-resolvable identity (v1.4).** A `Host` may implement one more, optional method — `locate(reference)` — and own a URI scheme of its own. A `$schema`/`$adopts` reference (or a launching schema) whose scheme is not `https:` is offered to it before being refused; the host answers with a **location**, an absolute local path or an `https://` URL, and everything downstream is unchanged: the document is read, parsed, deduplicated, cycle-checked and pin-verified exactly as a path-named one, and a relative `$adopts` written *inside* it resolves against it. A scheme the host does not own — `undefined`, or no `locate` at all — is `unsupported-scheme`, exactly as before.
+
+```typescript
+import { createRequire } from "node:module";
+import type { Host } from "cascata";
+import { createNodeHost } from "cascata/host/node.js";
+
+const require = createRequire(import.meta.url);
+const base = createNodeHost();
+const host: Host = {
+  ...base,
+  async locate(reference) {
+    return reference === "beltype:document" ? require.resolve("@my/schemas/document.yaml") : undefined;
+  },
+};
+```
+
+A located reference is **not sandbox-checked**: the host chose the location, and the sandbox confines what a *document's own text* can reach (`SPEC.md` §16, §8.1). The exemption does not travel — what the located document writes for itself is checked as usual. Delegation targets are untouched.
+
+**The sandbox root correction (v1.4).** `sandboxRoot: "/"` now admits every absolute path beneath it. Containment was "equal to the root, or the root plus a separator", which for `/` read `startsWith("//")` and admitted nothing at all; the separator is now appended only where the root does not already end in one. `/sandbox` still does not contain `/sandboxfoo`.
+
 `load()` composes `resolve()` → `merge()` → `validate()` → `project()`; the staged calls stay public.
 Diagnostics carry a **level**: an `error` decides the outcome, an `info` is a lint that teaches and
 rides along with a successful result.
@@ -1200,7 +1224,7 @@ import type { Host, HostReadResult } from "cascata";
 
 class MyHost implements Host {
   async read(location: string): Promise<HostReadResult> { /* … */ }
-  // canonicalize, cacheRead, cacheWrite
+  // canonicalize, cacheRead, cacheWrite — and, optionally, locate (v1.4)
 }
 ```
 
