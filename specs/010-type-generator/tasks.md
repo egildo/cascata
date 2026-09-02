@@ -315,6 +315,16 @@ silently into an earlier phase. Empty at planning time, by definition.
       oracle's closedness claim guarded nothing: removing closedness from the emitter entirely left
       the whole sweep green. Four hand-built cases added to the oracle, and both seal sabotages now
       go red against them
+- [x] T056 **A named type beside the position's own structure was emitted as the bare alias, dropping
+      the structure — wider than the accumulated demand, and the one direction Article VIII's
+      soundness law forbids.** `checkDemand` runs every keyword of one demand beside a resolved
+      `type:`, so `{ type: box, keys: { b: { demand: { required: true } } } }` is enforced as both.
+      Fixed in `src/generate/accumulate.ts` (the tree, not the emitter): a depth-0 reference at a
+      position declaring `keys`/`values`/`items`/`seal` of its own carries the inline intersection of
+      the declaration set's body with those demands, the same body-with-body composition row 23
+      performs for two declarations of one name. Nine cases, four of them the validator's own verdict
+      through the compiler; both negatives confirmed compiling — green for the wrong reason — before
+      the fix. Contract row 23a and research W-7 added. Egildo's decision; Article VIII is silent
 - [x] T055 [US7] The future-tense sweep reached `src/` too, not only `specs/`: `src/index.ts` and
       `src/project/value.ts` both told a reader the generator had not shipped yet. Corrected in place
 - [x] T054 [US5] `resolve()`'s body became `resolveEntry()`, parameterised on which key the entry's

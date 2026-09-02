@@ -77,7 +77,26 @@ import { extend } from "../extend.js";
 /** One alternative set after intersection. A `ref` names a declaration set; the emitter decides the spelling. */
 export type AccumulatedType =
   | { readonly kind: "builtin"; readonly name: BuiltinTypeName; readonly depth: number }
-  | { readonly kind: "ref"; readonly declarations: readonly TypeDeclaration[]; readonly depth: number }
+  | {
+      readonly kind: "ref";
+      readonly declarations: readonly TypeDeclaration[];
+      readonly depth: number;
+      /**
+       * The intersection of this reference's body with the position's **own**
+       * structural demands, where the position declares any (`keys`,
+       * `values`, `items`, `seal`). Present only then; a usage that adds
+       * nothing of its own carries no `inlined` and is emitted as the alias
+       * (row 22).
+       *
+       * §5.1's composition has no precedence rule and never had one:
+       * `checkDemand` runs *every* keyword of one demand beside a resolved
+       * `type:`, so `{ type: box, keys: { b: { demand: { required: true } } } }`
+       * is enforced as both. Emitting `box` alone was wider than the
+       * accumulated demand — the one direction Article VIII's soundness law
+       * forbids — and the article is silent on the shape (research W-7).
+       */
+      readonly inlined?: AccumulatedPosition;
+    }
   | { readonly kind: "union"; readonly alternatives: readonly AccumulatedType[] };
 
 /** One constraint that survives accumulation, with the provenance JSDoc needs (FR-023). */
@@ -211,6 +230,8 @@ interface Ctx {
   readonly inProgress: Set<string>;
   readonly recursive: Set<string>;
   readonly intersectionSets: Map<string, readonly TypeDeclaration[]>;
+  /** Declaration sets currently being inlined into a position, so a recursion that re-enters one stays a reference. */
+  readonly inlining: Set<string>;
   readonly pendingSets: string[];
   readonly diagnostics: Diagnostic[];
 }
@@ -686,6 +707,76 @@ function childContributions(contributions: readonly Contribution[], keyword: "va
   return children;
 }
 
+/** The same demand with its `type:` removed — the position's own structure, without the reference that is being resolved into it. */
+function withoutType(parsed: ParsedDemand): ParsedDemand {
+  const { type: _resolved, ...rest } = parsed;
+  return rest;
+}
+
+/**
+ * Whether the position says anything of its own about **shape**, over and
+ * above whichever type it names.
+ *
+ * `enum`, the bounds and `required` are deliberately not triggers: they are
+ * accumulated on the position itself and already reach the emitted type
+ * (an `enum`) or the JSDoc (the bounds) without any body needing to be
+ * intersected. They still *participate* in an inlined body, because the
+ * body is built from these same contributions.
+ */
+function declaresOwnStructure(contributions: readonly Contribution[]): boolean {
+  return contributions.some((contribution) => {
+    const parsed = contribution.parsed;
+    const keys = parsed.keys;
+    const namesAKey = keys !== undefined && [...keys.values()].some((declaration) => declaration.demand !== undefined);
+    return namesAKey || parsed.values !== undefined || parsed.items !== undefined || parsed.seal === "closed";
+  });
+}
+
+/**
+ * A reference's body intersected with the position's own structural
+ * demands — §5.1's composition, performed the same way row 23 performs it
+ * for two declarations of one name: body with body, inline, never `A & B`.
+ *
+ * The position's own demands are contributed **with their `type:` stripped**,
+ * which is what stops the resolution from looping: the reference being
+ * resolved does not resolve itself again. `ctx.inlining` covers the other
+ * loop — a recursive type whose every level adds structure of its own —
+ * where the reference stays an alias, exactly the escape row 23 takes for a
+ * recursive multi-declaration set.
+ */
+function inlinedBody(declarations: readonly TypeDeclaration[], contributions: readonly Contribution[], depth: number, ctx: Ctx): AccumulatedPosition | undefined {
+  const key = setKeyOf(declarations);
+  if (ctx.inlining.has(key)) {
+    return undefined;
+  }
+  ctx.inlining.add(key);
+  const own = contributions.map((contribution) => ({ ...contribution, parsed: withoutType(contribution.parsed) }));
+  const body = positionOf([...own, ...bodyContributions(declarations)], depth, ctx);
+  ctx.inlining.delete(key);
+  return body;
+}
+
+/** Attach an inlined body to every depth-0 reference in `type`, where the position declares structure of its own. */
+function withInlinedReferences(type: AccumulatedType | "empty" | undefined, contributions: readonly Contribution[], depth: number, ctx: Ctx): AccumulatedType | "empty" | undefined {
+  if (type === undefined || type === "empty" || !declaresOwnStructure(contributions)) {
+    return type;
+  }
+  function attach(alternative: AccumulatedType): AccumulatedType {
+    if (alternative.kind === "union") {
+      return { kind: "union", alternatives: alternative.alternatives.map(attach) };
+    }
+    // Depth 0 only: at depth ≥ 1 the position's own `keys`/`seal` would be
+    // describing the array, not its elements, and `items` already reaches
+    // the elements through a position of its own.
+    if (alternative.kind !== "ref" || alternative.depth !== 0) {
+      return alternative;
+    }
+    const body = inlinedBody(alternative.declarations, contributions, depth, ctx);
+    return body === undefined ? alternative : { ...alternative, inlined: body };
+  }
+  return attach(type);
+}
+
 function positionOf(contributions: readonly Contribution[], depth: number, ctx: Ctx): AccumulatedPosition {
   if (contributions.length === 0 || depth > MAX_DEMAND_DEPTH) {
     return emptyPosition();
@@ -715,7 +806,7 @@ function positionOf(contributions: readonly Contribution[], depth: number, ctx: 
   const accept = accumulateAccept(contributions);
   const numeric = numericByDepth.get(0);
   return {
-    type: accumulateType(contributions, ctx),
+    type: withInlinedReferences(accumulateType(contributions, ctx), contributions, depth, ctx),
     keys,
     ...(values.length > 0 ? { values: positionOf(values, depth + 1, ctx) } : {}),
     ...(items.length > 0 ? { items: positionOf(items, depth + 1, ctx) } : {}),
@@ -854,7 +945,7 @@ export function accumulate(layers: readonly Layer[], options: AccumulateOptions 
   for (const layer of layers) {
     extend(allDecls, readTypeDeclarations(layer).declarations);
   }
-  const ctx: Ctx = { allDecls, bodies: new Map(), inProgress: new Set(), recursive: new Set(), intersectionSets: new Map(), pendingSets: [], diagnostics: [] };
+  const ctx: Ctx = { allDecls, bodies: new Map(), inProgress: new Set(), recursive: new Set(), intersectionSets: new Map(), inlining: new Set(), pendingSets: [], diagnostics: [] };
 
   const rootContributions = layers.flatMap((layer) => {
     const contribution = rootContribution(layer);

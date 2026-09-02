@@ -412,6 +412,127 @@ unknown: an extra key the seal forbids
   });
 });
 
+// --- A named type beside the position's own structure ------------------------
+
+describe("a position that names a type AND declares structure of its own — both apply, so the type must say both", () => {
+  /**
+   * **The shape v1.1 first shipped wide, and the corpus does not contain.**
+   * `checkDemand` runs *every* keyword of one demand — `keys`, `values`,
+   * `seal`, the bounds — beside a resolved `type:`, so a demand of
+   * `{ type: box, keys: { b: { demand: { required: true } } } }` is enforced
+   * as the **intersection** of `box`'s own body and that `keys`. Emitting
+   * `box`'s alias alone is wider than the accumulated demand, and wider is
+   * the one direction Article VIII's soundness law forbids.
+   *
+   * Hand-built, and it says so — no descriptor in the validate corpus writes
+   * this shape, which is exactly why it went unnoticed. The **expectation**
+   * is still the validator's: each case asserts what `validate()` does
+   * first, and only then what the type does.
+   */
+  const NARROWING_SCHEMA = `$id: vendor/core
+types:
+  box:
+    demand:
+      type: mapping
+      keys:
+        a: { demand: { type: string } }
+keys:
+  thing:
+    demand:
+      type: box
+      keys:
+        b: { demand: { type: string, required: true } }
+`;
+
+  function filesWith(schema: string, config: string): Map<string, Uint8Array> {
+    return new Map([
+      ["/virtual/schema.yaml", new TextEncoder().encode(schema)],
+      ["/virtual/config.yaml", new TextEncoder().encode(config)],
+    ]);
+  }
+
+  async function verdicts(schema: string, config: string): Promise<{ readonly validates: boolean; readonly compiles: boolean; readonly source: string }> {
+    const options = { host: new InMemoryHost({ files: filesWith(schema, config) }), sandboxRoot: "/virtual" };
+    const resolved = await resolve("/virtual/config.yaml", options);
+    if (!resolved.ok) {
+      throw new Error(resolved.diagnostics.map((d) => d.code).join(", "));
+    }
+    const merged = merge(resolved);
+    if (!merged.ok) {
+      throw new Error(merged.diagnostics.map((d) => d.code).join(", "));
+    }
+    const generated = await generateTypes("/virtual/schema.yaml", { host: new InMemoryHost({ files: filesWith(schema, config) }), sandboxRoot: "/virtual" });
+    if (!generated.ok) {
+      throw new Error(generated.diagnostics.map((d) => d.code).join(", "));
+    }
+    const projected = project(merged.configuration);
+    const source = `${generated.source}\nconst __inhabits: ${generated.tree.rootName} = ${toLiteral(projected.value as ConfigValue)};\nvoid __inhabits;\n`;
+    return { validates: validate(merged.configuration).ok, compiles: compileInMemory(source).length === 0, source };
+  }
+
+  it("the validator REFUSES a config missing the position's own required child, even though the named type does not demand it", async () => {
+    const verdict = await verdicts(NARROWING_SCHEMA, `$schema: ./schema.yaml\nthing:\n  a: hello\n`);
+    expect(verdict.validates).toBe(false);
+  });
+
+  it("...and the projected configuration therefore must NOT inhabit the generated type", async () => {
+    const verdict = await verdicts(NARROWING_SCHEMA, `$schema: ./schema.yaml\nthing:\n  a: hello\n`);
+    expect(verdict.compiles, `the emitted type accepted a configuration the validator refused:\n${verdict.source}`).toBe(false);
+  });
+
+  it("...while the config the validator ACCEPTS compiles — so it is the narrowing being caught, not the shape", async () => {
+    const verdict = await verdicts(NARROWING_SCHEMA, `$schema: ./schema.yaml\nthing:\n  a: hello\n  b: world\n`);
+    expect(verdict.validates).toBe(true);
+    expect(verdict.compiles, verdict.source).toBe(true);
+  });
+
+  /** `seal` and `values`, not only `keys`: the position closes a mapping the named type left open. */
+  const SEALING_SCHEMA = `$id: vendor/core
+types:
+  openBox:
+    demand:
+      type: mapping
+      values: { type: string }
+keys:
+  thing:
+    demand:
+      type: openBox
+      seal: closed
+      keys:
+        a: { demand: { type: string } }
+`;
+
+  it("a position that SEALS a mapping the named type left open refuses an undeclared key, and the type says so", async () => {
+    const refused = await verdicts(SEALING_SCHEMA, `$schema: ./schema.yaml\nthing:\n  a: x\n  z: y\n`);
+    expect(refused.validates, "the validator refuses it first").toBe(false);
+    expect(refused.compiles, `the emitted type accepted a sealed mapping's undeclared key:\n${refused.source}`).toBe(false);
+    const accepted = await verdicts(SEALING_SCHEMA, `$schema: ./schema.yaml\nthing:\n  a: x\n`);
+    expect(accepted.validates).toBe(true);
+    expect(accepted.compiles, accepted.source).toBe(true);
+  });
+
+  /** The bounds and `enum` a position adds beside a named type reach the accumulated demand too. */
+  const ENUM_SCHEMA = `$id: vendor/core
+types:
+  word:
+    demand: { type: string }
+keys:
+  thing:
+    demand:
+      type: word
+      enum: ["yes", "no"]
+`;
+
+  it("an `enum` declared beside a named type narrows the emitted type to its literals", async () => {
+    const refused = await verdicts(ENUM_SCHEMA, `$schema: ./schema.yaml\nthing: maybe\n`);
+    expect(refused.validates).toBe(false);
+    expect(refused.compiles, refused.source).toBe(false);
+    const accepted = await verdicts(ENUM_SCHEMA, `$schema: ./schema.yaml\nthing: "yes"\n`);
+    expect(accepted.validates).toBe(true);
+    expect(accepted.compiles, accepted.source).toBe(true);
+  });
+});
+
 // --- §1 row 7: the meta-schema round trip -----------------------------------
 
 describe("contract §1 row 7 / SC-004 — the meta-schema inhabits the type generated from itself", () => {

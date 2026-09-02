@@ -280,6 +280,17 @@ syntax).
   Proposed `demand-unsatisfiable`, `info`. A second new code, `emit-identifier-collision`, `error`,
   for FR-026. Both go to `SPEC.md`'s diagnostic catalogue via the README, as every milestone's codes
   have.
+- **W-7. A named type beside the position's own structural demands.** Article VIII's mapping table
+  gives a row to "a named type" and a row to "`keys`", and says nothing about a position that
+  carries both — `{ type: box, keys: { b: { demand: { required: true } } } }`. §5.1 settles it and
+  the implementation confirms it: `checkDemand` runs *every* keyword of one demand beside a
+  resolved `type:`, so both apply, composed by intersection with no precedence rule. v1.1 first
+  shipped the bare alias there, which is **wider** than the accumulated demand — a configuration the
+  validator refuses would typecheck — and no schema in the validate corpus or the meta-schema writes
+  the shape, so nothing caught it. Corrected in Phase 9 (T056) to the inline body-with-body
+  intersection row 23 already performs for two declarations of one name. The article should gain one
+  clause: **a named type composes with whatever else the position demands, and the emitted type is
+  their intersection.** A correction.
 - **W-6. The article's identifier clause says "non-ASCII included" for quoting** and says nothing
   about type names, which §9.1 already restricts to ASCII. Consistent, but the article's probe-gate
   concern about non-ASCII *type* names is unreachable through a type expression. Recorded, no change.

@@ -231,6 +231,96 @@ describe("contract §3 rows 2–4 — alias names are kept, escaped, or refused"
   });
 });
 
+// --- a named type beside the position's own structure -----------------------
+
+describe("a reference beside the position's own structural demands is the INLINE intersection of the two", () => {
+  it("the named type's body and the position's own `keys` are one object type, with `@intersects` naming the declaration", () => {
+    const source = emitAndCompile(`$id: vendor/core
+types:
+  box:
+    demand:
+      type: mapping
+      keys:
+        a: { demand: { type: string } }
+keys:
+  thing:
+    demand:
+      type: box
+      keys:
+        b: { demand: { type: string, required: true } }
+`);
+    // `box` still emits as its own alias — a *usage* that adds nothing of
+    // its own still refers to it by name (row 22). What changes is the
+    // usage that adds something: `thing` demands `box` AND a required `b`,
+    // and `checkDemand` enforces both, so the type must say both.
+    expect(source).toBe(`${HEADER}export type box = {
+  readonly a?: string;
+  readonly [key: string]: unknown;
+};
+
+export type core = {
+  /** @intersects box */
+  readonly thing?: {
+    readonly a?: string;
+    readonly b: string;
+    readonly [key: string]: unknown;
+  };
+  readonly [key: string]: unknown;
+};
+`);
+  });
+
+  it("a usage that adds NOTHING of its own still refers to the alias by name — the inlining is the exception, not the rule", () => {
+    const source = emitAndCompile(`$id: vendor/core
+types:
+  box:
+    demand:
+      type: mapping
+      keys:
+        a: { demand: { type: string } }
+keys:
+  thing:
+    demand: { type: box }
+`);
+    expect(source).toContain("readonly thing?: box;");
+    expect(source).not.toContain("@intersects");
+  });
+
+  it("`seal` and `values` participate too: a position that closes what the type left open emits no index signature", () => {
+    const source = emitAndCompile(`$id: vendor/core
+types:
+  openBox:
+    demand:
+      type: mapping
+      values: { type: string }
+keys:
+  thing:
+    demand:
+      type: openBox
+      seal: closed
+      keys:
+        a: { demand: { type: string } }
+`);
+    expect(source).toContain(`  readonly thing?: {
+    readonly a?: string;
+  };`);
+  });
+
+  it("and `items` participates: a position that constrains the elements of a named sequence type", () => {
+    const source = emitAndCompile(`$id: vendor/core
+types:
+  list:
+    demand: { type: sequence }
+keys:
+  thing:
+    demand:
+      type: list
+      items: { type: string }
+`);
+    expect(source).toContain("readonly thing?: readonly string[];");
+  });
+});
+
 // --- row 27: accept ---------------------------------------------------------
 
 describe("contract row 27 — `accept` narrows where alternatives differ, and reaches JSDoc where they do not", () => {

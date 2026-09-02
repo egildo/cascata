@@ -257,7 +257,10 @@ function emitAlternative(alternative: AccumulatedType, position: AccumulatedPosi
   const admission = position.numericByDepth.get(depth);
   let core: string;
   if (alternative.kind === "ref") {
-    core = emitReference(alternative.declarations, indent, ctx);
+    // A reference the position added structural demands to is emitted as
+    // the intersection the tree computed, inline — never as the alias,
+    // which would say only half of what the accumulated demand says.
+    core = alternative.inlined !== undefined ? emitPosition(alternative.inlined, indent, ctx, false) : emitReference(alternative.declarations, indent, ctx);
   } else {
     switch (alternative.name) {
       case "string":
@@ -366,7 +369,7 @@ function intersectedNames(type: AccumulatedType | "empty" | undefined, ctx: Emit
   if (type.kind === "union") {
     return type.alternatives.flatMap((alternative) => intersectedNames(alternative, ctx));
   }
-  if (type.kind !== "ref" || type.declarations.length < 2) {
+  if (type.kind !== "ref" || (type.declarations.length < 2 && type.inlined === undefined)) {
     return [];
   }
   return type.declarations.map((declaration) => ctx.aliasOf.get(declarationKey(declaration)) ?? aliasName(declaration.name));
