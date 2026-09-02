@@ -62,6 +62,7 @@ import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span
 import { resolveAlias, isMergeKeyPair, mergeSources } from "./expand.js";
 import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsupportedTagDiagnostic } from "./floor.js";
 import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "./limits.js";
+import { findFirstInvalidUtf8ByteOffset, locateByteOffset } from "../encoding.js";
 
 // `yaml` merges each of these classes with a `.Parsed` namespace member
 // carrying the concrete post-parse shape (a definite `range`, and — for
@@ -637,141 +638,10 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
 // caller has a JS string, invalid bytes have already become U+FFFD —
 // verified empirically, not assumed (constitution v1.1.0's probe gate).
 //
-// The validator below is intentionally NOT "decode with the default
-// (repairing) TextDecoder, then scan the result for U+FFFD": a document
-// may legitimately *contain* U+FFFD (its own case, tests/corpus/cases/
-// bytes-encoding/legitimate-replacement-character-accepted.json), so that
-// approach cannot tell "was always U+FFFD" from "was repaired into one",
-// and repairing at all is what FR-002 forbids. Validation runs on the
-// bytes directly, per RFC 3629 / Unicode Table 3-7's well-formedness
-// rules, before any decoding is attempted.
-
-function isContinuationByteAt(bytes: Uint8Array, index: number): boolean {
-  if (index >= bytes.length) {
-    return false;
-  }
-  const value = bytes[index];
-  return value !== undefined && value >= 0x80 && value <= 0xbf;
-}
-
-function isByteInRangeAt(bytes: Uint8Array, index: number, min: number, max: number): boolean {
-  if (index >= bytes.length) {
-    return false;
-  }
-  const value = bytes[index];
-  return value !== undefined && value >= min && value <= max;
-}
-
-/**
- * The byte offset of the first ill-formed UTF-8 sequence in `bytes`, or
- * `undefined` if every byte belongs to a well-formed sequence. Well-formed
- * here excludes overlong encodings, encoded surrogates (U+D800-U+DFFF),
- * and code points past U+10FFFF, matching Unicode's Table 3-7 exactly —
- * a plain per-byte continuation-count check would silently accept all
- * three.
- */
-function findFirstInvalidUtf8ByteOffset(bytes: Uint8Array): number | undefined {
-  const length = bytes.length;
-  let index = 0;
-  while (index < length) {
-    const leadByte = bytes[index];
-    if (leadByte === undefined) {
-      // Unreachable: index < length guarantees a defined element.
-      throw new Error("Internal error: UTF-8 scan indexed past the end of the byte array");
-    }
-    if (leadByte <= 0x7f) {
-      index += 1;
-      continue;
-    }
-    if (leadByte >= 0xc2 && leadByte <= 0xdf) {
-      if (!isContinuationByteAt(bytes, index + 1)) return index;
-      index += 2;
-      continue;
-    }
-    if (leadByte === 0xe0) {
-      if (!isByteInRangeAt(bytes, index + 1, 0xa0, 0xbf)) return index; // excludes overlong (E0 80-9F)
-      if (!isContinuationByteAt(bytes, index + 2)) return index;
-      index += 3;
-      continue;
-    }
-    if (leadByte >= 0xe1 && leadByte <= 0xec) {
-      if (!isContinuationByteAt(bytes, index + 1)) return index;
-      if (!isContinuationByteAt(bytes, index + 2)) return index;
-      index += 3;
-      continue;
-    }
-    if (leadByte === 0xed) {
-      if (!isByteInRangeAt(bytes, index + 1, 0x80, 0x9f)) return index; // excludes encoded surrogates (ED A0-BF)
-      if (!isContinuationByteAt(bytes, index + 2)) return index;
-      index += 3;
-      continue;
-    }
-    if (leadByte >= 0xee && leadByte <= 0xef) {
-      if (!isContinuationByteAt(bytes, index + 1)) return index;
-      if (!isContinuationByteAt(bytes, index + 2)) return index;
-      index += 3;
-      continue;
-    }
-    if (leadByte === 0xf0) {
-      if (!isByteInRangeAt(bytes, index + 1, 0x90, 0xbf)) return index; // excludes overlong (F0 80-8F)
-      if (!isContinuationByteAt(bytes, index + 2)) return index;
-      if (!isContinuationByteAt(bytes, index + 3)) return index;
-      index += 4;
-      continue;
-    }
-    if (leadByte >= 0xf1 && leadByte <= 0xf3) {
-      if (!isContinuationByteAt(bytes, index + 1)) return index;
-      if (!isContinuationByteAt(bytes, index + 2)) return index;
-      if (!isContinuationByteAt(bytes, index + 3)) return index;
-      index += 4;
-      continue;
-    }
-    if (leadByte === 0xf4) {
-      if (!isByteInRangeAt(bytes, index + 1, 0x80, 0x8f)) return index; // excludes > U+10FFFF (F4 90-BF)
-      if (!isContinuationByteAt(bytes, index + 2)) return index;
-      if (!isContinuationByteAt(bytes, index + 3)) return index;
-      index += 4;
-      continue;
-    }
-    // 0x80-0xC1: a bare continuation byte, or C0/C1 (which can only start
-    // an overlong 2-byte sequence and so are never valid lead bytes).
-    // 0xF5-0xFF: beyond the range that can encode a code point <= U+10FFFF.
-    // No byte in either set may ever lead a well-formed sequence.
-    return index;
-  }
-  return undefined;
-}
-
-/**
- * Line/column of `offset`, computed directly from the raw bytes rather
- * than through `LineCounter` (there is no decoded string yet to build one
- * from at this point — this runs *before* decoding, on the byte prefix
- * known to be well-formed since `offset` is where that stops being true).
- * Column is a code-point count, matching every other span in this
- * codebase (parse.ts's module doc above).
- */
-function locateByteOffset(bytes: Uint8Array, offset: number): { line: number; column: number } {
-  let line = 1;
-  let lineStartByteOffset = 0;
-  for (let index = 0; index < offset; index += 1) {
-    if (bytes[index] === 0x0a) {
-      line += 1;
-      lineStartByteOffset = index + 1;
-    }
-  }
-  let decodedLinePrefix: string;
-  try {
-    decodedLinePrefix = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes.subarray(lineStartByteOffset, offset));
-  } catch (error) {
-    // Should be unreachable: findFirstInvalidUtf8ByteOffset guarantees
-    // everything before `offset` is well-formed. Thrown rather than
-    // silently mis-reporting a position, matching this file's existing
-    // "Internal error" convention.
-    throw new Error(`Internal error: byte range [${String(lineStartByteOffset)}, ${String(offset)}) was reported well-formed but failed to decode: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const column = [...decodedLinePrefix].length + 1;
-  return { line, column };
-}
+// The validator and the byte-offset locator this entry point needs live
+// in `src/adapters/encoding.ts` (v1.2, 011 T001), shared with the JSON
+// adapter — see that module's own doc for why they are written as they
+// are. Nothing about them changed when they moved.
 
 /**
  * Parse YAML bytes into a Cascata tree or a non-empty diagnostic list.

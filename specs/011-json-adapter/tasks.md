@@ -5,12 +5,12 @@ any order. Every task cites the FR it discharges.
 
 ## Phase 1 — Foundational
 
-- [ ] **T001** Extract `findFirstInvalidUtf8ByteOffset` and `locateByteOffset` from
+- [x] **T001** Extract `findFirstInvalidUtf8ByteOffset` and `locateByteOffset` from
   `src/adapters/yaml/parse.ts` into `src/adapters/encoding.ts`, byte for byte, and import them back.
   No logic changes. (FR-003, research P-2)
-- [ ] **T002** Run `pnpm test` and confirm `tests/corpus/cases/bytes-encoding/` and
+- [x] **T002** Run `pnpm test` and confirm `tests/corpus/cases/bytes-encoding/` and
   `tests/corpus/cases/bytes-parity/` are still green — the regression evidence for T001.
-- [ ] **T003** Commit. Nothing has changed behaviourally and the suite says so.
+- [x] **T003** Commit. Nothing has changed behaviourally and the suite says so.
 
 ## Phase 2 — The conformance corpus, before the parser (FR-020)
 
