@@ -8,11 +8,11 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.2.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
+**v1.3.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
 frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
 meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
-first release under that freeze and v1.2 is the second; both are additions — Article VIII's
-accumulated demand and type generator, then a second format adapter. Nothing a schema meant before
+first release under that freeze, v1.2 the second, v1.3 the third; all three are additions — Article VIII's
+accumulated demand and type generator, then a second format adapter, then the launching schema. Nothing a schema meant before
 either release means anything else after it.
 
 | | |
@@ -27,6 +27,7 @@ either release means anything else after it.
 | **v1.0** | **the output surface** — `project()` and `load<T>()`, the value a consumer actually reads (`SPEC.md` Article VII) — plus the freeze |
 | **v1.1** | **the accumulated demand, and the TypeScript type generator** — `accumulate()` and `generate()`, `generateTypes()`, and soundness against the validator as the conformance rule (`SPEC.md` Article VIII) |
 | **v1.2** | **the JSON adapter** — a second format, hand-written against RFC 8259, selected for `.json` by the registry v0.2 built for it; format-blindness stops being a claim about the architecture and becomes an observed fact about two live adapters |
+| **v1.3** | **the launching schema** — `resolve()`/`load()` accept `schema`, a stand-in for the `$schema` line an entry did not write, consulted only when the entry names none; built for an embedder whose entry is a Markdown file's frontmatter |
 
 Full detail lives in `specs/001-…` through `specs/011-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
@@ -742,6 +743,16 @@ const result = await load("./site.yaml", {
   sandboxRoot: process.cwd(),
   host: createNodeHost({ cacheDir: ".cascata-cache" }),
   transport: createNodeTransport(),   // omit for a purely local resolution
+});
+```
+
+**The launching schema (v1.3).** An entry that names no `$schema` can still be governed: pass `schema` and the entry is resolved as if it had written `$schema: <schema>` — relative to the entry's own directory, `~/` expanded, config-authored and so exempt from the sandbox, refused as `document-unreachable` at the entry document when the host cannot supply it. An authored `$schema` always wins and the option is then never read. Without the option a silent entry is a single-document graph with an empty pedigree, as before. `generateTypes()` ignores the field: its entry is a schema, and a schema with no `$adopts` is the root.
+
+```typescript
+const result = await load("./index.md.frontmatter.yaml", {
+  sandboxRoot: process.cwd(),
+  host: myHost,
+  schema: "./beltype.yaml",   // consulted only if the entry names no $schema of its own
 });
 ```
 
