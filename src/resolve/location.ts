@@ -172,6 +172,31 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
 }
 
 /**
+ * Classify a location the **host** supplied for a reference in a scheme
+ * it owns (v1.4 FR-001/FR-002, `Host.locate`). The host has already done
+ * the resolving; this only reads what kind of location came back, so that
+ * the same downstream code handles it as it handles any other:
+ * `https://` is a remote document (fetched, cached, pin-verified through
+ * the transport that has existed since v0.2), anything else an absolute
+ * local path.
+ *
+ * Deliberately **not** `classifyReferenceLocation`: there is no referring
+ * document to resolve against — the host answered with a location, not
+ * with more reference text — and a returned string carrying some third
+ * scheme is not re-offered to the host. One hop is the whole contract.
+ * `resolvePath` is applied to the local case only so that an already
+ * absolute path is normalized the same way every other local location in
+ * this module is (`.`/`..` segments collapsed, so location-based dedup
+ * still agrees with a path-named reference to the same document).
+ */
+export function classifyLocatedDocument(location: string): ReferenceLocationKind {
+  if (HTTPS_LOCATION_PATTERN.test(location)) {
+    return { kind: "https", url: location };
+  }
+  return { kind: "local", location: resolvePath(location) };
+}
+
+/**
  * Resolve `reference`'s text against the directory of the document that
  * wrote it (FR-006), first expanding a leading `~/` if `reference` is
  * config-authored (FR-029; `expandTilde` above). `path.resolve` handles
@@ -248,11 +273,21 @@ export function toAbsoluteSandboxRoot(sandboxRoot: string): string {
  * absolute and normalized: equal to the root, or the root followed by a
  * path separator, never a bare prefix match (`/sandboxfoo` must not be
  * read as inside `/sandbox`).
+ *
+ * **v1.4 FR-007, a correction.** The separator is *appended* only where
+ * the root does not already end in one. A filesystem root already does —
+ * `/` on POSIX, `C:\` on Windows — and appending a second one produced
+ * `startsWith("//")`, which no absolute path satisfies. `sandboxRoot:
+ * "/"`, the one value that plainly means "contain nothing, admit
+ * everything", therefore refused every reference except the root itself.
+ * The `/sandboxfoo` case is why the separator is there at all and is
+ * unaffected: a root that does not end in one still gets one.
  */
 export async function isWithinSandbox(host: Host, location: string, sandboxRoot: string): Promise<boolean> {
   const realSandboxRoot = await safeCanonicalize(host, sandboxRoot);
   const realLocation = await safeCanonicalize(host, location);
-  return realLocation === realSandboxRoot || realLocation.startsWith(realSandboxRoot + sep);
+  const containedPrefix = realSandboxRoot.endsWith(sep) ? realSandboxRoot : realSandboxRoot + sep;
+  return realLocation === realSandboxRoot || realLocation.startsWith(containedPrefix);
 }
 
 /** `host.canonicalize`, falling back to the already-normalized lexical path (`path.resolve`'s output, idempotent on an already-absolute path) when the host cannot canonicalize it — e.g. it does not exist. See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is not treated as a sandbox verdict in either direction. */

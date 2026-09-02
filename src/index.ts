@@ -28,7 +28,7 @@ import { freeze } from "./model/freeze.js";
 import { createOrigin, createSourceSpan, type Origin } from "./model/span.js";
 import { createReference, extractAdoptsReference, extractSchemaReference, referenceDiagnostic, type ExtractedReference, type Reference } from "./resolve/reference.js";
 import { accumulate as accumulateImpl, generate as generateImpl, type AccumulatedTree } from "./generate/index.js";
-import { classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoot, type ReferenceLocationKind } from "./resolve/location.js";
+import { classifyLocatedDocument, classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoot, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
 import { DocumentCache } from "./resolve/cache.js";
 import { resolveFetchLimits, resolveRemoteDocument, type FetchLimits, type RemoteDocumentFailure } from "./resolve/fetch.js";
@@ -291,6 +291,13 @@ function requireHost(options: ResolveOptions): void {
   if (host === undefined || host === null || typeof host.read !== "function" || typeof host.canonicalize !== "function" || typeof host.cacheRead !== "function" || typeof host.cacheWrite !== "function") {
     throw new Error("resolve() requires 'host' (v0.7 FR-022, FR-028, SPEC.md Article VI) — there is no default; pass createNodeHost() from 'cascata/host/node.js' for the ordinary local filesystem, or an in-memory host for tests");
   }
+  // v1.4 FR-001: `locate` is optional — absent is the ordinary host and
+  // needs no comment. Present-but-not-callable is a programmer error and
+  // is named as one here rather than surfacing as a TypeError from the
+  // one call site.
+  if (host.locate !== undefined && typeof host.locate !== "function") {
+    throw new Error("resolve() was given a 'host' whose 'locate' is not a function (v1.4 FR-001, SPEC.md Article VI) — omit the member entirely for a host that owns no namespace");
+  }
 }
 
 /** A phantom, zero-width span at `documentLength: 0` — the same convention `checkSizeLimit` (v0.1) uses for "nothing was read/parsed at all yet". Used only when a document cannot even be read, so there is no real content to anchor a span inside. */
@@ -532,7 +539,15 @@ async function readAtTarget(host: Host, target: ReferenceLocationKind, candidate
  * directly instead, in `tests/unit/graph-remote-dedup.test.ts`.
  */
 async function walkAdoptsChain(host: Host, candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined, sandboxRoot: string): Promise<ChainWalkResult> {
-  const target = classifyReferenceLocation(candidate, referringLocation);
+  const classified = classifyReferenceLocation(candidate, referringLocation);
+  // v1.4 FR-001: a scheme this library does not itself understand is
+  // offered to the host before it is refused — the host may own that
+  // namespace, and Article VI's whole premise is that the host answers
+  // what is at a location. `undefined`, and a host with no `locate` at
+  // all, both fall through to v0.2 FR-013's unchanged refusal (FR-004).
+  const located = classified.kind === "unsupported-scheme" ? await host.locate?.(candidate.text) : undefined;
+  const hostLocated = located !== undefined;
+  const target: ReferenceLocationKind = located === undefined ? classified : classifyLocatedDocument(located);
   if (target.kind === "unsupported-scheme") {
     // Refused *before any request is made* (v0.2 FR-013) — this branch
     // never reaches resolve/fetch.ts at all.
@@ -541,7 +556,14 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
       diagnostics: [referenceDiagnostic("unsupported-scheme", candidate, `Reference '${candidate.text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.2 FR-013)`)],
     };
   }
-  if (target.kind === "local" && (await isSandboxEscape(host, candidate, target.location, sandboxRoot))) {
+  // v1.4 FR-003: a located reference is not sandbox-checked. The sandbox
+  // confines what a *document's own text* can reach; here the text named
+  // a namespace and the host chose the location, which is the same
+  // consent §8.1 reads into a config's own reference and v0.2 FR-020
+  // already exempts. What the located document then writes for *itself*
+  // is checked as usual — it is ordinary reference text in an ordinary
+  // document, and this exemption does not travel down the chain.
+  if (!hostLocated && target.kind === "local" && (await isSandboxEscape(host, candidate, target.location, sandboxRoot))) {
     // Refused *before any read is attempted* (v0.2 FR-021, research D6) —
     // judged on the resolved real path, following symlinks
     // (`isSandboxEscape`/`isWithinSandbox`, `src/resolve/location.ts`).

@@ -21,6 +21,11 @@
  *   of the on-disk cache (FR-025); the caching *policy* (content
  *   addressing, freshness, RFC 9111's applicable subset) stays in
  *   `resolve/cache.ts`.
+ * - `locate` — **optional, v1.4 FR-001** — the location of a reference
+ *   written in a URI scheme this host owns, or `undefined` for a scheme
+ *   it does not. The same law as the three above: supply, never meaning.
+ *   The host says *where `beltype:document` is*; the library alone
+ *   decides what to do with the answer.
  *
  * This module itself performs no I/O and imports nothing — a pure
  * interface declaration, exactly like `resolve/transport.ts`'s own
@@ -52,4 +57,28 @@ export interface Host {
   cacheRead(key: string): Promise<Uint8Array | undefined>;
   /** Store `bytes` under `key`, overwriting any previous value. A host with no cache configured may throw — the same "required exactly when needed, never ambient" posture `sandboxRoot` has always held (Principle VI). */
   cacheWrite(key: string, bytes: Uint8Array): Promise<void>;
+  /**
+   * **Optional (v1.4 FR-001, `SPEC.md` §16).** The location of
+   * `reference` — a `$schema`/`$adopts` text carrying a URI scheme that
+   * is not `https:` — if this host owns that scheme, or `undefined` if it
+   * does not. A host that implements nothing here is the library exactly
+   * as it was before v1.4: every such reference is `unsupported-scheme`.
+   *
+   * **Return an absolute location or `undefined`** — an absolute local
+   * path, or an `https://` URL. What comes back is read as a *location*
+   * and nothing else: it is classified once (remote or local), never
+   * re-offered to this method, and everything downstream — reading,
+   * parsing, dedup, cycle detection, and a relative `$adopts` written
+   * inside the located document — proceeds against it unchanged
+   * (v1.4 FR-002). A relative string is a host bug, not a second syntax.
+   *
+   * **Supply, never meaning.** The host answers *which document its
+   * namespace names*, as it already answers which bytes are at a path. It
+   * does not answer whether that document is permitted: a located
+   * reference is not sandbox-checked (v1.4 FR-003) precisely because the
+   * host, not a document, chose the location — which is the same
+   * boundary Article VI already draws, applied where the location itself
+   * comes from the host.
+   */
+  locate?(reference: string): Promise<string | undefined>;
 }
