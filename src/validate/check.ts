@@ -41,7 +41,7 @@ import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js"
 import { readDemandVocabulary, readNestedKeysMapping, recursiveVocabularyProblems, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
 import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, requiredViolationCause, type ViolationSite } from "./constraints.js";
 import { dedupeViolations, renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
-import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
+import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, declarationsOfLayers, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
 import { parseTypeExpression, type Alternative, type TypeExpression } from "./typeexpr.js";
 import { readDirectives, reservedKeyValue } from "./directives.js";
 import type { KeyFinalState } from "../merge/final.js";
@@ -758,7 +758,7 @@ function violationsForLayer(configuration: MergedConfiguration, layer: Layer, al
  *   naming something outside the referenced type's own declared set,
  *   including any selection at all when the type declares none.
  */
-function typeUsageProblems(configuration: MergedConfiguration, allDecls: readonly TypeDeclaration[], knownDeclaredNames: ReadonlySet<string>): Diagnostic[] {
+function typeUsageProblems(layers: readonly Layer[], allDecls: readonly TypeDeclaration[], knownDeclaredNames: ReadonlySet<string>): Diagnostic[] {
   const problems: Diagnostic[] = [];
 
   function checkAlternativeReachability(alt: Alternative, layer: Layer, pointerPath: readonly (string | number)[], span: Node["span"]): void {
@@ -841,7 +841,7 @@ function typeUsageProblems(configuration: MergedConfiguration, allDecls: readonl
     }
   }
 
-  for (const layer of configuration.layers) {
+  for (const layer of layers) {
     if (layer.role !== "schema") {
       continue;
     }
@@ -919,8 +919,39 @@ function sealClosedSites(raw: RawDemand, value: Node): readonly ViolationSite[] 
  * reusing the identical `malformed-demand-value`-shaped refusal for a
  * value that is present but not `"open"`/`"closed"`.
  */
-function topLevelSealDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
+/**
+ * The **shape** half of the top-level `seal` check: a present `seal:` whose
+ * value is not `'open'`/`'closed'`. Split out of `topLevelSealDiagnostics`
+ * in v1.1 so the schema-vocabulary pass can run it with no configuration in
+ * hand; the value half — which keys a sealed top level actually admits —
+ * stays below, where the merged tree is.
+ */
+function malformedTopLevelSealDiagnostics(layers: readonly Layer[]): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
+  for (const layer of layers) {
+    if (layer.role !== "schema" || layer.tree.type !== "mapping") {
+      continue;
+    }
+    const sealNode = layer.tree.entries.get("seal");
+    if (sealNode === undefined || (sealNode.type === "scalar" && sealNode.kind === "string" && (sealNode.value === "open" || sealNode.value === "closed"))) {
+      continue;
+    }
+    diagnostics.push(
+      createDiagnostic({
+        level: "error",
+        code: "malformed-demand-value",
+        message: `top-level 'seal' is not 'open' or 'closed' (SPEC.md §9, v0.7)`,
+        primary: sealNode.span,
+        pointer: "",
+        pedigreePosition: layer.rank,
+      }),
+    );
+  }
+  return diagnostics;
+}
+
+function topLevelSealDiagnostics(configuration: MergedConfiguration): Diagnostic[] {
+  const diagnostics: Diagnostic[] = malformedTopLevelSealDiagnostics(configuration.layers);
   for (const layer of configuration.layers) {
     if (layer.role !== "schema" || layer.tree.type !== "mapping") {
       continue;
@@ -929,17 +960,7 @@ function topLevelSealDiagnostics(configuration: MergedConfiguration): Diagnostic
     if (sealNode === undefined) {
       continue;
     }
-    if (!(sealNode.type === "scalar" && sealNode.kind === "string" && (sealNode.value === "open" || sealNode.value === "closed"))) {
-      diagnostics.push(
-        createDiagnostic({
-          level: "error",
-          code: "malformed-demand-value",
-          message: `top-level 'seal' is not 'open' or 'closed' (SPEC.md §9, v0.7)`,
-          primary: sealNode.span,
-          pointer: "",
-          pedigreePosition: layer.rank,
-        }),
-      );
+    if (!(sealNode.type === "scalar" && sealNode.kind === "string")) {
       continue;
     }
     if (sealNode.value !== "closed" || configuration.tree.type !== "mapping") {
@@ -1103,6 +1124,43 @@ function directiveDiagnostics(configuration: MergedConfiguration, allDecls: read
 }
 
 /**
+ * **v1.1 (010 FR-030)** — every closed-vocabulary problem a *schema chain*
+ * has, with no configuration in hand.
+ *
+ * This is exactly the set of passes `checkConfiguration` below runs before
+ * it looks at a single value: the per-layer demand vocabulary (unknown and
+ * unimplemented keywords, malformed shapes, malformed sections, malformed
+ * key declarations), the namespace checks, the guarded/unguarded type-cycle
+ * refusal, per-layer type-usage reachability and accept-widening, and the
+ * shape of a top-level `seal`. **The same functions, not a second
+ * implementation** — the two call sites share every one of them, so a
+ * schema `validate()` refuses is a schema `generateTypes()` refuses, and
+ * neither can drift into accepting what the other rejects.
+ *
+ * What it deliberately does **not** run is everything downstream of a
+ * value: the demand walk, `seal`'s own violation check, `final`, and the
+ * directives pass all need a merged tree, and a generator has none.
+ *
+ * `error`s and `info`s both come back; the caller decides. `generateTypes()`
+ * refuses on any `error` and carries the `info`s through (FR-030).
+ */
+export function schemaVocabularyProblems(layers: readonly Layer[]): readonly Diagnostic[] {
+  const allDecls = declarationsOfLayers(layers);
+  const knownDeclaredNames = new Set(allDecls.map((declaration) => declaration.name));
+  const diagnostics: Diagnostic[] = [];
+  for (const layer of layers) {
+    extend(diagnostics, vocabularyProblemsForLayer(layer, knownDeclaredNames));
+  }
+  extend(diagnostics, collisionDiagnostics(allDecls));
+  extend(diagnostics, builtinCollisionDiagnostics(allDecls));
+  extend(diagnostics, qualifierCollisionDiagnostics(layers));
+  extend(diagnostics, cycleDiagnostics(allDecls));
+  extend(diagnostics, typeUsageProblems(layers, allDecls, knownDeclaredNames));
+  extend(diagnostics, malformedTopLevelSealDiagnostics(layers));
+  return diagnostics;
+}
+
+/**
  * Check `configuration` against every schema layer's `demand`, root to
  * leaf. Vocabulary problems (demand keywords, type entries, collisions,
  * qualifiers, cycles, accept-widening) and value violations are found by
@@ -1126,9 +1184,9 @@ export function checkConfiguration(configuration: MergedConfiguration, options: 
   }
   extend(vocabularyDiagnostics, collisionDiagnostics(allDecls));
   extend(vocabularyDiagnostics, builtinCollisionDiagnostics(allDecls));
-  extend(vocabularyDiagnostics, qualifierCollisionDiagnostics(configuration));
+  extend(vocabularyDiagnostics, qualifierCollisionDiagnostics(configuration.layers));
   extend(vocabularyDiagnostics, cycleDiagnostics(allDecls));
-  extend(vocabularyDiagnostics, typeUsageProblems(configuration, allDecls, knownDeclaredNames));
+  extend(vocabularyDiagnostics, typeUsageProblems(configuration.layers, allDecls, knownDeclaredNames));
 
   const violations: Violation[] = [];
   for (const layer of configuration.layers) {

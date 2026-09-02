@@ -155,13 +155,27 @@ export function readTypeDeclarations(layer: Layer): { readonly declarations: rea
   return { declarations, problems };
 }
 
-/** Every `TypeDeclaration` reachable anywhere in the pedigree, root to leaf, in layer-rank order (deterministic — FR-010). */
-export function allDeclarations(configuration: MergedConfiguration): readonly TypeDeclaration[] {
+/**
+ * Every `TypeDeclaration` declared by `layers`, in layer-rank order
+ * (deterministic — FR-010).
+ *
+ * **v1.1: the layers-only form.** `allDeclarations` below is this function
+ * applied to a configuration's own layers and is unchanged; the type
+ * generator has no configuration to hand it (`SPEC.md` §18: the accumulated
+ * demand is computed from schema layers alone), so the layer list — which
+ * is all this ever read — became the parameter.
+ */
+export function declarationsOfLayers(layers: readonly Layer[]): readonly TypeDeclaration[] {
   const all: TypeDeclaration[] = [];
-  for (const layer of configuration.layers) {
+  for (const layer of layers) {
     extend(all, readTypeDeclarations(layer).declarations);
   }
   return all;
+}
+
+/** Every `TypeDeclaration` reachable anywhere in the pedigree, root to leaf, in layer-rank order (deterministic — FR-010). */
+export function allDeclarations(configuration: MergedConfiguration): readonly TypeDeclaration[] {
+  return declarationsOfLayers(configuration.layers);
 }
 
 /** Every closed-vocabulary/shape problem found reading every layer's own `types:` section. */
@@ -219,7 +233,9 @@ export function builtinCollisionDiagnostics(declarations: readonly TypeDeclarati
 /**
  * FR-019a: two documents whose `$id`s share a qualifier (research.md
  * D5), where those documents do **not** stand in an ancestor/descendant
- * relation. This extends `collisionDiagnostics`'s own FR-016b reasoning
+ * relation. **v1.1: takes the layer list rather than a whole
+ * configuration** — it only ever read `configuration.layers`, and the type
+ * generator has no configuration to give it. This extends `collisionDiagnostics`'s own FR-016b reasoning
  * to the qualified namespace by the identical structural argument:
  * **not literally stated in `SPEC.md`'s §15 amendment**, which settled
  * only the unqualified case — this is the implementer's own inference
@@ -241,8 +257,8 @@ export function builtinCollisionDiagnostics(declarations: readonly TypeDeclarati
  * multi-adoption future; unreachable in v1, on purpose, documented here
  * rather than left to look like live protection.
  */
-export function qualifierCollisionDiagnostics(configuration: MergedConfiguration): readonly Diagnostic[] {
-  void configuration;
+export function qualifierCollisionDiagnostics(layers: readonly Layer[]): readonly Diagnostic[] {
+  void layers;
   return [];
 }
 

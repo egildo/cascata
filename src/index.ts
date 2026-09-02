@@ -27,6 +27,7 @@ import type { Node } from "./model/node.js";
 import { freeze } from "./model/freeze.js";
 import { createOrigin, createSourceSpan, type Origin } from "./model/span.js";
 import { createReference, extractAdoptsReference, extractSchemaReference, referenceDiagnostic, type ExtractedReference, type Reference } from "./resolve/reference.js";
+import { accumulate as accumulateImpl, generate as generateImpl, type AccumulatedTree } from "./generate/index.js";
 import { classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoot, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
 import { DocumentCache } from "./resolve/cache.js";
@@ -38,8 +39,8 @@ import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 import { checkPinningDemand } from "./graph/authority.js";
 import { foldConfiguration } from "./merge/fold.js";
 import { why as whyImpl } from "./merge/provenance.js";
-import type { MergedConfiguration } from "./merge/provenance.js";
-import { checkConfiguration } from "./validate/check.js";
+import type { Layer, MergedConfiguration } from "./merge/provenance.js";
+import { checkConfiguration, schemaVocabularyProblems } from "./validate/check.js";
 import { resource as resourceImpl, type ResolvedResource } from "./validate/resource.js";
 import { project as projectImpl } from "./project/value.js";
 import type { DelegationHop } from "./model/reference.js";
@@ -927,7 +928,7 @@ function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDoc
  * each schema's own resolved `AuthoritySection`, which only exists once
  * this walk has run.
  */
-async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean): Promise<ResolveResult> {
+async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean, graftDelegation: boolean): Promise<ResolveResult> {
   const schemaDocumentsRootToLeaf = [...graph.documents.slice(1)].reverse();
 
   const { sections: authoritySections, diagnostics: authorityDiagnostics } = checkPinningDemand(schemaDocumentsRootToLeaf);
@@ -944,6 +945,17 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: str
   const errors = [...authorityDiagnostics, ...grantErrors];
   if (errors.length > 0) {
     return { ok: false, diagnostics: errors };
+  }
+
+  if (!graftDelegation) {
+    // **v1.1**: a `generateTypes()` resolution's entry is a *schema*, and
+    // §8's grants graft into a **configuration**. Walking a schema document
+    // against them would be looking for delegated fragments in the wrong
+    // document — and would perform I/O for a stage whose contract says it
+    // performs none of its own. The grants are still *collected*, so an
+    // unrecognized `delegate:` value is still refused above; nothing is
+    // grafted.
+    return { ok: true, graph, pedigree, delegationBreadcrumbs: new Map(), diagnostics: grantInfos };
   }
 
   const state: DelegationState = {
@@ -967,7 +979,22 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: str
   return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs, diagnostics: grantInfos };
 }
 
-export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
+/**
+ * `resolve()`'s body, with the two things that differ between a
+ * **configuration** entry and a **schema** entry as parameters.
+ *
+ * `resolve()` treats its entry as the configuration: the chain starts at the
+ * entry's own `$schema`, and the schema layers' delegation grants graft into
+ * the entry's tree. `generateTypes()`'s entry is the leaf **schema** (plan
+ * D-5): the chain starts at the entry's own `$adopts` — the key a schema
+ * actually carries — and nothing grafts, because there is no configuration
+ * to graft into.
+ *
+ * One body rather than two, so a schema chain and a config chain are read,
+ * pinned, cycle-checked and sandbox-checked by the identical code (FR-033's
+ * own posture, applied a stage earlier).
+ */
+async function resolveEntry(entryPath: string, options: ResolveOptions, entryReference: (tree: Node) => ExtractedReference, graftDelegation: boolean): Promise<ResolveResult> {
   requireSandboxRoot(options);
   requireHost(options);
   const host = options.host;
@@ -1017,7 +1044,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
   // still be caught as a cycle.
   const canonicalEntry = builder.registerContent(entryLocation, entryDocument);
 
-  const schemaExtraction: ExtractedReference = extractSchemaReference(canonicalEntry.tree);
+  const schemaExtraction: ExtractedReference = entryReference(canonicalEntry.tree);
   if (schemaExtraction.kind === "sequence") {
     // Not yet on the "aborting the whole call" path below — nothing has
     // recursed yet, so closing out the entry's own visit costs nothing
@@ -1031,7 +1058,7 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
     // single-document graph and an empty pedigree.
     builder.finishVisit(entryLocation, canonicalEntry);
     const graph = buildGraph(canonicalEntry, []);
-    return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false);
+    return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false, graftDelegation);
   }
 
   const chainResult = await walkAdoptsChain(host, schemaExtraction.reference, entryLocation, builder, remote, sandboxRoot);
@@ -1045,7 +1072,17 @@ export async function resolve(entryPath: string, options: ResolveOptions): Promi
   builder.finishVisit(entryLocation, canonicalEntry);
 
   const graph = buildGraph(canonicalEntry, chainResult.documentsLeafToRoot);
-  return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false);
+  return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false, graftDelegation);
+}
+
+/**
+ * Resolve a configuration's whole pedigree from its launching point
+ * (contracts/resolve-api.md), unchanged from v0.2 in behaviour and in
+ * signature: the entry is the configuration, its `$schema` starts the
+ * chain, and delegation grafts.
+ */
+export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
+  return resolveEntry(entryPath, options, extractSchemaReference, true);
 }
 
 // --- merge() — User Story 1 (v0.3, tasks.md T024) ------------------------
@@ -1331,6 +1368,92 @@ export async function metaValidate(options: MetaValidateOptions): Promise<MetaVa
   }
   const validated = validate(merged.configuration);
   return validated.ok ? { ok: true, diagnostics: validated.diagnostics } : { ok: false, diagnostics: validated.diagnostics };
+}
+
+// --- generateTypes() — User Story 5 (v1.1, SPEC.md Article VIII (§18)) ----
+
+export { accumulate, generate } from "./generate/index.js";
+export type {
+  AccumulateOptions,
+  AccumulateResult,
+  AccumulatedConstraint,
+  AccumulatedDeclaration,
+  AccumulatedIntersection,
+  AccumulatedKey,
+  AccumulatedPosition,
+  AccumulatedTree,
+  AccumulatedType,
+  DemandSource,
+  GenerateResult,
+} from "./generate/index.js";
+
+/** `resolve()`'s options plus the one the generator adds: the root alias's name (FR-031). */
+export interface GenerateTypesOptions extends ResolveOptions {
+  readonly rootName?: string;
+}
+
+/**
+ * `ok: true` carries the **tree** beside the source, the way `load()`
+ * carries the configuration beside the value: a projection, never a
+ * replacement. A caller wanting a second emitter has the artifact both are
+ * translations of.
+ */
+export type GenerateTypesResult =
+  | { readonly ok: true; readonly source: string; readonly tree: AccumulatedTree; readonly diagnostics: readonly Diagnostic[] }
+  | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] };
+
+/**
+ * TypeScript declaration text for a schema chain — `SPEC.md` Article VIII's
+ * "one call", and Article VI's laws unchanged.
+ *
+ * **The entry is the leaf schema, not a configuration** (plan D-5). That is
+ * the one place this differs from `load()`, and it is a difference of role
+ * rather than of machinery: `resolveEntry` reads the chain from the entry's
+ * own `$adopts` instead of a `$schema` a schema does not have, and the same
+ * pinning, cycle, sandbox and vocabulary rules apply to every document
+ * reached. The pedigree becomes the schema layers root to leaf; the entry
+ * becomes the leaf layer, at rank `pedigree.length`.
+ *
+ * **A schema the language refuses is never emitted from** (FR-030): the
+ * closed-vocabulary pass `validate()` runs before any value check runs here
+ * too, through the same functions, and any `error` is the whole answer.
+ *
+ * Performs no I/O of its own and writes nothing (Article VI): every
+ * document is read through the host, and the caller decides where the text
+ * goes. Throws only for programmer error — a missing `host` or
+ * `sandboxRoot`, exactly as `load()` does.
+ */
+export async function generateTypes(schemaLocation: string, options: GenerateTypesOptions): Promise<GenerateTypesResult> {
+  const resolved = await resolveEntry(schemaLocation, options, extractAdoptsReference, false);
+  if (!resolved.ok) {
+    return { ok: false, diagnostics: resolved.diagnostics };
+  }
+  // `graph.documents` is [entry, ...ancestors leaf-to-root], so the
+  // ancestors reversed are root-to-leaf and the entry is the leaf — the
+  // same shape `deriveLayers` builds, with the entry labelled `schema`
+  // rather than `config`, which is the whole of D-5.
+  const ancestors = [...resolved.graph.documents.slice(1)].reverse();
+  const layers: Layer[] = ancestors.map((document, index) => ({ identity: document.identity, role: "schema" as const, rank: index, tree: document.tree }));
+  layers.push({ identity: resolved.graph.entry.identity, role: "schema", rank: layers.length, tree: resolved.graph.entry.tree });
+
+  const schemaProblems = schemaVocabularyProblems(layers);
+  const schemaErrors = schemaProblems.filter((diagnostic) => diagnostic.level === "error");
+  if (schemaErrors.length > 0) {
+    return { ok: false, diagnostics: schemaErrors };
+  }
+
+  const accumulated = accumulateImpl(layers, options.rootName !== undefined ? { rootName: options.rootName } : {});
+  const generated = generateImpl(accumulated.tree);
+  const emitErrors = generated.diagnostics.filter((diagnostic) => diagnostic.level === "error");
+  if (emitErrors.length > 0) {
+    return { ok: false, diagnostics: emitErrors };
+  }
+  return {
+    ok: true,
+    source: generated.source,
+    tree: accumulated.tree,
+    diagnostics: [...resolved.diagnostics, ...schemaProblems.filter((diagnostic) => diagnostic.level === "info"), ...accumulated.diagnostics, ...generated.diagnostics],
+  };
 }
 
 export async function load<T = unknown>(entryPath: string, options: LoadOptions): Promise<LoadResult<T>> {

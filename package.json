@@ -12,6 +12,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./generate": {
+      "types": "./dist/generate/index.d.ts",
+      "import": "./dist/generate/index.js"
+    },
+    "./generate.js": {
+      "types": "./dist/generate/index.d.ts",
+      "import": "./dist/generate/index.js"
+    },
     "./host/node": {
       "types": "./dist/host/node.d.ts",
       "import": "./dist/host/node.js"

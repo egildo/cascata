@@ -200,26 +200,26 @@ rows 2–4.
 
 **Independent Test**: `generateTypes("./schema.yaml", { host, sandboxRoot })` returns compiled source.
 
-- [ ] T027 [US5] `tests/unit/generate-surface.test.ts` **first**: `generate()` performs no I/O and
+- [x] T027 [US5] `tests/unit/generate-surface.test.ts` **first**: `generate()` performs no I/O and
       returns `{ source, diagnostics }`; `generateTypes()` over a three-layer local chain returns
       `ok: true` with `source`, `tree`, `info`-only diagnostics; a schema with an unknown demand
       keyword ⇒ `ok: false` with the validator's own diagnostic; a missing `host` throws; a document
       the host declines ⇒ `document-unreachable`, no throw; `rootName` option, `$id` default, and
       `Configuration` fallback; the entry document's own `keys:` govern the root (it is the leaf
       schema, D-5); `tests/unit/load-typed.test.ts` unchanged and green
-- [ ] T028 [US5] `src/validate/check.ts`: export one function running the existing per-layer
+- [x] T028 [US5] `src/validate/check.ts`: export one function running the existing per-layer
       schema-vocabulary pass (unknown keywords, malformed shapes/sections, type resolution and
       cycles) over `readonly Layer[]` with no configuration — **additive**; find the functions
       `validate()` already calls before any value check and expose them, do not duplicate them
-- [ ] T029 [US5] `src/generate/index.ts`: exports `accumulate`, `generate`, and every type
+- [x] T029 [US5] `src/generate/index.ts`: exports `accumulate`, `generate`, and every type
       data-model.md names. `package.json`: `"./generate"` and `"./generate.js"` entries pointing at
       `dist/generate/index.*`, mirroring `./host/node`
-- [ ] T030 [US5] `src/index.ts`: `generateTypes()` beside `load()` — resolve the schema as entry,
+- [x] T030 [US5] `src/index.ts`: `generateTypes()` beside `load()` — resolve the schema as entry,
       build layers from the pedigree plus the entry as the leaf schema layer (rank = pedigree length),
       run T028's pass, `accumulate`, `generate`; re-export `accumulate`, `generate`, the types
-- [ ] T031 [US5] **Sabotage** (same protocol): skip T028's pass — the unknown-keyword case emits
+- [x] T031 [US5] **Sabotage** (same protocol): skip T028's pass — the unknown-keyword case emits
       source instead of refusing and goes red. Restore; record
-- [ ] T032 [US5] `pnpm typecheck && pnpm test` green; `tests/unit/layering.test.ts` green with
+- [x] T032 [US5] `pnpm typecheck && pnpm test` green; `tests/unit/layering.test.ts` green with
       `src/generate` populated; commit `feat(generate): generate(), generateTypes(), the entry point —
       v1.1 US5`
 
