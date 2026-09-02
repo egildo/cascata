@@ -75,19 +75,46 @@ export interface CompileProblem {
   readonly code: number;
 }
 
-/** Typecheck `source` as a standalone module. An empty result is a clean compile. */
-export function compileInMemory(source: string): readonly CompileProblem[] {
+/**
+ * Typecheck `source` as a standalone module. An empty result is a clean
+ * compile.
+ *
+ * `reuseLib: false` re-parses `lib.es2022.d.ts` and everything it
+ * references on every call, which is what the sharing above exists to
+ * avoid. It is not a tuning knob and no case sets it: it exists so the
+ * cost of the sharing can be **measured** rather than asserted (FR-038's
+ * own posture, and v1.0's for `memoize: false`).
+ */
+export function compileInMemory(source: string, reuseLib = true): readonly CompileProblem[] {
   const main = ts.createSourceFile(MAIN_FILE, source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+  const freshLib = new Map<string, ts.SourceFile | undefined>();
+  const lib = (fileName: string): ts.SourceFile | undefined => {
+    if (reuseLib) {
+      return libSourceFile(fileName);
+    }
+    const bare = fileName.startsWith("/") ? fileName.slice(1) : fileName;
+    if (freshLib.has(bare)) {
+      return freshLib.get(bare);
+    }
+    let parsed: ts.SourceFile | undefined;
+    try {
+      parsed = ts.createSourceFile(bare, readFileSync(join(LIB_DIR, bare), "utf-8"), ts.ScriptTarget.ES2022, false, ts.ScriptKind.TS);
+    } catch {
+      parsed = undefined;
+    }
+    freshLib.set(bare, parsed);
+    return parsed;
+  };
   const host: ts.CompilerHost = {
-    getSourceFile: (fileName) => (fileName === MAIN_FILE ? main : libSourceFile(fileName)),
+    getSourceFile: (fileName) => (fileName === MAIN_FILE ? main : lib(fileName)),
     getDefaultLibFileName: () => DEFAULT_LIB,
     writeFile: () => undefined,
     getCurrentDirectory: () => "/",
     getCanonicalFileName: (fileName) => fileName,
     useCaseSensitiveFileNames: () => true,
     getNewLine: () => "\n",
-    fileExists: (fileName) => fileName === MAIN_FILE || libSourceFile(fileName) !== undefined,
-    readFile: (fileName) => (fileName === MAIN_FILE ? source : libSourceFile(fileName)?.text),
+    fileExists: (fileName) => fileName === MAIN_FILE || lib(fileName) !== undefined,
+    readFile: (fileName) => (fileName === MAIN_FILE ? source : lib(fileName)?.text),
   };
   const program = ts.createProgram([MAIN_FILE], COMPILER_OPTIONS, host);
   const diagnostics = [...program.getSyntacticDiagnostics(), ...program.getSemanticDiagnostics(), ...program.getGlobalDiagnostics()];

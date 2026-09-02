@@ -234,26 +234,26 @@ type-shaped refusal does not; the meta-schema round trip.
 
 **Independent Test**: one `ok: true` corpus case, generated, projected, compiled.
 
-- [ ] T033 [US6] `tests/unit/generate-oracle.test.ts` **first** (the expectations are the
+- [x] T033 [US6] `tests/unit/generate-oracle.test.ts` **first** (the expectations are the
       validator's, so "first" means the harness runs against a stub emitter and *fails* for the right
       reason before US2–US5 make it pass — record that it did): iterate every descriptor in
       `tests/corpus/validate-cases/` through the corpus runner's own resolution; positive cases
       compile, their count asserted (**38** at HEAD); negative cases whose every expected code is in
       `{type-mismatch, required-violated, seal-violation, enum-violated}` fail to compile, count
       asserted; mixed cases listed by name with reason; the literal-writer pair (contract §1 row 8)
-- [ ] T034 [US6] `tests/unit/generate-oracle.test.ts`: the meta-schema — `generateTypes()` from
+- [x] T034 [US6] `tests/unit/generate-oracle.test.ts`: the meta-schema — `generateTypes()` from
       `meta/cascata.meta.yaml`; the meta-schema loaded as a configuration of itself the way
       `metaValidate()` builds it, projected, compiled against the generated root
-- [ ] T035 [US6] Whatever US2–US5 got wrong, the oracle now says so. Fix in `src/generate/`, never in
+- [x] T035 [US6] Whatever US2–US5 got wrong, the oracle now says so. Fix in `src/generate/`, never in
       the oracle; every fix gets a hand-written case in the story's suite it belongs to, and the
       report lists each
-- [ ] T036 [US6] **Sabotage** (FR-037, same protocol): swap `bigint` for `number` in the emitter;
+- [x] T036 [US6] **Sabotage** (FR-037, same protocol): swap `bigint` for `number` in the emitter;
       record exactly which corpus cases and whether the meta-schema case went red (at least one must);
       then swap `never` for `unknown` on closed-empty and confirm at least one `seal-violation`
       negative stops failing. Restore; record
-- [ ] T037 [US6] Measure the oracle's wall-clock with the shared `CompilerHost` and without it; keep
+- [x] T037 [US6] Measure the oracle's wall-clock with the shared `CompilerHost` and without it; keep
       the shared one; record both numbers in the report (a fact about the machine, not asserted)
-- [ ] T038 [US6] `pnpm typecheck && pnpm test` green; commit `test(generate): the soundness oracle —
+- [x] T038 [US6] `pnpm typecheck && pnpm test` green; commit `test(generate): the soundness oracle —
       v1.1 US6`
 
 **Checkpoint**: 38 positives compile, every purely type-shaped negative fails, the meta-schema round
@@ -290,6 +290,35 @@ trip compiles, and the sabotage was watched going red.
 
 Each entry here was found by running something, not by reading — recorded rather than folded
 silently into an earlier phase. Empty at planning time, by definition.
+
+- [x] T048 [US2] The index signature of a mapping that declares BOTH `keys` and `values` cannot be
+      the bare `readonly [key: string]: D` contract row 10 promises: TypeScript requires the index
+      type to subsume every declared property's type, and row 9 makes an undemanded key optional, so
+      `k?: D` is `D | undefined` and TS2411 refuses the pair. The index type is the union of `D` with
+      each declared property's type plus `undefined` where any is optional — which collapses to
+      `D | undefined` in the ordinary case. **A correction owed to contract row 10 and FR-018.**
+- [x] T049 [US2] A key declared with `delegate: allow` and no `demand` was becoming a property.
+      `parseDemand` keeps such an entry because it carries `delegate`; the walk now takes a name only
+      where a demand exists, which is what `readNestedKeysMapping` has always done
+- [x] T050 [US3] The admission at array depth is **intersected** across a demand's own alternatives,
+      not unioned — `numeric.ts`'s `walkArrayAlternative` records once per alternative and `record`
+      intersects. Found by writing US3's `int[] | float[]` case
+- [x] T051 [US6] **`url` and `path` are refinements of `string` (§7), so `string ∩ (url | path)` is
+      `url | path`, not empty.** Contract row 4's "a built-in intersects only with itself" is wrong
+      for exactly these two, and §7's own worked `resource` is that intersection. Found by the oracle:
+      corpus case T050 accumulated to `never` where whole-chain validation accepts a path
+- [x] T052 [US6] **A structural demand with no kind demand must emit `unknown`.** `{ keys: { … } }`
+      with no `type: mapping` beside it admits any value — v0.5's `checkNestedKeys` is conditional on
+      the value's runtime type, which corpus case T022 asserts by accepting a string there. Found by
+      the oracle; the cost is corpus case T024, whose nested `required` becomes inexpressible
+- [x] T053 [US6] **No descriptor in `tests/corpus/validate-cases/` expects `seal-violation`**, so the
+      oracle's closedness claim guarded nothing: removing closedness from the emitter entirely left
+      the whole sweep green. Four hand-built cases added to the oracle, and both seal sabotages now
+      go red against them
+- [x] T054 [US5] `resolve()`'s body became `resolveEntry()`, parameterised on which key the entry's
+      own outgoing reference comes from and on whether delegation grafts. A schema entry carries
+      `$adopts`, not the `$schema` `resolve()` looks for, so `generateTypes()` would otherwise have
+      seen an empty pedigree for every chain
 
 ---
 

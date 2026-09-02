@@ -255,15 +255,48 @@ function resolveOne(alternative: Alternative, scopeRank: number, ctx: Ctx): Reso
   return { depth: alternative.depth, declarations: [resolved] };
 }
 
+/**
+ * §7's refinement relation among the built-ins: **`url` and `path` are
+ * built-in refinements of `string`.** The article says so in as many words,
+ * and the validator agrees — `matchesBuiltinLeaf` accepts a `url` value as
+ * a string that also parses as a URL.
+ *
+ * The contract's row 4 says "a built-in intersects only with itself", which
+ * is right for every other pair and **wrong for these two**: it makes
+ * `string ∩ (url | path)` empty, and §7's own worked `resource` — `accept:
+ * [url, path]`, `demand: { type: string }` — is exactly that intersection.
+ * The corpus case for §7's narrowing (T050) is what caught it: the position
+ * accumulated to `never` where whole-chain validation accepts a path.
+ * Reported as a correction owed to contracts/accumulated-demand.md row 4.
+ */
+const REFINES: ReadonlyMap<BuiltinTypeName, BuiltinTypeName> = new Map([
+  ["url", "string"],
+  ["path", "string"],
+]);
+
+/** The narrower of two built-ins, or `undefined` where no value can be both. */
+function narrowerBuiltin(a: BuiltinTypeName, b: BuiltinTypeName): BuiltinTypeName | undefined {
+  if (a === b) {
+    return a;
+  }
+  if (REFINES.get(a) === b) {
+    return a;
+  }
+  if (REFINES.get(b) === a) {
+    return b;
+  }
+  return undefined;
+}
+
 /** Two alternatives at one position, conjoined. `undefined` where nothing can satisfy both. */
 function combineAlternatives(a: ResolvedAlternative, b: ResolvedAlternative): ResolvedAlternative | undefined {
   if (a.depth !== b.depth) {
     return undefined;
   }
-  if (a.builtin !== undefined && b.builtin !== undefined && a.builtin !== b.builtin) {
+  if (a.builtin !== undefined && b.builtin !== undefined && narrowerBuiltin(a.builtin, b.builtin) === undefined) {
     return undefined;
   }
-  const builtin = a.builtin ?? b.builtin;
+  const builtin = a.builtin !== undefined && b.builtin !== undefined ? narrowerBuiltin(a.builtin, b.builtin) : (a.builtin ?? b.builtin);
   const declarations = sortDeclarations([...new Set([...a.declarations, ...b.declarations])]);
   return { depth: a.depth, ...(builtin !== undefined ? { builtin } : {}), declarations };
 }

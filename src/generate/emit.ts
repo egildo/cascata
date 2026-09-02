@@ -330,16 +330,21 @@ function emitPosition(position: AccumulatedPosition, indent: string, ctx: EmitCo
     // reach JSDoc instead.
   }
   if (position.type === undefined) {
-    // The root is the config's own top level, which is a mapping whatever
-    // any demand says, so it always prints as one (FR-014). Elsewhere,
-    // structure prints structure and silence prints `unknown` (rows 15–16).
-    if (isRoot || position.keys.size > 0 || position.values !== undefined || position.seal === "closed") {
-      return emitObject(position, indent, ctx);
-    }
-    if (position.items !== undefined) {
-      return emitSequence(position, indent, ctx);
-    }
-    return "unknown";
+    // The root is the config's own top level, which §9's `keys:` govern by
+    // definition, so it always prints as a mapping (FR-014).
+    //
+    // **Everywhere else, structure alone is not a demand about kind.** A
+    // demand of `{ keys: { … } }` with no `type: mapping` beside it admits
+    // *any* value: v0.5's `checkNestedKeys` and v0.7's `checkNestedValues`
+    // and `sealClosedSites` are each conditional on the value's runtime
+    // type, so a string at such a position is accepted with no violation at
+    // all (the corpus's own T022 is exactly that case, and asserts it).
+    // Emitting an object type there would reject a configuration validation
+    // accepts, which is the one thing Article VIII's soundness law forbids.
+    // The contract's §6 rows for `keys: {}` therefore describe a demand
+    // that also says `type: mapping`; reported as a clarification owed to
+    // them and to FR-021.
+    return isRoot ? emitObject(position, indent, ctx) : "unknown";
   }
   if (isRoot && !hasStructure(position) && position.type.kind === "builtin" && position.type.name === "mapping") {
     return emitObject(position, indent, ctx);
