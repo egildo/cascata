@@ -952,6 +952,32 @@ The bootstrap (§14 item 7) was scheduled before this point precisely so that th
   are promises; and soundness against the validator is the conformance rule, so that the generator never
   has an expected output written by hand. See §18, §14, §17, §5.5, §12.
 
+- **Article VIII, corrected by its first implementation** → settled, at v1.1, as corrections. The
+  article was written days before it was built, and five of its rows or clauses were wrong in ways
+  only running the compiler and the corpus could show. **Closed-empty:** "no index signature" emits
+  `{}`, which admits every non-nullish value; a closed mapping with no keys is
+  `{ readonly [key: string]: never }`. **The index signature beside an optional sibling** carries
+  `undefined`, because TypeScript requires it to subsume its siblings — the article's "no
+  `| undefined`" clause now scopes itself to a property's own type. **`url` and `path` refine
+  `string`**: a rule that intersected built-ins only with themselves turned §7's own worked
+  `resource` into `never`, found by the corpus. **A position that names a type and adds structure of
+  its own** had a row for each and none for both, and the first implementation emitted the alias
+  alone — wider than the accumulated demand, a sound-looking hole no schema in the corpus exercised;
+  it now intersects, as two declarations do. **The soundness law's negative half** overstated what a
+  type can express: seven of the corpus's twenty-two type-shaped refusals typecheck, five for the
+  `url`/`path` limit and two for `required` at positions whose type is `unknown`; the law now names
+  the limit and the oracle names the cases. Closedness is enforced at object literals only, and the
+  article says so.
+
+  Three things found beside the article, recorded rather than smoothed: **no descriptor in the
+  validate corpus expected `seal-violation`**, so a v0.7 guarantee had no case until v1.1 added four
+  by hand; **`resolve()` could not launch from a schema**, since a schema carries `$adopts` and the
+  resolver read `$schema`, so `generateTypes()` would have emitted every leaf's demands alone had
+  the oracle not been run against a chain; and **a type-vocabulary check exported since v0.5 is
+  called from nowhere**, so `unknown-type-entry-keyword` and a non-mapping `types.<name>.demand`
+  are catalogued codes with a dead path — a pre-existing defect of `validate()`, left for its own
+  milestone because fixing it changes what `validate()` refuses. See §18, §7, §17, §10.
+
 New open questions get an entry here while open and a §-reference when settled. Amend by explicit article, never by drift.
 
 ---
@@ -1026,29 +1052,30 @@ Laws:
 
   | accumulated demand | emitted TypeScript |
   |---|---|
-  | `string`, `url`, `path` | `string` |
+  | `string`, `url`, `path` | `string`. `url` and `path` **refine** `string` (§7), so `string ∩ (url \| path)` is `url \| path`, never empty — §7's own worked `resource` is that intersection |
   | admits `float` | `number` (§17) |
   | admits `int`, not `float` | `bigint` (§17) |
   | `bool`, `null` | `boolean`, `null` |
   | a union of alternatives | a union; `T[]` → `readonly T[]` |
   | `keys` | an object type; every property `readonly` |
-  | `values: D` | an index signature `readonly [key: string]: D` |
-  | `seal: closed` in any layer | no index signature; otherwise `readonly [key: string]: unknown` |
+  | `values: D` | an index signature `readonly [key: string]: D`, its type widened to include every declared sibling property's type, and `undefined` where any sibling is optional — TypeScript requires an index signature to subsume its siblings, and a `k?: T` sibling is `T \| undefined` |
+  | `seal: closed` in any layer | no index signature where keys are declared; `readonly [key: string]: never` where none are — TypeScript's `{}` admits every non-nullish value. Otherwise `readonly [key: string]: unknown` |
   | a key `required` in any layer, or provided in any layer | a non-optional property (§5.5's guaranteed key); otherwise optional |
   | `enum` whose members are all scalars | a literal union, kind-aware under the numeric rule (`1n` under `bigint`, `1` under `number`); any non-scalar member → the accumulated type |
   | `final: true` with a scalar `provide` | the literal type of the constant (§6.3); a non-scalar `provide` → the accumulated type |
   | a named type | a named `export type`; guarded recursion is carried by TypeScript's own recursive aliases, and unguarded cycles never reach here (§7) |
+  | a position that names a type **and** declares structure of its own (`keys`, `values`, `items`, `seal`) | the intersection of the named body with that structure, inline, exactly as two declarations of one name intersect — never the alias alone, which would be wider than the accumulated demand |
   | one name declared by two layers of a chain | every declaration carries §7's qualifier as a prefix; a bare name is emitted only where the chain declares it once |
   | no demand | `unknown` (§17) |
   | `min`, `max`, `minLength`, `maxLength`, `pattern`, `accept` | no type; a JSDoc comment on the property naming the constraint and its declaring layer |
   | `delegate`, `cascade`, `directives`, `authority` | nothing; they are not shape |
 
-  **A `null` in the emitted type comes only from a `null` alternative.** `type: string` rejects an explicit `null` (§4.2's three-way distinction), so the emitted `string` carries no `| null` and no `| undefined`. Optionality belongs to the property, never to the value.
+  **A `null` in the emitted type comes only from a `null` alternative.** `type: string` rejects an explicit `null` (§4.2's three-way distinction), so the emitted `string` carries no `| null` and no `| undefined`. Optionality belongs to the property, never to the value. The one place `undefined` appears in a value type is an index signature beside an optional sibling, for the reason the `values` row gives; it is TypeScript's requirement, not a statement about the configuration.
 
   **JSDoc is output, not contract.** The comments exist so that a consumer hovering a property sees what the schema demands; their presence and wording may change without a version bump. The types may not.
 
 - **Identifiers are kept, quoted, or refused — never silently renamed.** A key that is a valid ECMAScript identifier is emitted as written; any other key is a quoted property name, non-ASCII included. A type name that is a valid identifier and not a TypeScript reserved word is emitted as written; otherwise it is escaped by a rule the contract states and the same input always escapes the same way. Two names that escape to one identifier are a generator error, not a coin toss.
-- **Soundness is the conformance rule, and the validator is the oracle.** Every configuration that validation accepts, projected by Article VII, inhabits the type generated from its schema chain — asserted by typechecking the projected value against the emitted type, for every accepting case in the conformance corpus and for the meta-schema against itself. A configuration refused for a type-shaped reason (`type-mismatch`, `required-violated`, `seal-violation`, `enum-violated`) must fail the same check. One refused for a range, a length, or a pattern may pass it, because TypeScript has no type for those and the JSDoc above is the honest substitute. The generator therefore has no expected outputs written by hand; expected outputs are derived, as Principle V requires.
+- **Soundness is the conformance rule, and the validator is the oracle.** Every configuration that validation accepts, projected by Article VII, inhabits the type generated from its schema chain — asserted by typechecking the projected value against the emitted type, for every accepting case in the conformance corpus and for the meta-schema against itself. A configuration refused for a type-shaped reason (`type-mismatch`, `required-violated`, `seal-violation`, `enum-violated`) must fail the same check **wherever the refused property is expressible as a type**. It is not always: a `url` or `path` refinement is a `string` to TypeScript; `required` at a key with no `type` refuses `null` where the property is `unknown`, which `null` inhabits; and a structural demand with no `type: mapping` admits any value, so a nested `required` beneath it constrains nothing the type can see. Each such case is named in the oracle, never skipped, so that one joining them is a regression and one leaving them is a limit closed. One refused for a range, a length, or a pattern may pass it, because TypeScript has no type for those and the JSDoc above is the honest substitute. And closedness is enforced by the host type system at object literals only — a value reaching a closed type through a variable is accepted structurally — so `seal: closed` is exact in the emitted type and partial in the compiler. The generator therefore has no expected outputs written by hand; expected outputs are derived, as Principle V requires.
 - **`load<T>()` is unchanged.** `T` remains the caller's claim and the library never checks it (§17). The generator makes the claim derivable; it does not make it checked. A caller who writes `T` by hand still may, and a `T` the generator wrote is still, to `load()`, a claim.
 
 ---
