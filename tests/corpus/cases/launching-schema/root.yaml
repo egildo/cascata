@@ -1,0 +1,6 @@
+$id: launching/root
+keys:
+  title:
+    demand:
+      type: string
+    provide: Untitled

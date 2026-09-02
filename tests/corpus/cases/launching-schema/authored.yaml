@@ -1,0 +1,6 @@
+$id: launching/authored
+keys:
+  title:
+    demand:
+      type: string
+    provide: Authored

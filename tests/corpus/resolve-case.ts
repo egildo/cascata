@@ -108,6 +108,14 @@ export interface ResolveCase {
    * just to reach the production default.
    */
   readonly maxChainLength?: number;
+  /**
+   * Optional: `resolve()`'s `schema` option (v1.3 FR-001) — the launching
+   * schema consulted only when the entry names no `$schema`. Passed
+   * verbatim: it is read as if the entry had written `$schema: <schema>`,
+   * so a relative text resolves against the entry document's directory
+   * and a leading `~/` expands (the case sets `homeDir` for that).
+   */
+  readonly schema?: string;
   readonly expect: ResolveExpect;
 }
 
@@ -260,7 +268,7 @@ function parseExpect(raw: unknown, source: string): ResolveExpect {
   fail(source, `'expect.ok' must be true or false`);
 }
 
-const CITES_PATTERN = /^v0\.2 FR-\d+$/;
+const CITES_PATTERN = /^v(0\.2|1\.3) FR-\d+$/;
 
 /** Load and validate one resolve-conformance case from `file`. `fixtureDir` resolves relative to `file`'s directory, per each case's own `fixtureDir` field. */
 export function loadResolveCase(file: string): ResolveCase {
@@ -280,6 +288,10 @@ export function loadResolveCase(file: string): ResolveCase {
   if (homeDirRaw !== undefined && typeof homeDirRaw !== "string") {
     fail(file, `'homeDir' must be a string if present, got ${JSON.stringify(homeDirRaw)}`);
   }
+  const schemaRaw = raw["schema"];
+  if (schemaRaw !== undefined && typeof schemaRaw !== "string") {
+    fail(file, `'schema' must be a string if present, got ${JSON.stringify(schemaRaw)}`);
+  }
   const maxChainLengthRaw = raw["maxChainLength"];
   if (maxChainLengthRaw !== undefined && (typeof maxChainLengthRaw !== "number" || !Number.isInteger(maxChainLengthRaw))) {
     fail(file, `'maxChainLength' must be an integer if present, got ${JSON.stringify(maxChainLengthRaw)}`);
@@ -295,5 +307,6 @@ export function loadResolveCase(file: string): ResolveCase {
     expect,
     ...(typeof homeDirRaw === "string" ? { homeDir: homeDirRaw } : {}),
     ...(typeof maxChainLengthRaw === "number" ? { maxChainLength: maxChainLengthRaw } : {}),
+    ...(typeof schemaRaw === "string" ? { schema: schemaRaw } : {}),
   };
 }

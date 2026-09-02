@@ -1,0 +1,6 @@
+$id: launching/house
+keys:
+  title:
+    demand:
+      type: string
+    provide: House

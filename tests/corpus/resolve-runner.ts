@@ -126,8 +126,8 @@ function checkDiagnostics(failures: string[], fixtureDir: string, actual: readon
  * `finally` even if `resolve()` throws, so one case's override can never
  * leak into another's — cases can run in the same process/worker.
  */
-async function resolveWithHomeOverride(entryPath: string, sandboxRoot: string, homeDir: string | undefined, maxChainLength: number | undefined): Promise<Awaited<ReturnType<typeof resolve>>> {
-  const options = { host: createNodeHost(), sandboxRoot, ...(maxChainLength === undefined ? {} : { maxChainLength }) };
+async function resolveWithHomeOverride(entryPath: string, sandboxRoot: string, homeDir: string | undefined, maxChainLength: number | undefined, schema: string | undefined): Promise<Awaited<ReturnType<typeof resolve>>> {
+  const options = { host: createNodeHost(), sandboxRoot, ...(maxChainLength === undefined ? {} : { maxChainLength }), ...(schema === undefined ? {} : { schema }) };
   if (homeDir === undefined) {
     return resolve(entryPath, options);
   }
@@ -150,7 +150,7 @@ export async function runResolveCase(testCase: ResolveCase): Promise<ResolveCase
   const sandboxRoot = join(testCase.fixtureDir, testCase.sandboxRoot);
   const homeDir = testCase.homeDir === undefined ? undefined : join(testCase.fixtureDir, testCase.homeDir);
 
-  const result = await resolveWithHomeOverride(entryPath, sandboxRoot, homeDir, testCase.maxChainLength);
+  const result = await resolveWithHomeOverride(entryPath, sandboxRoot, homeDir, testCase.maxChainLength, testCase.schema);
 
   if (testCase.expect.ok) {
     if (!result.ok) {

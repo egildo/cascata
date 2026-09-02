@@ -1,0 +1,25 @@
+{
+  "name": "v1.3 FR-001: an entry with no $schema resolves through the caller's launching schema, config-authored, anchored at a phantom span in the entry",
+  "cites": "v1.3 FR-001",
+  "fixtureDir": "launching-schema",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "schema": "./root.yaml",
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "config.yaml", "hash": "80ab8032f40d108949d109d652b7580a17b262570505f111a730928efba8d949" },
+      { "location": "root.yaml", "hash": "d4a87f30bb8d953be5ff32cc82e4991fc1a02757979b9ef3ef231474b98e6bc1" }
+    ],
+    "pedigree": [
+      {
+        "location": "root.yaml",
+        "hash": "d4a87f30bb8d953be5ff32cc82e4991fc1a02757979b9ef3ef231474b98e6bc1",
+        "kind": "schema",
+        "authority": "config-authored",
+        "verified": false,
+        "via": { "document": "config.yaml", "line": 1, "column": 1, "start": 0, "end": 0 }
+      }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "v1.3 FR-002: an authored $schema wins over the launching schema, which is then never read",
+  "cites": "v1.3 FR-002",
+  "fixtureDir": "launching-schema",
+  "entry": "config-authored.yaml",
+  "sandboxRoot": ".",
+  "schema": "./root.yaml",
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "config-authored.yaml", "hash": "db55e43fcae889081977b645ba4ab78c015ac667763e14c09284a971d539a37b" },
+      { "location": "authored.yaml", "hash": "9993b3c75bb65223a713f83f531ff7ad81c1a568dab0f4cb223c1a2dc882174c" }
+    ],
+    "pedigree": [
+      {
+        "location": "authored.yaml",
+        "hash": "9993b3c75bb65223a713f83f531ff7ad81c1a568dab0f4cb223c1a2dc882174c",
+        "kind": "schema",
+        "authority": "config-authored",
+        "verified": false,
+        "via": { "document": "config-authored.yaml", "line": 1, "column": 10, "start": 9, "end": 24 }
+      }
+    ]
+  }
+}

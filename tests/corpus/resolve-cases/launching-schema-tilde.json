@@ -1,0 +1,26 @@
+{
+  "name": "v1.3 FR-003: the launching schema is config-authored, so a leading ~/ expands as it would in a config's own $schema",
+  "cites": "v1.3 FR-003",
+  "fixtureDir": "launching-schema",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "homeDir": "home",
+  "schema": "~/house.yaml",
+  "expect": {
+    "ok": true,
+    "graph": [
+      { "location": "config.yaml", "hash": "80ab8032f40d108949d109d652b7580a17b262570505f111a730928efba8d949" },
+      { "location": "home/house.yaml", "hash": "18d1f4a4d85970da4cc8b83f711bbe54c45eb3d838d37a5067e9bd5bfcbc8489" }
+    ],
+    "pedigree": [
+      {
+        "location": "home/house.yaml",
+        "hash": "18d1f4a4d85970da4cc8b83f711bbe54c45eb3d838d37a5067e9bd5bfcbc8489",
+        "kind": "schema",
+        "authority": "config-authored",
+        "verified": false,
+        "via": { "document": "config.yaml", "line": 1, "column": 1, "start": 0, "end": 0 }
+      }
+    ]
+  }
+}
