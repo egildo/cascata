@@ -132,6 +132,7 @@ import { accumulateAppend, advanceStrategies, checkAppendable, effectiveStrategy
 import { createProvenanceBuilder, type Layer, type MergedConfiguration, type MergeStrategy, type ProvenanceBuilder, type ProvenanceRecord } from "./provenance.js";
 import { resolveFinal } from "./final.js";
 import type { DelegationHop } from "../model/reference.js";
+import type { PathFacility } from "../paths.js";
 
 /** No key has a declared strategy — used for every merge below the top level, where `cascade` never applies (rule 4's own doc comment above). */
 const NO_STRATEGIES: ReadonlyMap<string, MergeStrategy> = new Map();
@@ -538,7 +539,7 @@ export type FoldOutcome = { readonly ok: true; readonly configuration: MergedCon
  * at each layer for itself, via `advanceStrategies`, rather than being
  * handed one flat map.
  */
-export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]> = new Map()): FoldOutcome {
+export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]> = new Map(), paths?: PathFacility): FoldOutcome {
   const layers = deriveLayers(graph);
   const { diagnostics: strategyDiagnostics } = resolveStrategies(layers);
   // v0.7: final resolution runs alongside cascade's own whole-stack pass,
@@ -562,5 +563,10 @@ export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBr
   // through here unchanged — `src/merge/` never reads `delegate`
   // vocabulary itself, only carries the map `src/validate/` needs.
   // v0.7 additive field: `finalState` — see MergedConfiguration's own doc.
-  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs, finalState } };
+  // v1.5 additive field (issue #1): the path facility the resolution used,
+  // carried so `resource()` resolves a `path` value with the same
+  // semantics — omitted entirely when there is none, rather than
+  // defaulting to POSIX here, so that `MergedConfiguration.paths`
+  // distinguishes "no resolution stamped one" from "POSIX was chosen".
+  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs, finalState, ...(paths !== undefined ? { paths } : {}) } };
 }

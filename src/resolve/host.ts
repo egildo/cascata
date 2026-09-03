@@ -38,6 +38,8 @@
  * `tests/unit/layering.test.ts`.
  */
 
+import type { PathFacility } from "../paths.js";
+
 /** Bytes at a location, or a refusal naming why (FR-022a). Never throws for "the world said no" — a nonexistent file, a permission error, and the like are all `{ok: false, reason}`. */
 export type HostReadResult = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly reason: string };
 
@@ -81,4 +83,22 @@ export interface Host {
    * comes from the host.
    */
   locate?(reference: string): Promise<string | undefined>;
+
+  /**
+   * How this realm answers questions about paths — `dirname`,
+   * `isAbsolute`, `resolve`, the separator, and the user's home directory
+   * (issue #1, v1.5). Optional; a host that supplies none gets
+   * `posixPaths`, POSIX rules with no home directory.
+   *
+   * A **platform fact**, in the same sense `canonicalize` is: what
+   * `dirname("C:\\a\\b")` is, and whether `\\\\server\\share` is absolute,
+   * are things about a filesystem, not lexical arithmetic. Until v1.5
+   * `src/resolve/` and `src/validate/` imported `node:path` and
+   * `node:os` for these, which made the whole library fail at module
+   * evaluation in any realm that is not node — Article VI's seam held for
+   * I/O and leaked for platform facilities. `createNodeHost` answers with
+   * `node:path`'s own functions, so a node embedder's behavior (Windows
+   * included) is unchanged.
+   */
+  readonly paths?: PathFacility;
 }

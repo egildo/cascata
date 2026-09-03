@@ -16,8 +16,8 @@
  * tests/unit/layering.test.ts (T012).
  */
 
-import { createHash } from "node:crypto";
 import type { DocumentIdentity } from "../model/identity.js";
+import { sha256Hex } from "./sha256.js";
 
 // Re-exported for the same reason as reference.ts — one declaration, in model/.
 export type { DocumentIdentity };
@@ -29,9 +29,18 @@ export type { DocumentIdentity };
  * decoding (research D1, D2). Returns lowercase hex, matching
  * `crypto.Hash#digest("hex")`'s native output and the `sha256:<hex>`
  * shape `$pin` values are written in (SPEC.md §6.1: `$pin: sha256:9f2c…`).
+ *
+ * The digest comes from `./sha256.js` rather than from `node:crypto`,
+ * whose bare import made the library fail at module evaluation in any
+ * realm that is not node (issue #1). The output string is byte-for-byte
+ * what `createHash("sha256")…digest("hex")` produced — asserted against
+ * it, and against FIPS 180-4's published vectors, in
+ * `tests/unit/portability.test.ts`. See that file for why this is
+ * arithmetic in `src/` rather than a `Host` verb or an async
+ * `crypto.subtle` call.
  */
 export function hashBytes(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
+  return sha256Hex(bytes);
 }
 
 /** Construct a Document Identity from a resolved location and the bytes found there. */

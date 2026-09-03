@@ -34,9 +34,17 @@
  * eagerly at the top of `resolve()` — a deliberate, later-but-lazier
  * timing change, recorded in the milestone report.
  *
+ * **v1.5 (issue #1)**: `createNodeHost` also answers `paths` — `node:path`'s
+ * own `dirname`/`isAbsolute`/`resolve`/`sep` plus `os.homedir()`. Those
+ * imports used to sit inside `src/resolve/` and `src/validate/`, where
+ * they made the library fail to load in a browser realm; they live here
+ * now for the same reason `node:fs` does. See `src/paths.ts`.
+ *
  * `createNodeTransport` is v0.2's `createNetworkTransport`, moved
- * unchanged. **No test in this codebase ever constructs or calls
- * anything in this file** — every test passes an explicit in-memory host
+ * unchanged. **No test in this codebase ever performs I/O through
+ * anything in this file** (`tests/unit/paths.test.ts` constructs a host
+ * to check that its path facility is node's own, which touches nothing —
+ * the I/O-performing members are still never called) — every test passes an explicit in-memory host
  * test double or `RecordedTransport` (CLAUDE.md's non-negotiable: "No
  * network access in tests, ever"), so this module's own behavior is
  * unverified by the suite; it exists to make the documented contract
@@ -45,9 +53,11 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve as resolvePath, sep } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import type { Host, HostReadResult } from "../resolve/host.js";
+import type { PathFacility } from "../paths.js";
 import type { RecordingOutcome, Transport } from "../resolve/transport.js";
 
 export interface NodeHostOptions {
@@ -67,10 +77,42 @@ function requireCacheDir(cacheDir: string | undefined): string {
  * `canonicalize` need no `cacheDir` at all — only `cacheRead`/`cacheWrite`
  * do, and only when actually called.
  */
+/**
+ * `node:path`'s own functions, handed to the library as its path facility
+ * (issue #1). Nothing is reimplemented and nothing is wrapped: on Windows
+ * these are `path.win32`'s rules — drive letters, UNC roots, a backslash
+ * separator — exactly as every version before v1.5 got them by importing
+ * `node:path` directly. That equivalence is the whole point of routing
+ * them through the host rather than replacing them with lexical
+ * arithmetic of our own.
+ *
+ * `homeDirectory` is a **getter**, read at each access rather than
+ * captured when the host is made. `os.homedir()` honors `$HOME` on POSIX,
+ * and `tests/corpus/resolve-runner.ts` sets `$HOME` around the call to
+ * point a case at a fixture home — with a captured value that override
+ * silently stops working, which is exactly what happened the first time
+ * this was written as a plain field (three corpus cases went red). "Moved,
+ * not changed" (FR-027) governs here: the expansion reads the environment
+ * at expansion time, as it always has.
+ */
+export function createNodePathFacility(): PathFacility {
+  return {
+    separator: sep,
+    get homeDirectory(): string {
+      return homedir();
+    },
+    dirname,
+    isAbsolute,
+    resolve: resolvePath,
+  };
+}
+
 export function createNodeHost(options?: NodeHostOptions): Host {
   const cacheDir = options?.cacheDir;
 
   return {
+    paths: createNodePathFacility(),
+
     async read(location: string): Promise<HostReadResult> {
       try {
         const buffer = readFileSync(location);

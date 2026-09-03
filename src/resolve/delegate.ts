@@ -23,7 +23,7 @@
  * `items`. Recorded as a scope decision, not a citation gap.
  */
 
-import { isAbsolute } from "node:path";
+import type { PathFacility } from "../paths.js";
 import type { Node } from "../model/node.js";
 import type { SourceSpan } from "../model/span.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
@@ -215,8 +215,8 @@ export function mergeGrantTrees(a: DelegationGrantNode, b: DelegationGrantNode):
  * there regardless, so refusing it a second, earlier way was judged not
  * worth the extra code path.
  */
-export function isAbsoluteDelegatedPath(text: string): boolean {
-  return isAbsolute(text);
+export function isAbsoluteDelegatedPath(text: string, paths: PathFacility): boolean {
+  return paths.isAbsolute(text);
 }
 
 /**

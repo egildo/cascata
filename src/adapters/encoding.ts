@@ -156,3 +156,53 @@ export function locateByteOffset(bytes: Uint8Array, offset: number): { line: num
   const column = [...decodedLinePrefix].length + 1;
   return { line, column };
 }
+
+/**
+ * How many bytes `text` occupies when encoded as UTF-8 — the replacement
+ * for node's `Buffer.byteLength(text, "utf-8")`, which made the library
+ * fail to load in any realm that is not node (issue #1).
+ *
+ * Counts rather than encodes. `new TextEncoder().encode(text).length` is
+ * the one-liner and is exactly correct, but it allocates the encoded copy
+ * to then throw it away — and the first caller is the parser's *size
+ * limit* check, whose whole purpose is to refuse an over-large document
+ * "without being parsed at all" (contracts/parse-api.md). Allocating a
+ * second copy of a 500 MB input in order to decide it is too big is the
+ * one place where the extra copy is not free.
+ *
+ * An unpaired surrogate counts as 3 bytes, because that is what encoding
+ * it produces: both `TextEncoder` and `Buffer.byteLength` substitute
+ * U+FFFD (3 bytes in UTF-8) for a code unit that cannot be encoded. This
+ * function is not the place that *rejects* such input — `parseYaml`'s own
+ * lone-surrogate scan (`invalid-encoding`) is, and it needs a byte length
+ * to build the span it reports the rejection with, so counting has to
+ * agree with the encoder rather than refuse.
+ */
+export function utf8ByteLength(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const unit = text.charCodeAt(i);
+    if (unit < 0x80) {
+      bytes += 1;
+    } else if (unit < 0x800) {
+      bytes += 2;
+    } else if (unit >= 0xd800 && unit <= 0xdbff && i + 1 < text.length) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        // A well-formed surrogate pair: one astral scalar, four bytes,
+        // and the low surrogate is consumed here rather than counted again.
+        bytes += 4;
+        i += 1;
+      } else {
+        // A high surrogate with no low surrogate after it — U+FFFD.
+        bytes += 3;
+      }
+    } else {
+      // Every remaining BMP scalar, and every unpaired surrogate (a lone
+      // low surrogate, or a high one at the very end of the string),
+      // which encodes as U+FFFD: three bytes either way.
+      bytes += 3;
+    }
+  }
+  return bytes;
+}

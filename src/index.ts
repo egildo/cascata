@@ -30,6 +30,7 @@ import { createReference, extractAdoptsReference, extractSchemaReference, refere
 import { accumulate as accumulateImpl, generate as generateImpl, type AccumulatedTree } from "./generate/index.js";
 import { classifyLocatedDocument, classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoot, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
+import { posixPaths, type PathFacility } from "./paths.js";
 import { DocumentCache } from "./resolve/cache.js";
 import { resolveFetchLimits, resolveRemoteDocument, type FetchLimits, type RemoteDocumentFailure } from "./resolve/fetch.js";
 import type { Transport } from "./resolve/transport.js";
@@ -274,6 +275,16 @@ export type ResolveResult =
       readonly graph: Graph;
       readonly pedigree: Pedigree;
       readonly delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]>;
+      /**
+       * v1.5 additive field (issue #1): the path facility this resolution
+       * used — the host's, or `posixPaths` where the host supplied none.
+       * Carried so that `merge()` can stamp it onto the configuration and
+       * `resource()` can resolve a `path` value with the same semantics
+       * the resolution itself used. A caller passing `resolved` through to
+       * `merge()` in full gets it threaded automatically, exactly as v0.6's
+       * `delegationBreadcrumbs` is.
+       */
+      readonly paths: PathFacility;
       /** v0.7 FR-002: `info`-level lints found during resolution (e.g. §8.1's delegate-leaf-shape lint). Never `error`-level — an `error` anywhere makes the whole call `ok: false` instead. Possibly empty. */
       readonly diagnostics: readonly Diagnostic[];
     }
@@ -539,7 +550,8 @@ async function readAtTarget(host: Host, target: ReferenceLocationKind, candidate
  * directly instead, in `tests/unit/graph-remote-dedup.test.ts`.
  */
 async function walkAdoptsChain(host: Host, candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined, sandboxRoot: string): Promise<ChainWalkResult> {
-  const classified = classifyReferenceLocation(candidate, referringLocation);
+  const paths = host.paths ?? posixPaths;
+  const classified = classifyReferenceLocation(candidate, referringLocation, paths);
   // v1.4 FR-001: a scheme this library does not itself understand is
   // offered to the host before it is refused — the host may own that
   // namespace, and Article VI's whole premise is that the host answers
@@ -547,7 +559,7 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
   // all, both fall through to v0.2 FR-013's unchanged refusal (FR-004).
   const located = classified.kind === "unsupported-scheme" ? await host.locate?.(candidate.text) : undefined;
   const hostLocated = located !== undefined;
-  const target: ReferenceLocationKind = located === undefined ? classified : classifyLocatedDocument(located);
+  const target: ReferenceLocationKind = located === undefined ? classified : classifyLocatedDocument(located, paths);
   if (target.kind === "unsupported-scheme") {
     // Refused *before any request is made* (v0.2 FR-013) — this branch
     // never reaches resolve/fetch.ts at all.
@@ -765,7 +777,9 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   }
   const text = valueNode.value;
 
-  if (isAbsoluteDelegatedPath(text)) {
+  const paths = state.host.paths ?? posixPaths;
+
+  if (isAbsoluteDelegatedPath(text, paths)) {
     return {
       ok: false,
       diagnostics: [createDiagnostic({ level: "error", code: "absolute-delegated-path", message: `Delegated path '${text}' is absolute — v1 opens no door for absolute delegated paths (SPEC.md §8.4, v0.6 FR-023)`, primary: valueNode.span })],
@@ -779,7 +793,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   // the delegating document (a config, or a fragment several hops
   // in — never a schema, which only ever grants the *permission*).
   const reference = createReference({ text, span: valueNode.span, kind: "delegate", authority: "config-authored" });
-  const target = classifyReferenceLocation(reference, documentLocation);
+  const target = classifyReferenceLocation(reference, documentLocation, paths);
 
   if (target.kind === "unsupported-scheme") {
     return { ok: false, diagnostics: [referenceDiagnostic("unsupported-scheme", reference, `Delegated reference '${text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.6, mirroring v0.2 FR-013)`)] };
@@ -1008,6 +1022,7 @@ function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDoc
  * this walk has run.
  */
 async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean, graftDelegation: boolean): Promise<ResolveResult> {
+  const paths = host.paths ?? posixPaths;
   const schemaDocumentsRootToLeaf = [...graph.documents.slice(1)].reverse();
 
   const { sections: authoritySections, diagnostics: authorityDiagnostics } = checkPinningDemand(schemaDocumentsRootToLeaf);
@@ -1034,7 +1049,7 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: str
     // performs none of its own. The grants are still *collected*, so an
     // unrecognized `delegate:` value is still refused above; nothing is
     // grafted.
-    return { ok: true, graph, pedigree, delegationBreadcrumbs: new Map(), diagnostics: grantInfos };
+    return { ok: true, graph, pedigree, delegationBreadcrumbs: new Map(), paths, diagnostics: grantInfos };
   }
 
   const state: DelegationState = {
@@ -1055,7 +1070,7 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: str
 
   const graftedEntry: GraphDocument = { ...graph.entry, tree: walked.node };
   const graftedGraph: Graph = { entry: graftedEntry, documents: [graftedEntry, ...graph.documents.slice(1)] };
-  return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs, diagnostics: grantInfos };
+  return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs, paths, diagnostics: grantInfos };
 }
 
 /**
@@ -1078,11 +1093,12 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
   requireHost(options);
   const host = options.host;
   const remote = buildRemoteContext(options);
-  const sandboxRoot = toAbsoluteSandboxRoot(options.sandboxRoot);
+  const paths = host.paths ?? posixPaths;
+  const sandboxRoot = toAbsoluteSandboxRoot(options.sandboxRoot, paths);
   const maxChainLength = options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH;
 
   const builder = new GraphBuilder(maxChainLength);
-  const entryLocation = toAbsoluteEntryLocation(entryPath);
+  const entryLocation = toAbsoluteEntryLocation(entryPath, paths);
   const entryOrigin = createOrigin(entryLocation, entryLocation);
 
   const entryVisit = builder.beginVisit(entryLocation, undefined);
@@ -1200,6 +1216,15 @@ export interface MergeInput {
    * out of it) gets it threaded automatically.
    */
   readonly delegationBreadcrumbs?: ReadonlyMap<string, readonly DelegationHop[]>;
+
+  /**
+   * v1.5 additive field (issue #1), on the same terms as the one above:
+   * the path facility the resolution used, stamped onto the merged
+   * configuration so `resource()` resolves a `path` value the way the
+   * resolution did. Omitted → `posixPaths`. A caller passing `resolved`
+   * through in full gets the host's own facility threaded automatically.
+   */
+  readonly paths?: PathFacility;
 }
 
 export type MergeResult = { readonly ok: true; readonly configuration: MergedConfiguration } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -1224,7 +1249,7 @@ export type MergeResult = { readonly ok: true; readonly configuration: MergedCon
  * a real gap, closed in T061.
  */
 export function merge(resolved: MergeInput): MergeResult {
-  return foldConfiguration(resolved.graph, resolved.pedigree, resolved.delegationBreadcrumbs);
+  return foldConfiguration(resolved.graph, resolved.pedigree, resolved.delegationBreadcrumbs, resolved.paths);
 }
 
 // --- why() — User Story 3 (v0.3, tasks.md T049) --------------------------

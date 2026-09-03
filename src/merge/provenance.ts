@@ -102,6 +102,7 @@ import type { SourceSpan } from "../model/span.js";
 import type { Pedigree } from "../graph/pedigree.js";
 import type { DelegationHop } from "../model/reference.js";
 import type { KeyFinalState } from "./final.js";
+import type { PathFacility } from "../paths.js";
 
 /**
  * One document participating in the fold, with its place in precedence
@@ -190,6 +191,20 @@ export interface MergedConfiguration {
    * and carrying the breadcrumb on every diagnostic built from it.
    */
   readonly delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]>;
+
+  /**
+   * How the resolution that produced this configuration answered
+   * questions about paths — the host's `PathFacility`, or `posixPaths`
+   * where the host supplied none (v1.5, issue #1).
+   *
+   * Carried on the configuration rather than passed to `resource()`
+   * because `resource(configuration, pointer)` is a **public signature**
+   * (SPEC.md §16) and a third parameter defaulting to POSIX would quietly
+   * give a Windows caller POSIX `dirname` semantics — the one outcome
+   * worse than either alternative. A consumer never supplies this; it is
+   * stamped by `resolve()`.
+   */
+  readonly paths?: PathFacility;
   /**
    * **v0.7 additive field** — the whole-stack `final` resolution
    * (`src/merge/final.ts`'s `resolveFinal`, SPEC.md §6.3), keyed by RFC

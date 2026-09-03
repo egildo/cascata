@@ -62,7 +62,7 @@ import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span
 import { resolveAlias, isMergeKeyPair, mergeSources } from "./expand.js";
 import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsupportedTagDiagnostic } from "./floor.js";
 import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "../limits.js";
-import { findFirstInvalidUtf8ByteOffset, locateByteOffset } from "../encoding.js";
+import { findFirstInvalidUtf8ByteOffset, locateByteOffset, utf8ByteLength } from "../encoding.js";
 
 // `yaml` merges each of these classes with a `.Parsed` namespace member
 // carrying the concrete post-parse shape (a definite `range`, and — for
@@ -569,14 +569,14 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
 
   // Checked before anything else is touched, on the raw input exactly as
   // received — "refused without being parsed at all" (contracts/parse-api.md).
-  const rawByteLength = Buffer.byteLength(rawText, "utf-8");
+  const rawByteLength = utf8ByteLength(rawText);
   const sizeDiagnostic = checkSizeLimit(rawByteLength, limits, origin);
   if (sizeDiagnostic !== undefined) {
     return { ok: false, diagnostics: [sizeDiagnostic] };
   }
 
   const text = stripByteOrderMark(rawText);
-  const documentByteLength = Buffer.byteLength(text, "utf-8");
+  const documentByteLength = utf8ByteLength(text);
   const byteOffsetTable = buildByteOffsetTable(text);
   const lineCounter = new LineCounter();
   const spanContext: SpanContext = { origin, text, lineCounter, byteOffsetTable, documentByteLength };
@@ -668,7 +668,7 @@ export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides
   const limits = resolveLimits(limitOverrides);
 
   // Checked on the raw byte length before anything else, same as the text
-  // path checks Buffer.byteLength first — "refused without being parsed
+  // path checks utf8ByteLength first — "refused without being parsed
   // at all" (contracts/parse-api.md).
   const sizeDiagnostic = checkSizeLimit(bytes.length, limits, origin);
   if (sizeDiagnostic !== undefined) {

@@ -34,8 +34,7 @@
  * tests/unit/layering.test.ts.
  */
 
-import { dirname, resolve as resolvePath, sep } from "node:path";
-import { homedir } from "node:os";
+import { posixPaths, type PathFacility } from "../paths.js";
 import { createDocumentIdentity, type DocumentIdentity } from "./identity.js";
 import type { Reference } from "./reference.js";
 import type { Host } from "./host.js";
@@ -73,14 +72,20 @@ export interface ResolvedDocument {
  * first path segment, exactly as `resolvePath` would treat any other
  * directory name.
  *
- * `os.homedir()` is used, not a hardcoded/injected path — it already
- * honors `$HOME` on POSIX, which is what lets a test point it at a
- * fixture directory without touching the real user's home (see
- * tests/corpus/resolve-runner.ts's `homeDir` case field).
+ * The home directory is the **host's** answer (`PathFacility.homeDirectory`,
+ * v1.5, issue #1), not `os.homedir()` read here. `createNodeHost` answers
+ * with `os.homedir()`, which already honors `$HOME` on POSIX — what lets a
+ * test point it at a fixture directory without touching the real user's
+ * home (see tests/corpus/resolve-runner.ts's `homeDir` case field) — so
+ * node behavior is unchanged. A realm with no home directory at all
+ * (a browser) answers `undefined`, and then `~/` expands to nothing: the
+ * reference stays the literal relative path it looks like, which is
+ * already exactly how a schema-authored `~/` is treated. Expanding
+ * against an invented home would be the one genuinely wrong answer.
  */
-function expandTilde(reference: Reference): string {
-  if (reference.authority === "config-authored" && reference.text.startsWith("~/")) {
-    return resolvePath(homedir(), reference.text.slice(2));
+function expandTilde(reference: Reference, paths: PathFacility): string {
+  if (reference.authority === "config-authored" && reference.text.startsWith("~/") && paths.homeDirectory !== undefined) {
+    return paths.resolve(paths.homeDirectory, reference.text.slice(2));
   }
   return reference.text;
 }
@@ -148,8 +153,8 @@ const HTTPS_LOCATION_PATTERN = /^https:\/\//i;
  * predates scheme-awareness and nothing outside this module depends on
  * it gaining a scheme argument.
  */
-export function classifyReferenceLocation(reference: Reference, referringDocumentLocation: string): ReferenceLocationKind {
-  const text = expandTilde(reference);
+export function classifyReferenceLocation(reference: Reference, referringDocumentLocation: string, paths: PathFacility): ReferenceLocationKind {
+  const text = expandTilde(reference, paths);
   if (ABSOLUTE_URL_SCHEME_PATTERN.test(text)) {
     const scheme = (ABSOLUTE_URL_SCHEME_PATTERN.exec(text)?.[1] ?? "").toLowerCase();
     if (scheme === "https") {
@@ -168,7 +173,7 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
   if (HTTPS_LOCATION_PATTERN.test(referringDocumentLocation)) {
     return { kind: "https", url: new URL(text, referringDocumentLocation).toString() };
   }
-  return { kind: "local", location: resolvePath(dirname(referringDocumentLocation), text) };
+  return { kind: "local", location: paths.resolve(paths.dirname(referringDocumentLocation), text) };
 }
 
 /**
@@ -189,11 +194,11 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
  * this module is (`.`/`..` segments collapsed, so location-based dedup
  * still agrees with a path-named reference to the same document).
  */
-export function classifyLocatedDocument(location: string): ReferenceLocationKind {
+export function classifyLocatedDocument(location: string, paths: PathFacility): ReferenceLocationKind {
   if (HTTPS_LOCATION_PATTERN.test(location)) {
     return { kind: "https", url: location };
   }
-  return { kind: "local", location: resolvePath(location) };
+  return { kind: "local", location: paths.resolve(location) };
 }
 
 /**
@@ -221,19 +226,19 @@ export function classifyLocatedDocument(location: string): ReferenceLocationKind
  * path. Recognizing `https://`/`http://`/other schemes is User Story 3/4
  * work (FR-013, T062) and out of scope for this slice — see the report.
  */
-export function resolveReferenceLocation(reference: Reference, referringDocumentLocation: string): string {
-  const baseDir = dirname(referringDocumentLocation);
-  return resolvePath(baseDir, expandTilde(reference));
+export function resolveReferenceLocation(reference: Reference, referringDocumentLocation: string, paths: PathFacility): string {
+  const baseDir = paths.dirname(referringDocumentLocation);
+  return paths.resolve(baseDir, expandTilde(reference, paths));
 }
 
 /** Resolve a caller-supplied entry path to an absolute location, the same way every other reference is resolved — relative to `process.cwd()` if not already absolute. This is the *one* legitimate use of the working directory in this module: there is no "referring document" for the entry itself. */
-export function toAbsoluteEntryLocation(entryPath: string): string {
-  return resolvePath(entryPath);
+export function toAbsoluteEntryLocation(entryPath: string, paths: PathFacility): string {
+  return paths.resolve(entryPath);
 }
 
 /** Resolve a caller-supplied sandbox root to an absolute path, the same way `toAbsoluteEntryLocation` does for the entry document — relative to `process.cwd()` if not already absolute. A second legitimate use of the working directory: `sandboxRoot` (v0.2 FR-022) has no "referring document" either, being supplied directly by the caller rather than written by any document. */
-export function toAbsoluteSandboxRoot(sandboxRoot: string): string {
-  return resolvePath(sandboxRoot);
+export function toAbsoluteSandboxRoot(sandboxRoot: string, paths: PathFacility): string {
+  return paths.resolve(sandboxRoot);
 }
 
 /**
@@ -284,16 +289,17 @@ export function toAbsoluteSandboxRoot(sandboxRoot: string): string {
  * unaffected: a root that does not end in one still gets one.
  */
 export async function isWithinSandbox(host: Host, location: string, sandboxRoot: string): Promise<boolean> {
+  const separator = (host.paths ?? posixPaths).separator;
   const realSandboxRoot = await safeCanonicalize(host, sandboxRoot);
   const realLocation = await safeCanonicalize(host, location);
-  const containedPrefix = realSandboxRoot.endsWith(sep) ? realSandboxRoot : realSandboxRoot + sep;
+  const containedPrefix = realSandboxRoot.endsWith(separator) ? realSandboxRoot : realSandboxRoot + separator;
   return realLocation === realSandboxRoot || realLocation.startsWith(containedPrefix);
 }
 
 /** `host.canonicalize`, falling back to the already-normalized lexical path (`path.resolve`'s output, idempotent on an already-absolute path) when the host cannot canonicalize it — e.g. it does not exist. See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is not treated as a sandbox verdict in either direction. */
 async function safeCanonicalize(host: Host, path: string): Promise<string> {
   const canonical = await host.canonicalize(path);
-  return canonical ?? resolvePath(path);
+  return canonical ?? (host.paths ?? posixPaths).resolve(path);
 }
 
 /**

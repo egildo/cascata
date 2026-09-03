@@ -52,8 +52,8 @@
  * `layerForSpanOrigin` already exploits for a different purpose.
  */
 
-import { dirname, resolve as resolvePath } from "node:path";
 import type { MergedConfiguration } from "../merge/provenance.js";
+import { posixPaths } from "../paths.js";
 import { resolvePointer } from "../model/pointer.js";
 import { isValidPath, isValidUrl } from "./check.js";
 
@@ -76,7 +76,10 @@ const HTTPS_LOCATION_PATTERN = /^https:\/\//i;
  * 3. Parses as an absolute URL (`url`'s own built-in-type predicate,
  *    `isValidUrl` — WHATWG `URL`) → resolves to itself (FR-036).
  * 4. A `path`-shaped string (`path`'s own predicate, `isValidPath`) →
- *    resolved against `dirname(node.span.origin.id)` — the directory of
+ *    resolved against `dirname(node.span.origin.id)` — using the path
+ *    facility the resolution recorded on the configuration (v1.5, issue
+ *    #1: `dirname` is a platform fact, and importing `node:path` here is
+ *    what stopped the library loading in a browser realm) — the directory of
  *    the document that declared *this value*, never the entry document's
  *    (FR-035) and never confined to the sandbox root (FR-038).
  * 5. Neither shape → `not-a-resource`.
@@ -94,7 +97,8 @@ export function resource(configuration: MergedConfiguration, pointer: string): R
   }
   if (isValidPath(node.value)) {
     const declaringDocument = node.span.origin.id;
-    const location = HTTPS_LOCATION_PATTERN.test(declaringDocument) ? new URL(node.value, declaringDocument).toString() : resolvePath(dirname(declaringDocument), node.value);
+    const paths = configuration.paths ?? posixPaths;
+    const location = HTTPS_LOCATION_PATTERN.test(declaringDocument) ? new URL(node.value, declaringDocument).toString() : paths.resolve(paths.dirname(declaringDocument), node.value);
     return { kind: "path", location };
   }
   return { kind: "not-a-resource" };
