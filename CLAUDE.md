@@ -24,8 +24,12 @@ where the two milestones' code sits side by side, which is `src/index.ts` and `s
   syntax and left again in v0.5 when `glob` itself was dropped as a built-in type (SPEC.md §15) —
   the second time this line has needed correcting for the same dependency; the constitution's own
   "Technology & Security Constraints" list is a *ceiling* ("limited to..."), so it still names
-  `picomatch` and needs no amendment for using fewer than it allows. Node built-ins (`node:crypto`,
-  `fetch`, WHATWG `URL`, `TextDecoder`) are not dependencies. Adding anything else needs a
+  `picomatch` and needs no amendment for using fewer than it allows. Node built-ins are not dependencies —
+  but as of v1.5 the library proper uses **none** of them: `node:crypto`, `node:path`, `node:os` and
+  the `Buffer` global all left `src/` when it turned out a bare `node:` import makes the library fail
+  at module evaluation in a browser realm (issue #1, SPEC.md §15/§16). Only `src/host/node.ts` may
+  import one, and `tests/unit/layering.test.ts`'s realm sweep enforces that. Platform-neutral globals
+  (`fetch` in the shipped host, WHATWG `URL`, `TextDecoder`, `TextEncoder`) stay fair game. Adding anything else needs a
   constitution amendment.
 - **No network access in tests, ever.** Remote behavior runs against recorded responses.
 - **TypeScript `strict` + `noUncheckedIndexedAccess`. No `any`. No assertion casts on the node

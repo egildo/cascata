@@ -31,6 +31,7 @@ filesystem root now contains what is under it.
 | **v1.2** | **the JSON adapter** — a second format, hand-written against RFC 8259, selected for `.json` by the registry v0.2 built for it; format-blindness stops being a claim about the architecture and becomes an observed fact about two live adapters |
 | **v1.3** | **the launching schema** — `resolve()`/`load()` accept `schema`, a stand-in for the `$schema` line an entry did not write, consulted only when the entry names none; built for an embedder whose entry is a Markdown file's frontmatter |
 | **v1.4** | **host-resolvable identity** — an optional `Host.locate` lets a host own a URI scheme, so `$adopts: beltype:document` names a document by identity rather than by a path that differs on every machine; plus the correction that `sandboxRoot: "/"` contains everything under it |
+| **v1.5** | **it loads where Node does not** — `node:crypto`, the `Buffer` global, `node:path` and `node:os` are gone from the library proper: SHA-256 is arithmetic of its own, byte length is counted rather than encoded, and path semantics are an optional `Host.paths` the shipped Node host answers with `node:path`'s own functions |
 
 Full detail lives in `specs/001-…` through `specs/011-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
@@ -736,7 +737,10 @@ already states and Constitution Principle VI already requires.
 `resolve()` and `load()` **require** a `host` (`Host`: `read`, `canonicalize`, `cacheRead`,
 `cacheWrite`). The library performs no I/O of its own (`SPEC.md` §16, Article VI) — enforced
 mechanically by `tests/unit/layering.test.ts`, which refuses any `node:fs` import or bare `fetch`
-call anywhere under `src/` except the one named exemption, `src/host/node.ts`.
+call anywhere under `src/` except the one named exemption, `src/host/node.ts`. The same file's
+**realm sweep** (v1.5) refuses any `node:` import at all, and any use of `Buffer`, `process`,
+`__dirname` or `require`, under the same exemption: the library must *load* where Node does not,
+not merely refrain from reading a disk there.
 
 ```typescript
 import { load } from "cascata";
@@ -758,6 +762,15 @@ const result = await load("./index.md.frontmatter.yaml", {
   schema: "./beltype.yaml",   // consulted only if the entry names no $schema of its own
 });
 ```
+
+**Path semantics are the host's too (v1.5).** A `Host` may supply `paths` — `dirname`, `isAbsolute`,
+`resolve`, the segment `separator`, and the user's `homeDirectory`. `createNodeHost` answers with
+`node:path`'s own functions, so a Node embedder (Windows included) behaves exactly as it always has;
+a host that supplies none gets POSIX rules and no home directory, which is what a browser realm
+should get. This exists because `dirname("C:\a\b")` is a fact about a platform, not arithmetic —
+and because importing `node:path` to ask it made the whole library fail to load outside Node. One
+consequence worth stating plainly: **an embedder on Windows using a custom host must now answer
+`paths`**, or it will be judged by POSIX rules that call `C:\secrets\x.yaml` a relative path.
 
 **Host-resolvable identity (v1.4).** A `Host` may implement one more, optional method — `locate(reference)` — and own a URI scheme of its own. A `$schema`/`$adopts` reference (or a launching schema) whose scheme is not `https:` is offered to it before being refused; the host answers with a **location**, an absolute local path or an `https://` URL, and everything downstream is unchanged: the document is read, parsed, deduplicated, cycle-checked and pin-verified exactly as a path-named one, and a relative `$adopts` written *inside* it resolves against it. A scheme the host does not own — `undefined`, or no `locate` at all — is `unsupported-scheme`, exactly as before.
 
