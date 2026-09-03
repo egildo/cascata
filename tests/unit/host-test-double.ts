@@ -6,6 +6,7 @@
  * behind its back.
  */
 import type { Host, HostReadResult } from "../../src/resolve/host.js";
+import type { PathFacility } from "../../src/paths.js";
 
 export interface InMemoryHostOptions {
   /** location -> bytes. A location absent from this map is a read refusal. */
@@ -21,6 +22,13 @@ export interface InMemoryHostOptions {
    * is every host written before v1.4 and the case FR-004 needs to pin.
    */
   readonly identities?: ReadonlyMap<string, string>;
+  /**
+   * The host's path facility (v1.5, issue #1). Omit for the library's
+   * POSIX default — which is what every case written before v1.5 wants,
+   * since their locations are all POSIX-shaped. Supply one to pin that a
+   * host's own path semantics are actually the ones used.
+   */
+  readonly paths?: PathFacility;
 }
 
 /** A `Host` backed entirely by an in-memory map — no `node:fs`, ever. Tracks every call it received, so a test can assert *what was asked*, not just what came back. */
@@ -32,6 +40,8 @@ export class InMemoryHost implements Host {
   readonly locates: string[] = [];
   /** Present only when the constructor was given `identities` — see that option's own doc. */
   locate?: (reference: string) => Promise<string | undefined>;
+  /** Present only when the constructor was given `paths` — otherwise the library's POSIX default applies, as it does for any host that answers none. */
+  readonly paths?: PathFacility;
 
   private readonly files: ReadonlyMap<string, Uint8Array>;
   private readonly canonical: ReadonlyMap<string, string>;
@@ -42,6 +52,9 @@ export class InMemoryHost implements Host {
     this.files = options?.files ?? new Map();
     this.canonical = options?.canonical ?? new Map();
     this.canonicalizeIsIdentity = options?.canonicalizeIsIdentity ?? true;
+    if (options?.paths !== undefined) {
+      this.paths = options.paths;
+    }
     const identities = options?.identities;
     if (identities !== undefined) {
       this.locate = async (reference: string): Promise<string | undefined> => {

@@ -347,3 +347,176 @@ describe("Principle IV / Article VI: the host boundary — no import (static or 
     });
   }
 });
+
+// --- issue #1: the realm sweep — src/ loads where node does not ----------
+//
+// Gate 7 above polices *I/O* (`node:fs`, `fetch`): the library must not
+// reach past the host seam to touch the world. This sweep polices
+// something adjacent and narrower — the library must not reach past the
+// seam for a **platform facility** either, because doing so makes it
+// fail at *module evaluation* in any realm that is not node, before a
+// line of Cascata code runs and with no partial mode to fall back to.
+//
+// Reported from outside (issue #1) by an embedder whose editing tools run
+// the whole cascade inside a browser tab. Two sites were found:
+// `node:crypto`'s `createHash` in `src/resolve/identity.ts` (now
+// `src/resolve/sha256.ts`) and the `Buffer` global in
+// `src/adapters/yaml/parse.ts` (now `utf8ByteLength` in
+// `src/adapters/encoding.ts`). Neither was a rule violation — `CLAUDE.md`
+// lists `node:crypto` among the permitted built-ins — which is exactly
+// why nothing mechanical caught them, and why this sweep exists rather
+// than a note asking reviewers to remember.
+//
+// **The exemption is the same one gate 7 names**, `src/host/node.ts`: a
+// node host is entitled to be a node host, and an embedder in a browser
+// supplies its own `Host` rather than importing that file. The check is
+// therefore total over `src/` minus that one file, like gate 7's, rather
+// than a directory list like the two boundary sweeps above.
+//
+// Additive: this touches no assertion already in this file.
+
+// Any `node:`-prefixed specifier at all, not a list of known ones — a
+// built-in nobody thought to enumerate is exactly the case that would
+// slip through a list, and the whole point is that `node:crypto` was on
+// the *permitted* list when it broke a realm. The bare-name forms of the
+// same modules ("fs", "path", "crypto") are checked separately, since a
+// bundler resolves those to the built-in too.
+const NODE_BUILTIN_SPECIFIER_PATTERN = /^node:/;
+const BARE_NODE_BUILTIN_SPECIFIERS: ReadonlySet<string> = new Set([
+  "assert", "buffer", "child_process", "crypto", "dns", "events", "fs", "http", "https", "net",
+  "os", "path", "process", "readline", "stream", "tls", "url", "util", "worker_threads", "zlib",
+]);
+
+// A *use* of a node-only global: `Buffer.…`, `process.…`, `__dirname`,
+// `__filename`, `require(…)`. Anchored on the property access (or the
+// call, for `require`) for the same reason gate 7's patterns are anchored
+// on a call: this codebase's prose says "Buffer" and "process" as
+// ordinary English words all over its comments ("Buffer for !!binary",
+// "the parsing process"), and a bare-word match would fire on every one
+// of them. `response.arrayBuffer()` and `ArrayBuffer` must not match
+// either, which is what the leading `(?<![.\w$])` is for.
+//
+// This is textual, with exactly the limits gate 7's own header spells out
+// at length: it catches the accidental reintroduction — a `Buffer.byteLength`
+// reached for out of habit, a `process.env` read added while debugging —
+// and it is not a defense against `globalThis["Buf" + "fer"]`. Nothing
+// here claims otherwise.
+//
+// **Comments are stripped before this scan, and that is load-bearing.**
+// Gate 7's patterns get away with scanning raw source because a call
+// written `fetch(` cannot appear in this codebase's prose. `Buffer.` and
+// `process.` can and do: `src/resolve/location.ts` explains itself in
+// terms of "relative to `process.cwd()`", and the very function that
+// replaced `Buffer.byteLength` documents what it replaced. A raw-source
+// scan reported four failures on this repository the moment it was
+// written, every one of them a sentence. Stripping first is what makes
+// the sweep about code.
+const NODE_GLOBAL_USE_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
+  ["Buffer", /(?<![.\w$])Buffer\s*\./],
+  ["process", /(?<![.\w$])process\s*\./],
+  ["__dirname", /(?<![.\w$])__dirname(?![\w$])/],
+  ["__filename", /(?<![.\w$])__filename(?![\w$])/],
+  ["require", /(?<![.\w$])require\(/],
+];
+
+/**
+ * `source` with its comments removed and nothing else changed — string
+ * and template literals are walked through rather than scanned, so a
+ * `"https://…"` inside one is not mistaken for the start of a line
+ * comment (which would silently swallow the rest of a real line and turn
+ * this sweep into one that reports less than it appears to). Regex
+ * literals are not tracked: a `/` that begins one is treated as
+ * division, which cannot hide code from the patterns above — the worst
+ * it can do is leave a comment's text in place, i.e. a false positive,
+ * which is the direction a boundary test should fail in.
+ */
+function stripComments(source: string): string {
+  let out = "";
+  let index = 0;
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1];
+    if (char === "/" && next === "/") {
+      while (index < source.length && source[index] !== "\n") {
+        index += 1;
+      }
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      index += 2;
+      while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) {
+        index += 1;
+      }
+      index += 2;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      const quote = char;
+      out += char;
+      index += 1;
+      while (index < source.length) {
+        const inner = source[index];
+        out += inner;
+        index += 1;
+        if (inner === "\\") {
+          out += source[index] ?? "";
+          index += 1;
+          continue;
+        }
+        if (inner === quote) {
+          break;
+        }
+      }
+      continue;
+    }
+    out += char;
+    index += 1;
+  }
+  return out;
+}
+
+function importsNodeBuiltin(filePath: string): string[] {
+  return importSpecifiersOf(filePath).filter(
+    (specifier) => NODE_BUILTIN_SPECIFIER_PATTERN.test(specifier) || BARE_NODE_BUILTIN_SPECIFIERS.has(specifier),
+  );
+}
+
+// The dynamic/`require` twin of the above, for the same reason gate 7
+// needed one: a static-specifier scan cannot see `await import("node:crypto")`.
+const DYNAMIC_NODE_BUILTIN_PATTERN = /(?<![.\w$])(?:import|require)\(\s*["'`](?:node:[a-z_/]+|assert|buffer|child_process|crypto|dns|events|fs|http|https|net|os|path|process|readline|stream|tls|url|util|worker_threads|zlib)["'`]/;
+
+describe("issue #1 / Article VI: src/ evaluates in a realm that is not node — no node built-in, no node-only global, except the shipped host", () => {
+  const allSrcFiles = listTsFiles(join(REPO_ROOT, "src"));
+  const policedFiles = allSrcFiles.filter((file) => file.slice(REPO_ROOT.length + 1) !== HOST_BOUNDARY_EXEMPTION);
+
+  it("polices more than one file — a sweep whose exemption swallowed everything would pass vacuously", () => {
+    expect(policedFiles.length).toBeGreaterThan(1);
+  });
+
+  it(`the one node-only file (${HOST_BOUNDARY_EXEMPTION}) does import a node built-in — otherwise this exemption is guarding nothing and the sweep proves less than it appears to`, () => {
+    const exemptionPath = join(REPO_ROOT, ...HOST_BOUNDARY_EXEMPTION.split("/"));
+    expect(importsNodeBuiltin(exemptionPath).length).toBeGreaterThan(0);
+  });
+
+  for (const file of policedFiles) {
+    const relativeFile = file.slice(REPO_ROOT.length + 1);
+    it(`${relativeFile} imports no node built-in`, () => {
+      expect(
+        importsNodeBuiltin(file),
+        `${relativeFile} imports a node built-in — only ${HOST_BOUNDARY_EXEMPTION} may; a bare "node:" import fails at module evaluation in a browser realm`,
+      ).toEqual([]);
+    });
+
+    it(`${relativeFile} does not dynamically import(...) or require(...) a node built-in`, () => {
+      const content = stripComments(readFileSync(file, "utf-8"));
+      expect(DYNAMIC_NODE_BUILTIN_PATTERN.test(content), `${relativeFile} reaches a node built-in through import(...) or require(...)`).toBe(false);
+    });
+
+    for (const [name, pattern] of NODE_GLOBAL_USE_PATTERNS) {
+      it(`${relativeFile} does not use the node-only global \`${name}\``, () => {
+        const content = stripComments(readFileSync(file, "utf-8"));
+        expect(pattern.test(content), `${relativeFile} uses \`${name}\`, which does not exist in a browser realm`).toBe(false);
+      });
+    }
+  }
+});
