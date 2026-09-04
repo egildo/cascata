@@ -38,7 +38,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "dist-tag": "sh scripts/dist-tag.sh"
   },
   "dependencies": {
     "yaml": "^2.9.0"
