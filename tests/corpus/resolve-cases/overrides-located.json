@@ -1,0 +1,15 @@
+{
+  "name": "v1.6 FR-007: an override in a scheme the host owns is located and read like a $schema in that scheme",
+  "cites": "v1.6 FR-007",
+  "fixtureDir": "overrides",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "identities": { "beltype:cli": "over-a.yaml" },
+  "overrides": ["beltype:cli"],
+  "expect": {
+    "ok": true,
+    "graph": [ { "location": "config.yaml", "hash": "a779a8ff96881a78925f7c98a696902f5a7fd9d954fff97f2da4e8b5fcf6f8e0" }, { "location": "root.yaml", "hash": "5cc99e89b7a9cd4a6be2d81eb1830338ef7a873be073dc525b3a1dabddf1fc3f" } ],
+    "overrides": [ { "location": "over-a.yaml", "hash": "dfe9f00de979e485a0b7ac3589d2c592dc38320b885e02953d917fca355a91e5" } ],
+    "pedigree": [ { "location": "root.yaml", "hash": "5cc99e89b7a9cd4a6be2d81eb1830338ef7a873be073dc525b3a1dabddf1fc3f", "kind": "schema", "authority": "config-authored", "verified": false, "via": { "document": "config.yaml", "line": 1, "column": 10, "start": 9, "end": 20 } } ]
+  }
+}

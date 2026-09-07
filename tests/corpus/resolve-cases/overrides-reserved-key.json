@@ -1,0 +1,12 @@
+{
+  "name": "v1.6 FR-005: an override carrying a $-prefixed key is refused at that key's value",
+  "cites": "v1.6 FR-005",
+  "fixtureDir": "overrides",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "overrides": ["./reserved.yaml"],
+  "expect": {
+    "ok": false,
+    "diagnostics": [ { "code": "override-reserved-key", "primary": { "document": "reserved.yaml", "line": 1, "column": 10, "start": 9, "end": 20 } } ]
+  }
+}

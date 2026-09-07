@@ -139,7 +139,11 @@ const NO_STRATEGIES: ReadonlyMap<string, MergeStrategy> = new Map();
 
 /**
  * Derive the ranked `Layer` list from a resolved `Graph` — root schema
- * lowest, config highest of all (FR-005, data-model.md "Layer").
+ * lowest, the entry above every schema, and each override above the
+ * entry in the order given (FR-005, data-model.md "Layer"; v1.6 FR-011).
+ * An override is a `role: "config"` layer like the entry: the fold reads
+ * no strategy from it and provisions fill what it leaves silent, which
+ * is what makes it governed rather than privileged.
  *
  * Takes `Graph` rather than the narrower `Pedigree` type: `graph.documents`
  * carries each document's parsed `tree`, and `Pedigree` (v0.2,
@@ -166,6 +170,14 @@ export function deriveLayers(graph: Graph): readonly Layer[] {
     rank: layers.length,
     tree: graph.entry.tree,
   });
+  for (const override of graph.overrides ?? []) {
+    layers.push({
+      identity: override.identity,
+      role: "config",
+      rank: layers.length,
+      tree: override.tree,
+    });
+  }
   return layers;
 }
 

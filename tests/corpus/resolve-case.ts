@@ -77,7 +77,7 @@ export interface ExpectedResolveDiagnostic {
 }
 
 export type ResolveExpect =
-  | { readonly ok: true; readonly graph: readonly ExpectedGraphDocument[]; readonly pedigree: readonly ExpectedPedigreeEntry[] }
+  | { readonly ok: true; readonly graph: readonly ExpectedGraphDocument[]; readonly pedigree: readonly ExpectedPedigreeEntry[]; readonly overrides?: readonly ExpectedGraphDocument[] }
   | { readonly ok: false; readonly diagnostics: readonly ExpectedResolveDiagnostic[] };
 
 /** One resolution-conformance case. */
@@ -126,6 +126,16 @@ export interface ResolveCase {
    * between cases. Absent for every case that names no scheme.
    */
   readonly identities?: Readonly<Record<string, string>>;
+  /**
+   * Optional: `resolve()`'s `overrides` option (v1.6 FR-001) — config
+   * documents the embedder names, read after the entry's chain and ranked
+   * after it in this order. Passed verbatim: each text is read as a
+   * config-authored reference from the entry document, so a relative text
+   * resolves against the entry's directory and a scheme'd one goes to the
+   * case's `identities`. A successful case asserts them under
+   * `expect.overrides`, in order; absent there, none is expected.
+   */
+  readonly overrides?: readonly string[];
   readonly expect: ResolveExpect;
 }
 
@@ -277,10 +287,15 @@ function parseExpect(raw: unknown, source: string): ResolveExpect {
     if (!Array.isArray(pedigreeRaw)) {
       fail(source, `'expect.pedigree' must be an array when ok is true`);
     }
+    const overridesRaw = raw["overrides"];
+    if (overridesRaw !== undefined && !Array.isArray(overridesRaw)) {
+      fail(source, `'expect.overrides' must be an array if present`);
+    }
     return {
       ok: true,
       graph: graphRaw.map((item, index) => parseGraphDocument(item, source, `expect.graph[${index}]`)),
       pedigree: pedigreeRaw.map((item, index) => parsePedigreeEntry(item, source, `expect.pedigree[${index}]`)),
+      ...(Array.isArray(overridesRaw) ? { overrides: overridesRaw.map((item, index) => parseGraphDocument(item, source, `expect.overrides[${index}]`)) } : {}),
     };
   }
   if (ok === false) {
@@ -296,7 +311,7 @@ function parseExpect(raw: unknown, source: string): ResolveExpect {
   fail(source, `'expect.ok' must be true or false`);
 }
 
-const CITES_PATTERN = /^v(0\.2|1\.3|1\.4) FR-\d+$/;
+const CITES_PATTERN = /^v(0\.2|1\.3|1\.4|1\.6) FR-\d+$/;
 
 /** Load and validate one resolve-conformance case from `file`. `fixtureDir` resolves relative to `file`'s directory, per each case's own `fixtureDir` field. */
 export function loadResolveCase(file: string): ResolveCase {
@@ -321,6 +336,10 @@ export function loadResolveCase(file: string): ResolveCase {
     fail(file, `'schema' must be a string if present, got ${JSON.stringify(schemaRaw)}`);
   }
   const identities = parseIdentities(raw["identities"], file);
+  const overridesRaw = raw["overrides"];
+  if (overridesRaw !== undefined && (!Array.isArray(overridesRaw) || !overridesRaw.every((item) => typeof item === "string"))) {
+    fail(file, `'overrides' must be an array of strings if present, got ${JSON.stringify(overridesRaw)}`);
+  }
   const maxChainLengthRaw = raw["maxChainLength"];
   if (maxChainLengthRaw !== undefined && (typeof maxChainLengthRaw !== "number" || !Number.isInteger(maxChainLengthRaw))) {
     fail(file, `'maxChainLength' must be an integer if present, got ${JSON.stringify(maxChainLengthRaw)}`);
@@ -338,5 +357,6 @@ export function loadResolveCase(file: string): ResolveCase {
     ...(typeof maxChainLengthRaw === "number" ? { maxChainLength: maxChainLengthRaw } : {}),
     ...(typeof schemaRaw === "string" ? { schema: schemaRaw } : {}),
     ...(identities !== undefined ? { identities } : {}),
+    ...(Array.isArray(overridesRaw) ? { overrides: overridesRaw.filter((item): item is string => typeof item === "string") } : {}),
   };
 }

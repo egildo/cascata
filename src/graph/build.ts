@@ -86,6 +86,17 @@ export interface GraphDocument {
 export interface Graph {
   readonly entry: GraphDocument;
   readonly documents: readonly GraphDocument[];
+  /**
+   * v1.6 FR-011 — additive, optional: the embedder's overrides, in the
+   * order given, which is their rank order after the entry. Absent means
+   * none, so every graph built before this field existed — and every
+   * hand-built one in the test suite — reads exactly as it did. Not in
+   * `documents`, because `documents.slice(1)` is "the schema chain" at
+   * every consumer, and an override is a layer of the fold, never a node
+   * of the adoption graph: not deduplicated, not cycle-checked, not in
+   * the pedigree.
+   */
+  readonly overrides?: readonly GraphDocument[];
 }
 
 /** One frame of the active resolution path — what `GraphBuilder` needs to name every reference in a cycle, in chain order (contracts/diagnostics.md's `reference-cycle`). */
@@ -237,8 +248,8 @@ export class GraphBuilder {
 }
 
 /** Assemble the final `Graph` from the entry document and every other document discovered, in discovery order (leaf-to-root along the chain). Pure — no IO, no cycle/dedup logic of its own (that is `GraphBuilder`'s job, already applied by the time the orchestrator calls this). */
-export function buildGraph(entry: GraphDocument, restInDiscoveryOrder: readonly GraphDocument[]): Graph {
-  return { entry, documents: [entry, ...restInDiscoveryOrder] };
+export function buildGraph(entry: GraphDocument, restInDiscoveryOrder: readonly GraphDocument[], overrides: readonly GraphDocument[] = []): Graph {
+  return { entry, documents: [entry, ...restInDiscoveryOrder], ...(overrides.length === 0 ? {} : { overrides }) };
 }
 
 /** One branch's outcome, whatever `T` and `F` the caller resolves candidates into and fails with — deliberately generic (see `resolveAllBranches`'s own doc for why this file never names `Diagnostic`). */

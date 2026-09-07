@@ -55,6 +55,28 @@ function checkGraph(failures: string[], fixtureDir: string, graph: Graph, expect
   }
 }
 
+/** v1.6 FR-001/FR-002: the overrides are asserted in **order** — rank order is the order given, and a case that lists two is pinning exactly that. A case with no `expect.overrides` expects none. */
+function checkOverrides(failures: string[], fixtureDir: string, graph: Graph, expected: readonly ExpectedGraphDocument[]): void {
+  const actual = graph.overrides ?? [];
+  if (actual.length !== expected.length) {
+    failures.push(`overrides: expected ${expected.length} document(s), got ${actual.length} (locations: ${actual.map((doc) => relativeLocation(fixtureDir, doc.identity.location)).join(", ")})`);
+    return;
+  }
+  actual.forEach((actualDoc, index) => {
+    const expectedDoc = expected[index];
+    if (expectedDoc === undefined) {
+      return;
+    }
+    const actualLocation = relativeLocation(fixtureDir, actualDoc.identity.location);
+    if (actualLocation !== expectedDoc.location) {
+      failures.push(`overrides[${index}]: expected location '${expectedDoc.location}', got '${actualLocation}'`);
+    }
+    if (actualDoc.identity.hash !== expectedDoc.hash) {
+      failures.push(`overrides[${index}] '${expectedDoc.location}': expected hash ${expectedDoc.hash}, got ${actualDoc.identity.hash}`);
+    }
+  });
+}
+
 function checkPedigree(failures: string[], fixtureDir: string, pedigree: Pedigree, expected: readonly ExpectedPedigreeEntry[]): void {
   if (pedigree.length !== expected.length) {
     failures.push(`pedigree: expected ${expected.length} entrie(s) in root-to-leaf order, got ${pedigree.length} (locations: ${pedigree.map((e) => relativeLocation(fixtureDir, e.identity.location)).join(", ")})`);
@@ -146,8 +168,8 @@ function hostForCase(fixtureDir: string, identities: Readonly<Record<string, str
   };
 }
 
-async function resolveWithHomeOverride(entryPath: string, sandboxRoot: string, homeDir: string | undefined, maxChainLength: number | undefined, schema: string | undefined, host: Host): Promise<Awaited<ReturnType<typeof resolve>>> {
-  const options = { host, sandboxRoot, ...(maxChainLength === undefined ? {} : { maxChainLength }), ...(schema === undefined ? {} : { schema }) };
+async function resolveWithHomeOverride(entryPath: string, sandboxRoot: string, homeDir: string | undefined, maxChainLength: number | undefined, schema: string | undefined, overrides: readonly string[] | undefined, host: Host): Promise<Awaited<ReturnType<typeof resolve>>> {
+  const options = { host, sandboxRoot, ...(maxChainLength === undefined ? {} : { maxChainLength }), ...(schema === undefined ? {} : { schema }), ...(overrides === undefined ? {} : { overrides }) };
   if (homeDir === undefined) {
     return resolve(entryPath, options);
   }
@@ -170,7 +192,7 @@ export async function runResolveCase(testCase: ResolveCase): Promise<ResolveCase
   const sandboxRoot = join(testCase.fixtureDir, testCase.sandboxRoot);
   const homeDir = testCase.homeDir === undefined ? undefined : join(testCase.fixtureDir, testCase.homeDir);
 
-  const result = await resolveWithHomeOverride(entryPath, sandboxRoot, homeDir, testCase.maxChainLength, testCase.schema, hostForCase(testCase.fixtureDir, testCase.identities));
+  const result = await resolveWithHomeOverride(entryPath, sandboxRoot, homeDir, testCase.maxChainLength, testCase.schema, testCase.overrides, hostForCase(testCase.fixtureDir, testCase.identities));
 
   if (testCase.expect.ok) {
     if (!result.ok) {
@@ -179,6 +201,7 @@ export async function runResolveCase(testCase: ResolveCase): Promise<ResolveCase
     }
     checkGraph(failures, testCase.fixtureDir, result.graph, testCase.expect.graph);
     checkPedigree(failures, testCase.fixtureDir, result.pedigree, testCase.expect.pedigree);
+    checkOverrides(failures, testCase.fixtureDir, result.graph, testCase.expect.overrides ?? []);
   } else {
     if (result.ok) {
       failures.push(`expected ok:false, got ok:true with a graph of ${result.graph.documents.length} document(s)`);

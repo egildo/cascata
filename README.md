@@ -8,12 +8,13 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.4.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
+**v1.6.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
 frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
 meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
-first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth; every one of them is an
+first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth; every one of them is an
 addition — Article VIII's accumulated demand and type generator, then a second format adapter, then the
-launching schema, then a namespace the host can own. Nothing a schema meant before any of those releases
+launching schema, then a namespace the host can own, then a library that loads in a browser realm, then config
+documents the embedder names ranked after the entry. Nothing a schema meant before any of those releases
 means anything else after it. v1.4 carries one *correction* beside its addition: a `sandboxRoot` naming a
 filesystem root now contains what is under it.
 
@@ -31,6 +32,7 @@ filesystem root now contains what is under it.
 | **v1.2** | **the JSON adapter** — a second format, hand-written against RFC 8259, selected for `.json` by the registry v0.2 built for it; format-blindness stops being a claim about the architecture and becomes an observed fact about two live adapters |
 | **v1.3** | **the launching schema** — `resolve()`/`load()` accept `schema`, a stand-in for the `$schema` line an entry did not write, consulted only when the entry names none; built for an embedder whose entry is a Markdown file's frontmatter |
 | **v1.4** | **host-resolvable identity** — an optional `Host.locate` lets a host own a URI scheme, so `$adopts: beltype:document` names a document by identity rather than by a path that differs on every machine; plus the correction that `sandboxRoot: "/"` contains everything under it |
+| **v1.6** | **overrides** — `resolve()`/`load()` accept `overrides`, config documents the embedder names, read after the entry's chain and ranked after it in the order given, governed by every demand, `final` and `append` the pedigree accumulated exactly as the entry is; built for an embedder whose operator sets a key from a command line |
 | **v1.5** | **it loads where Node does not** — `node:crypto`, the `Buffer` global, `node:path` and `node:os` are gone from the library proper: SHA-256 is arithmetic of its own, byte length is counted rather than encoded, and path semantics are an optional `Host.paths` the shipped Node host answers with `node:path`'s own functions |
 
 Full detail lives in `specs/001-…` through `specs/011-…`, each with its own `spec.md`, `plan.md`,
@@ -760,6 +762,17 @@ const result = await load("./index.md.frontmatter.yaml", {
   sandboxRoot: process.cwd(),
   host: myHost,
   schema: "./beltype.yaml",   // consulted only if the entry names no $schema of its own
+});
+```
+
+**Overrides (v1.6).** The embedder may also name config documents the entry did not write: pass `overrides`, a list of locations, and each is read after the entry's chain — as a config-authored reference from the entry, so relative to its directory, `~/` expanded, a scheme offered to `locate`, sandbox-exempt — and becomes a config layer ranked after the entry, the last highest of all. An override is governed exactly as the entry is: a demand refuses its value at its own line, a `final` holds against it, a key under `append` accumulates it after the entry's items, a granted key delegates from inside it, and `why()` names it. It carries no `$`-key (`override-reserved-key`): the pedigree is the entry's. It is a layer, not a node of the adoption graph, so two overrides with identical bytes are two layers. Built for a command line — `--set title=Draft`, `-c ci.yaml`, each minted into a document behind a location the host answers — where the alternative, merging over the value after `load()` returns, is exactly the merge no demand can see. Absent, nothing changes; `generateTypes()` ignores it.
+
+```typescript
+const result = await load("./index.md.frontmatter.yaml", {
+  sandboxRoot: process.cwd(),
+  host: myHost,
+  schema: "./beltype.yaml",
+  overrides: ["./ci.yaml", "beltype:cli"],   // read after the chain, ranked after the entry, the last highest of all
 });
 ```
 

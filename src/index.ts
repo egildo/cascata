@@ -239,6 +239,32 @@ export interface ResolveOptions {
    * which breaks every span the embedder relies on for diagnostics.
    */
   readonly schema?: string;
+  /**
+   * **v1.6 FR-001 — overrides.** Config documents the embedder names,
+   * read after the entry's chain and ranked after the entry in this
+   * order, so the last outranks everything. Each text is read as a
+   * **config-authored** reference anchored at a phantom span in the
+   * entry document — the launching schema's own posture: relative to
+   * the entry's directory, `~/` expanded, a scheme offered to `locate`,
+   * `https://` through `transport`, and exempt from the sandbox because
+   * the embedder chose it. Every rule of the cascade then applies to it
+   * as to the entry: a demand, a `final`, a seal refuses its value at its
+   * own span (FR-003), `append` accumulates it (FR-004), delegation
+   * grafts into it (FR-009), and `why()` names it (FR-006). It carries
+   * no `$`-key (`override-reserved-key`, FR-005): the pedigree is the
+   * entry's and an override starts none. Never registered with the graph
+   * builder — an override is a layer, not a node of the adoption graph,
+   * so two with identical bytes are two layers (FR-010). Ignored by
+   * `generateTypes()`. Absent or empty, v1.5 exactly.
+   *
+   * Exists for the embedder whose operator sets a key from a command
+   * line — `--set title=Draft`, `-c ci.yaml` — and whose venue's
+   * contract must bind those values like any others. Merging them over
+   * the projected value after `load()` returned is what this replaces:
+   * that merge saw no demand, no `final`, and left `why()` naming the
+   * document that lost.
+   */
+  readonly overrides?: readonly string[];
 }
 
 /**
@@ -760,6 +786,77 @@ function fragmentReservedKeyDiagnostics(root: Node): Diagnostic[] {
   return problems;
 }
 
+/** v1.6 FR-005: an override's root mapping carries no `$`-prefixed key — the same rule and the same shape as `fragmentReservedKeyDiagnostics`, under its own code because the two refuse for different reasons: a fragment belongs to its parent's layer and cannot start a pedigree; an override is a layer of its own and must not start a second one. */
+function overrideReservedKeyDiagnostics(root: Node): Diagnostic[] {
+  if (root.type !== "mapping") {
+    return [];
+  }
+  const problems: Diagnostic[] = [];
+  for (const [key, valueNode] of root.entries) {
+    if (key.startsWith("$")) {
+      problems.push(
+        createDiagnostic({ level: "error",
+          code: "override-reserved-key",
+          message: `Override contains reserved key '${key}' — an override carries no '$'-prefixed key: the pedigree is the entry's, and an override starts none (SPEC.md Article VI, v1.6 FR-005)`,
+          primary: valueNode.span,
+        }),
+      );
+    }
+  }
+  return problems;
+}
+
+type OverridesOutcome = { readonly ok: true; readonly documents: readonly GraphDocument[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+
+/**
+ * v1.6 FR-001: read the embedder's overrides, in order, after the entry's
+ * chain has been walked. Each text is a config-authored reference
+ * anchored at the entry's phantom span — classified against the entry
+ * document (never the working directory), offered to `locate` for a
+ * scheme the library does not own (v1.4), and read locally or through
+ * the transport by the code that reads every other reference. Never
+ * sandbox-checked: `isSandboxEscape` answers `false` for anything
+ * config-authored (v0.2 FR-020), so it is not asked. Never registered
+ * with the builder (FR-010): dedup and cycle detection are facts about
+ * the adoption graph, and an override is not in it.
+ *
+ * Every override is read even after one fails, so a command line with
+ * two bad flags reports both rather than the first.
+ */
+async function readOverrides(host: Host, texts: readonly string[], entryLocation: string, entryOrigin: Origin, remote: RemoteContext | undefined): Promise<OverridesOutcome> {
+  const paths = host.paths ?? posixPaths;
+  const documents: GraphDocument[] = [];
+  const diagnostics: Diagnostic[] = [];
+  for (const text of texts) {
+    const candidate = createReference({ text, span: phantomSpan(entryOrigin), kind: "override", authority: "config-authored" });
+    const classified = classifyReferenceLocation(candidate, entryLocation, paths);
+    const located = classified.kind === "unsupported-scheme" ? await host.locate?.(candidate.text) : undefined;
+    const target: ReferenceLocationKind = located === undefined ? classified : classifyLocatedDocument(located, paths);
+    if (target.kind === "unsupported-scheme") {
+      diagnostics.push(referenceDiagnostic("unsupported-scheme", candidate, `Override '${candidate.text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.2 FR-013)`));
+      continue;
+    }
+    const read = await readAtTarget(host, target, candidate, remote);
+    if (!read.ok) {
+      diagnostics.push(read.diagnostic);
+      continue;
+    }
+    const location = target.kind === "local" ? target.location : target.url;
+    const parsed = parseAtLocation(read.bytes, location);
+    if (!parsed.ok) {
+      extend(diagnostics, parsed.diagnostics);
+      continue;
+    }
+    const reserved = overrideReservedKeyDiagnostics(parsed.tree);
+    if (reserved.length > 0) {
+      extend(diagnostics, reserved);
+      continue;
+    }
+    documents.push({ identity: createDocumentIdentity(location, read.bytes), tree: freeze(parsed.tree), verified: read.verified });
+  }
+  return diagnostics.length > 0 ? { ok: false, diagnostics } : { ok: true, documents };
+}
+
 type GraftOutcome =
   | { readonly ok: true; readonly node: Node; readonly fragmentLocation: string; readonly breadcrumbChain: readonly DelegationHop[] }
   | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] };
@@ -1068,8 +1165,20 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: str
     return { ok: false, diagnostics: [...walked.diagnostics] };
   }
 
+  // v1.6 FR-009: the same grants graft into each override, relative to
+  // the override's own location — an override is a configuration the
+  // pedigree governs, and §8's grant is a fact about the pedigree.
+  const graftedOverrides: GraphDocument[] = [];
+  for (const override of graph.overrides ?? []) {
+    const walkedOverride = await walkForDelegation(override.tree, grantTree, override.identity.location, [], state);
+    if (!walkedOverride.ok) {
+      return { ok: false, diagnostics: [...walkedOverride.diagnostics] };
+    }
+    graftedOverrides.push({ ...override, tree: walkedOverride.node });
+  }
+
   const graftedEntry: GraphDocument = { ...graph.entry, tree: walked.node };
-  const graftedGraph: Graph = { entry: graftedEntry, documents: [graftedEntry, ...graph.documents.slice(1)] };
+  const graftedGraph: Graph = buildGraph(graftedEntry, graph.documents.slice(1), graftedOverrides);
   return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs, paths, diagnostics: grantInfos };
 }
 
@@ -1088,7 +1197,7 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: str
  * pinned, cycle-checked and sandbox-checked by the identical code (FR-033's
  * own posture, applied a stage earlier).
  */
-async function resolveEntry(entryPath: string, options: ResolveOptions, entryReference: (tree: Node) => ExtractedReference, graftDelegation: boolean, launchingSchema: string | undefined): Promise<ResolveResult> {
+async function resolveEntry(entryPath: string, options: ResolveOptions, entryReference: (tree: Node) => ExtractedReference, graftDelegation: boolean, launchingSchema: string | undefined, overrides: readonly string[] | undefined): Promise<ResolveResult> {
   requireSandboxRoot(options);
   requireHost(options);
   const host = options.host;
@@ -1148,37 +1257,44 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
     builder.abandonVisit(entryLocation);
     return { ok: false, diagnostics: [multipleAdoptionDiagnostic(schemaExtraction)] };
   }
-  let candidate: Reference;
+  let candidate: Reference | undefined;
   if (schemaExtraction.kind === "none") {
-    if (launchingSchema === undefined) {
-      // Legal: no $schema at all (spec.md's Edge Cases; T023) — a
-      // single-document graph and an empty pedigree.
-      builder.finishVisit(entryLocation, canonicalEntry);
-      const graph = buildGraph(canonicalEntry, []);
-      return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false, graftDelegation);
-    }
     // v1.3 FR-001: the embedder's launching schema stands in for the
     // `$schema` line the entry did not write. Config-authored, because the
     // embedder's option is consent the way a config's own reference is
     // (§8.1); anchored at a phantom span in the entry document, because
     // no position in any document wrote it — the same convention the
     // unreadable-entry diagnostic above uses for "reached by nothing".
-    candidate = createReference({ text: launchingSchema, span: phantomSpan(entryOrigin), kind: "schema", authority: "config-authored" });
+    // Without it: legal, no $schema at all (spec.md's Edge Cases; T023) —
+    // a single-document graph and an empty pedigree.
+    candidate = launchingSchema === undefined ? undefined : createReference({ text: launchingSchema, span: phantomSpan(entryOrigin), kind: "schema", authority: "config-authored" });
   } else {
     candidate = schemaExtraction.reference;
   }
 
-  const chainResult = await walkAdoptsChain(host, candidate, entryLocation, builder, remote, sandboxRoot);
-  if (!chainResult.ok) {
-    // Aborting the whole call — no further use of `builder` follows, so
-    // `entryLocation`'s frame is left on the (about to be discarded)
-    // stack rather than explicitly closed out (same reasoning as
-    // `walkAdoptsChain`'s own failure paths).
-    return { ok: false, diagnostics: chainResult.diagnostics };
+  let chainDocumentsLeafToRoot: readonly GraphDocument[] = [];
+  if (candidate !== undefined) {
+    const chainResult = await walkAdoptsChain(host, candidate, entryLocation, builder, remote, sandboxRoot);
+    if (!chainResult.ok) {
+      // Aborting the whole call — no further use of `builder` follows, so
+      // `entryLocation`'s frame is left on the (about to be discarded)
+      // stack rather than explicitly closed out (same reasoning as
+      // `walkAdoptsChain`'s own failure paths).
+      return { ok: false, diagnostics: chainResult.diagnostics };
+    }
+    chainDocumentsLeafToRoot = chainResult.documentsLeafToRoot;
   }
   builder.finishVisit(entryLocation, canonicalEntry);
 
-  const graph = buildGraph(canonicalEntry, chainResult.documentsLeafToRoot);
+  // v1.6 FR-001: the overrides, after the chain — so a diagnostic about
+  // one is never reported ahead of a chain that would have failed anyway,
+  // and `host.reads` records the order the layers rank in.
+  const overridesRead = await readOverrides(host, overrides ?? [], entryLocation, entryOrigin, remote);
+  if (!overridesRead.ok) {
+    return { ok: false, diagnostics: overridesRead.diagnostics };
+  }
+
+  const graph = buildGraph(canonicalEntry, chainDocumentsLeafToRoot, overridesRead.documents);
   return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false, graftDelegation);
 }
 
@@ -1189,7 +1305,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
  * chain, and delegation grafts.
  */
 export async function resolve(entryPath: string, options: ResolveOptions): Promise<ResolveResult> {
-  return resolveEntry(entryPath, options, extractSchemaReference, true, options.schema);
+  return resolveEntry(entryPath, options, extractSchemaReference, true, options.schema, options.overrides);
 }
 
 // --- merge() — User Story 1 (v0.3, tasks.md T024) ------------------------
@@ -1541,7 +1657,7 @@ export type GenerateTypesResult =
  * `sandboxRoot`, exactly as `load()` does.
  */
 export async function generateTypes(schemaLocation: string, options: GenerateTypesOptions): Promise<GenerateTypesResult> {
-  const resolved = await resolveEntry(schemaLocation, options, extractAdoptsReference, false, undefined);
+  const resolved = await resolveEntry(schemaLocation, options, extractAdoptsReference, false, undefined, undefined);
   if (!resolved.ok) {
     return { ok: false, diagnostics: resolved.diagnostics };
   }

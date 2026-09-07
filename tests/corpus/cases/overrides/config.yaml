@@ -1,0 +1,4 @@
+$schema: ./root.yaml
+title: Authored
+styles:
+  - a.css

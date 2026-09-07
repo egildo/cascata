@@ -111,9 +111,9 @@ import type { PathFacility } from "../paths.js";
 export interface Layer {
   /** Which document — v0.2's `DocumentIdentity`. */
   readonly identity: DocumentIdentity;
-  /** `schema` (from the pedigree) or `config` (the entry document). */
+  /** `schema` (from the pedigree) or `config` (the entry document — and, since v1.6, each override the embedder named). */
   readonly role: "schema" | "config";
-  /** Position in precedence order: 0 is the root schema; highest is the config. Dense, total, never assigned ad hoc. */
+  /** Position in precedence order: 0 is the root schema; the entry sits above every schema; the last override (v1.6), or the entry when there is none, is highest. Dense, total, never assigned ad hoc. */
   readonly rank: number;
   /** This layer's own parsed tree — see this file's module doc for why it is here despite data-model.md's table omitting it. */
   readonly tree: Node;

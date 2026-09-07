@@ -248,6 +248,22 @@ export const OUTPUT_SURFACE_CODES = ["malformed-section", "precision-narrowed"] 
 export const GENERATOR_CODES = ["demand-unsatisfiable", "emit-identifier-collision"] as const;
 
 /** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.5's codes are unchanged; v0.6 only appends. */
+/**
+ * Overrides (v1.6, `SPEC.md` Article VI — §16; specs/014-overrides FR-005).
+ *
+ * One code, for the one thing an override can do that no existing code
+ * names: carry a `$`-prefixed key. `fragment-reserved-key` is the same
+ * shape refusing for a different reason — a fragment belongs to its
+ * parent's layer and cannot start a pedigree, an override is a layer of
+ * its own and must not start a second one — and Principle VI says two
+ * reasons are two codes. Everything else an override can get wrong
+ * (unreadable, an unsupported scheme, a violated demand, a `final` set)
+ * already has its code, and reusing those is what makes "an override is
+ * governed as the entry is" true in the diagnostics as well as in the
+ * fold.
+ */
+export const OVERRIDE_CODES = ["override-reserved-key"] as const;
+
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
@@ -264,6 +280,7 @@ export const DIAGNOSTIC_CODES = [
   ...DIRECTIVES_CODES,
   ...OUTPUT_SURFACE_CODES,
   ...GENERATOR_CODES,
+  ...OVERRIDE_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

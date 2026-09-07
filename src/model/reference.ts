@@ -19,8 +19,8 @@
 
 import type { SourceSpan } from "./span.js";
 
-/** Which keyword produced this reference. Every distinction costs a keyword (`SPEC.md` §2.4). `"delegate"` (v0.6): a granted key's string value, resolved as a reference to a fragment (`SPEC.md` §8). */
-export type ReferenceKind = "schema" | "adopts" | "delegate";
+/** Which keyword produced this reference. Every distinction costs a keyword (`SPEC.md` §2.4). `"delegate"` (v0.6): a granted key's string value, resolved as a reference to a fragment (`SPEC.md` §8). `"override"` (v1.6): the embedder's `overrides` option, one text per config document ranked after the entry (`SPEC.md` Article VI) — no keyword produced it, which is the distinction: it is the one reference kind no document can write. */
+export type ReferenceKind = "schema" | "adopts" | "delegate" | "override";
 
 /**
  * Who wrote the reference, which decides how far it may reach (§8.1's razor).

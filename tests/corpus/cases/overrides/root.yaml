@@ -1,0 +1,21 @@
+$id: overrides/root
+keys:
+  title:
+    demand:
+      type: string
+    provide: Untitled
+  styles:
+    demand:
+      type: sequence
+      items:
+        type: string
+    cascade: append
+  depth:
+    demand:
+      type: int
+      max: 3
+  secret:
+    demand:
+      type: string
+    provide: sealed
+    final: true
