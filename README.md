@@ -15,8 +15,8 @@ first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourt
 addition — Article VIII's accumulated demand and type generator, then a second format adapter, then the
 launching schema, then a namespace the host can own, then a library that loads in a browser realm, then config
 documents the embedder names ranked after the entry. Nothing a schema meant before any of those releases
-means anything else after it. v1.4 carries one *correction* beside its addition: a `sandboxRoot` naming a
-filesystem root now contains what is under it.
+means anything else after it. Of the six, v1.4 alone carries a *correction* beside its addition: a
+`sandboxRoot` naming a filesystem root now contains what is under it.
 
 | | |
 | --- | --- |
@@ -32,10 +32,10 @@ filesystem root now contains what is under it.
 | **v1.2** | **the JSON adapter** — a second format, hand-written against RFC 8259, selected for `.json` by the registry v0.2 built for it; format-blindness stops being a claim about the architecture and becomes an observed fact about two live adapters |
 | **v1.3** | **the launching schema** — `resolve()`/`load()` accept `schema`, a stand-in for the `$schema` line an entry did not write, consulted only when the entry names none; built for an embedder whose entry is a Markdown file's frontmatter |
 | **v1.4** | **host-resolvable identity** — an optional `Host.locate` lets a host own a URI scheme, so `$adopts: beltype:document` names a document by identity rather than by a path that differs on every machine; plus the correction that `sandboxRoot: "/"` contains everything under it |
-| **v1.6** | **overrides** — `resolve()`/`load()` accept `overrides`, config documents the embedder names, read after the entry's chain and ranked after it in the order given, governed by every demand, `final` and `append` the pedigree accumulated exactly as the entry is; built for an embedder whose operator sets a key from a command line |
 | **v1.5** | **it loads where Node does not** — `node:crypto`, the `Buffer` global, `node:path` and `node:os` are gone from the library proper: SHA-256 is arithmetic of its own, byte length is counted rather than encoded, and path semantics are an optional `Host.paths` the shipped Node host answers with `node:path`'s own functions |
+| **v1.6** | **overrides** — `resolve()`/`load()` accept `overrides`, config documents the embedder names, read after the entry's chain and ranked after it in the order given, governed by every demand, `final` and `append` the pedigree accumulated exactly as the entry is; built for an embedder whose operator sets a key from a command line |
 
-Full detail lives in `specs/001-…` through `specs/011-…`, each with its own `spec.md`, `plan.md`,
+Full detail lives in `specs/001-…` through `specs/014-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
 the same surface.
 
