@@ -51,6 +51,7 @@ The user is **the embedder**, Article VI's host author. Their tool takes `-c ext
 
 - A `$`-key in an override. An override that named its own `$schema` would be a second entry, which is the "delegate and start a layer" question with its own laws, not this one.
 - A default. There is none; nothing is inferred from the entry's location or the process.
+- A pin on the option. A `$pin` is a directive beside a reference, pinning the document it names (§6.1), so it cannot live inside an override, which names nothing; it would live on the option, as `overrides: [{ location, pin }]`, and that is one addition with pinning the launching schema — "the embedder may pin what its option names" — deferred together until a consumer ships a `-c ci.yaml` it wants byte-exact.
 - A sandbox check on the option's text. The embedder chose it, which is the same consent §8.1 reads into a config's own reference and v1.3 reads into the launching schema. What an override's own text then reaches (its delegations) is checked as any config's is.
 - A merge-corpus case at the value level. The resolve corpus pins the graph; the unit tests pin the value, provenance and refusals through `load()`, as 012's report noted the format cannot.
 
