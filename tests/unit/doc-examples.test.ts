@@ -33,7 +33,7 @@ import type { Layer } from "../../src/merge/provenance.js";
 const REPO_ROOT = join(__dirname, "..", "..");
 const ENCODER = new TextEncoder();
 
-/** `SPEC.md`, `README.md`, and every `specs/**\/*.md` — FR-021a's own list. */
+/** `SPEC.md`, `README.md`, every `docs/*.md`, and every `specs/**\/*.md` — FR-021a's own list, plus `docs/`, where the reference moved when the README became an introduction. */
 function documentationFiles(): string[] {
   const out = [join(REPO_ROOT, "SPEC.md"), join(REPO_ROOT, "README.md")];
   const walk = (directory: string): void => {
@@ -46,6 +46,7 @@ function documentationFiles(): string[] {
       }
     }
   };
+  walk(join(REPO_ROOT, "docs"));
   walk(join(REPO_ROOT, "specs"));
   return out.sort();
 }
