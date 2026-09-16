@@ -1,4 +1,4 @@
-# Cascata
+<p align="center"><img src="docs/logo.svg" alt="Cascata" width="360"></p>
 
 **Configuration that cascades like CSS, but where the house rules can't be overridden.**
 
