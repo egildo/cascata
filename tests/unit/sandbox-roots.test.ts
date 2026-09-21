@@ -1,0 +1,416 @@
+/**
+ * v1.7 (015) — sandbox roots. Issue #2, measured by the consumer on
+ * v1.6.0 through a node host on macOS.
+ *
+ * **Story 1, absent is not outside (v1.7 FR-001 to FR-003).** The
+ * containment check canonicalizes both sides through the host and, for a
+ * location the host cannot canonicalize — i.e. one that does not exist —
+ * fell back to the *lexical* path. The root exists, so under a root that
+ * is or sits beneath a symbolic link the two sides were compared in
+ * different spaces and a merely **absent** file inside the root was
+ * refused as `sandbox-escape`. On macOS that is the ordinary case, not a
+ * corner: `/tmp` and `/var` are links, so every `mkdtemp` venue is behind
+ * one.
+ *
+ * The file is in two halves, as the spec's Conformance section requires.
+ *
+ * - **A scripted host** — `InMemoryHost` with `canonicalizeIsIdentity:
+ *   false` and an explicit `canonical` table. **The table is the oracle**:
+ *   every expected verdict below is derived from it by hand (each case
+ *   writes the derivation down), never read off a run. No disk is
+ *   touched, so the win32 half (v1.7 FR-003) runs on any platform.
+ * - **The node host over a real temporary directory** — a `real/`
+ *   directory and a `link` → `real` symlink the test builds itself, so
+ *   the case is red on Linux too, where `/tmp` is not a link. The "real"
+ *   half starts from the **canonicalized** temporary directory: on macOS,
+ *   `mkdtemp` under `os.tmpdir()` already sits behind `/var` → `/private/var`,
+ *   so without that both halves would be the symlinked case and the
+ *   comparison would prove nothing.
+ */
+
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, win32 } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { resolve } from "../../src/index.js";
+import { createNodeHost } from "../../src/host/node.js";
+import { posixPaths, type PathFacility } from "../../src/paths.js";
+import { InMemoryHost } from "./host-test-double.js";
+
+const ENCODER = new TextEncoder();
+
+/**
+ * `node:path.win32`'s own rules as a `PathFacility` — the same shape
+ * `tests/unit/paths.test.ts` builds, for the same reason: a Windows
+ * verdict must be checked with Windows path semantics, and node is the
+ * oracle for what those are (SPEC.md §11, v1.5).
+ */
+const win32Paths: PathFacility = {
+  separator: win32.sep,
+  homeDirectory: undefined,
+  dirname: win32.dirname,
+  isAbsolute: win32.isAbsolute,
+  resolve: (base: string, segment?: string) => (segment === undefined ? win32.resolve(base) : win32.resolve(base, segment)),
+};
+
+function files(entries: Record<string, string>): Map<string, Uint8Array> {
+  return new Map(Object.entries(entries).map(([location, text]) => [location, ENCODER.encode(text)]));
+}
+
+function codesOf(result: Awaited<ReturnType<typeof resolve>>): string[] {
+  return result.ok ? [] : result.diagnostics.map((diagnostic) => diagnostic.code);
+}
+
+// --- Half one: the scripted host ------------------------------------------
+//
+// One venue, reachable two ways. The canonical table below says `/link`
+// is a symbolic link to `/real`, that everything which exists under it
+// canonicalizes into `/real`, and — by omission, since
+// `canonicalizeIsIdentity` is false — that everything else does not exist.
+
+const POSIX_CANONICAL: ReadonlyMap<string, string> = new Map([
+  ["/", "/"],
+  ["/real", "/real"],
+  ["/real/venue", "/real/venue"],
+  ["/real/venue/config.yaml", "/real/venue/config.yaml"],
+  ["/real/venue/schema.yaml", "/real/venue/schema.yaml"],
+  ["/real/città", "/real/città"],
+  ["/link", "/real"],
+  ["/link/venue", "/real/venue"],
+  ["/link/venue/config.yaml", "/real/venue/config.yaml"],
+  ["/link/venue/schema.yaml", "/real/venue/schema.yaml"],
+  ["/link/città", "/real/città"],
+  ["/link/città/config.yaml", "/real/città/config.yaml"],
+  ["/link/città/schema.yaml", "/real/città/schema.yaml"],
+  ["/house", "/house"],
+  ["/house/config.yaml", "/house/config.yaml"],
+  ["/house/schema.yaml", "/house/schema.yaml"],
+  ["/housekeeping", "/housekeeping"],
+]);
+
+/** A venue at `<dir>` whose config adopts `<adoptsTarget>` through a schema beside it. `dir` is the *lexical* directory the library will compute locations in — `/link/venue` for the symlinked half, `/real/venue` for the control. */
+function posixVenue(dir: string, adoptsTarget: string): InMemoryHost {
+  return new InMemoryHost({
+    files: files({
+      [`${dir}/config.yaml`]: "$schema: ./schema.yaml\n",
+      [`${dir}/schema.yaml`]: `$adopts: ${adoptsTarget}\n`,
+    }),
+    canonical: POSIX_CANONICAL,
+    canonicalizeIsIdentity: false,
+  });
+}
+
+describe("v1.7 FR-001/FR-002 (scripted host, POSIX): an absent file is judged through its nearest existing ancestor", () => {
+  it("under a symlinked root, an absent file inside the root is document-unreachable, not sandbox-escape", async () => {
+    // Derived from the table by hand:
+    //   location  /link/venue/missing.yaml  -> absent; ancestor /link/venue -> /real/venue
+    //                                       -> /real/venue/missing.yaml
+    //   root      /link/venue               -> /real/venue
+    //   /real/venue/missing.yaml starts with "/real/venue/"  => inside
+    // Inside, and unreadable, so the verdict is the ordinary read failure.
+    const result = await resolve("/link/venue/config.yaml", { host: posixVenue("/link/venue", "./missing.yaml"), sandboxRoot: "/link/venue" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("gives the identical verdict under the real directory — the two halves must agree, which is the whole bug", async () => {
+    // root /real/venue -> /real/venue; location /real/venue/missing.yaml
+    // -> absent, ancestor /real/venue -> /real/venue => inside.
+    const result = await resolve("/real/venue/config.yaml", { host: posixVenue("/real/venue", "./missing.yaml"), sandboxRoot: "/real/venue" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("still refuses an absent file OUTSIDE a symlinked root — absence is not a pass either", async () => {
+    // location /link/outside.yaml -> absent; ancestor /link -> /real
+    //                             -> /real/outside.yaml
+    // root     /link/venue        -> /real/venue, prefix "/real/venue/"
+    // "/real/outside.yaml" is neither equal to nor prefixed by it => outside.
+    const result = await resolve("/link/venue/config.yaml", { host: posixVenue("/link/venue", "../outside.yaml"), sandboxRoot: "/link/venue" });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+
+  it("refuses the same absent outside file under the real directory too", async () => {
+    const result = await resolve("/real/venue/config.yaml", { host: posixVenue("/real/venue", "../outside.yaml"), sandboxRoot: "/real/venue" });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+});
+
+// v1.7 FR-002: `isWithinSandbox` has three callers and one fix —
+// `$schema`/`$adopts` above, and delegation here (§8.4). A delegated
+// reference is judged by the same primitive, so the same two verdicts
+// must follow from the same table.
+
+const DELEGATING_SCHEMA = "keys:\n  network:\n    demand:\n      type: mapping\n    delegate: allow\n";
+
+function posixDelegatingVenue(dir: string, delegatedTarget: string): InMemoryHost {
+  return new InMemoryHost({
+    files: files({
+      [`${dir}/config.yaml`]: `$schema: ./schema.yaml\nnetwork: ${delegatedTarget}\n`,
+      [`${dir}/schema.yaml`]: DELEGATING_SCHEMA,
+    }),
+    canonical: POSIX_CANONICAL,
+    canonicalizeIsIdentity: false,
+  });
+}
+
+describe("v1.7 FR-002 (scripted host, POSIX): delegation agrees, because it judges through the same isWithinSandbox", () => {
+  it("an absent delegated fragment under a symlinked root is document-unreachable", async () => {
+    // /link/venue/missing-fragment.yaml -> ancestor /link/venue -> /real/venue
+    //   => /real/venue/missing-fragment.yaml, inside /real/venue.
+    const result = await resolve("/link/venue/config.yaml", { host: posixDelegatingVenue("/link/venue", "./missing-fragment.yaml"), sandboxRoot: "/link/venue" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("an absent delegated ../ target is still the delegation's own sandbox refusal", async () => {
+    // /link/outside-fragment.yaml -> ancestor /link -> /real
+    //   => /real/outside-fragment.yaml, outside /real/venue.
+    const result = await resolve("/link/venue/config.yaml", { host: posixDelegatingVenue("/link/venue", "../outside-fragment.yaml"), sandboxRoot: "/link/venue" });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+});
+
+// --- v1.7 FR-003: the same two verdicts in the host's own terms ----------
+
+const WIN32_CANONICAL: ReadonlyMap<string, string> = new Map([
+  ["C:\\", "C:\\"],
+  ["C:\\real", "C:\\real"],
+  ["C:\\real\\venue", "C:\\real\\venue"],
+  ["C:\\link", "C:\\real"],
+  ["C:\\link\\venue", "C:\\real\\venue"],
+  ["C:\\link\\venue\\config.yaml", "C:\\real\\venue\\config.yaml"],
+  ["C:\\link\\venue\\schema.yaml", "C:\\real\\venue\\schema.yaml"],
+]);
+
+function win32Venue(adoptsTarget: string): InMemoryHost {
+  return new InMemoryHost({
+    files: files({
+      "C:\\link\\venue\\config.yaml": "$schema: ./schema.yaml\n",
+      "C:\\link\\venue\\schema.yaml": `$adopts: ${adoptsTarget}\n`,
+    }),
+    canonical: WIN32_CANONICAL,
+    canonicalizeIsIdentity: false,
+    paths: win32Paths,
+  });
+}
+
+describe("v1.7 FR-003 (scripted host, win32): computed with the host's PathFacility and no other notion of a path", () => {
+  it("an absent file under C:\\link\\venue is document-unreachable", async () => {
+    // C:\link\venue\missing.yaml -> absent; ancestor C:\link\venue -> C:\real\venue
+    //   => C:\real\venue\missing.yaml; root C:\link\venue -> C:\real\venue,
+    //   prefix "C:\real\venue\" => inside.
+    const result = await resolve("C:\\link\\venue\\config.yaml", { host: win32Venue(".\\missing.yaml"), sandboxRoot: "C:\\link\\venue" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("an absent ..\\outside.yaml is still sandbox-escape", async () => {
+    // C:\link\outside.yaml -> absent; ancestor C:\link -> C:\real
+    //   => C:\real\outside.yaml, outside C:\real\venue.
+    const result = await resolve("C:\\link\\venue\\config.yaml", { host: win32Venue("..\\outside.yaml"), sandboxRoot: "C:\\link\\venue" });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+});
+
+// --- The probe gate (constitution, Principle V) ---------------------------
+//
+// Non-ASCII, boundary and adversarial inputs, exercised before FR-001's
+// conclusion was written down. Two ASCII-only probes have been wrong in
+// this repository's history; these are here so the conclusion rests on
+// something.
+
+describe("v1.7 FR-001 probe gate — non-ASCII, boundary, adversarial", () => {
+  it("non-ASCII: a venue directory named città/ under the link", async () => {
+    // /link/città/missing.yaml -> absent; ancestor /link/città -> /real/città
+    //   => /real/città/missing.yaml, inside /real/città. The remainder is
+    //   sliced out of the very string its own ancestor was taken from, so
+    //   no re-encoding of the non-ASCII segment happens at all.
+    const host = new InMemoryHost({
+      files: files({
+        "/link/città/config.yaml": "$schema: ./schema.yaml\n",
+        "/link/città/schema.yaml": "$adopts: ./missing.yaml\n",
+      }),
+      canonical: POSIX_CANONICAL,
+      canonicalizeIsIdentity: false,
+    });
+
+    const result = await resolve("/link/città/config.yaml", { host, sandboxRoot: "/link/città" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("boundary: the root itself does not exist — the same treatment applies to it", async () => {
+    // root /link/venue/nowhere -> absent; ancestor /link/venue -> /real/venue
+    //   => /real/venue/nowhere.
+    // location /link/venue/nowhere/missing.yaml -> absent; same ancestor
+    //   => /real/venue/nowhere/missing.yaml, inside.
+    const host = new InMemoryHost({
+      files: files({
+        "/link/venue/config.yaml": "$schema: ./schema.yaml\n",
+        "/link/venue/schema.yaml": "$adopts: ./nowhere/missing.yaml\n",
+      }),
+      canonical: POSIX_CANONICAL,
+      canonicalizeIsIdentity: false,
+    });
+
+    const result = await resolve("/link/venue/config.yaml", { host, sandboxRoot: "/link/venue/nowhere" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("boundary: the location IS the root", async () => {
+    // `$adopts: .` resolves to /link/venue itself -> /real/venue, which
+    // equals the canonicalized root => inside (a directory, so the read
+    // then fails, which is the point: the verdict is not sandbox-escape).
+    const result = await resolve("/link/venue/config.yaml", { host: posixVenue("/link/venue", "."), sandboxRoot: "/link/venue" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("boundary: the root is `/` — an absent file anywhere is inside it", async () => {
+    // root / -> /, prefix "/" (already ends in the separator, v1.4 FR-007).
+    // location /elsewhere/missing.yaml -> absent; ancestor / -> /
+    //   => /elsewhere/missing.yaml, which starts with "/" => inside.
+    const result = await resolve("/link/venue/config.yaml", { host: posixVenue("/link/venue", "/elsewhere/missing.yaml"), sandboxRoot: "/" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("adversarial: /housekeeping is not inside /house, even when the target does not exist", async () => {
+    // /housekeeping/missing.yaml -> absent; ancestor /housekeeping ->
+    //   /housekeeping => /housekeeping/missing.yaml.
+    // root /house -> /house, prefix "/house/". Not equal, not prefixed.
+    const host = new InMemoryHost({
+      files: files({
+        "/house/config.yaml": "$schema: ./schema.yaml\n",
+        "/house/schema.yaml": "$adopts: ../housekeeping/missing.yaml\n",
+      }),
+      canonical: POSIX_CANONICAL,
+      canonicalizeIsIdentity: false,
+    });
+
+    const result = await resolve("/house/config.yaml", { host, sandboxRoot: "/house" });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+
+  it("boundary: a host that canonicalizes nothing at all is unchanged — the lexical path stands", async () => {
+    // Every canonicalize answers undefined, including for `/`, so no
+    // ancestor is ever found and both sides fall back to the lexical path,
+    // exactly as v0.2 through v1.6 behaved for such a host.
+    const host = new InMemoryHost({
+      files: files({
+        "/link/venue/config.yaml": "$schema: ./schema.yaml\n",
+        "/link/venue/schema.yaml": "$adopts: ./missing.yaml\n",
+      }),
+      canonical: new Map(),
+      canonicalizeIsIdentity: false,
+    });
+
+    const result = await resolve("/link/venue/config.yaml", { host, sandboxRoot: "/link/venue" });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("the POSIX facility this suite leans on is the library's own — resolve() collapses `..` before any of the above is judged", () => {
+    expect(posixPaths.resolve("/link/venue", "../outside.yaml")).toBe("/link/outside.yaml");
+    expect(posixPaths.dirname("/link/venue/missing.yaml")).toBe("/link/venue");
+  });
+});
+
+// --- Half two: the node host over a real temporary directory --------------
+
+describe("v1.7 FR-001/FR-002 (node host, real symlink): the case the consumer measured", () => {
+  let root: string;
+
+  afterEach(() => {
+    if (root !== undefined) {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * `realpathSync` on the `mkdtemp` result is load-bearing: on macOS
+   * `os.tmpdir()` is `/var/folders/…` and `/var` is a link to
+   * `/private/var`, so without it the "real" half below would *also* be a
+   * symlinked case and the comparison would prove nothing.
+   */
+  function buildVenue(adoptsTarget: string, venueName = "venue"): { readonly realVenue: string; readonly linkVenue: string } {
+    root = realpathSync(mkdtempSync(join(tmpdir(), "cascata-v17-")));
+    const realVenue = join(root, "real", venueName);
+    mkdirSync(realVenue, { recursive: true });
+    writeFileSync(join(realVenue, "config.yaml"), "$schema: ./schema.yaml\n");
+    writeFileSync(join(realVenue, "schema.yaml"), `$adopts: ${adoptsTarget}\n`);
+    symlinkSync(join(root, "real"), join(root, "link"));
+    return { realVenue, linkVenue: join(root, "link", venueName) };
+  }
+
+  it("an absent file inside a symlinked root is document-unreachable, exactly as under the real directory", async () => {
+    const { realVenue, linkVenue } = buildVenue("./missing.yaml");
+
+    const throughLink = await resolve(join(linkVenue, "config.yaml"), { host: createNodeHost(), sandboxRoot: linkVenue });
+    const throughReal = await resolve(join(realVenue, "config.yaml"), { host: createNodeHost(), sandboxRoot: realVenue });
+
+    expect(codesOf(throughLink)).toEqual(["document-unreachable"]);
+    expect(codesOf(throughReal)).toEqual(["document-unreachable"]);
+  });
+
+  it("an absent ../ target outside a symlinked root is still sandbox-escape", async () => {
+    const { realVenue, linkVenue } = buildVenue("../outside.yaml");
+
+    const throughLink = await resolve(join(linkVenue, "config.yaml"), { host: createNodeHost(), sandboxRoot: linkVenue });
+    const throughReal = await resolve(join(realVenue, "config.yaml"), { host: createNodeHost(), sandboxRoot: realVenue });
+
+    expect(codesOf(throughLink)).toEqual(["sandbox-escape"]);
+    expect(codesOf(throughReal)).toEqual(["sandbox-escape"]);
+  });
+
+  it("probe gate, non-ASCII on a real filesystem: a venue directory named città/", async () => {
+    const { linkVenue } = buildVenue("./missing.yaml", "città");
+
+    const result = await resolve(join(linkVenue, "config.yaml"), { host: createNodeHost(), sandboxRoot: linkVenue });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("probe gate, adversarial: a dangling link inside the root pointing outside it is judged inside and then fails to read — the window this milestone leaves open, pinned rather than left implicit", async () => {
+    const { linkVenue } = buildVenue("./dangling.yaml");
+    // The link's target does not exist, so `realpath` answers nothing for
+    // it and it is judged through its ancestor — the venue, inside the
+    // root. It is then unreadable. v0.2 judged it identically (its lexical
+    // fallback put it inside too); see the spec's "Out of scope".
+    symlinkSync(join(linkVenue, "..", "..", "escaped.yaml"), join(linkVenue, "dangling.yaml"));
+
+    const result = await resolve(join(linkVenue, "config.yaml"), { host: createNodeHost(), sandboxRoot: linkVenue });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("probe gate, adversarial: a granted root that is a prefix of a sibling's name", async () => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), "cascata-v17-")));
+    const house = join(root, "house");
+    mkdirSync(join(root, "housekeeping"), { recursive: true });
+    mkdirSync(house, { recursive: true });
+    writeFileSync(join(house, "config.yaml"), "$schema: ./schema.yaml\n");
+    writeFileSync(join(house, "schema.yaml"), "$adopts: ../housekeeping/missing.yaml\n");
+
+    const result = await resolve(join(house, "config.yaml"), { host: createNodeHost(), sandboxRoot: house });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+
+  it("a symlink inside the root whose real target lies outside it is still refused — the v0.2 guarantee this milestone must not loosen", async () => {
+    const { linkVenue } = buildVenue("./escape.yaml");
+    writeFileSync(join(root, "outside.yaml"), "title: Outside\n");
+    symlinkSync(join(root, "outside.yaml"), join(linkVenue, "escape.yaml"));
+
+    const result = await resolve(join(linkVenue, "config.yaml"), { host: createNodeHost(), sandboxRoot: linkVenue });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+});

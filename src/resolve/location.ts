@@ -252,26 +252,46 @@ export function toAbsoluteSandboxRoot(sandboxRoot: string, paths: PathFacility):
  * failure §8.4 exists to prevent, and a symlink is a completely ordinary
  * way to arrange that.
  *
- * **v0.7**: canonicalization is now the **host's** answer (`host.canonicalize`,
+ * **v0.7**: canonicalization is the **host's** answer (`host.canonicalize`,
  * FR-026) for both `location` and `sandboxRoot` — `sandboxRoot` too, in
  * case the root itself is (or sits under) a symlink, so both sides of the
- * comparison are canonicalized consistently. If `location` does not exist
- * at all, `host.canonicalize` returns `undefined`; this function then
- * falls back to the already-normalized *lexical* path
- * (`classifyReferenceLocation`'s output has already resolved `.`/`..`
- * segments) rather than treating "does not exist" as either an automatic
- * pass or an automatic sandbox-escape refusal — **moved, not changed**
- * (FR-027) from v0.2's `realpathSync`-catches-and-falls-back shape. This
- * is a deliberate judgment call, recorded here and in the milestone
- * report: a target that does not exist poses no exfiltration risk
- * (nothing can be read from it), and the ordinary `document-unreachable`
- * check downstream already reports "this reference does not resolve to a
- * readable document" with its own clear diagnostic — conflating that
- * with `sandbox-escape` would blur two distinct failures into one. If
- * `sandboxRoot` itself cannot be canonicalized (rare — a caller-supplied
- * root that does not exist), the same fallback applies to it, so a
- * caller misconfiguration here still cannot crash `resolve()`
+ * comparison are canonicalized consistently.
+ *
+ * **v1.7 FR-001, a correction: absent is not outside.** "Cannot be
+ * canonicalized" must be a sandbox verdict in neither direction — that is
+ * this function's own stated rule, and until v1.7 it was not kept. The
+ * host answers `undefined` for a location that does not exist, and
+ * `safeCanonicalize` fell back to the *lexical* path for it. The root
+ * exists, so it was canonicalized; under a root that is or sits beneath a
+ * symbolic link the two sides were then compared **in different spaces**
+ * (`/private/var/…/venue` against `/var/…/venue/missing.yaml`), the
+ * prefixes disagreed, and a file that was merely **absent** was refused as
+ * `sandbox-escape` — with a message naming as outside the root a path that
+ * was inside it. On macOS that is the ordinary case, not a corner: `/tmp`
+ * and `/var` are links, so every venue under `os.tmpdir()` is behind one.
+ * Reported from outside as issue #2, measured on v1.6.0.
+ *
+ * `safeCanonicalize` now judges a location that does not exist through its
+ * **nearest existing ancestor** (see its own doc), so both sides stand in
+ * the same space and the two verdicts separate cleanly: an absent file
+ * inside the root is `document-unreachable`, an absent file outside it is
+ * `sandbox-escape`. The judgment call v0.7 recorded here survives intact
+ * and is now actually implemented — a target that does not exist poses no
+ * exfiltration risk (nothing can be read from it), and the downstream
+ * `document-unreachable` check already reports exactly that failure with
+ * its own diagnostic; conflating the two blurs two distinct failures into
+ * one. A `sandboxRoot` that does not exist gets the same treatment, so a
+ * caller misconfiguration still cannot crash `resolve()`
  * (contracts/resolve-api.md point 1, "Never throws for bad input").
+ *
+ * **What this deliberately does not close** (v1.7, "Out of scope"): a
+ * dangling link *inside* the root whose target is outside it cannot be
+ * canonicalized, is judged through its ancestor as inside, and then fails
+ * to read — `document-unreachable`. If its target appears between the
+ * check and the read, the read succeeds. v0.2 through v1.6 judged it
+ * identically (the lexical fallback put it inside too); closing the window
+ * needs a host verb that reads *and* reports the real path together, which
+ * is a different amendment.
  *
  * String-prefix comparison, not `path.relative`, because it is the
  * simplest check that is still exactly right once both sides are
@@ -296,10 +316,48 @@ export async function isWithinSandbox(host: Host, location: string, sandboxRoot:
   return realLocation === realSandboxRoot || realLocation.startsWith(containedPrefix);
 }
 
-/** `host.canonicalize`, falling back to the already-normalized lexical path (`path.resolve`'s output, idempotent on an already-absolute path) when the host cannot canonicalize it — e.g. it does not exist. See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is not treated as a sandbox verdict in either direction. */
+/**
+ * `host.canonicalize(path)`, and — when the host cannot answer, i.e. when
+ * `path` does not exist — the canonical path of its **nearest existing
+ * ancestor** with the remaining segments appended (v1.7 FR-001).
+ *
+ * The walk is lexical and upward: `dirname` until the host answers. The
+ * segments below that ancestor need no canonicalization of their own,
+ * which is the point — they do not exist, so none of them is a link, and
+ * there is nothing for a link to hide behind. They are taken as a **slice
+ * of the very string they came from** (`resolved.slice(current.length)`)
+ * rather than re-joined segment by segment, so a non-ASCII or oddly
+ * normalized name passes through untouched.
+ *
+ * Where no ancestor canonicalizes at all — a host that answers
+ * `canonicalize` for documents only, or one with no notion of
+ * canonicalization — the already-normalized lexical path stands, exactly
+ * as it did from v0.2 through v1.6. `paths.resolve` has already collapsed
+ * `.`/`..`, so the remainder never contains either and re-resolving it
+ * against the canonical ancestor cannot move it; the leading separator is
+ * stripped first because an absolute second argument to `resolve` would
+ * discard the ancestor entirely.
+ *
+ * See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is a
+ * sandbox verdict in neither direction, and for the bug this replaced.
+ */
 async function safeCanonicalize(host: Host, path: string): Promise<string> {
-  const canonical = await host.canonicalize(path);
-  return canonical ?? (host.paths ?? posixPaths).resolve(path);
+  const paths = host.paths ?? posixPaths;
+  const resolved = paths.resolve(path);
+  let current = resolved;
+  for (;;) {
+    const canonical = await host.canonicalize(current);
+    if (canonical !== undefined) {
+      const remainder = resolved.slice(current.length);
+      const relative = remainder.startsWith(paths.separator) ? remainder.slice(paths.separator.length) : remainder;
+      return relative.length === 0 ? canonical : paths.resolve(canonical, relative);
+    }
+    const parent = paths.dirname(current);
+    if (parent === current) {
+      return resolved;
+    }
+    current = parent;
+  }
 }
 
 /**
