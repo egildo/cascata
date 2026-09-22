@@ -216,6 +216,10 @@ and a config attempting to declare `cascade`.
 - **FR-012**: `cascade: append` MUST accumulate sequence items root-first across contributing layers,
   and MUST NOT remove an inherited item — removal is not an operation in v1 (§5.2).
 - **FR-013**: `append` over a value that is not a sequence MUST be refused at that value's position.
+  *Amended by v1.8 FR-001, FR-002 and FR-005, `specs/016-append-scalar/`: a **scalar** is no longer
+  refused but taken as a sequence of that one scalar, reported as `append-scalar-wrapped`
+  (`level: "info"`) at the same position; the refusal of a **mapping** stands, under this code. The
+  text above stays as history.*
 - **FR-014**: A `cascade` value that is not a strategy this version implements MUST be refused,
   naming what is supported. `merge-by-key` is reserved and MUST be refused as unimplemented rather
   than as unknown.

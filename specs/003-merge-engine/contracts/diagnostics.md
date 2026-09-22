@@ -13,7 +13,8 @@ a different thing and not a diagnostic field.
 |---|---|---|
 | `unknown-cascade-strategy` | A `cascade` value that is not a strategy — including a non-string value | The declared value |
 | `unimplemented-cascade-strategy` | `merge-by-key`, reserved by §5.3 but not built | The declared value |
-| `append-over-non-sequence` | `cascade: append` on a key whose value in some layer is not a sequence | The offending value, in the layer that supplied it |
+| `append-over-non-sequence` | `cascade: append` on a key whose value in some layer is a mapping (a scalar since v1.8 is `append-scalar-wrapped` instead — see below) | The offending value, in the layer that supplied it |
+| `append-scalar-wrapped` | *(v1.8, `specs/016-append-scalar/`)* `level: "info"`, not a refusal: a scalar under `cascade: append` taken as a list of one | The scalar, in the layer that supplied it |
 | `cascade-strategy-weakened` | A descendant declaring `replace` for a key an ancestor declared `append` — it would remove every inherited item, which `SPEC.md` §5.2 forbids | The descendant's declaration |
 
 `cascade-strategy-weakened` is a **monotonicity** refusal, not a syntax one: the declaration is

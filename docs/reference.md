@@ -526,8 +526,19 @@ documents).
 |---|---|
 | `unknown-cascade-strategy` | A `cascade` value that is not a strategy this version implements — including a non-string value |
 | `unimplemented-cascade-strategy` | `cascade: merge-by-key` — reserved by `SPEC.md` §5.3 but not built; the author is early, not wrong, so this is distinct from `unknown-cascade-strategy` |
-| `append-over-non-sequence` | `cascade: append` on a key whose value in some layer is not a sequence — positioned at the offending value, in the layer that supplied it, not at the `cascade` declaration |
+| `append-over-non-sequence` | `cascade: append` on a key whose value in some layer is a **mapping** — positioned at the offending value, in the layer that supplied it, not at the `cascade` declaration. A **scalar** is no longer refused: see `append-scalar-wrapped` (v1.8) |
+| `append-scalar-wrapped` | **`info`** — not a refusal. A scalar contributed to a key under `cascade: append` is taken as a list of one, at the scalar's own span in the layer that supplied it (v1.8) |
 | `cascade-strategy-weakened` | A descendant declaring `replace` for a key an ancestor declared `append` — refused because it would discard every ancestor's accumulated contribution (`SPEC.md` §5.2), not because the declaration is malformed on its own |
+
+**A scalar under `append` is a list of one (v1.8).** `append` promises a list, and the commonest
+contribution to one is a single item, so `styles: ./report.css` under an accumulating key is taken as
+`[./report.css]` — extended onto whatever was inherited, in rank order, never replacing it — and the
+author is told with `append-scalar-wrapped`, at their own position. An `info`, so the build continues
+and `load()` stays `ok: true`; never silent, so nothing is normalized behind the author's back. The
+posture is `precision-narrowed`'s. A mapping has no one-item reading and is still refused. The fold
+does not consult the demand — it cannot, being upstream of validation — so a scalar whose type the
+item demand refuses is wrapped and then refused **by the demand, at the same span**, with the notice
+alongside it. To write a directory-shaped value under an accumulating key, write the list.
 
 A **config** declaring its own `cascade` produces no diagnostic — it is ignored, never honoured, since
 policy comes from schemas only (v0.3 FR-015). A schema using `demand` or `delegate` produces nothing

@@ -115,7 +115,7 @@ Rules are written in the host format, the way JSON Schema is JSON describing JSO
 |---|---|---|
 | `demand` | a constraint: `type`, `required`, `enum`, `min`/`max`, `pattern`, `keys`, `items`, `values`, `seal` | intersection, only ever narrower |
 | `provide` | a value injected where the config is silent | replaced or appended downstream, unless sealed |
-| `cascade` | `replace` (default) or `append`, per key | may tighten toward `append`, never back |
+| `cascade` | `replace` (default) or `append`, per key | may tighten toward `append`, never back; under `append` a single value is taken as a list of one, with a notice |
 | `final` | freezes a key from this layer down | cannot be undeclared |
 | `delegate` | lets a config load a fragment from another file into this key, sandboxed and validated in place | per-key grant, never inherited by accident |
 | `types` | named types, narrowable by descendants | narrowing tightens every usage at once |
