@@ -59,7 +59,17 @@ export interface PathFacility {
    */
   readonly homeDirectory: string | undefined;
 
-  /** The directory containing `path` — `node:path`'s `dirname`. */
+  /**
+   * The directory containing `path` — `node:path`'s `dirname`.
+   *
+   * The sandbox check (v1.7 FR-001) walks an absent location up through
+   * this until `Host.canonicalize` answers, then appends what it walked
+   * past by **slicing the resolved string at the ancestor's length**. That
+   * is correct only while `dirname`'s answer, for an absolute normalized
+   * input, is a prefix of it (and the root is its own parent, which ends
+   * the walk) — true of `node:path`'s posix and win32 and of `posixPaths`,
+   * and required of any facility a host supplies.
+   */
   dirname(path: string): string;
 
   /** Whether `path` is absolute in this realm's terms — `node:path`'s `isAbsolute`. Windows says yes to `C:\\x` and to `\\\\server\\share`; POSIX says no to both. */

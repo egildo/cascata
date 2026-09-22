@@ -10,14 +10,14 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.6.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
+**v1.8.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
 frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
 meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
-first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh; every one of them is an
+first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh, v1.8 the eighth; every one of them is an
 addition — Article VIII's accumulated demand and type generator, then a second format adapter, then the
 launching schema, then a namespace the host can own, then a library that loads in a browser realm, then config
-documents the embedder names ranked after the entry, then a sandbox the caller may grant more than one root for.
-Nothing a schema meant before any of those releases means anything else after it. Two of the seven carry
+documents the embedder names ranked after the entry, then a sandbox the caller may grant more than one root for, then a scalar under `append` taken as a list of one.
+Nothing a schema meant before any of those releases means anything else after it. Two of the eight carry
 *corrections* beside their additions: v1.4's, that a `sandboxRoot` naming a filesystem root contains what is
 under it, and v1.7's two — that a location which does not exist is judged through its nearest existing
 ancestor, so a root behind a symbolic link no longer reads *absent* as *outside*, and that a schema's `~/`
@@ -38,10 +38,11 @@ expands (and is then confined), which §5.3 had always shown and §15 had forbid
 | **v1.3** | **the launching schema** — `resolve()`/`load()` accept `schema`, a stand-in for the `$schema` line an entry did not write, consulted only when the entry names none; built for an embedder whose entry is a Markdown file's frontmatter |
 | **v1.4** | **host-resolvable identity** — an optional `Host.locate` lets a host own a URI scheme, so `$adopts: beltype:document` names a document by identity rather than by a path that differs on every machine; plus the correction that `sandboxRoot: "/"` contains everything under it |
 | **v1.5** | **it loads where Node does not** — `node:crypto`, the `Buffer` global, `node:path` and `node:os` are gone from the library proper: SHA-256 is arithmetic of its own, byte length is counted rather than encoded, and path semantics are an optional `Host.paths` the shipped Node host answers with `node:path`'s own functions |
-| **v1.7** | **sandbox roots** — `sandboxRoot` takes a list, and a schema's `~/` expands and is then confined, so a house schema shared by every project on a machine has a lawful door; plus the correction that an absent file under a symlinked root is `document-unreachable` and not `sandbox-escape`, and `posixPaths` exported from `cascata/paths` |
 | **v1.6** | **overrides** — `resolve()`/`load()` accept `overrides`, config documents the embedder names, read after the entry's chain and ranked after it in the order given, governed by every demand, `final` and `append` the pedigree accumulated exactly as the entry is; built for an embedder whose operator sets a key from a command line |
+| **v1.7** | **sandbox roots** — `sandboxRoot` takes a list, and a schema's `~/` expands and is then confined, so a house schema shared by every project on a machine has a lawful door; plus the correction that an absent file under a symlinked root is `document-unreachable` and not `sandbox-escape`, and `posixPaths` exported from `cascata/paths` |
+| **v1.8** | **a scalar under `append`** — a single value contributed to a key under `cascade: append` is taken as a list of one and appended, with an `info` notice (`append-scalar-wrapped`) at the author's own position; a mapping is still refused (`SPEC.md` §5.3) |
 
-Full detail lives in `specs/001-…` through `specs/014-…`, each with its own `spec.md`, `plan.md`,
+Full detail lives in `specs/001-…` through `specs/016-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
 the same surface.
 

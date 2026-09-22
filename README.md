@@ -174,10 +174,10 @@ Remote schemas are pinned by SHA-256 (`$pin`), fetched over HTTPS only, cached p
 Cascata is not on npm yet (the name is taken by an unrelated package). Install from git, using a `-dist` tag, which carries the built output so consumers need no compiler:
 
 ```bash
-pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.7.0-dist"
+pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.8.0-dist"
 ```
 
-Node 22 or later. TypeScript declarations are included. Exports: `cascata`, `cascata/generate`, `cascata/host/node`.
+Node 22 or later. TypeScript declarations are included. Exports: `cascata`, `cascata/generate`, `cascata/paths`, `cascata/host/node`.
 
 ## Read next
 
@@ -191,7 +191,7 @@ Node 22 or later. TypeScript declarations are included. Exports: `cascata`, `cas
 
 ## Status
 
-**v1.7**, and the specification is frozen. A correction to `SPEC.md` is always permitted, an addition is permitted while no existing meaning changes, and changing an existing meaning requires v2.0. Every release since v1.0 has been an addition. Nothing a schema meant before any of them means anything else after.
+**v1.8**, and the specification is frozen. A correction to `SPEC.md` is always permitted, an addition is permitted while no existing meaning changes, and changing an existing meaning requires v2.0. Every release since v1.0 has been an addition. Nothing a schema meant before any of them means anything else after.
 
 The pipeline, in the order the library runs it:
 

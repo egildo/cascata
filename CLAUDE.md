@@ -122,6 +122,9 @@ section of a report has been worth more than the diff.
 - **`url` and `path` are refinements of `string` (§7), not siblings of it.** A rule that intersects
   built-ins "only with themselves" makes `string ∩ (url | path)` empty and turns §7's own worked
   `resource` into `never`. The corpus caught it; nothing else would have.
+- **Each corpus loader gates `cites` by version** (`CITES_PATTERN` in `tests/corpus/{resolve,merge,validate}-case.ts`).
+  A new milestone's case cannot load until its regex admits the new `vX.Y`; two milestones in a row
+  lost time rediscovering this. Extend it in the first commit that adds a case.
 
 ## Conventions
 
