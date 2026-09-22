@@ -28,7 +28,7 @@ import { freeze } from "./model/freeze.js";
 import { createOrigin, createSourceSpan, type Origin } from "./model/span.js";
 import { createReference, extractAdoptsReference, extractSchemaReference, referenceDiagnostic, type ExtractedReference, type Reference } from "./resolve/reference.js";
 import { accumulate as accumulateImpl, generate as generateImpl, type AccumulatedTree } from "./generate/index.js";
-import { classifyLocatedDocument, classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoot, type ReferenceLocationKind } from "./resolve/location.js";
+import { canonicalizeForDiagnostic, classifyLocatedDocument, classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoots, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
 import { posixPaths, type PathFacility } from "./paths.js";
 import { DocumentCache } from "./resolve/cache.js";
@@ -166,8 +166,25 @@ export interface ResolveOptions {
    * on the real, symlink-resolved path (`src/resolve/location.ts`'s
    * `isSandboxEscape`, FR-021, research D6) — is refused as
    * `sandbox-escape`. A config-authored reference is exempt (FR-020).
+   *
+   * **v1.7 FR-004, an addition: a location, or a list of them.** A bare
+   * string is the one-element list, and a location is inside the sandbox
+   * when it is inside **any** granted root — so every door shut to a
+   * caller granting one root stays shut. It exists for the document that
+   * is lawfully outside every project because it is shared by all of
+   * them: a house schema under the user's home directory, which a venue
+   * schema names and which no single project directory can contain.
+   *
+   * The posture does not move: **granted, never ambient** (v0.2 FR-022,
+   * v1.7 FR-005). No root is inferred, none is read from a document,
+   * nothing a document says can add one, and a refusal tells a document
+   * nothing but that it was refused. `undefined`, `null`, `""`, `[]`, and
+   * a list with a member that is not a non-empty string all throw — a
+   * programmer error, not a fact about the world. Delegation (§8.4) is
+   * confined by this same set; there is one sandbox, not one per
+   * mechanism (v1.7 FR-006).
    */
-  readonly sandboxRoot: string;
+  readonly sandboxRoot: string | readonly string[];
   /**
    * The maximum number of **schema** documents (the pedigree, not
    * counting the entry/config document) a chain may contain before being
@@ -316,9 +333,24 @@ export type ResolveResult =
     }
   | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
+/**
+ * v0.2 FR-022, held **member-wise** as of v1.7 FR-005. One message for
+ * every shape, because they are one mistake: the caller did not grant a
+ * root. `[]` is refused for exactly the reason `""` and `undefined` are —
+ * a list of no roots grants no reach, and inferring one from the entry
+ * document's location is the thing this option exists not to do.
+ */
+/** The granted roots as a diagnostic names them (v1.7 FR-009): every one of them, quoted, in the order the caller granted them — a refusal that named only the first would be the misleading message this milestone is replacing. */
+function namedRoots(sandboxRoots: readonly string[]): string {
+  return sandboxRoots.map((root) => `'${root}'`).join(", ");
+}
+
 function requireSandboxRoot(options: ResolveOptions): void {
-  if (options.sandboxRoot === undefined || options.sandboxRoot === null || options.sandboxRoot.length === 0) {
-    throw new Error("resolve() requires 'sandboxRoot' (v0.2 FR-022) — there is no default and none is inferred from the entry document's location");
+  const granted: unknown = options.sandboxRoot;
+  const members = typeof granted === "string" ? [granted] : granted;
+  const missing = !Array.isArray(members) || members.length === 0 || members.some((root) => typeof root !== "string" || root.length === 0);
+  if (missing) {
+    throw new Error("resolve() requires 'sandboxRoot' (v0.2 FR-022, v1.7 FR-004/FR-005) — a non-empty location, or a non-empty list of them, every member a non-empty string; there is no default and none is inferred from the entry document's location");
   }
 }
 
@@ -575,7 +607,7 @@ async function readAtTarget(host: Host, target: ReferenceLocationKind, candidate
  * finding recorded for T021's local case) — the mechanism is tested
  * directly instead, in `tests/unit/graph-remote-dedup.test.ts`.
  */
-async function walkAdoptsChain(host: Host, candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined, sandboxRoot: string): Promise<ChainWalkResult> {
+async function walkAdoptsChain(host: Host, candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined, sandboxRoots: readonly string[]): Promise<ChainWalkResult> {
   const paths = host.paths ?? posixPaths;
   const classified = classifyReferenceLocation(candidate, referringLocation, paths);
   // v1.4 FR-001: a scheme this library does not itself understand is
@@ -601,7 +633,7 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
   // already exempts. What the located document then writes for *itself*
   // is checked as usual — it is ordinary reference text in an ordinary
   // document, and this exemption does not travel down the chain.
-  if (!hostLocated && target.kind === "local" && (await isSandboxEscape(host, candidate, target.location, sandboxRoot))) {
+  if (!hostLocated && target.kind === "local" && (await isSandboxEscape(host, candidate, target.location, sandboxRoots))) {
     // Refused *before any read is attempted* (v0.2 FR-021, research D6) —
     // judged on the resolved real path, following symlinks
     // (`isSandboxEscape`/`isWithinSandbox`, `src/resolve/location.ts`).
@@ -610,7 +642,13 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
     // reached for a schema-authored reference.
     return {
       ok: false,
-      diagnostics: [referenceDiagnostic("sandbox-escape", candidate, `Schema-authored reference '${candidate.text}' resolves outside the sandbox root '${sandboxRoot}' (v0.2 FR-021)`)],
+      diagnostics: [
+        referenceDiagnostic(
+          "sandbox-escape",
+          candidate,
+          `Schema-authored reference '${candidate.text}' resolves to '${await canonicalizeForDiagnostic(host, target.location)}', outside every granted sandbox root (${namedRoots(sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (v0.2 FR-021)`,
+        ),
+      ],
     };
   }
   const location = target.kind === "local" ? target.location : target.url;
@@ -690,7 +728,7 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
     return { ok: true, documentsLeafToRoot: [canonical] };
   }
 
-  const parentResult = await walkAdoptsChain(host, adoptsExtraction.reference, location, builder, remote, sandboxRoot);
+  const parentResult = await walkAdoptsChain(host, adoptsExtraction.reference, location, builder, remote, sandboxRoots);
   if (!parentResult.ok) {
     // Aborting the whole resolve() call regardless — no further use of
     // `builder` follows, so `location`'s frame is left on the (about to
@@ -759,7 +797,7 @@ interface DelegationState {
   readonly host: Host;
   readonly tracker: DelegationCycleTracker;
   readonly byteCache: Map<string, Uint8Array>;
-  readonly sandboxRoot: string;
+  readonly sandboxRoots: readonly string[];
   readonly remote: RemoteContext | undefined;
   readonly allowRemoteDelegation: boolean;
   readonly breadcrumbs: Map<string, DelegationHop[]>;
@@ -929,10 +967,16 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
     }
   } else {
     location = target.location;
-    if (await isDelegationSandboxEscape(state.host, location, state.sandboxRoot)) {
+    if (await isDelegationSandboxEscape(state.host, location, state.sandboxRoots)) {
       return {
         ok: false,
-        diagnostics: [referenceDiagnostic("sandbox-escape", reference, `Delegated reference '${text}' resolves outside the sandbox root '${state.sandboxRoot}' (SPEC.md §8.4, v0.6 FR-022)`)],
+        diagnostics: [
+          referenceDiagnostic(
+            "sandbox-escape",
+            reference,
+            `Delegated reference '${text}' resolves to '${await canonicalizeForDiagnostic(state.host, location)}', outside every granted sandbox root (${namedRoots(state.sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (SPEC.md §8.4, v0.6 FR-022)`,
+          ),
+        ],
       };
     }
     const cached = state.byteCache.get(location);
@@ -1118,7 +1162,7 @@ function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDoc
  * each schema's own resolved `AuthoritySection`, which only exists once
  * this walk has run.
  */
-async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: string, remote: RemoteContext | undefined, allowRemoteDelegation: boolean, graftDelegation: boolean): Promise<ResolveResult> {
+async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoots: readonly string[], remote: RemoteContext | undefined, allowRemoteDelegation: boolean, graftDelegation: boolean): Promise<ResolveResult> {
   const paths = host.paths ?? posixPaths;
   const schemaDocumentsRootToLeaf = [...graph.documents.slice(1)].reverse();
 
@@ -1153,7 +1197,7 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoot: str
     host,
     tracker: new DelegationCycleTracker(MAX_DELEGATION_DEPTH),
     byteCache: new Map(),
-    sandboxRoot,
+    sandboxRoots,
     remote,
     allowRemoteDelegation,
     breadcrumbs: new Map(),
@@ -1203,7 +1247,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
   const host = options.host;
   const remote = buildRemoteContext(options);
   const paths = host.paths ?? posixPaths;
-  const sandboxRoot = toAbsoluteSandboxRoot(options.sandboxRoot, paths);
+  const sandboxRoots = toAbsoluteSandboxRoots(options.sandboxRoot, paths);
   const maxChainLength = options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH;
 
   const builder = new GraphBuilder(maxChainLength);
@@ -1274,7 +1318,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
 
   let chainDocumentsLeafToRoot: readonly GraphDocument[] = [];
   if (candidate !== undefined) {
-    const chainResult = await walkAdoptsChain(host, candidate, entryLocation, builder, remote, sandboxRoot);
+    const chainResult = await walkAdoptsChain(host, candidate, entryLocation, builder, remote, sandboxRoots);
     if (!chainResult.ok) {
       // Aborting the whole call — no further use of `builder` follows, so
       // `entryLocation`'s frame is left on the (about to be discarded)
@@ -1295,7 +1339,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
   }
 
   const graph = buildGraph(canonicalEntry, chainDocumentsLeafToRoot, overridesRead.documents);
-  return finalizeWithDelegation(host, graph, sandboxRoot, remote, options.allowRemoteDelegation ?? false, graftDelegation);
+  return finalizeWithDelegation(host, graph, sandboxRoots, remote, options.allowRemoteDelegation ?? false, graftDelegation);
 }
 
 /**

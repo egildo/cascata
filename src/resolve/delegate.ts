@@ -234,7 +234,14 @@ export function isAbsoluteDelegatedPath(text: string, paths: PathFacility): bool
  * specific policy). `async`/`Host`-backed as of v0.7 — `isWithinSandbox`
  * itself now asks the host to canonicalize, rather than calling
  * `realpathSync` directly (SPEC.md Article VI).
+ *
+ * **v1.7 FR-006**: the roots are the caller's whole granted list, not a
+ * set of delegation's own. §8.4 confines a delegated path to "the sandbox",
+ * and there is one sandbox, not one per mechanism — a per-root policy
+ * (this root for `$adopts`, that one for delegation) is explicitly out of
+ * scope. The reuse this function has always practised is what makes that
+ * free: widening `isWithinSandbox` widened delegation with it.
  */
-export async function isDelegationSandboxEscape(host: Host, location: string, sandboxRoot: string): Promise<boolean> {
-  return !(await isWithinSandbox(host, location, sandboxRoot));
+export async function isDelegationSandboxEscape(host: Host, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
+  return !(await isWithinSandbox(host, location, sandboxRoots));
 }

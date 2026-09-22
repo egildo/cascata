@@ -414,3 +414,191 @@ describe("v1.7 FR-001/FR-002 (node host, real symlink): the case the consumer me
     expect(codesOf(result)).toEqual(["sandbox-escape"]);
   });
 });
+
+// --- Story 2: granted roots (v1.7 FR-004 to FR-006, FR-009, FR-011) -------
+//
+// The lawful door the second correction needs. `sandboxRoot` accepts a
+// list; a location is inside the sandbox when it is inside **any** member.
+// The posture does not move: granted, never ambient. No root is inferred,
+// none is read from a document, and nothing a document says can add one.
+//
+// Flat in-memory filesystems below (`canonicalizeIsIdentity` left at its
+// default, so every location canonicalizes to itself): story 1 is what
+// tests the canonicalization, and mixing the two would make it unclear
+// which rule a verdict came from.
+
+const HOUSE_FILES = {
+  "/venue/config.yaml": "$schema: ./schema.yaml\n",
+  "/venue/schema.yaml": "$adopts: /house/house.yaml\n",
+  "/house/house.yaml": "title: House\n",
+};
+
+describe("v1.7 FR-004 — the caller may grant more than one sandbox root", () => {
+  it("a second granted root admits an absolute path under it, and the house schema heads the pedigree", async () => {
+    const result = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: ["/venue", "/house"] });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.pedigree.map((entry) => entry.identity.location)).toEqual(["/house/house.yaml", "/venue/schema.yaml"]);
+  });
+
+  it("without the second root the same reference is sandbox-escape, exactly as today", async () => {
+    const result = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: "/venue" });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+
+  it("a bare string is the one-element list — the two spellings agree", async () => {
+    const asString = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: "/venue" });
+    const asList = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: ["/venue"] });
+
+    expect(codesOf(asList)).toEqual(codesOf(asString));
+    expect(codesOf(asList)).toEqual(["sandbox-escape"]);
+  });
+
+  it("the grant is per-member, not first-member-only — the second member is what admits it", async () => {
+    const first = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: ["/house", "/venue"] });
+    const second = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: ["/venue", "/house"] });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+  });
+
+  it("granting a root that contains neither changes nothing — a list is not a loophole", async () => {
+    const result = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: ["/venue", "/unrelated"] });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+});
+
+describe("v1.7 FR-009 — the refusal names the resolved location, every granted root, and the lawful door", () => {
+  it("names all three, keeping the code, the level, the span and the citation", async () => {
+    const schemaText = "$adopts: /house/house.yaml\n";
+    const result = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: ["/venue", "/other"] });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    const diagnostic = result.diagnostics[0];
+    expect(diagnostic?.code).toBe("sandbox-escape");
+    expect(diagnostic?.level).toBe("error");
+    expect(diagnostic?.message).toContain("/house/house.yaml");
+    expect(diagnostic?.message).toContain("'/venue'");
+    expect(diagnostic?.message).toContain("'/other'");
+    expect(diagnostic?.message).toContain("sandboxRoot");
+    expect(diagnostic?.message).toContain("v0.2 FR-021");
+    // The primary span is still the $adopts value's own position in the
+    // schema that wrote it — unchanged by this milestone.
+    const valueStart = schemaText.indexOf("/house/house.yaml");
+    expect(diagnostic?.primary.origin.id).toBe("/venue/schema.yaml");
+    expect(diagnostic?.primary.start).toBe(valueStart);
+    expect(diagnostic?.primary.end).toBe(valueStart + "/house/house.yaml".length);
+  });
+});
+
+describe("v1.7 FR-005 — v0.2 FR-022 holds member-wise", () => {
+  const host = () => new InMemoryHost({ files: files(HOUSE_FILES) });
+  const bad: ReadonlyArray<readonly [string, unknown]> = [
+    ["undefined", undefined],
+    ["null", null],
+    ["the empty string", ""],
+    ["the empty list", []],
+    ["a list whose only member is empty", [""]],
+    ["a list with one good member and one empty one", ["/venue", ""]],
+    ["a list with a member that is not a string", ["/venue", 42]],
+    ["a list with a null member", ["/venue", null]],
+  ];
+
+  for (const [label, value] of bad) {
+    it(`throws for ${label}`, async () => {
+      const options = { host: host(), sandboxRoot: value } as unknown as Parameters<typeof resolve>[1];
+      await expect(resolve("/venue/config.yaml", options)).rejects.toThrow(/requires 'sandboxRoot'/);
+    });
+  }
+
+  it("no root is inferred from the entry document's location — a granted list that contains nothing refuses", async () => {
+    const result = await resolve("/venue/config.yaml", { host: host(), sandboxRoot: ["/elsewhere"] });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+});
+
+const DELEGATION_FILES = {
+  "/venue/config.yaml": "$schema: ./schema.yaml\nnetwork: ../house/frag.yaml\n",
+  "/venue/schema.yaml": DELEGATING_SCHEMA,
+  "/house/frag.yaml": "host: example.com\n",
+};
+
+describe("v1.7 FR-006 — delegation is confined by the same set of roots; there is one sandbox, not one per mechanism", () => {
+  it("a delegated target under a second granted root is honored", async () => {
+    const result = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(DELEGATION_FILES) }), sandboxRoot: ["/venue", "/house"] });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("the same target without that root is the delegation's own sandbox refusal", async () => {
+    const result = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(DELEGATION_FILES) }), sandboxRoot: ["/venue"] });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+
+  it("the delegation refusal names every granted root and the option that grants one", async () => {
+    const result = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(DELEGATION_FILES) }), sandboxRoot: ["/venue", "/other"] });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.diagnostics[0]?.message).toContain("'/venue'");
+    expect(result.diagnostics[0]?.message).toContain("'/other'");
+    expect(result.diagnostics[0]?.message).toContain("sandboxRoot");
+  });
+});
+
+describe("v1.7 FR-011 — unchanged, and shown unchanged, now for each member of a list", () => {
+  it("/sandboxfoo is not inside /sandbox, whichever member /sandbox is", async () => {
+    const host = new InMemoryHost({
+      files: files({
+        "/sandbox/config.yaml": "$schema: ./schema.yaml\n",
+        "/sandbox/schema.yaml": "$adopts: /sandboxfoo/base.yaml\n",
+        "/sandboxfoo/base.yaml": "title: Lookalike\n",
+      }),
+    });
+
+    const result = await resolve("/sandbox/config.yaml", { host, sandboxRoot: ["/other", "/sandbox"] });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+
+  it("a filesystem root as a list member still contains everything beneath it", async () => {
+    const result = await resolve("/venue/config.yaml", { host: new InMemoryHost({ files: files(HOUSE_FILES) }), sandboxRoot: ["/nothing-here", "/"] });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("a host-located reference is not sandbox-checked, list or no list (v1.4)", async () => {
+    const host = new InMemoryHost({
+      files: files({
+        "/venue/config.yaml": "$schema: ./schema.yaml\n",
+        "/venue/schema.yaml": "$adopts: beltype:document\n",
+        "/pkg/root.yaml": "title: Packaged\n",
+      }),
+      identities: new Map([["beltype:document", "/pkg/root.yaml"]]),
+    });
+
+    const result = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue"] });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("an override's own text is not sandbox-checked (v1.6), and a launching schema's is not either (v1.3)", async () => {
+    const host = new InMemoryHost({
+      files: files({
+        "/venue/config.yaml": "name: entry\n",
+        "/house/house.yaml": "title: House\n",
+        "/house/over.yaml": "name: overridden\n",
+      }),
+    });
+
+    const result = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue"], schema: "/house/house.yaml", overrides: ["/house/over.yaml"] });
+
+    expect(result.ok).toBe(true);
+  });
+});

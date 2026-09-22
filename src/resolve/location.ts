@@ -236,9 +236,24 @@ export function toAbsoluteEntryLocation(entryPath: string, paths: PathFacility):
   return paths.resolve(entryPath);
 }
 
-/** Resolve a caller-supplied sandbox root to an absolute path, the same way `toAbsoluteEntryLocation` does for the entry document — relative to `process.cwd()` if not already absolute. A second legitimate use of the working directory: `sandboxRoot` (v0.2 FR-022) has no "referring document" either, being supplied directly by the caller rather than written by any document. */
-export function toAbsoluteSandboxRoot(sandboxRoot: string, paths: PathFacility): string {
-  return paths.resolve(sandboxRoot);
+/**
+ * Resolve the caller-supplied sandbox root — or, as of v1.7 FR-004, roots
+ * — to absolute paths, the same way `toAbsoluteEntryLocation` does for the
+ * entry document: relative to `process.cwd()` if not already absolute. A
+ * second legitimate use of the working directory: `sandboxRoot` (v0.2
+ * FR-022) has no "referring document" either, being supplied directly by
+ * the caller rather than written by any document.
+ *
+ * A bare string is the one-element list, which is the whole of the
+ * widening: every door that was shut stays shut to a caller who grants one
+ * root. Validation of the members themselves (v1.7 FR-005 — none absent,
+ * none empty, none a non-string) happens in `src/index.ts` before this is
+ * called, because it *throws* rather than diagnosing and that posture
+ * belongs at the API surface.
+ */
+export function toAbsoluteSandboxRoots(sandboxRoot: string | readonly string[], paths: PathFacility): readonly string[] {
+  const granted = typeof sandboxRoot === "string" ? [sandboxRoot] : sandboxRoot;
+  return granted.map((root) => paths.resolve(root));
 }
 
 /**
@@ -308,12 +323,35 @@ export function toAbsoluteSandboxRoot(sandboxRoot: string, paths: PathFacility):
  * The `/sandboxfoo` case is why the separator is there at all and is
  * unaffected: a root that does not end in one still gets one.
  */
-export async function isWithinSandbox(host: Host, location: string, sandboxRoot: string): Promise<boolean> {
+export async function isWithinSandbox(host: Host, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
   const separator = (host.paths ?? posixPaths).separator;
-  const realSandboxRoot = await safeCanonicalize(host, sandboxRoot);
   const realLocation = await safeCanonicalize(host, location);
-  const containedPrefix = realSandboxRoot.endsWith(separator) ? realSandboxRoot : realSandboxRoot + separator;
-  return realLocation === realSandboxRoot || realLocation.startsWith(containedPrefix);
+  for (const sandboxRoot of sandboxRoots) {
+    const realSandboxRoot = await safeCanonicalize(host, sandboxRoot);
+    const containedPrefix = realSandboxRoot.endsWith(separator) ? realSandboxRoot : realSandboxRoot + separator;
+    if (realLocation === realSandboxRoot || realLocation.startsWith(containedPrefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The location a `sandbox-escape` diagnostic should name (v1.7 FR-009):
+ * the reference as actually resolved — `~/`-expanded, `.`/`..` collapsed,
+ * and canonicalized where FR-001 could — rather than the text the document
+ * wrote. The consumer's own maintainer misread the old message, which
+ * named an unexpanded `~/schemas/house.yaml` and the venue as the root,
+ * as evidence that `~/` *had* expanded; naming the path actually judged is
+ * the whole of the fix.
+ *
+ * Exported for `src/index.ts`'s two refusal messages and nothing else. It
+ * is the same primitive `isWithinSandbox` judges with, so the message can
+ * never disagree with the verdict, and it costs one extra host call on a
+ * path that has already failed.
+ */
+export async function canonicalizeForDiagnostic(host: Host, location: string): Promise<string> {
+  return safeCanonicalize(host, location);
 }
 
 /**
@@ -370,11 +408,11 @@ async function safeCanonicalize(host: Host, path: string): Promise<string> {
  * same invariant `Reference.authority` documents on itself (D6: a schema
  * cannot claim config authority to escape the sandbox).
  */
-export async function isSandboxEscape(host: Host, candidate: Reference, location: string, sandboxRoot: string): Promise<boolean> {
+export async function isSandboxEscape(host: Host, candidate: Reference, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
   if (candidate.authority !== "schema-authored") {
     return false;
   }
-  return !(await isWithinSandbox(host, location, sandboxRoot));
+  return !(await isWithinSandbox(host, location, sandboxRoots));
 }
 
 export type ReadOutcome = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly reason: string };
