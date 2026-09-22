@@ -20,6 +20,14 @@
       "types": "./dist/generate/index.d.ts",
       "import": "./dist/generate/index.js"
     },
+    "./paths": {
+      "types": "./dist/paths.d.ts",
+      "import": "./dist/paths.js"
+    },
+    "./paths.js": {
+      "types": "./dist/paths.d.ts",
+      "import": "./dist/paths.js"
+    },
     "./host/node": {
       "types": "./dist/host/node.d.ts",
       "import": "./dist/host/node.js"

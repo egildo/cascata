@@ -26,6 +26,8 @@
  */
 
 import { posix, win32, sep as nativeSep, dirname, dirname as nativeDirname, isAbsolute as nativeIsAbsolute, join, resolve as nativeResolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname as pathDirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -33,6 +35,9 @@ import { posixPaths, type PathFacility } from "../../src/paths.js";
 import { load, resolve, resource, type MergedConfiguration } from "../../src/index.js";
 import { createMapping, createStringScalar } from "../../src/model/node.js";
 import { createOrigin, createSourceSpan } from "../../src/model/span.js";
+
+/** The repository root, for the v1.7 FR-010 cases at the end of this file. */
+const REPO_ROOT_FOR_EXPORTS = join(pathDirname(fileURLToPath(import.meta.url)), "..", "..");
 import { createNodeHost } from "../../src/host/node.js";
 import { InMemoryHost } from "./host-test-double.js";
 
@@ -297,5 +302,63 @@ describe("the absolute-delegated-path refusal is judged in the host's terms — 
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("absolute-delegated-path");
+  });
+});
+
+// --- v1.7 FR-010: `cascata/paths`, an entry point ------------------------
+//
+// Reported from outside (issue #2, §3): a host with no filesystem of its
+// own but a known remote realm — a browser tab editing a server's POSIX
+// paths — needs "POSIX rules plus a home directory", and had to
+// re-implement the whole facility to add one member to it. The addition is
+// an export, not a feature: `{ ...posixPaths, homeDirectory }`.
+//
+// The realm requirement rides on `tests/unit/layering.test.ts`'s sweep,
+// which is total over `src/` minus the shipped node host — so the only
+// thing that could put this entry point outside it is the file moving.
+// That is what the last case below pins.
+
+describe("v1.7 FR-010 — posixPaths is exported from a `cascata/paths` entry point", () => {
+  const packageJson: unknown = JSON.parse(readFileSync(join(REPO_ROOT_FOR_EXPORTS, "package.json"), "utf-8"));
+
+  function exportsEntry(subpath: string): unknown {
+    const root = packageJson as { readonly exports?: Record<string, unknown> };
+    return root.exports?.[subpath];
+  }
+
+  for (const subpath of ["./paths", "./paths.js"]) {
+    it(`package.json exports ${subpath}, following the ./generate precedent`, () => {
+      expect(exportsEntry(subpath)).toEqual({ types: "./dist/paths.d.ts", import: "./dist/paths.js" });
+    });
+  }
+
+  it("the `-dist` build ships it — the source the exports name is inside the build's own rootDir", () => {
+    const build: unknown = JSON.parse(readFileSync(join(REPO_ROOT_FOR_EXPORTS, "tsconfig.build.json"), "utf-8"));
+    const include = (build as { readonly include?: readonly string[] }).include ?? [];
+    expect(include).toContain("src");
+    expect(existsSync(join(REPO_ROOT_FOR_EXPORTS, "src", "paths.ts"))).toBe(true);
+  });
+
+  it("the spread is what the consumer asked for: POSIX rules plus a home directory, and still a PathFacility", () => {
+    const facility: PathFacility = { ...posixPaths, homeDirectory: "/home/u" };
+
+    expect(facility.homeDirectory).toBe("/home/u");
+    expect(facility.separator).toBe(posix.sep);
+    expect(facility.dirname("/a/b/c.yaml")).toBe(posix.dirname("/a/b/c.yaml"));
+    expect(facility.isAbsolute("/a")).toBe(posix.isAbsolute("/a"));
+    expect(facility.resolve("/a/b", "../c.yaml")).toBe(posix.resolve("/a/b", "../c.yaml"));
+    // The exported constant is not mutated by the spread — the whole
+    // point is that a host may make several facilities from it.
+    expect(posixPaths.homeDirectory).toBeUndefined();
+  });
+
+  it("the entry point's source sits under src/, so the realm sweep already polices it", () => {
+    // `tests/unit/layering.test.ts` walks every `.ts` under `src/` except
+    // the shipped node host. A file outside `src/` would be swept by
+    // nothing, and this entry point is one an embedder imports *because*
+    // its realm is not node.
+    const pathsSource = join(REPO_ROOT_FOR_EXPORTS, "src", "paths.ts");
+    expect(existsSync(pathsSource)).toBe(true);
+    expect(readFileSync(pathsSource, "utf-8")).not.toMatch(/from\s+"node:/);
   });
 });
