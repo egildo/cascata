@@ -1,5 +1,5 @@
 /**
- * `cascata/generate` — the pure stage, on its own.
+ * `@egildo/cascata/generate` — the pure stage, on its own.
  *
  * `SPEC.md` Article VIII: "Emitters are translations of the tree, and
  * thin." `accumulate()` and `generate()` need no host, touch no disk, and

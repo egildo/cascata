@@ -12,8 +12,8 @@
  * embedder opts in explicitly:
  *
  * ```ts
- * import { load } from "cascata";
- * import { createNodeHost, createNodeTransport } from "cascata/host/node.js";
+ * import { load } from "@egildo/cascata";
+ * import { createNodeHost, createNodeTransport } from "@egildo/cascata/host/node.js";
  *
  * await load(entryPath, {
  *   sandboxRoot,

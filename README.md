@@ -79,8 +79,8 @@ styles:
 Load it:
 
 ```typescript
-import { load, why } from "cascata";
-import { createNodeHost } from "cascata/host/node";
+import { load, why } from "@egildo/cascata";
+import { createNodeHost } from "@egildo/cascata/host/node";
 
 const result = await load("./site.yaml", { host: createNodeHost(), sandboxRoot: process.cwd() });
 
@@ -129,7 +129,7 @@ The full vocabulary, its monotonicity table, and the worked examples live in [`S
 The same chain that validates a config can describe its shape:
 
 ```typescript
-import { generateTypes } from "cascata";
+import { generateTypes } from "@egildo/cascata";
 
 const generated = await generateTypes("./house.yaml", { host: createNodeHost(), sandboxRoot: process.cwd() });
 console.log(generated.source);
@@ -156,7 +156,7 @@ The emitted type is checked for soundness against the validator: every configura
 The library performs no I/O. `load()` takes a `host`, and the host answers for reading a document, canonicalizing a location, and caching. A Node host ships in the box:
 
 ```typescript
-import { createNodeHost, createNodeTransport } from "cascata/host/node";
+import { createNodeHost, createNodeTransport } from "@egildo/cascata/host/node";
 
 await load("./site.yaml", {
   host: createNodeHost({ cacheDir: ".cascata-cache" }),
@@ -177,7 +177,7 @@ Cascata is not on npm yet (the name is taken by an unrelated package). Install f
 pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.8.0-dist"
 ```
 
-Node 22 or later. TypeScript declarations are included. Exports: `cascata`, `cascata/generate`, `cascata/paths`, `cascata/host/node`.
+Node 22 or later. TypeScript declarations are included. Exports: `@egildo/cascata`, `@egildo/cascata/generate`, `@egildo/cascata/paths`, `@egildo/cascata/host/node`.
 
 ## Read next
 

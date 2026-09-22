@@ -1,9 +1,13 @@
 {
-  "name": "cascata",
-  "version": "1.8.0",
+  "name": "@egildo/cascata",
+  "version": "1.8.1",
   "description": "Schema-governed cascading configuration: a folder of human-readable documents turned into one validated, provenance-rich configuration object.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/egildo/cascata.git"
+  },
   "engines": {
     "node": ">=22"
   },
@@ -56,5 +60,8 @@
     "@types/node": "^26.4.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   }
 }

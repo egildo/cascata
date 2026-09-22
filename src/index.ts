@@ -197,7 +197,7 @@ export interface ResolveOptions {
    * The library's **only** route to local bytes, canonical identity, and
    * cache storage (v0.7, SPEC.md Article VI, FR-022, FR-028). **Required
    * — no default, none inferred.** A caller wanting the ordinary local
-   * filesystem passes `createNodeHost()` (`cascata/host/node.js`); a test
+   * filesystem passes `createNodeHost()` (`@egildo/cascata/host/node.js`); a test
    * passes an in-memory double. Missing or malformed throws, the same
    * "granted, never ambient" posture `sandboxRoot` has always had.
    *
@@ -216,7 +216,7 @@ export interface ResolveOptions {
    * remote reference reached with it `undefined` throws, the same
    * "required exactly when needed" posture `cacheDir` used to have. An
    * embedder wanting the real network passes `createNodeTransport()`
-   * (`cascata/host/node.js`) explicitly; a test always supplies a
+   * (`@egildo/cascata/host/node.js`) explicitly; a test always supplies a
    * `RecordedTransport` (constitution, Technology & Security Constraints
    * — no test in this codebase ever omits this field, and now no
    * production caller gets it for free either).
@@ -358,7 +358,7 @@ function requireSandboxRoot(options: ResolveOptions): void {
 function requireHost(options: ResolveOptions): void {
   const host = options.host as Host | undefined | null;
   if (host === undefined || host === null || typeof host.read !== "function" || typeof host.canonicalize !== "function" || typeof host.cacheRead !== "function" || typeof host.cacheWrite !== "function") {
-    throw new Error("resolve() requires 'host' (v0.7 FR-022, FR-028, SPEC.md Article VI) — there is no default; pass createNodeHost() from 'cascata/host/node.js' for the ordinary local filesystem, or an in-memory host for tests");
+    throw new Error("resolve() requires 'host' (v0.7 FR-022, FR-028, SPEC.md Article VI) — there is no default; pass createNodeHost() from '@egildo/cascata/host/node.js' for the ordinary local filesystem, or an in-memory host for tests");
   }
   // v1.4 FR-001: `locate` is optional — absent is the ordinary host and
   // needs no comment. Present-but-not-callable is a programmer error and
@@ -1576,7 +1576,7 @@ export interface MetaValidateOptions {
   readonly host: Host;
   /** Location of the document under test — a schema, judged as a config. */
   readonly subject: string;
-  /** Location of the meta-schema. `cascata/host/node`'s `nodeMetaSchemaLocation()` is where the shipped one lives; a caller with its own storage passes its own location, which is the point of the seam. */
+  /** Location of the meta-schema. `@egildo/cascata/host/node`'s `nodeMetaSchemaLocation()` is where the shipped one lives; a caller with its own storage passes its own location, which is the point of the seam. */
   readonly metaSchema: string;
 }
 
