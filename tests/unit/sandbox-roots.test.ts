@@ -371,6 +371,13 @@ describe("v1.7 FR-001/FR-002 (node host, real symlink): the case the consumer me
 
     expect(codesOf(throughLink)).toEqual(["sandbox-escape"]);
     expect(codesOf(throughReal)).toEqual(["sandbox-escape"]);
+    // v1.7 FR-009 meets FR-001: the refusal names the absent FILE in real
+    // space — ancestor canonicalized, the missing segment appended — not
+    // the ancestor alone, and not the lexical `link/` path. Every scripted
+    // case above canonicalizes the location itself, so only this one
+    // observes the appended remainder; a walk that returned the ancestor
+    // would still reach the right verdict and print the wrong path.
+    expect(throughLink.diagnostics[0]?.message).toContain(`'${join(root, "real", "outside.yaml")}'`);
   });
 
   it("probe gate, non-ASCII on a real filesystem: a venue directory named città/", async () => {
