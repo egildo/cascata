@@ -311,7 +311,7 @@ function parseExpect(raw: unknown, source: string): ResolveExpect {
   fail(source, `'expect.ok' must be true or false`);
 }
 
-const CITES_PATTERN = /^v(0\.2|1\.3|1\.4|1\.6) FR-\d+$/;
+const CITES_PATTERN = /^v(0\.2|1\.3|1\.4|1\.6|1\.7) FR-\d+$/;
 
 /** Load and validate one resolve-conformance case from `file`. `fixtureDir` resolves relative to `file`'s directory, per each case's own `fixtureDir` field. */
 export function loadResolveCase(file: string): ResolveCase {

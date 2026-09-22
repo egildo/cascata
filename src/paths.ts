@@ -41,11 +41,21 @@ export interface PathFacility {
    * The user's home directory, or `undefined` in a realm that has none.
    *
    * `undefined` is a real answer, not a missing one: a browser realm has
-   * no home directory, and a config-authored `~/config.yaml` there stays
-   * the literal relative path it looks like rather than expanding to an
-   * invented one (SPEC.md §9, v0.2 FR-029 — the expansion exists because
-   * a *user's* configuration may name their own home, which presupposes
-   * there is one).
+   * no home directory, and a `~/config.yaml` there stays the literal
+   * relative path it looks like rather than expanding to an invented one
+   * (SPEC.md §9 — the expansion exists because a document may name the
+   * user's own home, which presupposes there is one).
+   *
+   * **v1.7 FR-007**: this answers for a `~/` written by *any* local
+   * document, not only a config. Until v1.7 a schema-authored `~/` was
+   * left unexpanded, which made SPEC.md §5.3's own worked chain
+   * unresolvable; a schema's `~/` now expands through this member and is
+   * then confined by the caller's granted sandbox roots like any other
+   * path a schema wrote (§8.4, §15). Supply, not meaning: the host says
+   * where home is, the library decides whether what that expands to is
+   * contained. A `~/` inside a document read over `https://` is not
+   * expanded at all (v1.7 FR-008) — a remote document has no home on the
+   * reader's machine, and this value must never be joined into a URL.
    */
   readonly homeDirectory: string | undefined;
 

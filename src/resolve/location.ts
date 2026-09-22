@@ -61,16 +61,38 @@ export interface ResolvedDocument {
 }
 
 /**
- * A leading `~/` in a **config-authored** reference expands to the
- * user's home directory (v0.2 FR-029, SPEC.md §9 — the worked chain's
- * own `$schema: ~/.config/house.yaml` depends on this). A
- * **schema-authored** reference beginning `~/` MUST NOT expand: FR-021
- * exists to confine a schema's local reach to the sandbox root, and
- * expanding `~/` for a schema would be a ready-made way around it.
- * Schema-authored `~/foo.yaml` is therefore judged as "the literal
- * relative path it is" (spec.md's own wording) — `~` is just an ordinary
- * first path segment, exactly as `resolvePath` would treat any other
- * directory name.
+ * A leading `~/` in a reference written by a **local** document expands to
+ * the user's home directory — **whatever the reference's authority**
+ * (v1.7 FR-007, a correction to v0.2 FR-029; SPEC.md §5.3, §9, §15).
+ *
+ * **What changed, and why the old rule was wrong.** Until v1.7 only a
+ * *config*-authored `~/` expanded, on the reasoning that expanding it for
+ * a schema would be "a ready-made way around" FR-021's confinement. That
+ * located reach in the wrong place. Reach is what **containment** grants,
+ * and containment binds every schema-authored local reference whether or
+ * not its text was expanded first: `~/schemas/house.yaml` expands to a
+ * path under the user's home and is then admitted only where the caller
+ * granted a sandbox root that contains it (v1.7 FR-004), and refused
+ * otherwise. Expansion is supply; containment is meaning. Meanwhile the
+ * old rule made `SPEC.md` §5.3's own worked chain — a project *schema*
+ * writing `$adopts: ~/.config/house.yaml` — unresolvable, and produced a
+ * refusal naming a literal `<venue>/~/…` that misled the consumer's own
+ * maintainer into believing `~/` had expanded when it had not (issue #2).
+ *
+ * **The one bounded change of behavior**, recorded rather than glossed: a
+ * schema that wrote `~/x` meaning a directory literally named `~` beside
+ * itself must now write `./~/x`. `tests/corpus/resolve-cases/chain-tilde.json`
+ * is exactly that document and was updated with this milestone.
+ *
+ * **A remote referrer is never expanded** (v1.7 FR-008), under either
+ * authority, which is why this function needs `referringDocumentLocation`
+ * at all: a document read over `https://` has no home on the reader's
+ * machine, and a home path must never be joined into a URL. Measured on
+ * v1.6.0 before the guard existed, a config-authored `~/x.yaml` inside
+ * `https://example.test/schemas/base.yaml` resolved to
+ * `https://example.test/home/u/x.yaml` — the user's home directory,
+ * offered to the transport as a URL path. Unexpanded, `~/x.yaml` is the
+ * ordinary relative URL it always was and joins as one.
  *
  * The home directory is the **host's** answer (`PathFacility.homeDirectory`,
  * v1.5, issue #1), not `os.homedir()` read here. `createNodeHost` answers
@@ -79,12 +101,11 @@ export interface ResolvedDocument {
  * home (see tests/corpus/resolve-runner.ts's `homeDir` case field) — so
  * node behavior is unchanged. A realm with no home directory at all
  * (a browser) answers `undefined`, and then `~/` expands to nothing: the
- * reference stays the literal relative path it looks like, which is
- * already exactly how a schema-authored `~/` is treated. Expanding
+ * reference stays the literal relative path it looks like. Expanding
  * against an invented home would be the one genuinely wrong answer.
  */
-function expandTilde(reference: Reference, paths: PathFacility): string {
-  if (reference.authority === "config-authored" && reference.text.startsWith("~/") && paths.homeDirectory !== undefined) {
+function expandTilde(reference: Reference, referringDocumentLocation: string, paths: PathFacility): string {
+  if (reference.text.startsWith("~/") && paths.homeDirectory !== undefined && !HTTPS_LOCATION_PATTERN.test(referringDocumentLocation)) {
     return paths.resolve(paths.homeDirectory, reference.text.slice(2));
   }
   return reference.text;
@@ -154,7 +175,7 @@ const HTTPS_LOCATION_PATTERN = /^https:\/\//i;
  * it gaining a scheme argument.
  */
 export function classifyReferenceLocation(reference: Reference, referringDocumentLocation: string, paths: PathFacility): ReferenceLocationKind {
-  const text = expandTilde(reference, paths);
+  const text = expandTilde(reference, referringDocumentLocation, paths);
   if (ABSOLUTE_URL_SCHEME_PATTERN.test(text)) {
     const scheme = (ABSOLUTE_URL_SCHEME_PATTERN.exec(text)?.[1] ?? "").toLowerCase();
     if (scheme === "https") {
@@ -228,7 +249,7 @@ export function classifyLocatedDocument(location: string, paths: PathFacility): 
  */
 export function resolveReferenceLocation(reference: Reference, referringDocumentLocation: string, paths: PathFacility): string {
   const baseDir = paths.dirname(referringDocumentLocation);
-  return paths.resolve(baseDir, expandTilde(reference, paths));
+  return paths.resolve(baseDir, expandTilde(reference, referringDocumentLocation, paths));
 }
 
 /** Resolve a caller-supplied entry path to an absolute location, the same way every other reference is resolved — relative to `process.cwd()` if not already absolute. This is the *one* legitimate use of the working directory in this module: there is no "referring document" for the entry itself. */

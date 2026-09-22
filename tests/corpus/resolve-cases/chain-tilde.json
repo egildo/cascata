@@ -1,6 +1,6 @@
 {
-  "name": "T024: a config's leading ~/ expands to the home directory; a schema's does not",
-  "cites": "v0.2 FR-029",
+  "name": "v1.7 FR-007: a leading ~/ expands for a config AND for a schema; `./~/` is how a document now names a directory literally called ~",
+  "cites": "v1.7 FR-007",
   "fixtureDir": "chain-tilde",
   "entry": "project/config.yaml",
   "sandboxRoot": ".",
@@ -10,12 +10,21 @@
     "graph": [
       { "location": "project/config.yaml", "hash": "f8427ff5bc3f9f32eb685e61645aefd20c90f613bdc0220ed2fa688fcbb9e567" },
       { "location": "fakehome/schema-root.yaml", "hash": "2984b4812c3fc46ac8039e58d3be076606edff6f5ca03e97e85148f9b26b8bfc" },
+      { "location": "fakehome/parent.yaml", "hash": "930da2feb756ed3c6a23b0b697f24fd797b2f9468c6e1c77894e75b0a3ca6557" },
       { "location": "fakehome/~/parent.yaml", "hash": "3a0c725be3191ef5be69ad6b56dbcc0e23b1e5d4d38f3ba22671a6d38dbb452a" }
     ],
     "pedigree": [
       {
         "location": "fakehome/~/parent.yaml",
         "hash": "3a0c725be3191ef5be69ad6b56dbcc0e23b1e5d4d38f3ba22671a6d38dbb452a",
+        "kind": "adopts",
+        "authority": "schema-authored",
+        "verified": false,
+        "via": { "document": "fakehome/parent.yaml", "line": 1, "column": 10, "start": 9, "end": 24 }
+      },
+      {
+        "location": "fakehome/parent.yaml",
+        "hash": "930da2feb756ed3c6a23b0b697f24fd797b2f9468c6e1c77894e75b0a3ca6557",
         "kind": "adopts",
         "authority": "schema-authored",
         "verified": false,

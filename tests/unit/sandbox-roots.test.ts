@@ -34,6 +34,9 @@ import { join, win32 } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolve } from "../../src/index.js";
 import { createNodeHost } from "../../src/host/node.js";
+import { classifyReferenceLocation } from "../../src/resolve/location.js";
+import { createReference } from "../../src/resolve/reference.js";
+import { createOrigin, createSourceSpan } from "../../src/model/span.js";
 import { posixPaths, type PathFacility } from "../../src/paths.js";
 import { InMemoryHost } from "./host-test-double.js";
 
@@ -600,5 +603,168 @@ describe("v1.7 FR-011 — unchanged, and shown unchanged, now for each member of
     const result = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue"], schema: "/house/house.yaml", overrides: ["/house/over.yaml"] });
 
     expect(result.ok).toBe(true);
+  });
+});
+
+// --- Story 3: a schema's `~/` (v1.7 FR-007, FR-008) -----------------------
+//
+// `SPEC.md` §5.3's worked chain has a project *schema* write
+// `$adopts: ~/.config/house.yaml`, while §15's "tilde paths" entry limited
+// expansion to config-authored references. The document contradicted
+// itself and its own example could not resolve. The entry's reason —
+// expansion "grants schemas no new reach" — located reach in the wrong
+// place: reach is what **containment** grants, and containment binds every
+// schema-authored local reference whether or not its text was expanded
+// first. So a schema's `~/` expands, and is then confined exactly as any
+// other path it writes.
+
+const HOME = "/home/u";
+
+/** The library's POSIX facility with a home directory — precisely the spread `cascata/paths` exists to make possible (v1.7 FR-010). */
+const homePaths: PathFacility = { ...posixPaths, homeDirectory: HOME };
+
+const TILDE_FILES = {
+  "/venue/config.yaml": "$schema: ./schema.yaml\n",
+  "/venue/schema.yaml": "$adopts: ~/schemas/house.yaml\n",
+  "/home/u/schemas/house.yaml": "title: House\n",
+};
+
+function tildeHost(overrides?: Partial<Record<string, string>>, paths: PathFacility = homePaths): InMemoryHost {
+  return new InMemoryHost({ files: files({ ...TILDE_FILES, ...overrides }), paths });
+}
+
+describe("v1.7 FR-007 — a local document's leading ~/ expands whatever the reference's authority, and is then confined", () => {
+  it("a venue schema's ~/schemas/house.yaml resolves when a root containing it is granted, and the house schema heads the pedigree", async () => {
+    const result = await resolve("/venue/config.yaml", { host: tildeHost(), sandboxRoot: ["/venue", "/home/u/schemas"] });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.pedigree.map((entry) => entry.identity.location)).toEqual(["/home/u/schemas/house.yaml", "/venue/schema.yaml"]);
+  });
+
+  it("without that root it is sandbox-escape, and the message names the EXPANDED path — not the literal <venue>/~/… that misled the consumer's own maintainer", async () => {
+    const result = await resolve("/venue/config.yaml", { host: tildeHost(), sandboxRoot: ["/venue"] });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("unreachable");
+    const message = result.diagnostics[0]?.message ?? "";
+    expect(result.diagnostics[0]?.code).toBe("sandbox-escape");
+    expect(message).toContain("/home/u/schemas/house.yaml");
+    expect(message).not.toContain("/venue/~/");
+    expect(message).toContain("'/venue'");
+    expect(message).toContain("sandboxRoot");
+  });
+
+  it("a config-authored ~/ is what it was: expanded, and not sandbox-checked at all (v0.2 FR-020, unchanged)", async () => {
+    const host = tildeHost({ "/venue/config.yaml": "$schema: ~/schemas/house.yaml\n" });
+
+    const result = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue"] });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.pedigree.map((entry) => entry.identity.location)).toEqual(["/home/u/schemas/house.yaml"]);
+  });
+
+  it("with no home directory the text stays literal, as a config's does today", async () => {
+    // `posixPaths.homeDirectory` is `undefined` — a browser realm. The
+    // schema's `~/schemas/house.yaml` is then the ordinary relative path
+    // it looks like: `/venue/~/schemas/house.yaml`, which is INSIDE
+    // `/venue`, so the verdict is the read failure and never a refusal.
+    const result = await resolve("/venue/config.yaml", { host: tildeHost(undefined, posixPaths), sandboxRoot: ["/venue"] });
+
+    expect(codesOf(result)).toEqual(["document-unreachable"]);
+  });
+
+  it("the one bounded change of behavior has an escape hatch: `./~/x` still reaches a directory literally named `~`", async () => {
+    const host = tildeHost({
+      "/venue/schema.yaml": "$adopts: ./~/parent.yaml\n",
+      "/venue/~/parent.yaml": "title: Literal tilde\n",
+    });
+
+    const result = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue"] });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.pedigree.map((entry) => entry.identity.location)).toEqual(["/venue/~/parent.yaml", "/venue/schema.yaml"]);
+  });
+
+  it("expansion grants no reach on its own — a granted root is still what admits it (v0.2 FR-021, unchanged)", async () => {
+    // `~/../escape.yaml` expands and normalizes to `/home/escape.yaml`,
+    // outside both granted roots. Expansion is supply; containment is
+    // meaning.
+    const host = tildeHost({ "/venue/schema.yaml": "$adopts: ~/../escape.yaml\n", "/home/escape.yaml": "title: Escaped\n" });
+
+    const result = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue", "/home/u/schemas"] });
+
+    expect(codesOf(result)).toEqual(["sandbox-escape"]);
+  });
+
+  it("a delegated ~/ is unchanged — delegation was already config-authored, so it already expanded, and is still confined", async () => {
+    const host = new InMemoryHost({
+      files: files({
+        "/venue/config.yaml": "$schema: ./schema.yaml\nnetwork: ~/schemas/frag.yaml\n",
+        "/venue/schema.yaml": DELEGATING_SCHEMA,
+        "/home/u/schemas/frag.yaml": "host: example.com\n",
+      }),
+      paths: homePaths,
+    });
+
+    const refused = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue"] });
+    const admitted = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue", "/home/u/schemas"] });
+
+    expect(codesOf(refused)).toEqual(["sandbox-escape"]);
+    expect(admitted.ok).toBe(true);
+  });
+});
+
+/** A `Transport` that answers every request from a table and writes down the URL it was offered — which is what v1.7 FR-008 is actually about: the user's home path must never be joined into a URL. */
+class SpyTransport {
+  readonly requested: string[] = [];
+  constructor(private readonly bodies: ReadonlyMap<string, string>) {}
+  async request(url: string, _method: string): Promise<{ readonly kind: "response"; readonly response: { readonly status: number; readonly headers: Record<string, string>; readonly body: Uint8Array } }> {
+    this.requested.push(url);
+    const body = this.bodies.get(url);
+    return { kind: "response", response: { status: body === undefined ? 404 : 200, headers: {}, body: ENCODER.encode(body ?? "") } };
+  }
+}
+
+describe("v1.7 FR-008 — a ~/ in a document read over https:// is never expanded, under either authority", () => {
+  const REMOTE_SCHEMA = "https://example.test/schemas/base.yaml";
+
+  it("resolves as the relative URL it always was, and the home path reaches no URL the transport is offered", async () => {
+    const transport = new SpyTransport(
+      new Map([
+        [REMOTE_SCHEMA, "$adopts: ~/x.yaml\n"],
+        ["https://example.test/schemas/~/x.yaml", "title: Remote parent\n"],
+      ]),
+    );
+    const host = new InMemoryHost({ files: files({ "/venue/config.yaml": `$schema: ${REMOTE_SCHEMA}\n` }), paths: homePaths });
+
+    const result = await resolve("/venue/config.yaml", { host, sandboxRoot: ["/venue"], transport });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(transport.requested).toEqual([REMOTE_SCHEMA, "https://example.test/schemas/~/x.yaml"]);
+    expect(transport.requested.some((url) => url.includes(HOME))).toBe(false);
+  });
+
+  it("classifies a remote referrer's ~/ as the relative URL under BOTH authorities", () => {
+    const origin = createOrigin(REMOTE_SCHEMA, "base.yaml");
+    const span = createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: 64 });
+    for (const authority of ["config-authored", "schema-authored"] as const) {
+      const reference = createReference({ text: "~/x.yaml", span, kind: authority === "config-authored" ? "schema" : "adopts", authority });
+
+      expect(classifyReferenceLocation(reference, REMOTE_SCHEMA, homePaths)).toEqual({ kind: "https", url: "https://example.test/schemas/~/x.yaml" });
+    }
+  });
+
+  it("the same two references against a LOCAL referrer do expand — the guard is the referrer, not the authority", () => {
+    const origin = createOrigin("/venue/schema.yaml", "schema.yaml");
+    const span = createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: 64 });
+    for (const authority of ["config-authored", "schema-authored"] as const) {
+      const reference = createReference({ text: "~/x.yaml", span, kind: authority === "config-authored" ? "schema" : "adopts", authority });
+
+      expect(classifyReferenceLocation(reference, "/venue/schema.yaml", homePaths)).toEqual({ kind: "local", location: "/home/u/x.yaml" });
+    }
   });
 });
