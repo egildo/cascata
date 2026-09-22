@@ -392,24 +392,42 @@ export function fold(layers: readonly Layer[]): Node {
 }
 
 /**
- * Check every top-level key of `contribution` that is *currently* under
- * `"append"` (this file's module doc, moment 1: "a layer's own fresh
- * contribution") — pushes onto `diagnostics` for each that is not a
- * `Sequence`, never stopping at the first (T058).
+ * Read every top-level key of `contribution` that is *currently* under
+ * `"append"` as an append contribution (this file's module doc, moment 1:
+ * "a layer's own fresh contribution") — pushing each key's diagnostic onto
+ * `diagnostics`, never stopping at the first (T058), and **returning the
+ * contribution with every scalar under `append` wrapped into the one-item
+ * sequence it means** (v1.8 FR-001).
+ *
+ * Returns `contribution` itself, unallocated, when nothing was wrapped —
+ * which is every fold written before v1.8 and most folds after it. The
+ * rebuilt mapping keeps `contribution`'s own span, and each wrapped
+ * sequence keeps its scalar's, so nothing downstream — the merge, the
+ * provenance builder, `why()` — can tell a wrapped contribution from one
+ * the author bracketed by hand. That is the point: the wrap is a reading
+ * of the text, not a stage of its own.
  */
-function checkFreshAppendContributions(contribution: Node, strategies: ReadonlyMap<string, MergeStrategy>, diagnostics: Diagnostic[]): void {
+function readFreshAppendContributions(contribution: Node, strategies: ReadonlyMap<string, MergeStrategy>, diagnostics: Diagnostic[]): Node {
   if (contribution.type !== "mapping") {
-    return;
+    return contribution;
   }
+  const wrapped = new Map<string, Node>();
   for (const [key, value] of contribution.entries) {
     if (effectiveStrategy(key, strategies) !== "append") {
       continue;
     }
-    const violation = checkAppendable(key, value);
-    if (violation !== undefined) {
-      diagnostics.push(violation);
+    const outcome = checkAppendable(key, value);
+    if (outcome.diagnostic !== undefined) {
+      diagnostics.push(outcome.diagnostic);
+    }
+    if (outcome.node !== value) {
+      wrapped.set(key, outcome.node);
     }
   }
+  if (wrapped.size === 0) {
+    return contribution;
+  }
+  return createMapping([...contribution.entries].map(([key, value]) => [key, wrapped.get(key) ?? value] as const), contribution.span);
 }
 
 /**
@@ -423,10 +441,11 @@ function checkFreshAppendContributions(contribution: Node, strategies: ReadonlyM
  * are one-way (`resolveStrategies` already refuses weakening, FR-016), so
  * a key can move from `"replace"` to `"append"` only once.
  */
-function checkTransitionedAppendKeys(previousStrategies: ReadonlyMap<string, MergeStrategy>, strategies: ReadonlyMap<string, MergeStrategy>, result: Node | undefined, diagnostics: Diagnostic[]): void {
+function readTransitionedAppendKeys(previousStrategies: ReadonlyMap<string, MergeStrategy>, strategies: ReadonlyMap<string, MergeStrategy>, result: Node | undefined, diagnostics: Diagnostic[]): Node | undefined {
   if (result === undefined || result.type !== "mapping") {
-    return;
+    return result;
   }
+  const wrapped = new Map<string, Node>();
   for (const [key, strategy] of strategies) {
     if (strategy !== "append" || previousStrategies.get(key) === "append") {
       continue;
@@ -435,11 +454,18 @@ function checkTransitionedAppendKeys(previousStrategies: ReadonlyMap<string, Mer
     if (existing === undefined) {
       continue;
     }
-    const violation = checkAppendable(key, existing);
-    if (violation !== undefined) {
-      diagnostics.push(violation);
+    const outcome = checkAppendable(key, existing);
+    if (outcome.diagnostic !== undefined) {
+      diagnostics.push(outcome.diagnostic);
+    }
+    if (outcome.node !== existing) {
+      wrapped.set(key, outcome.node);
     }
   }
+  if (wrapped.size === 0) {
+    return result;
+  }
+  return createMapping([...result.entries].map(([key, value]) => [key, wrapped.get(key) ?? value] as const), result.span);
 }
 
 /** `fold()`'s full result — the tree, the provenance record built alongside it, and any `append-over-non-sequence` diagnostics found along the way (FR-013, T056, T058). `foldConfiguration` is `fold()`'s only caller that needs the provenance and diagnostics halves; every other caller (this file's own hand-constructed unit tests among them) just wants the tree, which is what `fold()` itself returns — those callers only ever build well-formed layers, so `diagnostics` is always empty for them. */
@@ -451,12 +477,19 @@ export function foldWithProvenance(layers: readonly Layer[]): { readonly tree: N
   for (const layer of layers) {
     const previousStrategies = strategies;
     strategies = advanceStrategies(strategies, layer);
-    checkTransitionedAppendKeys(previousStrategies, strategies, result, diagnostics);
-    const contribution = contributionOf(layer);
-    if (contribution === undefined) {
+    // v1.8 FR-001, the second moment: a scalar already sitting at a key
+    // whose strategy just tightened to `append` is wrapped in place, so the
+    // accumulation that starts here starts from a list.
+    result = readTransitionedAppendKeys(previousStrategies, strategies, result, diagnostics);
+    const rawContribution = contributionOf(layer);
+    if (rawContribution === undefined) {
       continue;
     }
-    checkFreshAppendContributions(contribution, strategies, diagnostics);
+    // v1.8 FR-001, the first moment: this layer's own scalar contribution
+    // to an accumulating key is wrapped before it is merged, which is what
+    // makes `accumulateAppend` see two sequences and extend rather than
+    // replace (FR-003).
+    const contribution = readFreshAppendContributions(rawContribution, strategies, diagnostics);
     if (result === undefined) {
       builder.recordFreshContribution([], contribution, layer);
       result = contribution;
@@ -474,7 +507,20 @@ export function foldWithProvenance(layers: readonly Layer[]): { readonly tree: N
 }
 
 /** `foldConfiguration`'s result — never both a configuration and diagnostics (mirrors `MergeResult` in `src/index.ts`, which this shape feeds directly). */
-export type FoldOutcome = { readonly ok: true; readonly configuration: MergedConfiguration } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+/**
+ * `foldConfiguration`'s verdict. The `ok: true` branch carries
+ * `diagnostics` as of v1.8 (FR-002): the fold can now produce an `info`
+ * lint (`append-scalar-wrapped`) that changes a value without refusing it,
+ * and a lint nobody carries is a lint nobody reads. It is always `info`-
+ * only — an `error` anywhere makes the whole fold `ok: false`, which is
+ * what `partitionByLevel` below enforces — and possibly empty, which is
+ * every fold before v1.8 and most folds after it. An additive field, so
+ * every existing consumer of the `ok: true` branch compiles and behaves
+ * unchanged.
+ */
+export type FoldOutcome =
+  | { readonly ok: true; readonly configuration: MergedConfiguration; readonly diagnostics: readonly Diagnostic[] }
+  | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /**
  * Fold a resolved graph and its pedigree into a `MergedConfiguration`, or
@@ -563,9 +609,17 @@ export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBr
   const { state: finalState, diagnostics: finalDiagnostics } = resolveFinal(layers);
   const { tree, provenance, diagnostics: foldDiagnostics } = foldWithProvenance(layers);
   const diagnostics = [...strategyDiagnostics, ...finalDiagnostics, ...foldDiagnostics];
-  if (diagnostics.length > 0) {
+  // v1.8 FR-002: an `error` still discards the tree, exactly as before —
+  // but an `info` must not, or the wrap would refuse the very documents it
+  // exists to accept. The notices ride along with the configuration
+  // instead, and `load()` concatenates them into its own list. The
+  // partition is by level rather than by code so that the next `info` the
+  // fold learns to raise needs no change here.
+  const errors = diagnostics.filter((diagnostic) => diagnostic.level === "error");
+  if (errors.length > 0) {
     return { ok: false, diagnostics };
   }
+  const notices = diagnostics.filter((diagnostic) => diagnostic.level !== "error");
   // v0.4 additive field (specs/004-constraint-checker/data-model.md):
   // `layers` is exactly what this function already computed above via
   // `deriveLayers(graph)` — stashed onto the result, not recomputed by a
@@ -580,5 +634,5 @@ export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBr
   // semantics — omitted entirely when there is none, rather than
   // defaulting to POSIX here, so that `MergedConfiguration.paths`
   // distinguishes "no resolution stamped one" from "POSIX was chosen".
-  return { ok: true, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs, finalState, ...(paths !== undefined ? { paths } : {}) } };
+  return { ok: true, diagnostics: notices, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs, finalState, ...(paths !== undefined ? { paths } : {}) } };
 }

@@ -212,24 +212,87 @@ function classifyUnrecognizedCascade(key: string, node: Node): Diagnostic {
 }
 
 /**
- * Refuse `node` as an `append` contribution if it is not a `Sequence`
- * (FR-013, `append-over-non-sequence`). The primary span is `node`'s own
- * — whichever real document actually supplied it — never a span
- * synthesized from the key's declaration, because the layer that declared
- * `cascade: append` and the layer that supplied the offending value can be
- * different documents (contracts/diagnostics.md: "the offending value, in
- * the layer that supplied it"; see `src/merge/fold.ts`'s module doc for
- * the two moments this is called from).
+ * How `node` participates in an `append` accumulation: the node to
+ * accumulate, and the one diagnostic (if any) that participation produced.
+ *
+ * Three outcomes, and the type is one shape rather than three so that
+ * every caller must look at both halves:
+ *
+ * - a **sequence** — itself, no diagnostic;
+ * - a **scalar** — the one-item sequence wrapping it, and an `info`
+ *   (v1.8 FR-001, FR-002);
+ * - a **mapping** — itself, unchanged, and an `error` (v0.3 FR-013 as
+ *   amended by v1.8 FR-005). `node` is returned unchanged here only so
+ *   that this function is total; `foldConfiguration` discards the whole
+ *   tree on any `error`, so what the fold does with it afterwards is never
+ *   observed (the same reasoning `accumulateAppend` records for itself).
  */
-export function checkAppendable(key: string, node: Node): Diagnostic | undefined {
+export interface AppendableOutcome {
+  readonly node: Node;
+  readonly diagnostic?: Diagnostic;
+}
+
+/**
+ * Read `node` as an `append` contribution (v0.3 FR-013, amended by v1.8
+ * FR-001, FR-002 and FR-005).
+ *
+ * **A scalar is a list of one** (v1.8). `append` promises a list, and the
+ * commonest contribution to one is a single item — one stylesheet, one
+ * component — so a scalar is taken as the sequence of that one scalar
+ * rather than refused. The synthetic sequence carries the **scalar's own
+ * span**, and its single item is the scalar `Node` itself with its origin
+ * untouched: that is what makes `why()` on the wrapped item name the
+ * author's own line without provenance needing to know a wrap happened at
+ * all (v1.8 FR-007). The author is told with `append-scalar-wrapped`,
+ * `info` — never silently, the posture `precision-narrowed` set in §17.
+ *
+ * A **mapping** has no one-item reading and is still refused.
+ *
+ * The primary span of either diagnostic is `node`'s own — whichever real
+ * document actually supplied it — never a span synthesized from the key's
+ * declaration, because the layer that declared `cascade: append` and the
+ * layer that supplied the value can be different documents
+ * (contracts/diagnostics.md: "the offending value, in the layer that
+ * supplied it"; see `src/merge/fold.ts`'s module doc for the two moments
+ * this is called from). v1.8 FR-004 keeps that rule for the notice: a
+ * scalar that pre-existed the transition to `append` is noticed at the
+ * ancestor that wrote it, not at the descendant that declared the
+ * strategy.
+ *
+ * The demand is not consulted, and cannot be: `src/merge/` may not import
+ * `src/validate/` (Principle IV, `tests/unit/layering.test.ts`). Whole-chain
+ * validation runs over the merged tree afterwards, so a scalar whose type
+ * the item demand refuses is refused **by the demand, at the same span**
+ * (v1.8 FR-006) — the right refusal, from the right stage, with no special
+ * path here.
+ */
+export function checkAppendable(key: string, node: Node): AppendableOutcome {
   if (node.type === "sequence") {
-    return undefined;
+    return { node };
   }
-  return createDiagnostic({ level: "error",
-    code: "append-over-non-sequence",
-    message: `key '${key}' is under 'cascade: append' but this value is not a sequence (got ${node.type === "scalar" ? `a ${node.kind} scalar` : `a ${node.type}`})`,
-    primary: node.span,
-  });
+  if (node.type === "scalar") {
+    return {
+      node: createSequence([node], node.span),
+      diagnostic: createDiagnostic({ level: "info",
+        code: "append-scalar-wrapped",
+        message: `key '${key}' is under 'cascade: append'; the single value '${describeScalarValue(node)}' was taken as a list of one — write [${describeScalarValue(node)}] to say so explicitly`,
+        primary: node.span,
+      }),
+    };
+  }
+  return {
+    node,
+    diagnostic: createDiagnostic({ level: "error",
+      code: "append-over-non-sequence",
+      message: `key '${key}' is under 'cascade: append' but a ${node.type} has no one-item reading and cannot be accumulated (SPEC.md §5.3; a single scalar is taken as a list of one, a mapping is not)`,
+      primary: node.span,
+    }),
+  };
+}
+
+/** A scalar's value as the author wrote it, for `append-scalar-wrapped`'s message. A string shows bare — the message already quotes it, and `JSON.stringify` would double the quoting on the very value the author is being told to bracket. A `bigint` needs `String`, which `JSON.stringify` cannot do at all (it throws). */
+function describeScalarValue(node: Node & { readonly type: "scalar" }): string {
+  return node.kind === "string" ? node.value : String(node.value);
 }
 
 /** `resolveStrategies`'s result: the effective strategy per top-level key, and any `cascade-strategy-weakened` refusals found along the way. */

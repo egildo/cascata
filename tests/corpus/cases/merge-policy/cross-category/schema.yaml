@@ -3,4 +3,5 @@ keys:
     cascade: sideways
   b:
     cascade: append
-    provide: not-a-list
+    provide:
+      bad: value

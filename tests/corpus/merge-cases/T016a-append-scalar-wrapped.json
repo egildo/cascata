@@ -1,0 +1,20 @@
+{
+  "name": "v1.8: a scalar contributed to a key under cascade: append folds to a one-item sequence, with an info notice at the scalar's own span",
+  "cites": "v1.8 FR-001",
+  "fixtureDir": "merge-append/scalar-wrapped",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "styles",
+          { "sequence": [{ "kind": "string", "value": "./report.css" }] }
+        ]
+      ]
+    },
+    "spans": [{ "pointer": "/styles", "document": "config.yaml", "line": 2, "column": 9 }],
+    "diagnostics": [{ "code": "append-scalar-wrapped", "document": "config.yaml", "line": 2, "column": 9 }]
+  }
+}

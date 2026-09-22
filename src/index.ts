@@ -1387,7 +1387,18 @@ export interface MergeInput {
   readonly paths?: PathFacility;
 }
 
-export type MergeResult = { readonly ok: true; readonly configuration: MergedConfiguration } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+/**
+ * `merge()`'s verdict — `src/merge/fold.ts`'s `FoldOutcome`, restated here
+ * as the public name `contracts/merge-api.md` gives it.
+ *
+ * **v1.8 additive field**: the `ok: true` branch carries `diagnostics`,
+ * the fold's own `info` lints (today: `append-scalar-wrapped`). Always
+ * `info`-only, possibly empty; an `error` anywhere still makes the call
+ * `ok: false` with no configuration, exactly as before. `load()`
+ * concatenates them into its own list, on the failure path as well as the
+ * success one (v1.8 FR-006).
+ */
+export type MergeResult = { readonly ok: true; readonly configuration: MergedConfiguration; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /**
  * Fold `resolved.graph` and `resolved.pedigree` into a `MergedConfiguration`
@@ -1744,12 +1755,17 @@ export async function load<T = unknown>(entryPath: string, options: LoadOptions)
   }
   const validated = validate(merged.configuration);
   if (!validated.ok) {
-    return { ok: false, diagnostics: validated.diagnostics };
+    // v1.8 FR-006: the fold's own `info` notices travel with the failure.
+    // A scalar wrapped under `append` and then refused by its item demand
+    // must report both — the wrap is what produced the value the demand is
+    // refusing, and a refusal of `[42]` at a span where the author wrote
+    // `42` is unreadable without it.
+    return { ok: false, diagnostics: [...merged.diagnostics, ...validated.diagnostics] };
   }
   // v1.0: the last stage, composed like the others rather than
   // reimplemented — `project()` stays public and a tool stepping through
   // the pipeline by hand reaches the identical value from the identical
   // implementation (FR-023).
   const projected = projectImpl<T>(validated.certified);
-  return { ok: true, configuration: validated.certified, value: projected.value, diagnostics: [...resolved.diagnostics, ...validated.diagnostics, ...projected.diagnostics] };
+  return { ok: true, configuration: validated.certified, value: projected.value, diagnostics: [...resolved.diagnostics, ...merged.diagnostics, ...validated.diagnostics, ...projected.diagnostics] };
 }

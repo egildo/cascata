@@ -1,0 +1,24 @@
+{
+  "name": "v1.8: a config's scalar EXTENDS the root schema's provided list by one item, in rank order — it never replaces it (SPEC.md §5.2)",
+  "cites": "v1.8 FR-003",
+  "fixtureDir": "merge-append/scalar-extended",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "styles",
+          {
+            "sequence": [
+              { "kind": "string", "value": "./a.css" },
+              { "kind": "string", "value": "./b.css" }
+            ]
+          }
+        ]
+      ]
+    },
+    "diagnostics": [{ "code": "append-scalar-wrapped", "document": "config.yaml", "line": 2, "column": 9 }]
+  }
+}

@@ -1,11 +1,19 @@
 {
-  "name": "T052a: cascade: append over a scalar is refused as append-over-non-sequence, positioned in the layer that supplied the scalar (schema-root) rather than the layer that declared append (schema-mid)",
-  "cites": "v0.3 FR-013",
+  "name": "T052a (amended by v1.8): a scalar pre-existing the transition to cascade: append is taken as a list of one, noticed in the layer that SUPPLIED the scalar (schema-root) rather than the layer that declared append (schema-mid)",
+  "cites": "v1.8 FR-004",
   "fixtureDir": "merge-policy/append-misuse/scalar",
   "entry": "config.yaml",
   "sandboxRoot": ".",
   "expect": {
-    "ok": false,
-    "diagnostics": [{ "code": "append-over-non-sequence", "document": "schema-root.yaml", "line": 3, "column": 14 }]
+    "ok": true,
+    "tree": {
+      "mapping": [
+        [
+          "items",
+          { "sequence": [{ "kind": "string", "value": "a-scalar" }] }
+        ]
+      ]
+    },
+    "diagnostics": [{ "code": "append-scalar-wrapped", "document": "schema-root.yaml", "line": 3, "column": 14 }]
   }
 }

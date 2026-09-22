@@ -142,6 +142,11 @@ export async function runMergeCase(testCase: MergeCase): Promise<MergeCaseResult
     if (testCase.expect.why !== undefined) {
       checkWhy(failures, testCase.fixtureDir, result.configuration, testCase.expect.why);
     }
+    // v1.8 (016 FR-002): a successful merge may carry `info` lints. An
+    // absent `expect.diagnostics` means "none" rather than "do not look" —
+    // otherwise a case could raise a notice nobody declared and still pass,
+    // which is the failure mode the `ok: false` branch has never had.
+    checkDiagnostics(failures, testCase.fixtureDir, result.diagnostics, testCase.expect.diagnostics ?? []);
   } else {
     if (result.ok) {
       failures.push("expected ok:false, got ok:true");

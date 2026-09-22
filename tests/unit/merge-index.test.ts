@@ -23,13 +23,21 @@ async function resolveFixture(): Promise<Extract<Awaited<ReturnType<typeof resol
 }
 
 describe("merge() (T024) — FR-010, contracts/merge-api.md", () => {
-  it("returns ok:true with a configuration, never both a configuration and diagnostics", async () => {
+  it("returns ok:true with a configuration, and never a configuration alongside an error", async () => {
     const resolved = await resolveFixture();
     const result = merge({ graph: resolved.graph, pedigree: resolved.pedigree });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
     expect(result.configuration.tree).toBeDefined();
-    expect("diagnostics" in result).toBe(false);
+    // v1.8: the `ok: true` branch now carries `diagnostics` — the fold can
+    // raise an `info` (`append-scalar-wrapped`) that changes a value
+    // without refusing it, and a lint nobody carries is a lint nobody
+    // reads. The claim FR-010 actually makes is about **errors**, and it is
+    // asserted directly here rather than through the absence of a field:
+    // a merge yields a configuration or errors, never both. This fixture
+    // raises nothing at all, so the list is also empty.
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.level === "error")).toEqual([]);
+    expect(result.diagnostics).toEqual([]);
   });
 
   it("the merged tree is deeply frozen (FR-010) — mutation attempts throw", async () => {

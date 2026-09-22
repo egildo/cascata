@@ -52,8 +52,24 @@ export const FETCH_INTEGRITY_CODES = ["pin-mismatch", "malformed-pin", "insecure
  * is named in SPEC.md §5.3 as reserved, so an author writing it is early,
  * not wrong, and a diagnostic saying "unknown" would teach them the
  * opposite (the same reasoning v0.2 applied to `multiple-adoption`).
+ *
+ * **`append-scalar-wrapped`** (v1.8, `SPEC.md` §5.3, §15) is the one
+ * `level: "info"` code in this list — a normalization lint, not a refusal.
+ * `append` promises a list, and the commonest contribution to one is a
+ * single item, so a scalar written where the list accumulates is taken as
+ * a sequence of that one scalar and the author is told, at the scalar's own
+ * position, in the layer that wrote it. The posture is exactly
+ * `precision-narrowed`'s (`OUTPUT_SURFACE_CODES` below, §17): the value is
+ * changed, the author is told, the build continues — never silent, and
+ * never fatal. It lives here rather than beside `precision-narrowed`
+ * because a code belongs with the stage that raises it, and this one is
+ * raised by the fold; the milestone spec asks for both placements and they
+ * are mutually exclusive (see the report).
+ *
+ * A **mapping** keeps `append-over-non-sequence`: there is no one-item
+ * reading of a mapping, so nothing is normalized and the refusal stands.
  */
-export const MERGE_POLICY_CODES = ["unknown-cascade-strategy", "unimplemented-cascade-strategy", "append-over-non-sequence", "cascade-strategy-weakened"] as const;
+export const MERGE_POLICY_CODES = ["unknown-cascade-strategy", "unimplemented-cascade-strategy", "append-over-non-sequence", "append-scalar-wrapped", "cascade-strategy-weakened"] as const;
 
 /**
  * `demand` vocabulary problems (v0.4, `SPEC.md` §9) —

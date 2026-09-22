@@ -62,7 +62,15 @@ export type ExpectedWhy =
   | { readonly pointer: string; readonly kind: "unknown-pointer" };
 
 export type MergeExpect =
-  | { readonly ok: true; readonly tree: ExpectedNode; readonly spans?: readonly ExpectedMergeSpan[]; readonly why?: readonly ExpectedWhy[] }
+  /**
+   * `diagnostics` on the `ok: true` branch is v1.8 (016 FR-002): a merge
+   * that succeeds may still carry `info` lints — `append-scalar-wrapped`
+   * today — and the resolve corpus's own `expect` has had the equivalent
+   * since v0.7. Optional, and checked exactly as the `ok: false` list is
+   * (count, then code/document/line/column in order), so omitting it on a
+   * case that raises one is a failure, not a pass.
+   */
+  | { readonly ok: true; readonly tree: ExpectedNode; readonly spans?: readonly ExpectedMergeSpan[]; readonly why?: readonly ExpectedWhy[]; readonly diagnostics?: readonly ExpectedMergeDiagnostic[] }
   | { readonly ok: false; readonly diagnostics: readonly ExpectedMergeDiagnostic[] };
 
 /** One merge-conformance case. */
@@ -192,7 +200,13 @@ function parseExpect(raw: unknown, source: string): MergeExpect {
     const rawWhy = raw["why"];
     const spans = rawSpans === undefined ? undefined : Array.isArray(rawSpans) ? rawSpans.map((span, index) => parseMergeSpan(span, source, `expect.spans[${index}]`)) : fail(source, "'expect.spans' must be an array if present");
     const why = rawWhy === undefined ? undefined : Array.isArray(rawWhy) ? rawWhy.map((entry, index) => parseWhy(entry, source, `expect.why[${index}]`)) : fail(source, "'expect.why' must be an array if present");
-    return { ok: true, tree, ...(spans !== undefined ? { spans } : {}), ...(why !== undefined ? { why } : {}) };
+    const rawDiagnostics = raw["diagnostics"];
+    const diagnostics = rawDiagnostics === undefined
+      ? undefined
+      : Array.isArray(rawDiagnostics)
+        ? rawDiagnostics.map((item, index) => parseMergeDiagnostic(item, source, `expect.diagnostics[${index}]`))
+        : fail(source, "'expect.diagnostics' must be an array if present");
+    return { ok: true, tree, ...(spans !== undefined ? { spans } : {}), ...(why !== undefined ? { why } : {}), ...(diagnostics !== undefined ? { diagnostics } : {}) };
   }
   if (ok === false) {
     const diagnosticsRaw = raw["diagnostics"];
@@ -204,7 +218,11 @@ function parseExpect(raw: unknown, source: string): MergeExpect {
   fail(source, "'expect.ok' must be true or false");
 }
 
-const CITES_PATTERN = /^v0\.3 FR-\d+$/;
+// v1.8 (016) joins v0.3: this corpus is the merge engine's, and the merge
+// engine has been amended once since. The gate is undocumented outside this
+// line and was found the same way 015 found `resolve-case.ts`'s twin — by a
+// case refusing to load.
+const CITES_PATTERN = /^v(0\.3|1\.8) FR-\d+$/;
 
 /** Load and validate one merge-conformance case from `file`. `fixtureDir` resolves relative to `file`'s directory, per the case's own `fixtureDir` field, same convention as `resolve-case.ts`. */
 export function loadMergeCase(file: string): MergeCase {

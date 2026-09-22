@@ -1,0 +1,5 @@
+keys:
+  styles:
+    cascade: append
+    provide:
+      - ./a.css
