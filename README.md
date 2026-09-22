@@ -167,14 +167,14 @@ await load("./site.yaml", {
 
 Everything under `src/` except that one file is free of `node:` imports, and a test enforces it. A browser, a Deno worker, a virtual filesystem in a test suite, or a host that resolves `$adopts: myapp:document` to a package-local file are all a `Host` implementation away.
 
-Remote schemas are pinned by SHA-256 (`$pin`), fetched over HTTPS only, cached per RFC 9111, and a document's own text can never reach outside the sandbox root the embedder chose. Delegation to a remote fragment is available only where the host supplies it and the user has opted in, never because a schema asked.
+Remote schemas are pinned by SHA-256 (`$pin`), fetched over HTTPS only, cached per RFC 9111, and a document's own text can never reach outside the sandbox roots the embedder chose — `sandboxRoot` is a location or a list of them, granted and never inferred, so a house schema shared across projects is reachable exactly when the embedder says so. Delegation to a remote fragment is available only where the host supplies it and the user has opted in, never because a schema asked.
 
 ## Install
 
 Cascata is not on npm yet (the name is taken by an unrelated package). Install from git, using a `-dist` tag, which carries the built output so consumers need no compiler:
 
 ```bash
-pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.6.0-dist"
+pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.7.0-dist"
 ```
 
 Node 22 or later. TypeScript declarations are included. Exports: `cascata`, `cascata/generate`, `cascata/host/node`.
@@ -191,7 +191,7 @@ Node 22 or later. TypeScript declarations are included. Exports: `cascata`, `cas
 
 ## Status
 
-**v1.6**, and the specification is frozen. A correction to `SPEC.md` is always permitted, an addition is permitted while no existing meaning changes, and changing an existing meaning requires v2.0. Every release since v1.0 has been an addition. Nothing a schema meant before any of them means anything else after.
+**v1.7**, and the specification is frozen. A correction to `SPEC.md` is always permitted, an addition is permitted while no existing meaning changes, and changing an existing meaning requires v2.0. Every release since v1.0 has been an addition. Nothing a schema meant before any of them means anything else after.
 
 The pipeline, in the order the library runs it:
 

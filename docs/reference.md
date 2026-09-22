@@ -13,12 +13,15 @@ for (`SPEC.md` Article VI).
 **v1.6.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
 frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
 meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
-first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth; every one of them is an
+first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh; every one of them is an
 addition — Article VIII's accumulated demand and type generator, then a second format adapter, then the
 launching schema, then a namespace the host can own, then a library that loads in a browser realm, then config
-documents the embedder names ranked after the entry. Nothing a schema meant before any of those releases
-means anything else after it. Of the six, v1.4 alone carries a *correction* beside its addition: a
-`sandboxRoot` naming a filesystem root now contains what is under it.
+documents the embedder names ranked after the entry, then a sandbox the caller may grant more than one root for.
+Nothing a schema meant before any of those releases means anything else after it. Two of the seven carry
+*corrections* beside their additions: v1.4's, that a `sandboxRoot` naming a filesystem root contains what is
+under it, and v1.7's two — that a location which does not exist is judged through its nearest existing
+ancestor, so a root behind a symbolic link no longer reads *absent* as *outside*, and that a schema's `~/`
+expands (and is then confined), which §5.3 had always shown and §15 had forbidden.
 
 | | |
 | --- | --- |
@@ -35,6 +38,7 @@ means anything else after it. Of the six, v1.4 alone carries a *correction* besi
 | **v1.3** | **the launching schema** — `resolve()`/`load()` accept `schema`, a stand-in for the `$schema` line an entry did not write, consulted only when the entry names none; built for an embedder whose entry is a Markdown file's frontmatter |
 | **v1.4** | **host-resolvable identity** — an optional `Host.locate` lets a host own a URI scheme, so `$adopts: beltype:document` names a document by identity rather than by a path that differs on every machine; plus the correction that `sandboxRoot: "/"` contains everything under it |
 | **v1.5** | **it loads where Node does not** — `node:crypto`, the `Buffer` global, `node:path` and `node:os` are gone from the library proper: SHA-256 is arithmetic of its own, byte length is counted rather than encoded, and path semantics are an optional `Host.paths` the shipped Node host answers with `node:path`'s own functions |
+| **v1.7** | **sandbox roots** — `sandboxRoot` takes a list, and a schema's `~/` expands and is then confined, so a house schema shared by every project on a machine has a lawful door; plus the correction that an absent file under a symlinked root is `document-unreachable` and not `sandbox-escape`, and `posixPaths` exported from `cascata/paths` |
 | **v1.6** | **overrides** — `resolve()`/`load()` accept `overrides`, config documents the embedder names, read after the entry's chain and ranked after it in the order given, governed by every demand, `final` and `append` the pedigree accumulated exactly as the entry is; built for an embedder whose operator sets a key from a command line |
 
 Full detail lives in `specs/001-…` through `specs/014-…`, each with its own `spec.md`, `plan.md`,
@@ -223,11 +227,16 @@ if (result.ok) {
 ```
 
 - **`entryPath: string`** — the entry document's path. Always local; the entry itself is never a URL.
-- **`options.sandboxRoot: string`** — **required**, no default, none inferred from the entry
-  document's location (v0.2 FR-022). A **schema-authored** local reference resolving outside this
-  root — including through a symlink — is refused as `sandbox-escape` (v0.2 FR-021). A **config's own**
-  reference is exempt (v0.2 FR-020): the author wrote it, which is consent (`SPEC.md` §9's own worked
-  chain, `$schema: ~/.config/house.yaml`, depends on this asymmetry).
+- **`options.sandboxRoot: string | readonly string[]`** — **required**, no default, none inferred
+  from the entry document's location (v0.2 FR-022, v1.7 FR-004). A location, or a list of them; a
+  bare string is the one-element list, and a reference is inside the sandbox when it is inside **any**
+  granted root. A **schema-authored** local reference resolving outside every one of them — including
+  through a symlink — is refused as `sandbox-escape` (v0.2 FR-021), and the refusal names the path as
+  resolved, every granted root, and this option. A **config's own** reference is exempt (v0.2 FR-020):
+  the author wrote it, which is consent (`SPEC.md` §9's own worked chain, `$schema: ~/.config/house.yaml`,
+  depends on this asymmetry). Granted, never ambient, member-wise: `undefined`, `""`, `[]`, and a list
+  with a member that is not a non-empty string all throw. Delegation is confined by the same set —
+  there is one sandbox, not one per mechanism.
 - **`options.cacheDir?: string`** — where fetched remote documents are cached on disk (v0.2 FR-016).
   Optional in the type, but resolution throws the moment it reaches an `https://` reference with none
   supplied — granted, never ambient, the same posture as `sandboxRoot`, enforced only where it becomes
@@ -262,7 +271,7 @@ answers "what schemas am I bound by", and the config is not an answer to that �
 
 ```typescript
 interface Reference {
-  text: string; // what was written — a relative path, a `~/`-prefixed path, or an absolute URL
+  text: string; // what was written — a relative path, a `~/`-prefixed path (expanded for a local document under either authority since v1.7), or an absolute URL
   span: SourceSpan; // where it was written, in the document that wrote it
   kind: "schema" | "adopts" | "delegate"; // v0.6
   authority: "config-authored" | "schema-authored"; // decides sandbox treatment — never from the text
@@ -296,7 +305,7 @@ that failed** (v0.2 FR-023).
 | `multiple-adoption` | A sequence value for `$adopts`/`$schema` — v1 adopts exactly one parent (`SPEC.md` §6.1, §9) |
 | `chain-limit-exceeded` | A chain longer than `maxChainLength` |
 | `unsupported-scheme` | A reference whose scheme is not HTTPS or a relative path — `http:`, `file:`, `data:` |
-| `sandbox-escape` | A **schema-authored** local reference resolving outside the sandbox root, including through a symlink |
+| `sandbox-escape` | A **schema-authored** local reference resolving outside every granted sandbox root, including through a symlink. A reference to a file that merely does not *exist* is `document-unreachable`, not this (v1.7 FR-001/FR-002) |
 | `pin-mismatch` | Fetched bytes whose hash differs from the stated `$pin` — names both expected and actual; the bytes never enter the graph |
 | `malformed-pin` | A `$pin` that is not a well-formed `sha256:<64 hex digits>` value |
 | `insecure-redirect` | A redirect hop leaving HTTPS — checked hop by hop, not just at the final destination |
@@ -339,7 +348,7 @@ favicon: ./icon.png             # NOT granted — stays the literal string (§8.
   two positions is read once but parsed and attributed independently — two grafts never share a
   breadcrumb, which is what makes each one's own error position correct.
 - **Security is unconditional, not authority-gated** (§8.4): every delegated reference — however
-  deeply nested, whoever nominally "wrote" the string — is confined to the sandbox root and refused if
+  deeply nested, whoever nominally "wrote" the string — is confined to the granted sandbox roots and refused if
   absolute, with no `$schema`-style exemption for a "config-authored" string. Remote targets are
   refused unless the **caller** opts in (`ResolveOptions.allowRemoteDelegation`), never a schema; the
   refusal names the missing opt-in and never suggests a schema could grant it.
@@ -807,6 +816,12 @@ const host: Host = {
 A located reference is **not sandbox-checked**: the host chose the location, and the sandbox confines what a *document's own text* can reach (`SPEC.md` §16, §8.1). The exemption does not travel — what the located document writes for itself is checked as usual. Delegation targets are untouched.
 
 **The sandbox root correction (v1.4).** `sandboxRoot: "/"` now admits every absolute path beneath it. Containment was "equal to the root, or the root plus a separator", which for `/` read `startsWith("//")` and admitted nothing at all; the separator is now appended only where the root does not already end in one. `/sandbox` still does not contain `/sandboxfoo`.
+
+**Sandbox roots (v1.7).** `sandboxRoot` takes a list as well as a location, and a reference is inside the sandbox when it is inside any member — the lawful door for a house schema shared by every project on a machine, which lives outside all of them. The posture is unmoved: granted, never ambient. No root is inferred, none is read from a document, nothing a document says can add one, and an empty list is refused as a missing root always was. Delegation (§8.4) is confined by the same set.
+
+A schema's leading `~/` now **expands**, through `Host.paths`' `homeDirectory`, and is then confined exactly as any other path a schema wrote: admitted only where a granted root contains it, and otherwise refused with a diagnostic naming the real path. §5.3's own worked chain — a project *schema* writing `$adopts: ~/.config/house.yaml` — could not resolve before this. A config-authored `~/` is what it was. A `~/` inside a document read over `https://` is not expanded under either authority: a remote document has no home on the reader's machine, and a home path is never joined into a URL. The one bounded change of behavior: a schema that wrote `~/x` meaning a directory literally named `~` beside itself must now write `./~/x`.
+
+**Absent is not outside (v1.7).** Containment canonicalizes both sides through the host and used to fall back to the *lexical* path for whichever the host could not answer for — a location that does not exist. The root exists, so under a root that is or sits beneath a symbolic link the two sides were compared in different spaces and a merely absent file inside the root was refused as `sandbox-escape`. On macOS that is the ordinary case, not a corner: `/tmp` and `/var` are links. A missing location is now judged through its nearest existing ancestor, with the segments that do not exist appended — none of which can be a link, because none of them exists. An absent file inside the root is `document-unreachable`; an absent file outside it is still `sandbox-escape`.
 
 `load()` composes `resolve()` → `merge()` → `validate()` → `project()`; the staged calls stay public.
 Diagnostics carry a **level**: an `error` decides the outcome, an `info` is a lint that teaches and

@@ -204,6 +204,10 @@ position of the offending reference.
   directory (`SPEC.md` §9). Schema-authored references MUST NOT expand it — a schema naming a path
   outside the project is what FR-021 exists to refuse, and expansion would only make that easier to
   write.
+  *Amended by v1.7 FR-007 and FR-008, `specs/015-sandbox-roots/`: a leading `~/` written by a local
+  document expands under either authority and a schema-authored one is then confined by FR-021, which
+  is where reach was granted all along; a `~/` in a document read over `https://` is not expanded at
+  all. The text above stays as history.*
 - **FR-007**: Every resolved document MUST carry a **canonical identity** — its location together
   with the hash of its bytes — and identity, not reference text, MUST decide whether two references
   name the same document.
@@ -257,6 +261,10 @@ position of the offending reference.
   parent-directory escapes and no absolute paths. Escape MUST be judged on the resolved target,
   including through symbolic links.
 - **FR-022**: The sandbox root MUST be supplied by the caller, never inferred silently.
+  *Amended by v1.7 FR-004 to FR-006, `specs/015-sandbox-roots/`: the caller may supply more than one
+  root, and a location is inside the sandbox when it is inside any of them; the requirement above
+  holds member-wise, and an empty list is refused as a missing root always was. The text stays as
+  history.*
 
 **Diagnostics** (§10)
 

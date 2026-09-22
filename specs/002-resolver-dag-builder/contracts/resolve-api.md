@@ -15,8 +15,10 @@ ResolveResult =
   | { ok: false, diagnostics: Diagnostic[] }   // non-empty, ordered
 ```
 
-`sandboxRoot` is **required**. There is no default and none is inferred from the entry document's
-location (FR-022) — a capability is granted, never ambient.
+`sandboxRoot` is **required**, and is `string | readonly string[]` as of v1.7 FR-004 (a bare string
+is the one-element list; a reference is inside the sandbox when it is inside any granted root). There
+is no default and none is inferred from the entry document's location (FR-022, held member-wise by
+v1.7 FR-005) — a capability is granted, never ambient.
 
 `cacheDir` is **conditionally required**: optional in the type, but resolution **throws** the moment
 it reaches an `https://` reference without one — an exception, not a diagnostic. Missing it is
