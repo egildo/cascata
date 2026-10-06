@@ -116,8 +116,8 @@ YAML (`tests/corpus/cases/encoding/`):
 | `lone-cr-in-double-quoted` | `a: "x\ry"\n` | `{a: "x y"}` (a single line break folds to a space) |
 | `lone-cr-in-literal-block` | `a: \|\r  one\r  two\r` | `{a: "one\ntwo\n"}` |
 | `byte-order-mark-in-quoted-scalar` | `a: "﻿x"\n` | `{a: "\u{FEFF}x"}`, accepted |
-| `byte-order-mark-repeated-prefix` | `﻿﻿a: 1\n` | `/a` 9–10 L1 C4 |
-| `byte-order-mark-after-comment-prefix` | `﻿# c\n﻿a: 1\n` | `/a` 13–14 L2 C4 |
+| `byte-order-mark-repeated-prefix` | `﻿﻿a: 1\n` | `/a` 9–10 L1 C4 — C5 under the amended FR-002 |
+| `byte-order-mark-after-comment-prefix` | `﻿# c\n﻿a: 1\n` | `/a` 13–14 L2 C4 — C5 under the amended FR-002 |
 | `byte-order-mark-misplaced` | `a: 1\n﻿b: 2\n` | `malformed-document` 5–8 L2 C1 |
 | `byte-order-mark-in-comment` | `a: 1 # ﻿\n` | `malformed-document` 7–10 L1 C8 |
 
