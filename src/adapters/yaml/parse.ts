@@ -45,7 +45,7 @@
  * never fire on real input.
  */
 
-import { LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument } from "yaml";
+import { LineCounter, isAlias, isMap, isScalar, isSeq, parseDocument, visit } from "yaml";
 import type { Alias, Document, ParsedNode, Range, Scalar, YAMLMap, YAMLSeq } from "yaml";
 import { DiagnosticCollector } from "../../diagnostics/collector.js";
 import { createDiagnostic, type Diagnostic } from "../../diagnostics/diagnostic.js";
@@ -63,6 +63,7 @@ import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span
 import { resolveAlias, isMergeKeyPair, mergeSources } from "./expand.js";
 import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsupportedTagDiagnostic } from "./floor.js";
 import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "../limits.js";
+import { allMarks, blankRepeatedPrefixMarks, documentPrefixMarks } from "./marks.js";
 import { findFirstInvalidUtf8ByteOffset, locateByteOffset, utf8ByteLength } from "../encoding.js";
 
 // `yaml` merges each of these classes with a `.Parsed` namespace member
@@ -528,6 +529,40 @@ function findLoneSurrogateOffsets(text: string): number[] {
   return offsets;
 }
 
+/**
+ * Every U+FEFF in `text` that is neither in the document prefix (`prefixMarks`)
+ * nor the content of a quoted scalar of `doc` — SPEC.md §4.2, v1.9. Ascending.
+ */
+function findMisplacedMarks(text: string, prefixMarks: readonly number[], doc: Document): number[] {
+  const inPrefix = new Set(prefixMarks);
+  const candidates = allMarks(text).filter((index) => !inPrefix.has(index));
+  if (candidates.length === 0) {
+    return [];
+  }
+  // Quoted scalars cannot nest and `visit` walks in document order, so the
+  // ranges ascend and one forward pass over the (ascending) marks suffices.
+  const quoted: Range[] = [];
+  visit(doc, {
+    Scalar(_key, node) {
+      if ((node.type === "QUOTE_DOUBLE" || node.type === "QUOTE_SINGLE") && node.range != null) {
+        quoted.push(node.range);
+      }
+    },
+  });
+  const misplaced: number[] = [];
+  let next = 0;
+  for (const index of candidates) {
+    while (quoted[next] !== undefined && (quoted[next]?.[1] ?? 0) <= index) {
+      next += 1;
+    }
+    const range = quoted[next];
+    if (range === undefined || index <= range[0]) {
+      misplaced.push(index);
+    }
+  }
+  return misplaced;
+}
+
 interface YamlReaderError {
   readonly code: string;
   readonly message: string;
@@ -599,7 +634,11 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   // handed an LF for each CR no LF follows — one code unit for one, so no
   // range moves — and everything that counts (offsets, columns, the surrogate
   // scan) keeps reading the stored `text`.
-  const doc = parseDocument(text.replace(LONE_CARRIAGE_RETURN, "\n"), { intAsBigInt: true, merge: true, lineCounter });
+  // v1.9 FR-005: a mark after the first on a prefix line is blanked, one code
+  // unit for one, because `yaml` would take it into the first key.
+  const prefixMarks = documentPrefixMarks(text);
+  const yamlText = blankRepeatedPrefixMarks(text.replace(LONE_CARRIAGE_RETURN, "\n"), prefixMarks);
+  const doc = parseDocument(yamlText, { intAsBigInt: true, merge: true, lineCounter });
 
   for (const offset of findLoneSurrogateOffsets(text)) {
     const span = toSourceSpan([offset, offset + 1, offset + 1], spanContext);
@@ -612,7 +651,26 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
     );
   }
 
+  // A mark outside a document prefix and a quoted scalar is not YAML 1.2.2
+  // (`yaml` admits most of them silently). Where `yaml` also errored at the
+  // mark, Cascata's diagnostic stands in for it rather than doubling it.
+  const misplacedMarks = findMisplacedMarks(text, prefixMarks, doc);
+  const misplacedAt = new Set(misplacedMarks);
+  for (const offset of misplacedMarks) {
+    diagnostics.add(
+      createDiagnostic({
+        level: "error",
+        code: "malformed-document",
+        message: "A byte-order mark (U+FEFF) is allowed only at the start of the document or inside a quoted string",
+        primary: toSourceSpan([offset, offset + 1, offset + 1], spanContext),
+      }),
+    );
+  }
+
   for (const error of doc.errors) {
+    if (misplacedAt.has(error.pos[0])) {
+      continue;
+    }
     const diagnostic = readerErrorDiagnostic(error, spanContext);
     if (diagnostic !== undefined) {
       diagnostics.add(diagnostic);

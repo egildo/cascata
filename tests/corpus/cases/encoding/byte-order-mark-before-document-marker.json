@@ -1,0 +1,29 @@
+{
+  "name": "encoding/byte-order-mark-before-document-marker",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "﻿---\na: 1\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/a",
+        "line": 2,
+        "column": 4,
+        "start": 10,
+        "end": 11,
+        "text": "1"
+      }
+    ]
+  }
+}

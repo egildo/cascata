@@ -77,6 +77,6 @@ case named for a byte-order mark. **Not cross-checked**; the prefix cases rest o
 - [x] T003 FR-001/FR-002 mark half in both adapters and the locator; sabotage; commit
 - [x] T004 Step 2 cases written and red
 - [x] T005 FR-003/FR-004; sabotage; commit
-- [ ] T006 Step 3 cases written and red
-- [ ] T007 FR-005; sabotage; commit
+- [x] T006 Step 3 cases written and red
+- [x] T007 FR-005; sabotage; commit
 - [ ] T008 FR-007 doc sweep, `report.md`; commit

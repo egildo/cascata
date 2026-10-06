@@ -1,0 +1,18 @@
+{
+  "name": "encoding/byte-order-mark-in-block-scalar",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: |\n  x﻿y\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 2,
+        "column": 4,
+        "start": 8,
+        "end": 11,
+        "text": "﻿"
+      }
+    ]
+  }
+}

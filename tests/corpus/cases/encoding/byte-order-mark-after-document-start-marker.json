@@ -1,0 +1,18 @@
+{
+  "name": "encoding/byte-order-mark-after-document-start-marker",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "---\n﻿a: 1\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 2,
+        "column": 1,
+        "start": 4,
+        "end": 7,
+        "text": "﻿"
+      }
+    ]
+  }
+}

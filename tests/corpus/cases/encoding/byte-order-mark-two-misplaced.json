@@ -1,0 +1,26 @@
+{
+  "name": "encoding/byte-order-mark-two-misplaced",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: 1\n﻿b: 2\nc: 3 # ﻿\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 2,
+        "column": 1,
+        "start": 5,
+        "end": 8,
+        "text": "﻿"
+      },
+      {
+        "code": "malformed-document",
+        "line": 3,
+        "column": 8,
+        "start": 20,
+        "end": 23,
+        "text": "﻿"
+      }
+    ]
+  }
+}

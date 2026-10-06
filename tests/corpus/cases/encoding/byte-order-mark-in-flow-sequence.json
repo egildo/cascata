@@ -1,0 +1,18 @@
+{
+  "name": "encoding/byte-order-mark-in-flow-sequence",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "[a, ﻿b]\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 1,
+        "column": 5,
+        "start": 4,
+        "end": 7,
+        "text": "﻿"
+      }
+    ]
+  }
+}
