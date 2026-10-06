@@ -173,6 +173,9 @@ tree written by hand from the rendered text.
   `invalid-encoding` at the first ill-formed byte offset. No repair to U+FFFD, ever.
 - **FR-004**: A single leading byte-order mark MUST be stripped before parsing and MUST contribute
   zero bytes and zero columns to every span, exactly as the YAML adapter does.
+  *Amended by v1.9, `specs/017-stored-bytes/`: the mark contributes zero columns and its three bytes
+  to every offset, exactly as the YAML adapter now does (SPEC.md §4.2). The text above stays as
+  history.*
 - **FR-005**: The document MUST be exactly one JSON value, optionally surrounded by RFC 8259
   whitespace. Trailing content MUST be `malformed-document` at its first byte.
 - **FR-006**: Empty or whitespace-only input MUST be `malformed-document` at offset 0.

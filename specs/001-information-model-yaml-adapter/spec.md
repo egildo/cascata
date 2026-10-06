@@ -144,6 +144,8 @@ case as data only and confirm it executes without any code change.
   explicitly. Precedence for merge keys is defined; a genuine duplicate is still refused.
 - **A byte-order mark** at the start of the file, which must not shift every reported position by
   one.
+  *Amended by v1.9, `specs/017-stored-bytes/`: a leading mark shifts no line or column, and counts
+  as its three bytes in every offset (SPEC.md §4.2). The text above stays as history.*
 - **Mixed or unusual line endings**, which must not shift reported line and column numbers.
 - **A limit reached exactly at its boundary** — the case that is allowed and the case one step past
   it must be distinguishable.
@@ -183,6 +185,9 @@ case as data only and confirm it executes without any code change.
   precedence over merged ones.
 - **FR-010**: Reported positions MUST be stable regardless of line-ending convention or the presence
   of a byte-order mark.
+  *Amended by v1.9, `specs/017-stored-bytes/`: "positions" holds for line and column only. Offsets
+  count stored bytes, a carriage return and a leading byte-order mark included, and a lone CR ends
+  a line (SPEC.md §4.2). The text above stays as history.*
 - **FR-011**: A key appearing more than once in one mapping — including duplicates introduced by
   expansion — MUST be refused. A later value MUST NOT silently replace an earlier one.
 - **FR-012**: A key that is not text MUST be refused, at that key's position.

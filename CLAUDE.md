@@ -95,6 +95,14 @@ section of a report has been worth more than the diff.
 - **`yaml` silently accepts** complex keys, non-string scalar keys (`1:`, `true:`), and non-core tags
   (`!!binary`, `!!timestamp`, `!!set`, `!!omap`), and builds a **circular structure** for alias cycles
   without error. All four are Cascata's to enforce.
+- **`yaml` does not treat a lone CR as a line break**, though YAML 1.2.2 does: `a: 1\r` parses as
+  the *string* `"1\r"`, silently. It also admits a byte-order mark at the start of a later line into
+  a plain key, which YAML 1.2.2 forbids. Both are Cascata's to correct (v1.9, SPEC.md §4.2). A lone
+  CR swapped for an LF changes no offset; anything that changes a length does.
+- **Offsets count stored bytes; line and column count what a person sees** (v1.9). A carriage
+  return and a leading byte-order mark are in every offset and in no column. Any fix that removes
+  bytes before parsing must add them back to offsets, as `rustc` learned when `cargo fix` broke on
+  Windows CRLF files.
 - **Sorting strings by JS default (`<`, `sort()`, `localeCompare`) is UTF-16 order, not code point
   order.** They disagree above the BMP. The model sorts by code point.
 - **A JS object cannot enumerate in canonical order.** ECMA-262's `OrdinaryOwnPropertyKeys` returns
