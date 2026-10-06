@@ -73,7 +73,7 @@ No other existing test went red.
    and so would any 1.2.2 parser. Fixed the case, not the code: `a: "x\r  y"\n`, value `"x y"`, `/a` 3-10
    L1 C4. (My first draft of that case also had a wrong `end`, caught by hand: 3-8 is the value, quote
    excluded.) The spec's phrase "a single line break folds to a space" is right; the example was not.
-3. **FR-002 and FR-005 cannot both be read literally.** FR-002: "a byte-order mark is never counted in
+3. **(Decided by the owner in round 2: only a mark at byte 0 is never a column. See Round 2.) FR-002 and FR-005 cannot both be read literally.** FR-002: "a byte-order mark is never counted in
    [`column`]". FR-005: a mark inside a quoted scalar "is content". Content is a code point and columns
    count code points. And the byte-path locator runs before any format is known, so it cannot tell a
    prefix mark from content. **Invented rule: no U+FEFF is ever counted in a column, on any path** (it is
@@ -91,7 +91,7 @@ No other existing test went red.
    line into a plain key". The probe (plan.md) shows `yaml` admits one silently in a plain scalar, a
    plain key, a flow sequence, a block scalar, an indent, after `---`, and a comment; it errors only on
    `--- ⌁a`, a block-scalar line start and a trailing mark.
-6. **"Repeatably" in FR-005 is not free from `yaml`**: `⌁⌁a: 1` yields the key `"⌁a"`. The spec
+6. **(Fixed in round 2.) "Repeatably" in FR-005 is not free from `yaml`**: `⌁⌁a: 1` yields the key `"⌁a"`. The spec
    (and the "probe gate" paragraph) hand-waves prefix marks as accepted; they are only accepted because
    the adapter blanks the second and later ones to a space for `yaml`. Consequence, not fixed:
    `⌁⌁---⏎a: 1` (valid YAML 1.2.2) becomes ` ---` and is *refused* by `yaml` with its own error at 1:1
@@ -125,3 +125,89 @@ No other existing test went red.
 
 Marks in the corpus JSON files are written as raw U+FEFF in YAML-format `input` strings (invisible in
 editors); the `text` fields likewise. Consider `﻿` escapes if that bites someone.
+
+---
+
+# Round 2: the repeated-prefix regression, and the owner's column rule
+
+Tests 2251 before, 2269 after. `pnpm typecheck` and `pnpm test` green at each commit; no SABOTAGE residue.
+
+## Commits
+
+- `b141850` fix(017): repeated prefix marks are removed from what yaml reads, not blanked
+- `2efcd52` feat(017): only a mark at byte 0 is never a column; any other U+FEFF counts
+- (this report) docs commit
+
+## 1. The regression (round-1 item 6)
+
+`⌁⌁---⏎a: 1⏎` (two prefixes, then an explicit document) is valid YAML 1.2.2, read as `{a: 1}` before 017
+and refused by round 1, whose blanking made ` ---`. Fixed in `src/adapters/yaml/marks.ts` and `parse.ts`:
+every prefix mark is **removed** from the text `yaml` reads; `storedIndexer` maps the parser's ranges and
+error positions back to stored indices (binary search; boundary indices land after the removed marks);
+lines are now counted by Cascata over the stored text rather than by `yaml`'s lexer. Offsets still count
+stored bytes. Justification and rejected alternatives are in `plan.md`, "Round 2".
+
+Cases (values by hand from the bytes; the first four were red against round 1 or the mapping, the pin was
+green throughout):
+- `byte-order-mark-repeated-prefix-before-document-marker`: `⌁⌁---⏎a: 1⏎`, `/a` 13-14 L2 C4. Red before the fix.
+- `...-repeated-prefix-after-comment-before-document-marker`: `⌁# c⏎⌁---⏎a: 1⏎`, `/a` 17-18 L3 C4. This one
+  was already green (one mark per line was always fine); it is the pin that the shape the coordinator named
+  keeps loading. The existing `byte-order-mark-before-document-marker` (`⌁---`, one mark) is the other pin.
+- `...-repeated-prefix-with-following-line`: `⌁⌁a: 1⏎b: 2⏎`, root `""` 6-15, `/a` 9-10, `/b` 14-15 L2 C4,
+  with `text`. The root span starts *exactly* where marks were removed, which is what makes it the boundary
+  test (see sabotage).
+- `...-repeated-prefix-then-quoted-mark` (`⌁⌁---⏎a: "⌁"⏎`, accepted, `/a` 13-18) and
+  `...-repeated-prefix-then-misplaced` (`⌁⌁---⏎a: 1⏎⌁b: 2⏎`, refused at 15-18 L3 C1): both consume ranges
+  and error positions after the mapping, so a wrong mapping shows as a wrong offset or a wrong verdict.
+
+## 2. The column rule (SPEC.md §4.2, 52c284e)
+
+YAML `codePointColumn` skips the mark only at index 0; the JSON scanner loses its special case entirely
+(it already starts past the leading mark); `locateByteOffset` discounts a mark only when the line begins
+at byte 0. The byte-0 cases did not move.
+
+Cases changed, by hand:
+- `encoding/byte-order-mark-in-quoted-scalar-is-no-column` renamed `-is-a-column`: `["⌁x", 1]`, `/1` C7 to **C8**
+  (`[ " ⌁ x " , ␠ 1` is the 8th code point; `/0` stays C2).
+- `json-encoding/byte-order-mark-in-string-is-no-column` renamed `-is-a-column`: `{"a":"⌁x","b":1}`, `/b` C14 to **C15**.
+- `encoding/byte-order-mark-repeated-prefix`: `/a` C4 to **C5** (the second mark is a column).
+- `encoding/byte-order-mark-after-comment-prefix`: line 2 begins with a mark that is not at byte 0, `/a` C4 to **C5**.
+- New `bytes-encoding/invalid-byte-after-non-leading-byte-order-mark` (`a: ⌁` then FF: 6-7, C5) and
+  `...-after-two-leading-marks` (`⌁⌁` then FF: 6-7, **C2**: first uncounted, second counted).
+Unchanged on purpose: `encoding/byte-order-mark`, `bytes-bom/...-counted`, `json-encoding/byte-order-mark-counted`,
+`bytes-encoding/invalid-byte-after-byte-order-mark` (byte-0 mark), and every diagnostic *at* a mark (a column
+counts what is before it).
+
+## Sabotage (backed up to /tmp, marked, restored)
+
+| Sabotage | Went red |
+|---|---|
+| Count the byte-0 mark, YAML | `encoding/byte-order-mark`, `...-repeated-prefix`, `...-with-following-line`, unit parity test |
+| Count the byte-0 mark, JSON | `json-encoding/byte-order-mark-counted` |
+| Count the byte-0 mark, locator | `invalid-byte-after-byte-order-mark`, `invalid-byte-after-two-leading-marks` |
+| Skip every U+FEFF again, YAML | `...-in-quoted-scalar-is-a-column`, `...-repeated-prefix`, `...-after-comment-prefix`, `...-with-following-line` |
+| Skip every U+FEFF again, JSON | `json-encoding/byte-order-mark-in-string-is-a-column` |
+| Skip every U+FEFF again, locator | `invalid-byte-after-non-leading-byte-order-mark`, `...-after-two-leading-marks` |
+| `storedIndexer` returns the parser index | 8 cases: every marked document |
+| `storedIndexer` boundary `<` for `<=` | **only** `...-repeated-prefix-with-following-line` (root span starts at the boundary); it stayed green until that case existed |
+
+## Documents: still silent, contradictory or wrong
+
+1. **Round-1 item 5 and the spec's FR-005 prose are now in line with §15, but `specs/017-stored-bytes/spec.md`
+   FR-005 still says nothing about *how* repeated prefix marks reach a parser that cannot take them.** That is
+   an implementation fact the spec presumed free; it was not free twice (blanking, then removal).
+2. **`spec.md` FR-008's table and the corpus lists in the spec are not updated** for the flipped and new cases
+   (I did not edit it; only `SPEC.md` was off-limits, but spec.md is the brief). It still lists the
+   `-is-no-column`-free table and the `C4` values for repeated/after-comment prefix cases (`C4` there, `C5` now,
+   and the spec's table rows for `byte-order-mark-repeated-prefix` and `byte-order-mark-after-comment-prefix`
+   say `/a` 9-10 L1 C4 and 13-14 L2 C4). The coordinator's note on FR-002 covers the rule but the table rows
+   contradict it.
+3. **A later document's prefix** (`...⏎⌁---`) remains reported as a misplaced mark besides `multiple-documents`
+   (round-1 item 7): the rule "a prefix mark is removed" is applied to the first prefix only.
+4. **`yaml` positions inside the removed region.** An error `yaml` reports at a position *inside* a removed
+   run cannot exist (the marks are not in its text), but a position at the boundary maps to after the marks;
+   an error "at the start of the document" therefore lands after the prefix, not on it. Unspecified; no case.
+5. **The SPEC §4.2 column sentence says "any other U+FEFF is a character like any other, as a person's editor
+   shows it"**: editors show it as zero-width, so a person counting visible columns would not count it. The owner
+   chose the editor's *decoder* behaviour (one leading mark dropped), which the sentence's rationale half-says.
+   Not wrong, but the rationale and the rule point at different things.
