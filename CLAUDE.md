@@ -139,6 +139,10 @@ section of a report has been worth more than the diff.
 - **`SPEC.md` is frozen as of v1.0** (§15's freeze rule). A *correction* is always permitted; an
   *addition* is permitted while no existing meaning changes; **changing an existing meaning requires
   v2.0**. The engineering constitution does not freeze — it governs process, not the language.
+  **Check every proposed refusal against the rule's own example**, "a rule that starts refusing what
+  it accepted" — v1.9 nearly shipped a lone-CR refusal that was exactly that. The reading §15 (v1.9)
+  makes explicit: refusing what a standard §12 mandates itself refuses is a correction; refusing what
+  that standard accepts needs v2.0.
 - Conventional commits. End messages with the co-author trailer for whichever model authored them.
 - Never amend, rebase, or force-push. Add commits.
 - Tick task checkboxes in `specs/NNN-*/tasks.md` as you complete them.
