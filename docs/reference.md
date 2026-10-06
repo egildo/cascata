@@ -10,14 +10,16 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.8.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
+**v1.9.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
 frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
 meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
-first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh, v1.8 the eighth; every one of them is an
-addition — Article VIII's accumulated demand and type generator, then a second format adapter, then the
+first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh, v1.8 the eighth, v1.9 the ninth. The first eight are
+additions — Article VIII's accumulated demand and type generator, then a second format adapter, then the
 launching schema, then a namespace the host can own, then a library that loads in a browser realm, then config
-documents the embedder names ranked after the entry, then a sandbox the caller may grant more than one root for, then a scalar under `append` taken as a list of one.
-Nothing a schema meant before any of those releases means anything else after it. Two of the eight carry
+documents the embedder names ranked after the entry, then a sandbox the caller may grant more than one root for, then a scalar under `append` taken as a list of one. v1.9 is corrections only: offsets count the stored
+bytes, a lone CR in YAML is the line break YAML 1.2.2 says it is, and a byte-order mark YAML does not admit
+is refused.
+Nothing a schema meant before any of those releases means anything else after it. Two of the first eight carry
 *corrections* beside their additions: v1.4's, that a `sandboxRoot` naming a filesystem root contains what is
 under it, and v1.7's two — that a location which does not exist is judged through its nearest existing
 ancestor, so a root behind a symbolic link no longer reads *absent* as *outside*, and that a schema's `~/`
@@ -41,6 +43,7 @@ expands (and is then confined), which §5.3 had always shown and §15 had forbid
 | **v1.6** | **overrides** — `resolve()`/`load()` accept `overrides`, config documents the embedder names, read after the entry's chain and ranked after it in the order given, governed by every demand, `final` and `append` the pedigree accumulated exactly as the entry is; built for an embedder whose operator sets a key from a command line |
 | **v1.7** | **sandbox roots** — `sandboxRoot` takes a list, and a schema's `~/` expands and is then confined, so a house schema shared by every project on a machine has a lawful door; plus the correction that an absent file under a symlinked root is `document-unreachable` and not `sandbox-escape`, and `posixPaths` exported from `cascata/paths` |
 | **v1.8** | **a scalar under `append`** — a single value contributed to a key under `cascade: append` is taken as a list of one and appended, with an `info` notice (`append-scalar-wrapped`) at the author's own position; a mapping is still refused (`SPEC.md` §5.3) |
+| **v1.9** | **spans count stored bytes** — corrections only: offsets count the document's stored bytes, a carriage return and a leading byte-order mark included, so a span slices exactly its node's text; line and column count what a person sees, with LF, CRLF and a lone CR each ending a line; a lone CR in YAML reads as the line break YAML 1.2.2 says it is, and a byte-order mark outside a document prefix or a quoted scalar is `malformed-document` (`SPEC.md` §4.2) |
 
 Full detail lives in `specs/001-…` through `specs/016-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
@@ -161,7 +164,7 @@ document's **stored bytes**, exactly as read: a carriage return is a byte, a lea
 three, and `bytes.subarray(start, end)` is exactly the text that produced the node (a quoted scalar's
 quotes included). Text handed to `parseText` is counted as its UTF-8 encoding. `line` and `column` are
 for a person: LF, CRLF and a lone CR each end one line, nothing else does (not U+2028, U+2029 or NEL),
-and `column` counts code points from the start of its line, except that a byte-order mark at the very start of the stored bytes is not counted (any other U+FEFF is a character, as an editor shows it). In YAML a lone CR
+and `column` counts code points from the start of its line, except that a byte-order mark at the very start of the stored bytes is not counted (any other U+FEFF is a character, and an editor's cursor counts it as one). In YAML a lone CR
 is a line break, as YAML 1.2.2 says, and a byte-order mark is accepted only before the document's
 content or inside a quoted string — anywhere else it is `malformed-document`, positioned at the mark.
 
