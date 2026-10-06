@@ -10,7 +10,7 @@ not edited. `plan.md` carries the probe table and the decisions; one plan file, 
 1. `8806bae` feat(017): offsets count the stored mark, columns never do; the slice property joins the corpus
 2. `925d43b` feat(017): LF, CRLF and a lone CR each end one line; YAML reads a lone CR as the break it is
 3. `1d4fd52` feat(017): a byte-order mark outside a document prefix or a quoted scalar is malformed-document
-4. (this commit) docs and report
+4. `e9c658d` docs(017): the stored-bytes rule in the reference, stale comments corrected, report
 
 ## What was built
 
