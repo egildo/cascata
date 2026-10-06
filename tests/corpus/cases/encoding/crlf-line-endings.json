@@ -28,7 +28,8 @@
         "line": 2,
         "column": 4,
         "start": 9,
-        "end": 10
+        "end": 10,
+        "text": "2"
       }
     ]
   }

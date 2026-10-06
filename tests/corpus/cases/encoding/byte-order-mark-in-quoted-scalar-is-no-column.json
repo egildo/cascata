@@ -1,0 +1,38 @@
+{
+  "name": "encoding/byte-order-mark-in-quoted-scalar-is-no-column",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "[\"﻿x\", 1]\n",
+  "expect": {
+    "tree": {
+      "sequence": [
+        {
+          "kind": "string",
+          "value": "﻿x"
+        },
+        {
+          "kind": "int",
+          "value": "1"
+        }
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/0",
+        "line": 1,
+        "column": 2,
+        "start": 1,
+        "end": 7,
+        "text": "\"﻿x\""
+      },
+      {
+        "pointer": "/1",
+        "line": 1,
+        "column": 7,
+        "start": 9,
+        "end": 10,
+        "text": "1"
+      }
+    ]
+  }
+}

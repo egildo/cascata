@@ -134,3 +134,46 @@ describe("T056: a failure names the case and the expected-versus-actual differen
     expect(result.failures.some((f) => f.includes("1:1") && f.includes("2:3"))).toBe(true);
   });
 });
+
+describe("017 FR-008: the slice property — `text` is compared against the stored bytes at the reported span", () => {
+  // The stub reports a span over bytes [3, 4) of a document whose first three bytes are a
+  // byte-order mark; the text there is "1" only if the runner slices the *stored* bytes.
+  const origin = createOrigin("t", "<t>");
+  const adapters: AdapterRegistry = {
+    yaml: (() => ({ ok: true, tree: createNullScalar(createSourceSpan({ origin, start: 3, end: 4, line: 1, column: 1, documentLength: 5 })) })) as Adapter,
+  };
+  const spanCase = (text: string) =>
+    parseCase({ name: "x", cites: "§4.2", format: "yaml", input: "﻿1x", expect: { tree: { kind: "null" }, spans: [{ pointer: "", line: 1, column: 1, text }] } }, "test-source");
+
+  it("passes when the slice decodes to the written text, a leading mark counted as three bytes", () => {
+    expect(runCase(spanCase("1"), adapters).failures).toEqual([]);
+  });
+
+  it("fails, naming both texts, when it does not", () => {
+    const result = runCase(spanCase("x"), adapters);
+    expect(result.passed).toBe(false);
+    expect(result.failures.join("\n")).toMatch(/decode to "1", expected "x"/);
+  });
+
+  it("fails, rather than repairing, when the span splits a code point", () => {
+    const split: AdapterRegistry = {
+      yaml: (() => ({ ok: true, tree: createNullScalar(createSourceSpan({ origin, start: 1, end: 4, line: 1, column: 1, documentLength: 5 })) })) as Adapter,
+    };
+    expect(runCase(spanCase("anything"), split).failures.join("\n")).toMatch(/not well-formed UTF-8/);
+  });
+
+  it("reads an inputBytes case's bytes as given, and a diagnostic's primary span too", () => {
+    const diag: AdapterRegistry = {
+      yaml: (() => ({ ok: false, diagnostics: [{ level: "error", code: "malformed-document", message: "stub", primary: createSourceSpan({ origin, start: 0, end: 3, line: 1, column: 1, documentLength: 5 }), related: [] }] })) as Adapter,
+    };
+    const testCase = parseCase(
+      { name: "x", cites: "§4.2", format: "yaml", inputBytes: [0xef, 0xbb, 0xbf, 0x31, 0x78], expect: { diagnostics: [{ code: "malformed-document", line: 1, column: 1, text: "﻿" }] } },
+      "test-source",
+    );
+    expect(runCase(testCase, diag).failures).toEqual([]);
+  });
+
+  it("rejects a non-string `text`", () => {
+    expect(() => parseCase({ name: "x", cites: "§4.2", format: "yaml", input: "", expect: { tree: { kind: "null" }, spans: [{ pointer: "", line: 1, column: 1, text: 1 }] } }, "test-source")).toThrow(/text must be a string/);
+  });
+});

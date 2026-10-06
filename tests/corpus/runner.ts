@@ -234,7 +234,7 @@ function compareRelatedSpans(actual: readonly RelatedSpan[], expected: readonly 
  * specific matched diagnostic — a mismatch there is reported as its own
  * failure rather than as "missing", since the diagnostic itself was found.
  */
-function compareDiagnostics(actual: readonly Diagnostic[], expected: readonly ExpectedDiagnostic[], failures: string[]): void {
+function compareDiagnostics(actual: readonly Diagnostic[], expected: readonly ExpectedDiagnostic[], source: string | Uint8Array, failures: string[]): void {
   const remainingActual = actual.map((diagnostic) => ({ diagnostic, claimed: false }));
 
   for (const exp of expected) {
@@ -253,6 +253,9 @@ function compareDiagnostics(actual: readonly Diagnostic[], expected: readonly Ex
     if (exp.end !== undefined && primary.end !== exp.end) {
       failures.push(`diagnostic ${exp.code} at ${exp.line}:${exp.column}: expected end ${exp.end}, got ${primary.end}`);
     }
+    if (exp.text !== undefined) {
+      checkSlice(source, primary, exp.text, `diagnostic ${exp.code} at ${exp.line}:${exp.column}`, failures);
+    }
     if (exp.related !== undefined) {
       compareRelatedSpans(match.diagnostic.related, exp.related, failures);
     }
@@ -261,6 +264,27 @@ function compareDiagnostics(actual: readonly Diagnostic[], expected: readonly Ex
     if (!entry.claimed) {
       failures.push(`unexpected diagnostic ${entry.diagnostic.code} at ${entry.diagnostic.primary.line}:${entry.diagnostic.primary.column}`);
     }
+  }
+}
+
+/**
+ * The slice property (SPEC.md §4.2, v1.9): the case's stored bytes — the
+ * UTF-8 encoding of `input`, or `inputBytes` as given — between `start` and
+ * `end` must decode to `expected`. Decoded `fatal` (a span that splits a
+ * code point is a failure, not a repaired string) and `ignoreBOM: true` (a
+ * slice that begins with U+FEFF keeps it).
+ */
+function checkSlice(source: string | Uint8Array, span: { readonly start: number; readonly end: number }, expected: string, at: string, failures: string[]): void {
+  const bytes = typeof source === "string" ? new TextEncoder().encode(source) : source;
+  let actual: string;
+  try {
+    actual = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes.subarray(span.start, span.end));
+  } catch {
+    failures.push(`${at}: bytes [${span.start}, ${span.end}) are not well-formed UTF-8, expected the text ${JSON.stringify(expected)}`);
+    return;
+  }
+  if (actual !== expected) {
+    failures.push(`${at}: bytes [${span.start}, ${span.end}) decode to ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
   }
 }
 
@@ -275,7 +299,8 @@ export function runCase(testCase: ConformanceCase, adapters: AdapterRegistry): C
   }
 
   const origin = createOrigin(testCase.name, testCase.name);
-  const outcome = adapter(sourceOf(testCase), origin, testCase.limits);
+  const source = sourceOf(testCase);
+  const outcome = adapter(source, origin, testCase.limits);
   const failures: string[] = [];
 
   if ("tree" in testCase.expect) {
@@ -301,6 +326,9 @@ export function runCase(testCase: ConformanceCase, adapters: AdapterRegistry): C
         if (span.end !== undefined && node.span.end !== span.end) {
           failures.push(`span assertion at '${span.pointer}': expected end ${span.end}, got ${node.span.end}`);
         }
+        if (span.text !== undefined) {
+          checkSlice(source, node.span, span.text, `span assertion at '${span.pointer}'`, failures);
+        }
       }
     }
   } else if ("equalTo" in testCase.expect) {
@@ -320,7 +348,7 @@ export function runCase(testCase: ConformanceCase, adapters: AdapterRegistry): C
     if (outcome.ok) {
       failures.push("expected diagnostics, but parsing produced an accepted tree");
     } else {
-      compareDiagnostics(outcome.diagnostics, testCase.expect.diagnostics, failures);
+      compareDiagnostics(outcome.diagnostics, testCase.expect.diagnostics, source, failures);
     }
   }
 

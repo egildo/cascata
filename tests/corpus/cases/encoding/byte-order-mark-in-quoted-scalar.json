@@ -1,0 +1,19 @@
+{
+  "name": "encoding/byte-order-mark-in-quoted-scalar",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: \"﻿x\"\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "string",
+            "value": "﻿x"
+          }
+        ]
+      ]
+    }
+  }
+}

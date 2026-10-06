@@ -1,21 +1,24 @@
 {
-  "name": "bytes-bom/byte-order-mark-in-byte-stream-unchanged",
+  "name": "json-encoding/byte-order-mark-counted",
   "cites": "§4.2",
-  "format": "yaml",
+  "format": "json",
   "inputBytes": [
     239,
     187,
     191,
+    123,
+    34,
     97,
+    34,
     58,
-    32,
     49,
-    10,
+    44,
+    34,
     98,
+    34,
     58,
-    32,
     50,
-    10
+    125
   ],
   "expect": {
     "tree": {
@@ -38,11 +41,20 @@
     },
     "spans": [
       {
-        "pointer": "/b",
-        "line": 2,
-        "column": 4,
+        "pointer": "/a",
+        "line": 1,
+        "column": 6,
         "start": 8,
-        "end": 9
+        "end": 9,
+        "text": "1"
+      },
+      {
+        "pointer": "/b",
+        "line": 1,
+        "column": 12,
+        "start": 14,
+        "end": 15,
+        "text": "2"
       }
     ]
   }

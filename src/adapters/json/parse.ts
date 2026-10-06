@@ -72,7 +72,7 @@ const LITERAL_TRUE = [0x74, 0x72, 0x75, 0x65] as const;
 const LITERAL_FALSE = [0x66, 0x61, 0x6c, 0x73, 0x65] as const;
 const LITERAL_NULL = [0x6e, 0x75, 0x6c, 0x6c] as const;
 
-/** `EF BB BF`, the UTF-8 encoding of U+FEFF. RFC 8259 §8.1 forbids one and permits a parser to ignore it; Cascata ignores it, exactly as the YAML adapter does. */
+/** `EF BB BF`, the UTF-8 encoding of U+FEFF. RFC 8259 §8.1 forbids one and permits a parser to ignore it; Cascata ignores it as a token and counts it as three bytes of offset (SPEC.md §4.2, v1.9). */
 const BOM = [0xef, 0xbb, 0xbf] as const;
 
 /** Every string in a JSON document is decoded through this one decoder. `fatal` because the bytes were already validated and a repair here would be a silent lie; `ignoreBOM: true` because BOM stripping happens in exactly one place (the YAML adapter's own hard-won finding — the option's name is a double negative). */
@@ -87,8 +87,8 @@ class JsonParser {
   /** Set once a grammar violation has been recorded. Every parse function returns immediately while it is set — see the module doc on why JSON cannot resynchronize. */
   private failed = false;
 
-  constructor(bytes: Uint8Array, origin: Origin, limits: ParseLimits) {
-    this.scanner = new Scanner(bytes);
+  constructor(bytes: Uint8Array, origin: Origin, limits: ParseLimits, start: number) {
+    this.scanner = new Scanner(bytes, start);
     this.origin = origin;
     this.documentLength = bytes.length;
     this.limits = limits;
@@ -677,10 +677,10 @@ function hasByteOrderMark(bytes: Uint8Array): boolean {
  *      looking for U+FFFD afterwards, because a document may legitimately
  *      contain one and repairing is what §4.2 forbids
  *      (`src/adapters/encoding.ts`).
- *   3. **A leading BOM is removed**, so it contributes zero bytes and zero
- *      columns and every span equals the span the same document without one
- *      would have.
- *   4. The scan itself, over the remaining bytes.
+ *   3. **A leading BOM is skipped, not removed** (v1.9): it is three stored
+ *      bytes, so every offset counts it, and no column does. Line and column
+ *      equal what the same document without one would report.
+ *   4. The scan itself, from the byte after the mark.
  */
 export function parseJsonBytes(bytes: Uint8Array, origin: Origin, limitOverrides?: Partial<ParseLimits>): ParseOutcome {
   const limits = resolveLimits(limitOverrides);
@@ -706,8 +706,8 @@ export function parseJsonBytes(bytes: Uint8Array, origin: Origin, limitOverrides
     };
   }
 
-  const body = hasByteOrderMark(bytes) ? bytes.subarray(BOM.length) : bytes;
-  return new JsonParser(body, origin, limits).parseDocument();
+  // v1.9: a leading mark is stored, so it is counted — scanning starts past it, over the whole document.
+  return new JsonParser(bytes, origin, limits, hasByteOrderMark(bytes) ? BOM.length : 0).parseDocument();
 }
 
 /**

@@ -73,6 +73,13 @@ export interface ExpectedSpan {
   readonly column: number;
   readonly start?: number;
   readonly end?: number;
+  /**
+   * The slice property (v1.9, SPEC.md §4.2; specs/017-stored-bytes FR-008):
+   * the document's stored bytes from `start` to `end` decode to exactly this
+   * text. Written by hand, never copied from a run. Needs no `start`/`end` of
+   * its own — the runner slices at the span the adapter reported.
+   */
+  readonly text?: string;
 }
 
 /** One expected related span on a diagnostic, e.g. a duplicate key's first occurrence. */
@@ -91,6 +98,8 @@ export interface ExpectedDiagnostic {
   readonly column: number;
   readonly start?: number;
   readonly end?: number;
+  /** As `ExpectedSpan.text`, for the diagnostic's primary span. Absent where the slice is not text (an invalid byte). */
+  readonly text?: string;
   readonly related?: readonly ExpectedRelatedSpan[];
 }
 
@@ -263,6 +272,14 @@ function parseOptionalOffset(raw: Record<string, unknown>, field: string, source
   return value;
 }
 
+function parseOptionalText(raw: Record<string, unknown>, source: string, at: string): string | undefined {
+  const value = raw["text"];
+  if (value !== undefined && typeof value !== "string") {
+    fail(source, `${at}.text must be a string when present, got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
 function parseExpectedSpan(raw: unknown, source: string, index: number): ExpectedSpan {
   if (!isPlainObject(raw)) {
     fail(source, `spans[${index}] must be an object`);
@@ -277,7 +294,8 @@ function parseExpectedSpan(raw: unknown, source: string, index: number): Expecte
   const at = `spans[${index}]`;
   const start = parseOptionalOffset(raw, "start", source, at);
   const end = parseOptionalOffset(raw, "end", source, at);
-  return { pointer, line, column, ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}) };
+  const text = parseOptionalText(raw, source, at);
+  return { pointer, line, column, ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}), ...(text !== undefined ? { text } : {}) };
 }
 
 function parseExpectedRelatedSpan(raw: unknown, source: string, at: string, index: number): ExpectedRelatedSpan {
@@ -317,6 +335,7 @@ function parseExpectedDiagnostic(raw: unknown, source: string, index: number): E
   const at = `diagnostics[${index}]`;
   const start = parseOptionalOffset(raw, "start", source, at);
   const end = parseOptionalOffset(raw, "end", source, at);
+  const text = parseOptionalText(raw, source, at);
   let parsedRelated: ExpectedRelatedSpan[] | undefined;
   if (related !== undefined) {
     if (!Array.isArray(related)) {
@@ -330,6 +349,7 @@ function parseExpectedDiagnostic(raw: unknown, source: string, index: number): E
     column,
     ...(start !== undefined ? { start } : {}),
     ...(end !== undefined ? { end } : {}),
+    ...(text !== undefined ? { text } : {}),
     ...(parsedRelated !== undefined ? { related: parsedRelated } : {}),
   };
 }

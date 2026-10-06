@@ -28,10 +28,11 @@
  *      unaffected); column is recomputed by counting actual Unicode code
  *      points from that line's start.
  *
- * A leading byte-order mark is stripped before any of this runs, so it
- * contributes zero bytes/columns rather than shifting every position by
- * one — `yaml` does not do this itself (verified empirically: a BOM
- * occupies index 0 and is counted like any other character).
+ * A leading byte-order mark is **kept** (v1.9, SPEC.md §4.2): it is three
+ * stored bytes, so `byteOffsetTable` counts it in every offset after it,
+ * and it is never a column (`codePointColumn` skips U+FEFF). `yaml` handles
+ * the leading mark itself (its lexer eats one per line while still in the
+ * document prefix), so the text is handed over as stored.
  *
  * Revised for User Story 2 (Phase 4): FR-019 requires one read to report
  * every floor violation it can detect, not the first. Every conversion
@@ -79,12 +80,7 @@ type SeqNode = YAMLSeq.Parsed;
 /** Mirrors contracts/parse-api.md's `ParseResult` shape; re-exported (as `ParseResult`) from `src/index.ts`. */
 export type ParseOutcome = { ok: true; tree: Node } | { ok: false; diagnostics: Diagnostic[] };
 
-const BYTE_ORDER_MARK = "﻿";
-
-/** Strip a single leading BOM, if present, so it never enters span math (SPEC.md edge cases). */
-function stripByteOrderMark(text: string): string {
-  return text.startsWith(BYTE_ORDER_MARK) ? text.slice(BYTE_ORDER_MARK.length) : text;
-}
+const BYTE_ORDER_MARK_UNIT = 0xfeff;
 
 function utf8ByteLengthOfCodePoint(codePoint: number): number {
   if (codePoint <= 0x7f) return 1;
@@ -118,14 +114,21 @@ function buildByteOffsetTable(text: string): Uint32Array {
   return table;
 }
 
-/** Count actual Unicode code points (not UTF-16 units) from `lineStart` up to `target`, 1-based. */
+/**
+ * Count actual Unicode code points (not UTF-16 units) from `lineStart` up to
+ * `target`, 1-based. A U+FEFF is never counted (SPEC.md §4.2, v1.9: a column
+ * is what a person sees, and the byte-order mark is not a column) — it is
+ * still a byte, which `byteOffsetTable` counts.
+ */
 function codePointColumn(text: string, lineStart: number, target: number): number {
   let count = 0;
   let index = lineStart;
   while (index < target) {
     const codePoint = text.codePointAt(index);
     index += codePoint !== undefined && codePoint > 0xffff ? 2 : 1;
-    count += 1;
+    if (codePoint !== BYTE_ORDER_MARK_UNIT) {
+      count += 1;
+    }
   }
   return count + 1;
 }
@@ -575,8 +578,9 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
     return { ok: false, diagnostics: [sizeDiagnostic] };
   }
 
-  const text = stripByteOrderMark(rawText);
-  const documentByteLength = utf8ByteLength(text);
+  // v1.9: the mark is kept — every offset counts the stored bytes (SPEC.md §4.2).
+  const text = rawText;
+  const documentByteLength = rawByteLength;
   const byteOffsetTable = buildByteOffsetTable(text);
   const lineCounter = new LineCounter();
   const spanContext: SpanContext = { origin, text, lineCounter, byteOffsetTable, documentByteLength };
@@ -653,16 +657,10 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
  *
  * `TextDecoder`'s `ignoreBOM` option is set to `true` here — the
  * WHATWG-spec-confusing name means "do not silently strip a leading BOM
- * yourself," i.e. `ignoreBOM: false` (the default) makes the decoder
- * strip it, which was caught only by sabotage-testing this exact
- * function: disabling `stripByteOrderMark` below and re-running the
- * corpus left tests/corpus/cases/bytes-bom/ passing anyway, revealing
- * that the default decoder had already removed the BOM before
- * `stripByteOrderMark` ever ran, so the sabotage was invisible from this
- * path. Correct by accident is still an accident: `ignoreBOM: true`
- * makes BOM stripping happen in exactly one place (`stripByteOrderMark`,
- * shared with the text path) rather than twice, coincidentally, in two
- * different layers.
+ * yourself": `ignoreBOM: false` (the default) makes the decoder strip it,
+ * which would hide the mark from every offset after it. Since v1.9 the mark
+ * is stored bytes and must reach `parseYaml` intact (sabotage-testing the
+ * v0.2 form of this function is what first exposed the double negative).
  */
 export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides?: Partial<ParseLimits>): ParseOutcome {
   const limits = resolveLimits(limitOverrides);

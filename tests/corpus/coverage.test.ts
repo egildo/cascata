@@ -118,7 +118,7 @@ const JSON_ACCEPTANCE_RULES: readonly AcceptanceRule[] = [
   { decision: "JSON: three-way null/empty/absent distinction", directory: "json-structure" },
   { decision: "JSON: code-point columns over non-ASCII and astral text", directory: "json-unicode" },
   { decision: "JSON: the single definition of equality", directory: "json-equality" },
-  { decision: "JSON: a stripped byte-order mark", directory: "json-encoding" },
+  { decision: "JSON: a counted byte-order mark", directory: "json-encoding" },
   { decision: "JSON: YAML-only syntax is ordinary string content (the unreachable floor rules)", directory: "json-strings" },
 ];
 

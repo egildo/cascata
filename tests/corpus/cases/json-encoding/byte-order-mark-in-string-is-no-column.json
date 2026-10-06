@@ -1,0 +1,63 @@
+{
+  "name": "json-encoding/byte-order-mark-in-string-is-no-column",
+  "cites": "§4.2",
+  "format": "json",
+  "inputBytes": [
+    123,
+    34,
+    97,
+    34,
+    58,
+    34,
+    239,
+    187,
+    191,
+    120,
+    34,
+    44,
+    34,
+    98,
+    34,
+    58,
+    49,
+    125
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "string",
+            "value": "﻿x"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/a",
+        "line": 1,
+        "column": 6,
+        "start": 5,
+        "end": 11,
+        "text": "\"﻿x\""
+      },
+      {
+        "pointer": "/b",
+        "line": 1,
+        "column": 14,
+        "start": 16,
+        "end": 17,
+        "text": "1"
+      }
+    ]
+  }
+}

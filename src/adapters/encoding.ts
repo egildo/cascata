@@ -132,7 +132,8 @@ export function findFirstInvalidUtf8ByteOffset(bytes: Uint8Array): number | unde
  * from at this point — this runs *before* decoding, on the byte prefix
  * known to be well-formed since `offset` is where that stops being true).
  * Column is a code-point count, matching every other span in this
- * codebase (`src/adapters/yaml/parse.ts`'s module doc, findings 1 and 2).
+ * codebase (`src/adapters/yaml/parse.ts`'s module doc, findings 1 and 2),
+ * and never counts a U+FEFF.
  */
 export function locateByteOffset(bytes: Uint8Array, offset: number): { line: number; column: number } {
   let line = 1;
@@ -153,7 +154,8 @@ export function locateByteOffset(bytes: Uint8Array, offset: number): { line: num
     // "Internal error" convention.
     throw new Error(`Internal error: byte range [${String(lineStartByteOffset)}, ${String(offset)}) was reported well-formed but failed to decode: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const column = [...decodedLinePrefix].length + 1;
+  // A U+FEFF is a byte of the offset but never a column (SPEC.md §4.2, v1.9).
+  const column = [...decodedLinePrefix].filter((character) => character !== "\uFEFF").length + 1;
   return { line, column };
 }
 
