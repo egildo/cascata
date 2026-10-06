@@ -1,0 +1,25 @@
+{
+  "name": "bytes-encoding/invalid-byte-after-two-leading-marks",
+  "cites": "§4.2",
+  "format": "yaml",
+  "inputBytes": [
+    239,
+    187,
+    191,
+    239,
+    187,
+    191,
+    255
+  ],
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "invalid-encoding",
+        "line": 1,
+        "column": 2,
+        "start": 6,
+        "end": 7
+      }
+    ]
+  }
+}

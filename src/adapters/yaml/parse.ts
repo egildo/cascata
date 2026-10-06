@@ -30,9 +30,9 @@
  *
  * A leading byte-order mark is **kept** (v1.9, SPEC.md §4.2): it is three
  * stored bytes, so `byteOffsetTable` counts it in every offset after it,
- * and it is never a column (`codePointColumn` skips U+FEFF). `yaml` handles
- * the leading mark itself (its lexer eats one per line while still in the
- * document prefix), so the text is handed over as stored.
+ * and a mark at the very start of the stored bytes is never a column
+ * (`codePointColumn`; any other U+FEFF is a character). Prefix marks are
+ * removed from the text `yaml` reads and its indices mapped back (`marks.ts`).
  *
  * Revised for User Story 2 (Phase 4): FR-019 requires one read to report
  * every floor violation it can detect, not the first. Every conversion
@@ -120,19 +120,21 @@ function buildByteOffsetTable(text: string): Uint32Array {
 
 /**
  * Count actual Unicode code points (not UTF-16 units) from `lineStart` up to
- * `target`, 1-based. A U+FEFF is never counted (SPEC.md §4.2, v1.9: a column
- * is what a person sees, and the byte-order mark is not a column) — it is
- * still a byte, which `byteOffsetTable` counts.
+ * `target`, 1-based. The one U+FEFF never counted is a byte-order mark at the
+ * very start of the stored bytes, index 0 (SPEC.md §4.2, v1.9: it is what an
+ * editor's decoder drops); any other — a second mark in a prefix, one inside
+ * a quoted scalar — is a character like any other. Every mark is still a
+ * byte, which `byteOffsetTable` counts.
  */
 function codePointColumn(text: string, lineStart: number, target: number): number {
   let count = 0;
   let index = lineStart;
   while (index < target) {
     const codePoint = text.codePointAt(index);
-    index += codePoint !== undefined && codePoint > 0xffff ? 2 : 1;
-    if (codePoint !== BYTE_ORDER_MARK_UNIT) {
+    if (!(index === 0 && codePoint === BYTE_ORDER_MARK_UNIT)) {
       count += 1;
     }
+    index += codePoint !== undefined && codePoint > 0xffff ? 2 : 1;
   }
   return count + 1;
 }

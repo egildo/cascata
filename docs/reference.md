@@ -161,7 +161,7 @@ document's **stored bytes**, exactly as read: a carriage return is a byte, a lea
 three, and `bytes.subarray(start, end)` is exactly the text that produced the node (a quoted scalar's
 quotes included). Text handed to `parseText` is counted as its UTF-8 encoding. `line` and `column` are
 for a person: LF, CRLF and a lone CR each end one line, nothing else does (not U+2028, U+2029 or NEL),
-and `column` counts code points from the start of its line and never counts a U+FEFF. In YAML a lone CR
+and `column` counts code points from the start of its line, except that a byte-order mark at the very start of the stored bytes is not counted (any other U+FEFF is a character, as an editor shows it). In YAML a lone CR
 is a line break, as YAML 1.2.2 says, and a byte-order mark is accepted only before the document's
 content or inside a quoted string — anywhere else it is `malformed-document`, positioned at the mark.
 

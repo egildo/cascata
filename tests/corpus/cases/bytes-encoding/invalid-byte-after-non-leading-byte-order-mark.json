@@ -1,0 +1,26 @@
+{
+  "name": "bytes-encoding/invalid-byte-after-non-leading-byte-order-mark",
+  "cites": "§4.2",
+  "format": "yaml",
+  "inputBytes": [
+    97,
+    58,
+    32,
+    239,
+    187,
+    191,
+    255,
+    10
+  ],
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "invalid-encoding",
+        "line": 1,
+        "column": 5,
+        "start": 6,
+        "end": 7
+      }
+    ]
+  }
+}

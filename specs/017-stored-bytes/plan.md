@@ -13,16 +13,16 @@ would restate the spec.
 |---|---|
 | FR-008 | `ExpectedSpan` and `ExpectedDiagnostic` gain optional `text`; runner slices the case's bytes (`TextEncoder` of `input`, or `inputBytes`) at the matched span and compares against a *fatal, BOM-preserving* decode. |
 | FR-001 | YAML: stop stripping the mark; `text` keeps it, the byte table is built over it, `documentLength` is the raw length. JSON: scanner starts at offset 3 when a mark leads; `documentLength` is the full byte length. |
-| FR-002 | `column` never counts a U+FEFF — see the decision below. YAML `codePointColumn`, JSON `Scanner.advance`, `locateByteOffset`. |
+| FR-002 | `column` never counts a mark at byte 0; any other U+FEFF counts (round 2; round 1 skipped every U+FEFF — see Round 2). YAML `codePointColumn`, JSON `Scanner.advance`, `locateByteOffset`. |
 | FR-003 | `Scanner.advance` and `locateByteOffset` end a line at a CR no LF follows. YAML via FR-004. |
 | FR-004 | `parseYaml` builds `yamlText` from the raw text: each lone CR becomes LF (same length). `yamlText` goes to `parseDocument` only; spans, byte table, columns and the surrogate scan use the original. |
-| FR-005 | Pre-scan of the raw text for U+FEFF; each is *prefix* (accepted), *inside a quoted scalar* (accepted, found by visiting the parsed AST), or refused as `malformed-document`. Prefix marks after the first on a line are blanked to a space in `yamlText` (probe, below). |
+| FR-005 | Pre-scan of the raw text for U+FEFF; each is *prefix* (accepted), *inside a quoted scalar* (accepted, found by visiting the parsed AST), or refused as `malformed-document`. Prefix marks are blanked (round 1) / removed with an index map (round 2, see below) in `yamlText`. |
 | FR-006 | Confirmed, not newly built: identity/pins hash the bytes read; one unit assertion if it is one line. |
 | FR-007 | Doc sweep at step 4. |
 
 ## Decisions the spec left open
 
-1. **`column` and U+FEFF — every U+FEFF is skipped, not only a leading mark.** FR-002 says "a
+1. **(Superseded in round 2 — see the end.) `column` and U+FEFF — every U+FEFF is skipped, not only a leading mark.** FR-002 says "a
    byte-order mark is never counted"; FR-005 says a mark in a quoted scalar "is content". Both cannot be
    read as "a mark in a quoted scalar is counted". The byte-path locator runs before any format is
    known and cannot tell a prefix mark from content, so the only rule all three paths can share is "a
@@ -80,3 +80,24 @@ case named for a byte-order mark. **Not cross-checked**; the prefix cases rest o
 - [x] T006 Step 3 cases written and red
 - [x] T007 FR-005; sabotage; commit
 - [x] T008 FR-007 doc sweep, `report.md`; commit
+
+## Round 2 (owner decisions on the round-1 report)
+
+**Mechanism for repeated prefix marks: removal plus an index map, not blanking.** Blanking the second
+mark of `⌁⌁---` gave ` ---`, which is not a document marker, so valid YAML 1.2.2 was refused. Every prefix
+mark (not only the repeats) is now removed from the text `yaml` reads, so nothing in a prefix can change
+what follows it. `storedIndexer` maps a parser index back to a stored one by binary search over the removed
+marks (`parserPos_i = m_i - i`; stored = parser + marks removed at or before it) — the Rust compiler's
+`NormalizedPos` precedent, which also keeps offsets honest. Choices: (a) ranges and error positions are
+rewritten **in place after the parse** (`visit` over nodes, then `doc.errors`/`doc.warnings`) so every
+consumer after that speaks stored indices and nothing downstream knows the mapping exists; (b) lines are
+counted by Cascata over the stored text (`LineCounter.addNewLine` per LF / lone CR) instead of by `yaml`'s
+lexer, which saw the mark-less text; (c) a boundary index (a node beginning exactly where marks were
+removed) maps to *after* them. Rejected: keeping the first mark of each line for `yaml` to eat (two code
+paths, and the blanked-extra problem returns); a translation table consulted at each span construction (many
+call sites).
+
+**Column rule (SPEC.md §4.2, 52c284e).** Only a mark at stored index 0 is never a column; any other U+FEFF
+counts, on all three paths. YAML `codePointColumn` skips index 0 only; the JSON scanner loses its special
+case entirely (it starts past the leading mark); `locateByteOffset` discounts a mark only when the line
+starts at byte 0.

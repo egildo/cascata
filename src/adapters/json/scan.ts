@@ -16,7 +16,7 @@
  *
  *   - **`offset` is a byte offset**, because the cursor moves one byte at a
  *     time over a `Uint8Array`. There is nothing to convert.
- *   - **`column` is a count of code points** (never counting U+FEFF), because a UTF-8 continuation
+ *   - **`column` is a count of code points** (a leading mark is skipped, not counted), because a UTF-8 continuation
  *     byte (`0b10xxxxxx`) is precisely a byte that does *not* begin a new
  *     code point. Counting every consumed byte that is not one is counting
  *     code points, exactly, with no decoding and no lookahead.
@@ -95,11 +95,10 @@ export class Scanner {
     if (byte === LINE_FEED || (byte === CARRIAGE_RETURN && this.bytes[this.offsetValue] !== LINE_FEED)) {
       this.lineValue += 1;
       this.columnValue = 1;
-    } else if ((byte & 0xc0) !== 0x80 && !(byte === 0xef && this.bytes[this.offsetValue] === 0xbb && this.bytes[this.offsetValue + 1] === 0xbf)) {
-      // Not a UTF-8 continuation byte, so this byte begins a code point —
-      // unless that code point is U+FEFF (`EF BB BF`), which is never a
-      // column (SPEC.md §4.2, v1.9). Its other two bytes are continuation
-      // bytes and were never counted.
+    } else if ((byte & 0xc0) !== 0x80) {
+      // Not a UTF-8 continuation byte, so this byte begins a code point. A
+      // U+FEFF counts like any other: the leading mark, which §4.2 (v1.9)
+      // never counts, is skipped by starting the scan past it.
       this.columnValue += 1;
     }
     return byte;
