@@ -62,6 +62,9 @@ editor that writes a byte-order mark.
 - **FR-002** `column` counts code points from the start of its line, and a byte-order mark is never
   counted in it, on every path, including `invalid-encoding`'s byte locator
   (`src/adapters/encoding.ts`, `locateByteOffset`), which counts it today.
+  *Amended 2026-10-06 after implementation (owner's decision): only the mark at byte 0 is never a
+  column; any other U+FEFF — a second prefix mark, one inside a string — counts as one, on every
+  path, the byte locator included. SPEC.md §4.2 says so.*
 - **FR-003** LF, CRLF and a lone CR (one no LF follows) each end exactly one line, on every path:
   the YAML adapter (after FR-004), the JSON adapter, and `locateByteOffset`. Nothing else ends a
   line — not U+2028, U+2029 or U+0085.
