@@ -93,6 +93,11 @@ return (0x0D). No other byte is whitespace — a vertical tab or a form feed bet
 
 ## Byte-order mark
 
+> **Superseded in part by v1.9** (`SPEC.md` §4.2, §15 "Spans count stored bytes"; `specs/017-stored-bytes`).
+> A leading mark is still skipped as a token and is still no column, but it is **counted** in every
+> offset: three bytes, not zero. "Removed" and "contributes zero bytes" below are history. Line and
+> column are as written; the rest of the section stands.
+
 RFC 8259 §8.1 forbids one and says a parser may ignore it. Cascata ignores it, exactly as the YAML
 adapter does: a single leading `EF BB BF` is removed before parsing and contributes **zero** bytes
 and zero columns, so every span in a document with a BOM equals the span in the same document

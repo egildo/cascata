@@ -75,7 +75,7 @@ const LITERAL_NULL = [0x6e, 0x75, 0x6c, 0x6c] as const;
 /** `EF BB BF`, the UTF-8 encoding of U+FEFF. RFC 8259 §8.1 forbids one and permits a parser to ignore it; Cascata ignores it as a token and counts it as three bytes of offset (SPEC.md §4.2, v1.9). */
 const BOM = [0xef, 0xbb, 0xbf] as const;
 
-/** Every string in a JSON document is decoded through this one decoder. `fatal` because the bytes were already validated and a repair here would be a silent lie; `ignoreBOM: true` because BOM stripping happens in exactly one place (the YAML adapter's own hard-won finding — the option's name is a double negative). */
+/** Every string in a JSON document is decoded through this one decoder. `fatal` because the bytes were already validated and a repair here would be a silent lie; `ignoreBOM: true` because the default would strip a U+FEFF inside a string, which is content (the YAML adapter's own hard-won finding — the option's name is a double negative). */
 const DECODER = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 class JsonParser {

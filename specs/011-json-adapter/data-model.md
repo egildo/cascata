@@ -47,6 +47,10 @@ line:    number       1-based, incremented on every 0x0A consumed
 column:  number       1-based, in code points: incremented on every consumed byte that is not a UTF-8 continuation byte
 ```
 
+*Amended by v1.9, `specs/017-stored-bytes/`: `bytes` is the document as stored, a leading mark included
+(scanning starts past it); `offset` counts it; `line` is incremented on LF, and on a CR no LF follows;
+`column` does not count a U+FEFF. The lines above are history.*
+
 Invariant: `offset`, `line` and `column` always describe the same point, because the only way to
 move is `advance()`, which updates all three. A parser that recomputed a line number by scanning
 backwards would be quadratic and would drift; this one cannot.

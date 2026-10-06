@@ -149,12 +149,21 @@ interface Sequence {
 
 interface SourceSpan {
   origin: Origin;
-  start: number; // byte offset, 0-based
+  start: number; // byte offset into the stored bytes, 0-based
   end: number; // one past the last byte
   line: number; // 1-based
   column: number; // 1-based, counted in Unicode code points
 }
 ```
+
+**Positions count two things, for two readers** (`SPEC.md` §4.2, v1.9). `start` and `end` count the
+document's **stored bytes**, exactly as read: a carriage return is a byte, a leading byte-order mark is
+three, and `bytes.subarray(start, end)` is exactly the text that produced the node (a quoted scalar's
+quotes included). Text handed to `parseText` is counted as its UTF-8 encoding. `line` and `column` are
+for a person: LF, CRLF and a lone CR each end one line, nothing else does (not U+2028, U+2029 or NEL),
+and `column` counts code points from the start of its line and never counts a U+FEFF. In YAML a lone CR
+is a line break, as YAML 1.2.2 says, and a byte-order mark is accepted only before the document's
+content or inside a quoted string — anywhere else it is `malformed-document`, positioned at the mark.
 
 Every node is constructible only through a span-requiring factory — there is no way to build one
 without a position. `Mapping.entries` is likewise constructible only in canonical (sorted) order —
@@ -1262,9 +1271,9 @@ finds an answer rather than a silence.
   implementation, and `1e400` parses as `float Infinity` — the same answer the YAML adapter already
   gives `1e400` and `.inf`. An *integer* of any size stays exact, so this is reachable only by
   writing an exponent.
-- **A BOM is ignored**, exactly as in YAML: a single leading `EF BB BF` is removed and contributes
-  zero bytes and zero columns, so a document with one has the same spans as the same document
-  without.
+- **A leading BOM is skipped, and counted**: a single leading `EF BB BF` is no token and no column, but
+  it is three stored bytes, so every offset in a document that has one is three more than in the same
+  document without (v1.9; before it, the mark contributed zero bytes). Line and column are unchanged.
 
 ### `Host` and `HostReadResult` are exported
 

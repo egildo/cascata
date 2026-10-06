@@ -1,0 +1,36 @@
+{
+  "name": "encoding/unicode-separators-end-no-line",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: \"x y zw\"\nb: 3\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "string",
+            "value": "x y zw"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "3"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/b",
+        "line": 2,
+        "column": 4,
+        "start": 21,
+        "end": 22,
+        "text": "3"
+      }
+    ]
+  }
+}

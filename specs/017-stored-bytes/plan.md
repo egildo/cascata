@@ -79,4 +79,4 @@ case named for a byte-order mark. **Not cross-checked**; the prefix cases rest o
 - [x] T005 FR-003/FR-004; sabotage; commit
 - [x] T006 Step 3 cases written and red
 - [x] T007 FR-005; sabotage; commit
-- [ ] T008 FR-007 doc sweep, `report.md`; commit
+- [x] T008 FR-007 doc sweep, `report.md`; commit
