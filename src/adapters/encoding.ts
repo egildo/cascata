@@ -139,7 +139,9 @@ export function locateByteOffset(bytes: Uint8Array, offset: number): { line: num
   let line = 1;
   let lineStartByteOffset = 0;
   for (let index = 0; index < offset; index += 1) {
-    if (bytes[index] === 0x0a) {
+    // LF, CRLF and a lone CR each end one line (SPEC.md §4.2, v1.9): a CR
+    // ends one unless an LF follows, and then the LF does.
+    if (bytes[index] === 0x0a || (bytes[index] === 0x0d && bytes[index + 1] !== 0x0a)) {
       line += 1;
       lineStartByteOffset = index + 1;
     }

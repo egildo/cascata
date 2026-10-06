@@ -1,0 +1,30 @@
+{
+  "name": "encoding/lone-cr-sequence",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "- x\r- y\r",
+  "expect": {
+    "tree": {
+      "sequence": [
+        {
+          "kind": "string",
+          "value": "x"
+        },
+        {
+          "kind": "string",
+          "value": "y"
+        }
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/1",
+        "line": 2,
+        "column": 3,
+        "start": 6,
+        "end": 7,
+        "text": "y"
+      }
+    ]
+  }
+}

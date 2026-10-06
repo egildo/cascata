@@ -1,0 +1,29 @@
+{
+  "name": "encoding/lone-cr-in-double-quoted",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: \"x\r  y\"\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "string",
+            "value": "x y"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/a",
+        "line": 1,
+        "column": 4,
+        "start": 3,
+        "end": 10,
+        "text": "\"x\r  y\""
+      }
+    ]
+  }
+}

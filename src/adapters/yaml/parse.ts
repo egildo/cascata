@@ -82,6 +82,9 @@ export type ParseOutcome = { ok: true; tree: Node } | { ok: false; diagnostics: 
 
 const BYTE_ORDER_MARK_UNIT = 0xfeff;
 
+/** A CR that no LF follows (SPEC.md §4.2, v1.9). */
+const LONE_CARRIAGE_RETURN = /\r(?!\n)/g;
+
 function utf8ByteLengthOfCodePoint(codePoint: number): number {
   if (codePoint <= 0x7f) return 1;
   if (codePoint <= 0x7ff) return 2;
@@ -591,7 +594,12 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   // before this call would be nonsense (verified: line comes back 0).
   // The lone-surrogate scan below runs on the same `text` regardless, so
   // ordering it after costs nothing.
-  const doc = parseDocument(text, { intAsBigInt: true, merge: true, lineCounter });
+  // v1.9 FR-004: YAML 1.2.2's `b-break` is CRLF, CR or LF, and `yaml` does not
+  // read a lone CR as a break (`a: 1\r` is the string "1\r"). The parser is
+  // handed an LF for each CR no LF follows — one code unit for one, so no
+  // range moves — and everything that counts (offsets, columns, the surrogate
+  // scan) keeps reading the stored `text`.
+  const doc = parseDocument(text.replace(LONE_CARRIAGE_RETURN, "\n"), { intAsBigInt: true, merge: true, lineCounter });
 
   for (const offset of findLoneSurrogateOffsets(text)) {
     const span = toSourceSpan([offset, offset + 1, offset + 1], spanContext);

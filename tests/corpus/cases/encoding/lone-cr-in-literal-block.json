@@ -1,0 +1,19 @@
+{
+  "name": "encoding/lone-cr-in-literal-block",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: |\r  one\r  two\r",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "string",
+            "value": "one\ntwo\n"
+          }
+        ]
+      ]
+    }
+  }
+}

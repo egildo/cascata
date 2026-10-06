@@ -75,8 +75,8 @@ case named for a byte-order mark. **Not cross-checked**; the prefix cases rest o
 - [x] T001 `text` field in the corpus format and runner, with harness tests
 - [x] T002 Step 1 cases written and red: `byte-order-mark`, `byte-order-mark-in-quoted-scalar`, JSON `byte-order-mark-counted`, `invalid-byte-after-byte-order-mark`, `text` on `crlf-line-endings`/`lf-baseline`; unit parity test
 - [x] T003 FR-001/FR-002 mark half in both adapters and the locator; sabotage; commit
-- [ ] T004 Step 2 cases written and red
-- [ ] T005 FR-003/FR-004; sabotage; commit
+- [x] T004 Step 2 cases written and red
+- [x] T005 FR-003/FR-004; sabotage; commit
 - [ ] T006 Step 3 cases written and red
 - [ ] T007 FR-005; sabotage; commit
 - [ ] T008 FR-007 doc sweep, `report.md`; commit

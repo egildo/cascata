@@ -1,0 +1,25 @@
+{
+  "name": "bytes-encoding/invalid-byte-after-crlf",
+  "cites": "§4.2",
+  "format": "yaml",
+  "inputBytes": [
+    97,
+    58,
+    32,
+    49,
+    13,
+    10,
+    255
+  ],
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "invalid-encoding",
+        "line": 2,
+        "column": 1,
+        "start": 6,
+        "end": 7
+      }
+    ]
+  }
+}

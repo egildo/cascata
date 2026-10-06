@@ -20,7 +20,7 @@
  *     byte (`0b10xxxxxx`) is precisely a byte that does *not* begin a new
  *     code point. Counting every consumed byte that is not one is counting
  *     code points, exactly, with no decoding and no lookahead.
- *   - **`line` counts `0x0A` bytes.** A newline can never be a fragment of
+ *   - **`line` counts line ends** — `0x0A`, `0x0D 0x0A`, and a lone `0x0D` (v1.9). A newline can never be a fragment of
  *     a multi-byte sequence — every byte of one has its high bit set — so
  *     line counting is safe at the byte level in a way it would not be in,
  *     say, UTF-16 with surrogate pairs.
@@ -90,7 +90,9 @@ export class Scanner {
       return undefined;
     }
     this.offsetValue += 1;
-    if (byte === LINE_FEED) {
+    // LF, CRLF and a lone CR each end exactly one line (SPEC.md §4.2, v1.9):
+    // a CR ends one unless an LF follows, in which case the LF ends it.
+    if (byte === LINE_FEED || (byte === CARRIAGE_RETURN && this.bytes[this.offsetValue] !== LINE_FEED)) {
       this.lineValue += 1;
       this.columnValue = 1;
     } else if ((byte & 0xc0) !== 0x80 && !(byte === 0xef && this.bytes[this.offsetValue] === 0xbb && this.bytes[this.offsetValue + 1] === 0xbf)) {

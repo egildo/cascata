@@ -1,0 +1,66 @@
+{
+  "name": "encoding/mixed-line-endings",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: 1\r\nb: 2\rc: 3\nd: 4\n",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ],
+        [
+          "c",
+          {
+            "kind": "int",
+            "value": "3"
+          }
+        ],
+        [
+          "d",
+          {
+            "kind": "int",
+            "value": "4"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/b",
+        "line": 2,
+        "column": 4,
+        "start": 9,
+        "end": 10,
+        "text": "2"
+      },
+      {
+        "pointer": "/c",
+        "line": 3,
+        "column": 4,
+        "start": 14,
+        "end": 15,
+        "text": "3"
+      },
+      {
+        "pointer": "/d",
+        "line": 4,
+        "column": 4,
+        "start": 19,
+        "end": 20,
+        "text": "4"
+      }
+    ]
+  }
+}

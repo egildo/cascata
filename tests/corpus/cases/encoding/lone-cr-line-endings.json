@@ -1,0 +1,44 @@
+{
+  "name": "encoding/lone-cr-line-endings",
+  "cites": "§4.2",
+  "format": "yaml",
+  "input": "a: 1\rb: 2\r",
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/a",
+        "line": 1,
+        "column": 4,
+        "start": 3,
+        "end": 4,
+        "text": "1"
+      },
+      {
+        "pointer": "/b",
+        "line": 2,
+        "column": 4,
+        "start": 8,
+        "end": 9,
+        "text": "2"
+      }
+    ]
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "name": "json-encoding/mixed-line-endings",
+  "cites": "§4.2",
+  "format": "json",
+  "inputBytes": [
+    123,
+    34,
+    97,
+    34,
+    58,
+    49,
+    44,
+    13,
+    10,
+    34,
+    98,
+    34,
+    58,
+    50,
+    44,
+    13,
+    34,
+    99,
+    34,
+    58,
+    51,
+    10,
+    125
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ],
+        [
+          "c",
+          {
+            "kind": "int",
+            "value": "3"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/b",
+        "line": 2,
+        "column": 5,
+        "start": 13,
+        "end": 14,
+        "text": "2"
+      },
+      {
+        "pointer": "/c",
+        "line": 3,
+        "column": 5,
+        "start": 20,
+        "end": 21,
+        "text": "3"
+      }
+    ]
+  }
+}

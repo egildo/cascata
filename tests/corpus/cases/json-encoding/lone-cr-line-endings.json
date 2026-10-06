@@ -1,0 +1,51 @@
+{
+  "name": "json-encoding/lone-cr-line-endings",
+  "cites": "§4.2",
+  "format": "json",
+  "inputBytes": [
+    123,
+    34,
+    97,
+    34,
+    58,
+    49,
+    44,
+    13,
+    34,
+    98,
+    34,
+    58,
+    50,
+    125
+  ],
+  "expect": {
+    "tree": {
+      "mapping": [
+        [
+          "a",
+          {
+            "kind": "int",
+            "value": "1"
+          }
+        ],
+        [
+          "b",
+          {
+            "kind": "int",
+            "value": "2"
+          }
+        ]
+      ]
+    },
+    "spans": [
+      {
+        "pointer": "/b",
+        "line": 2,
+        "column": 5,
+        "start": 12,
+        "end": 13,
+        "text": "2"
+      }
+    ]
+  }
+}
