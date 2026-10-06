@@ -63,7 +63,7 @@ import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span
 import { resolveAlias, isMergeKeyPair, mergeSources } from "./expand.js";
 import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsupportedTagDiagnostic } from "./floor.js";
 import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "../limits.js";
-import { allMarks, blankRepeatedPrefixMarks, documentPrefixMarks } from "./marks.js";
+import { allMarks, documentPrefixMarks, removePrefixMarks, storedIndexer } from "./marks.js";
 import { findFirstInvalidUtf8ByteOffset, locateByteOffset, utf8ByteLength } from "../encoding.js";
 
 // `yaml` merges each of these classes with a `.Parsed` namespace member
@@ -624,21 +624,34 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   const spanContext: SpanContext = { origin, text, lineCounter, byteOffsetTable, documentByteLength };
   const diagnostics = new DiagnosticCollector();
 
-  // `lineCounter` is only populated as `parseDocument` lexes the text (it
-  // calls `addNewLine` while scanning), so any span computed from it
-  // before this call would be nonsense (verified: line comes back 0).
-  // The lone-surrogate scan below runs on the same `text` regardless, so
-  // ordering it after costs nothing.
-  // v1.9 FR-004: YAML 1.2.2's `b-break` is CRLF, CR or LF, and `yaml` does not
-  // read a lone CR as a break (`a: 1\r` is the string "1\r"). The parser is
-  // handed an LF for each CR no LF follows — one code unit for one, so no
-  // range moves — and everything that counts (offsets, columns, the surrogate
-  // scan) keeps reading the stored `text`.
-  // v1.9 FR-005: a mark after the first on a prefix line is blanked, one code
-  // unit for one, because `yaml` would take it into the first key.
+  // v1.9 FR-005: every prefix mark is removed from what `yaml` reads (see
+  // `removePrefixMarks`), and FR-004's lone-CR substitution applied; the
+  // parser's ranges and error positions are then mapped back below, so
+  // everything past this point speaks stored indices.
   const prefixMarks = documentPrefixMarks(text);
-  const yamlText = blankRepeatedPrefixMarks(text.replace(LONE_CARRIAGE_RETURN, "\n"), prefixMarks);
-  const doc = parseDocument(yamlText, { intAsBigInt: true, merge: true, lineCounter });
+  const yamlText = removePrefixMarks(text.replace(LONE_CARRIAGE_RETURN, "\n"), prefixMarks);
+  const doc = parseDocument(yamlText, { intAsBigInt: true, merge: true });
+  if (prefixMarks.length > 0) {
+    const toStored = storedIndexer(prefixMarks);
+    visit(doc, {
+      Node(_key, node) {
+        if (node.range != null) {
+          node.range = [toStored(node.range[0]), toStored(node.range[1]), toStored(node.range[2])];
+        }
+      },
+    });
+    for (const error of [...doc.errors, ...doc.warnings]) {
+      error.pos = [toStored(error.pos[0]), toStored(error.pos[1])];
+    }
+  }
+  // Lines are counted over the stored text: LF, CRLF, and a lone CR each end one.
+  lineCounter.addNewLine(0);
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (unit === 0x0a || (unit === 0x0d && text.charCodeAt(index + 1) !== 0x0a)) {
+      lineCounter.addNewLine(index + 1);
+    }
+  }
 
   for (const offset of findLoneSurrogateOffsets(text)) {
     const span = toSourceSpan([offset, offset + 1, offset + 1], spanContext);

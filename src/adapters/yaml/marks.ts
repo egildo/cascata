@@ -62,22 +62,44 @@ export function allMarks(text: string): number[] {
 }
 
 /**
- * `text` with each prefix mark that is not the first on its line blanked to a
- * space — one code unit for one, so no offset moves. `yaml` strips the first
- * mark of a prefix line itself and takes a second (`⌁⌁a: 1`) into the key.
+ * `text` with every prefix mark removed, so that no mark in a prefix can
+ * disturb what follows it: `yaml` strips one per line itself, takes a second
+ * into the first key, and — once that second is blanked instead — turns
+ * `⌁⌁---` into ` ---`, which is not a document marker. Removal shifts every
+ * later index, so the parser's indices are mapped back to stored ones by
+ * `storedIndexer` (the Rust compiler's `NormalizedPos` is the precedent:
+ * original = normalized + the total width removed before it).
  */
-export function blankRepeatedPrefixMarks(text: string, prefixMarks: readonly number[]): string {
-  // One pass over the marks, joined once — a prefix of 300,000 marks must not
-  // cost 300,000 copies of the document.
+export function removePrefixMarks(text: string, prefixMarks: readonly number[]): string {
+  if (prefixMarks.length === 0) return text;
+  // One pass, joined once — a prefix of 300,000 marks must not cost 300,000 copies.
   const pieces: string[] = [];
   let from = 0;
   for (const index of prefixMarks) {
-    if (text[index - 1] === BYTE_ORDER_MARK) {
-      pieces.push(text.slice(from, index), " ");
-      from = index + 1;
-    }
+    pieces.push(text.slice(from, index));
+    from = index + 1;
   }
-  if (from === 0) return text;
   pieces.push(text.slice(from));
   return pieces.join("");
+}
+
+/**
+ * Maps an index into `removePrefixMarks(text, prefixMarks)` back to the
+ * stored text's index. The i-th removed mark (0-based, ascending) sat at
+ * stored index `m` and left the parser's text at `m - i`; a parser index `p`
+ * has had `i + 1` marks removed before it for every `m_i - i <= p`, so it
+ * lands after them — a node's range begins after the prefix, never inside it.
+ * Binary search: a document may have a very long prefix and many nodes.
+ */
+export function storedIndexer(prefixMarks: readonly number[]): (parserIndex: number) => number {
+  return (parserIndex) => {
+    let low = 0;
+    let high = prefixMarks.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if ((prefixMarks[middle] ?? 0) - middle <= parserIndex) low = middle + 1;
+      else high = middle;
+    }
+    return parserIndex + low;
+  };
 }
