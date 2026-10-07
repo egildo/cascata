@@ -20,7 +20,7 @@ Two new exports and a handful of new diagnostic codes.
 **Scope, narrowed from issue #7 on purpose.** The issue also asked for the refusal of an edit to a
 value that exists only in the merged configuration (a schema default), naming its layer. That needs
 `why()` to report the pointer *inside* the supplying document, not just its span, so that a session
-can re-target the edit later. It is the next milestone, together with Provenance's session. This one
+can rebase the edit later. It is the next milestone, together with Provenance's session. This one
 is document-level only.
 
 ## User Scenarios & Testing
@@ -141,7 +141,7 @@ the range in UTF-16 units (`non-ascii` and `byte-order-mark` red); widen the ran
 
 Inserting and deleting; block scalars and containers (refused); which document an edit to a merged
 value belongs in, and `why()` reporting an in-document pointer (the next milestone); a precision
-rule; TOML; applying or saving an edit (the caller's, and Provenance's session).
+rule; TOML; applying or committing an edit (the caller's, and Provenance's session).
 
 ## Plan and tasks
 

@@ -1193,7 +1193,7 @@ Laws:
 - **Spelling is the format's, and is chosen for every reader.** A string is written plain only where a plain scalar reads back as that same string — under Cascata's rules *and* under YAML 1.1's, so `yes`, `no`, `on` and `off` are quoted even though Cascata reads them as strings (§4.2). Otherwise it is quoted in the style the replaced scalar used, or double-quoted where that style cannot hold it. A number is written in its shortest exact form. No precision rule is applied: rounding is the caller's until a schema can declare one.
 - **Some targets are refused rather than guessed.** A pointer with no value in the document. A value reached through a YAML alias or merge key, because writing it would change every other place that shares it. A block scalar, whose style the first version does not reproduce. A mapping or sequence, because setting a container is an insertion, which is not yet written. Each is a diagnostic at the target's span, never a throw.
 
-What is not in this article: inserting and deleting entries, which need format-preserving trees (§4.3's sibling, still unbuilt); which document an edit to a *merged* value belongs in, where a value may come from a schema's `provide` rather than any config (the view-update question, left open); and applying, saving and re-targeting edits, which belong to the caller's session.
+What is not in this article: inserting and deleting entries, which need format-preserving trees (§4.3's sibling, still unbuilt); which document an edit to a *merged* value belongs in, where a value may come from a schema's `provide` rather than any config (the view-update question, left open); and applying, committing and rebasing edits, which belong to the caller's session.
 
 ---
 
