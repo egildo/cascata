@@ -107,7 +107,8 @@ function firstAliasTo(node: YamlNode, doc: Document, spans: YamlSpans): SourceSp
   let first: SourceSpan | undefined;
   visit(doc, {
     Alias(_key, alias) {
-      if (first === undefined && alias.range != null && alias.resolve(doc) === node) {
+      // The name first: `resolve` walks the document, and a document may hold thousands of aliases to other anchors.
+      if (first === undefined && alias.range != null && alias.source === node.anchor && alias.resolve(doc) === node) {
         first = spans.spanOf(alias.range);
         return visit.BREAK;
       }

@@ -86,8 +86,10 @@ double; flow sequence and mapping; root; sequence item; after a comment; over a 
 5. Exports, codes, reference docs, `report.md`.
 
 Steps 1-3 and the string code landed in one commit: `edit.ts` is one function that cannot be split
-usefully, and the cases (written first, by hand, and run red against no implementation at all) were
-added in the same sweep. The step-4 commit adds the string cases and the property test.
+usefully. The cases were written first and by hand, but there was no implementation to run them red
+against before the writer existed (the first run was green: every hand-counted range matched); what
+watched them go red is the sabotage in `report.md`. The step-4 commit adds the string cases and the
+property test.
 
 ## Tasks
 
@@ -95,4 +97,4 @@ added in the same sweep. The step-4 commit adds the string cases and the propert
 - [x] T002 locate cases and implementation
 - [x] T003 setValue cases (numbers, booleans, null, refusals) and implementation
 - [x] T004 string cases, probe, property test
-- [ ] T005 reference.md, README, report
+- [x] T005 reference.md, report (README and the version table wait for the release)

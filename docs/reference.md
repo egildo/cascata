@@ -1295,6 +1295,72 @@ class MyHost implements Host {
 }
 ```
 
+## v1.10 — writing a value back
+
+`SPEC.md` Article IX (§19), an **addition** (§15). Two functions on one document, YAML or JSON: where a value
+is, and the edit that changes only it. Neither reads or writes a file; applying an edit is the caller's.
+
+```ts
+import { locate, setValue } from "@egildo/cascata";
+
+const options = { format: "yaml", origin }; // as parse(): which document these bytes came from; optional `limits`
+
+locate(bytes, options, "/walls/W2/height");
+// { ok: true, start: 47, end: 50, kind: "float" } — stored bytes (§4.2), 0-based, end exclusive
+
+setValue(bytes, options, "/walls/W2/height", 3.4);
+// { ok: true, edit: { start: 47, end: 50, bytes: Uint8Array [ ...'3.4' ] } }
+// put `edit.bytes` in place of bytes[start, end); every other byte of the file is the caller's to keep
+```
+
+- `locate(bytes, options, pointer)` answers `{ ok: true, start, end, kind }` — `kind` is a scalar's model kind
+  (`string`, `int`, `float`, `bool`, `null`) or `mapping`/`sequence` — or `{ ok: false, diagnostics }`.
+  A document that does not parse gives the parse's own diagnostics. A container and a block scalar are
+  located like any value; only `setValue` refuses them.
+- `setValue(bytes, options, pointer, value)` answers `{ ok: true, edit: { start, end, bytes } }` or
+  `{ ok: false, diagnostics }`. `value` is `string`, `number`, `bigint`, `boolean` or `null`. Neither function
+  throws for a document or a value — only for programmer error (no `origin`, a `format` other than
+  `"yaml"`/`"json"`, a pointer that is neither empty nor starts with `/`, a value that is not a scalar).
+- `EditOptions`, `Edit`, `EditValue`, `LocatedKind`, `LocateResult`, `SetValueResult` are exported types.
+
+**The three laws**, each a conformance case, each also checked by round-tripping the edit through `parse`:
+
+1. *Nothing changed, nothing written* — a value equal to the one there gives the bytes already there, in
+   whatever spelling they had (`3.20` set to `3.2` writes `3.20`).
+2. *What you set is what you read* — the edited document reads back the value set, of the kind below.
+3. *Only the value moves* — the edit's range is exactly the value's span (§4.2): a quoted scalar's quotes in,
+   a trailing comment out. CRLF, a byte-order mark, a lone CR, non-ASCII elsewhere: all outside the range.
+
+**Kind is kept.** A `number` over a `float` is a float (`3` over `3.2` is `3.0`); over an `int`, an int if
+`Number.isInteger`, otherwise a float. A `bigint` is an int. Anything else writes its own kind. A float is
+spelled in JavaScript's shortest round-trip form with a point or exponent guaranteed (`3.0`, `1e+21`,
+`-0.0`); no precision rule is applied (`0.1 + 0.2` is `0.30000000000000004`). YAML spells `NaN`, `Infinity`
+and `-Infinity` `.nan`, `.inf`, `-.inf`; JSON cannot spell them.
+
+**Strings.** YAML: plain only if it reads back as the same string under Cascata's rules *and* YAML 1.1's —
+so `yes`, `no`, `on`, `off`, `y`, `n`, `true`, `null`, `~`, numbers (including `0b101`, `1_000`, `1:30`),
+dates, `.inf`, anything with `: ` or ` #`, a leading indicator, edge whitespace, a line break, a control
+character, and the empty string are quoted. The style of the scalar being replaced is kept where it can hold
+the text (a single-quoted scalar doubles an embedded `'`); where it cannot, double quotes with YAML escapes
+(`\n`, `\x01`, `\u2028`, `\uFEFF`). In a flow collection a plain string also avoids `,`, `[`, `]`, `{`, `}`.
+JSON: RFC 8259 §7, non-ASCII written as itself. A string with an unpaired surrogate has no UTF-8 spelling.
+
+**Every edit is read back** before it is returned. One that does not come back as the value set (an explicit
+`!!str` tag over a number, say) is refused as `edit-unsupported`, not guessed.
+
+### v1.10 diagnostic codes
+
+All `level: "error"`, positioned at the span named.
+
+| Code | When | Positioned at |
+|---|---|---|
+| `edit-target-absent` | no value at the pointer | the nearest existing ancestor |
+| `edit-target-shared` | the value is reached through a YAML alias or merge key, **or it, or a container above it, is anchored and an alias points there** — writing it would change every place that shares it | the (first) alias |
+| `edit-unsupported` | a block scalar (`\|`, `>`), a mapping or a sequence (setting a container is an insertion, not written yet), or a scalar that would not read back as the value set | the value |
+| `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
+
+Inserting and deleting, and which document an edit to a *merged* value belongs in, are not here (§19).
+
 ## Scripts
 
 ```bash
