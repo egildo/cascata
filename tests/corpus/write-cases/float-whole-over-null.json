@@ -1,0 +1,18 @@
+{
+  "name": "write/float-whole-over-null",
+  "cites": "v1.10 FR-006",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "n:\n",
+  "pointer": "/n",
+  "value": {
+    "number": 3
+  },
+  "expect": {
+    "edit": {
+      "start": 2,
+      "end": 2,
+      "bytes": " 3"
+    }
+  }
+}

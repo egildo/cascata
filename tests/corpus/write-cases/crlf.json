@@ -1,0 +1,18 @@
+{
+  "name": "write/crlf",
+  "cites": "v1.10 FR-005",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "walls:\r\n  W1:\r\n    height: 3.2\r\n  W2:\r\n    height: 3.2\r\n",
+  "pointer": "/walls/W1/height",
+  "value": {
+    "number": 3.4
+  },
+  "expect": {
+    "edit": {
+      "start": 27,
+      "end": 30,
+      "bytes": "3.4"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "write/null",
+  "cites": "v1.10 FR-006",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: 5\n",
+  "pointer": "/a",
+  "value": {
+    "null": true
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 4,
+      "bytes": "null"
+    }
+  }
+}

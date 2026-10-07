@@ -280,6 +280,26 @@ export const GENERATOR_CODES = ["demand-unsatisfiable", "emit-identifier-collisi
  */
 export const OVERRIDE_CODES = ["override-reserved-key"] as const;
 
+/**
+ * Writing a value back (v1.10, `SPEC.md` Article IX, §19) — specs/018-write-value
+ * FR-007 and FR-009. All four are `level: "error"` and come only from
+ * `locate` and `setValue`; nothing in the reading pipeline raises them.
+ *
+ * - `edit-target-absent` — no value at the pointer; positioned at the nearest
+ *   existing ancestor.
+ * - `edit-target-shared` — the value is reached through a YAML alias or merge
+ *   key, so writing it would change every place that shares it; positioned at
+ *   the alias.
+ * - `edit-unsupported` — a block scalar, a mapping or a sequence (setting a
+ *   container is an insertion, not written yet), or a scalar the writer could
+ *   not write and read back (an explicit tag that disagrees with the value);
+ *   positioned at the value.
+ * - `edit-unrepresentable` — the format cannot spell the value (JSON has no
+ *   `NaN` or infinity; no format has a lone surrogate); positioned at the
+ *   value it would have replaced.
+ */
+export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unsupported", "edit-unrepresentable"] as const;
+
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
@@ -297,6 +317,7 @@ export const DIAGNOSTIC_CODES = [
   ...OUTPUT_SURFACE_CODES,
   ...GENERATOR_CODES,
   ...OVERRIDE_CODES,
+  ...EDIT_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

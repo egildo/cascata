@@ -1,0 +1,18 @@
+{
+  "name": "write/lone-cr",
+  "cites": "v1.10 FR-005",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: 1\rb: 2\r",
+  "pointer": "/b",
+  "value": {
+    "number": 3
+  },
+  "expect": {
+    "edit": {
+      "start": 8,
+      "end": 9,
+      "bytes": "3"
+    }
+  }
+}

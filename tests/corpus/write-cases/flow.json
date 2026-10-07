@@ -1,0 +1,18 @@
+{
+  "name": "write/flow",
+  "cites": "v1.10 FR-002",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "walls:\n  W1: {height: 3}\n",
+  "pointer": "/walls/W1/height",
+  "value": {
+    "number": 4
+  },
+  "expect": {
+    "edit": {
+      "start": 22,
+      "end": 23,
+      "bytes": "4"
+    }
+  }
+}

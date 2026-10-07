@@ -1,0 +1,15 @@
+{
+  "name": "write/locate-root",
+  "cites": "v1.10 FR-001",
+  "format": "yaml",
+  "call": "locate",
+  "input": "walls:\n  W1:\n    height: 3.2\n  W2:\n    height: 3.2\n",
+  "pointer": "",
+  "expect": {
+    "located": {
+      "start": 0,
+      "end": 50,
+      "kind": "mapping"
+    }
+  }
+}

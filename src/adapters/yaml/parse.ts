@@ -607,7 +607,24 @@ function readerErrorDiagnostic(error: YamlReaderError, ctx: SpanContext): Diagno
  * returned tree — that is `src/index.ts`'s job, so the adapter itself
  * stays reusable by anything that wants the raw walk.
  */
-export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Partial<ParseLimits>): ParseOutcome {
+/**
+ * What the writer needs of the parse (v1.10, specs/018-write-value): the
+ * `yaml` document with every range already in stored UTF-16 indices (v1.9),
+ * and the one function that turns such a range into a span in stored bytes.
+ * Handed over after the document is parsed and before the tree is walked;
+ * the writer reads positions from the same place the reader measured them,
+ * which is the whole point of Article IX ("one parser per format").
+ */
+export interface YamlSpans {
+  /** A scalar's, an alias's or a flow collection's span. */
+  readonly spanOf: (range: Range) => SourceSpan;
+  /** A block mapping's or sequence's span, with the trailing line break trimmed (`toTightCollectionSpan`). */
+  readonly tightSpanOf: (range: Range) => SourceSpan;
+}
+
+export type YamlDocumentHook = (doc: Document, spans: YamlSpans) => void;
+
+export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Partial<ParseLimits>, onDocument?: YamlDocumentHook): ParseOutcome {
   const limits = resolveLimits(limitOverrides);
 
   // Checked before anything else is touched, on the raw input exactly as
@@ -665,6 +682,8 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
       }),
     );
   }
+
+  onDocument?.(doc, { spanOf: (range) => toSourceSpan(range, spanContext), tightSpanOf: (range) => toTightCollectionSpan(range, spanContext) });
 
   // A mark outside a document prefix and a quoted scalar is not YAML 1.2.2
   // (`yaml` admits most of them silently). Where `yaml` also errored at the
@@ -743,7 +762,7 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
  * is stored bytes and must reach `parseYaml` intact (sabotage-testing the
  * v0.2 form of this function is what first exposed the double negative).
  */
-export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides?: Partial<ParseLimits>): ParseOutcome {
+export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides?: Partial<ParseLimits>, onDocument?: YamlDocumentHook): ParseOutcome {
   const limits = resolveLimits(limitOverrides);
 
   // Checked on the raw byte length before anything else, same as the text
@@ -783,5 +802,5 @@ export function parseYamlBytes(bytes: Uint8Array, origin: Origin, limitOverrides
     throw new Error(`Internal error: UTF-8 validation found no invalid byte, but strict decoding still failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  return parseYaml(text, origin, limitOverrides);
+  return parseYaml(text, origin, limitOverrides, onDocument);
 }

@@ -1,0 +1,18 @@
+{
+  "name": "write/parse-error",
+  "cites": "v1.10 FR-002",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\"a\":}",
+  "pointer": "/a",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "diagnostic": {
+      "code": "malformed-document",
+      "start": 5,
+      "end": 6
+    }
+  }
+}

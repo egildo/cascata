@@ -1,0 +1,15 @@
+{
+  "name": "write/absent-at-root",
+  "cites": "v1.10 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "input": "a: 1\n",
+  "pointer": "/b",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-absent",
+      "start": 0,
+      "end": 4
+    }
+  }
+}

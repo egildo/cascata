@@ -1,0 +1,15 @@
+{
+  "name": "write/locate-scalar",
+  "cites": "v1.10 FR-001",
+  "format": "yaml",
+  "call": "locate",
+  "input": "walls:\n  W1:\n    height: 3.2\n  W2:\n    height: 3.2\n",
+  "pointer": "/walls/W1/height",
+  "expect": {
+    "located": {
+      "start": 25,
+      "end": 28,
+      "kind": "float"
+    }
+  }
+}

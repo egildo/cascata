@@ -74,6 +74,10 @@ export type { Recording, RecordedFailure, RecordedFailureKind, RecordedResponse,
 export type { Host, HostReadResult } from "./resolve/host.js";
 export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord, WhyResult } from "./merge/provenance.js";
 
+// Writing a value back (v1.10, SPEC.md Article IX): `locate` and `setValue`.
+export { locate, setValue } from "./adapters/edit.js";
+export type { Edit, EditFormat, EditOptions, EditValue, LocatedKind, LocateResult, SetValueResult } from "./adapters/edit.js";
+
 /** The result of one `parse()`/`parseText()` call. Never both a tree and diagnostics. */
 export type ParseResult = { readonly ok: true; readonly tree: Node } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 

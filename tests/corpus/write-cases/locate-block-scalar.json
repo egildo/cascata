@@ -1,0 +1,15 @@
+{
+  "name": "write/locate-block-scalar",
+  "cites": "v1.10 FR-001",
+  "format": "yaml",
+  "call": "locate",
+  "input": "note: |\n  one\n  two\n",
+  "pointer": "/note",
+  "expect": {
+    "located": {
+      "start": 6,
+      "end": 20,
+      "kind": "string"
+    }
+  }
+}

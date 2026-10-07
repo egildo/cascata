@@ -1,0 +1,15 @@
+{
+  "name": "write/locate-json",
+  "cites": "v1.10 FR-001",
+  "format": "json",
+  "call": "locate",
+  "input": "{\"a\": [1, \"x\"]}",
+  "pointer": "/a/1",
+  "expect": {
+    "located": {
+      "start": 10,
+      "end": 13,
+      "kind": "string"
+    }
+  }
+}

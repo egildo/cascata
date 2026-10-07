@@ -1,0 +1,15 @@
+{
+  "name": "write/absent",
+  "cites": "v1.10 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "input": "walls:\n  W1:\n    height: 3.2\n  W2:\n    height: 3.2\n",
+  "pointer": "/walls/W3/height",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-absent",
+      "start": 9,
+      "end": 50
+    }
+  }
+}

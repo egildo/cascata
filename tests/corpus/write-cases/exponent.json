@@ -1,0 +1,18 @@
+{
+  "name": "write/exponent",
+  "cites": "v1.10 FR-006",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "x: 1.5\n",
+  "pointer": "/x",
+  "value": {
+    "number": 1e+21
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 6,
+      "bytes": "1e+21"
+    }
+  }
+}

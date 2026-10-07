@@ -1,0 +1,15 @@
+{
+  "name": "write/absent-sequence-index",
+  "cites": "v1.10 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "input": "- a\n- b\n",
+  "pointer": "/2",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-absent",
+      "start": 0,
+      "end": 7
+    }
+  }
+}

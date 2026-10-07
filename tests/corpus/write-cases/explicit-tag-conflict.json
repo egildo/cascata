@@ -1,0 +1,18 @@
+{
+  "name": "write/explicit-tag-conflict",
+  "cites": "v1.10 FR-004",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: !!str 3\n",
+  "pointer": "/a",
+  "value": {
+    "number": 4
+  },
+  "expect": {
+    "diagnostic": {
+      "code": "edit-unsupported",
+      "start": 9,
+      "end": 10
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/locate-json-parse-error",
+  "cites": "v1.10 FR-001",
+  "format": "json",
+  "call": "locate",
+  "input": "{\"a\":}",
+  "pointer": "/a",
+  "expect": {
+    "diagnostic": {
+      "code": "malformed-document",
+      "start": 5,
+      "end": 6
+    }
+  }
+}

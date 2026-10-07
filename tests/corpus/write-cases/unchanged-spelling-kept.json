@@ -1,0 +1,18 @@
+{
+  "name": "write/unchanged-spelling-kept",
+  "cites": "v1.10 FR-003",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "x: 3.20\n",
+  "pointer": "/x",
+  "value": {
+    "number": 3.2
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 7,
+      "bytes": "3.20"
+    }
+  }
+}

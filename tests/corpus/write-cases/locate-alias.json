@@ -1,0 +1,15 @@
+{
+  "name": "write/locate-alias",
+  "cites": "v1.10 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "input": "base: &h 3.2\nW1: *h\n",
+  "pointer": "/W1",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-shared",
+      "start": 17,
+      "end": 19
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/locate-merge-key",
+  "cites": "v1.10 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "input": "base: &b\n  h: 1\nW1:\n  <<: *b\n",
+  "pointer": "/W1/h",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-shared",
+      "start": 26,
+      "end": 28
+    }
+  }
+}
