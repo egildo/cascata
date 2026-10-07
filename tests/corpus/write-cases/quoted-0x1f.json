@@ -1,0 +1,18 @@
+{
+  "name": "write/quoted-0x1f",
+  "cites": "v1.10 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: x\n",
+  "pointer": "/a",
+  "value": {
+    "string": "0x1F"
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 4,
+      "bytes": "\"0x1F\""
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "write/double-quoted-escapes",
+  "cites": "v1.10 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "b: \"y\"\n",
+  "pointer": "/b",
+  "value": {
+    "string": "a\"b\\c"
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 6,
+      "bytes": "\"a\\\"b\\\\c\""
+    }
+  }
+}

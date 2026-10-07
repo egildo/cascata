@@ -1,0 +1,18 @@
+{
+  "name": "write/json-string-over-number",
+  "cites": "v1.10 FR-006",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\"a\": 1}",
+  "pointer": "/a",
+  "value": {
+    "string": "x"
+  },
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 7,
+      "bytes": "\"x\""
+    }
+  }
+}

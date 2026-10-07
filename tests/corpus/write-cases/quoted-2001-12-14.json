@@ -1,0 +1,18 @@
+{
+  "name": "write/quoted-2001-12-14",
+  "cites": "v1.10 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: x\n",
+  "pointer": "/a",
+  "value": {
+    "string": "2001-12-14"
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 4,
+      "bytes": "\"2001-12-14\""
+    }
+  }
+}

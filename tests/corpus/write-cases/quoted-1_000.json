@@ -1,0 +1,18 @@
+{
+  "name": "write/quoted-1_000",
+  "cites": "v1.10 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: x\n",
+  "pointer": "/a",
+  "value": {
+    "string": "1_000"
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 4,
+      "bytes": "\"1_000\""
+    }
+  }
+}

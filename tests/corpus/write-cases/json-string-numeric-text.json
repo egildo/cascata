@@ -1,0 +1,18 @@
+{
+  "name": "write/json-string-numeric-text",
+  "cites": "v1.10 FR-008",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\"a\": 1}",
+  "pointer": "/a",
+  "value": {
+    "string": "2"
+  },
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 7,
+      "bytes": "\"2\""
+    }
+  }
+}
