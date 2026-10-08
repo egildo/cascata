@@ -23,7 +23,7 @@
 import { isAlias, isMap, isNode, isScalar, isSeq } from "yaml";
 import type { Document, Node as YamlNode } from "yaml";
 import type { Diagnostic } from "../../diagnostics/diagnostic.js";
-import type { Node } from "../../model/node.js";
+import type { Node, ScalarKind } from "../../model/node.js";
 import { pointersInDocument, resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
 import type { Origin, SourceSpan } from "../../model/span.js";
 import { editDiagnostic, type FindResult, type Found, type ScalarStyle, type SharedEdits } from "../edit.js";
@@ -217,10 +217,17 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
     ancestor = spanOfNode(node, spans) ?? ancestor;
     if (next === undefined) return absent(ancestor);
     if (next.value === null) {
-      // A pair with no value node at all (`? a`): the reader's null scalar is the value, and it has no bytes.
+      // A pair with no value node at all (`? a`, or `{a}` in flow): the reader's null scalar is the value, spanning zero
+      // width at the end of the key (v1.12 FR-010). In a block mapping a value goes on the next line, under the `?`.
       const modelNode = resolvePointer(outcome.tree, pointer);
       if (modelNode === undefined) return absent(ancestor);
-      return { ok: true, found: { start: modelNode.span.start, end: modelNode.span.end, node: modelNode, span: modelNode.span, style: "plain", inFlow } };
+      const mapSpan = spanOfNode(node, spans);
+      const indicator = inFlow || mapSpan === undefined ? undefined : `\n${" ".repeat(mapSpan.column - 1)}: `;
+      const shared = next.via ?? sharedBy;
+      return {
+        ok: true,
+        found: { start: modelNode.span.start, end: modelNode.span.end, node: modelNode, span: modelNode.span, style: "plain", inFlow, bareKey: { indicator }, ...(shared !== undefined ? { sharedBy: shared } : {}) },
+      };
     }
     sharedBy ??= firstAliasTo(next.value, anchors, spans);
     reach = { node: next.value, via: next.via, inFlow };
@@ -243,6 +250,7 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
   if (span === undefined || modelNode === undefined) {
     throw new Error("Internal error: the YAML reader and the AST walk disagree about where a value is");
   }
+  const tag = isScalar(node) && typeof node.tag === "string" ? { holds: TAG_HOLDS.get(node.tag), ...tagOnLine(bytes, span.start, node.tag) } : undefined;
   const sharedWith = sharedBy !== undefined && sharedEdits === "warn" ? aliasesHolding(node, doc, anchors, spans) : undefined;
   // Every node the reader says holds this value's bytes — the value, its alias and merge-key copies, by the model's
   // span rather than the walk's, so a walk that stopped short of the bytes is caught — for the read-back to check each.
@@ -259,8 +267,53 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
       ...(sharedBy !== undefined ? { sharedBy } : {}),
       ...(sharedWith !== undefined ? { sharedWith } : {}),
       ...(copies !== undefined ? { copies } : {}),
+      ...(tag !== undefined ? { tag } : {}),
     },
   };
+}
+
+/** The kind each core-schema scalar tag holds (v1.12 FR-011). */
+const TAG_HOLDS: ReadonlyMap<string, ScalarKind> = new Map<string, ScalarKind>([
+  ["tag:yaml.org,2002:str", "string"],
+  ["tag:yaml.org,2002:int", "int"],
+  ["tag:yaml.org,2002:float", "float"],
+  ["tag:yaml.org,2002:bool", "bool"],
+  ["tag:yaml.org,2002:null", "null"],
+]);
+
+const isBlank = (byte: number | undefined): boolean => byte === 0x20 || byte === 0x09;
+
+/**
+ * Where the explicit tag `resolved` of the value starting at `valueStart` is written, if it is on the
+ * value's own line (v1.12 FR-011): `yaml`'s ranges start at the value, after its properties, and expose
+ * no tag token, so the line is scanned back — over blanks, then at most two properties (`!tag` and
+ * `&anchor`, in either order). The token found must be the tag `yaml` resolved, in the `!!` or the
+ * verbatim `!<…>` form; anything else (a `%TAG` handle, a tag on an earlier line) is not found.
+ */
+function tagOnLine(bytes: Uint8Array, valueStart: number, resolved: string): { drop?: { start: number; kept: number } } {
+  let at = valueStart;
+  for (let property = 0; property < 2; property += 1) {
+    while (at > 0 && isBlank(bytes[at - 1])) at -= 1;
+    const end = at;
+    if (end === valueStart && property === 0) return {}; // nothing blank between a property and the value: no property
+    if (bytes[end - 1] === 0x3e /* > */) {
+      // A verbatim tag, `!<…>`: its URI may hold characters a shorthand cannot.
+      while (at > 0 && !(bytes[at - 1] === 0x21 && bytes[at] === 0x3c)) at -= 1;
+      at -= 1;
+    } else {
+      while (at > 0 && !isBlank(bytes[at - 1]) && bytes[at - 1] !== 0x0a && bytes[at - 1] !== 0x0d && ![0x2c, 0x5b, 0x5d, 0x7b, 0x7d].includes(bytes[at - 1] ?? 0)) at -= 1;
+    }
+    if (at < 0) return {};
+    const token = new TextDecoder().decode(bytes.subarray(at, end));
+    if (token.startsWith("&")) continue; // an anchor: stays, and the tag may be before it
+    const written = token.startsWith("!<") && token.endsWith(">") ? token.slice(2, -1) : token.startsWith("!!") ? `tag:yaml.org,2002:${token.slice(2)}` : undefined;
+    if (written !== resolved) return {};
+    // The tag and the blanks after it go; whatever follows them (an anchor written after the tag) is carried again.
+    let kept = end;
+    while (isBlank(bytes[kept])) kept += 1;
+    return { drop: { start: at, kept } };
+  }
+  return {};
 }
 
 /** Parse bytes the way the reader does, for the read-back; `undefined` if they do not parse. */
@@ -285,7 +338,9 @@ export function yamlNonFinite(value: number): string {
 export function yamlPadding(bytes: Uint8Array, at: number, text: string): string {
   const before = bytes[at - 1];
   const after = bytes[at];
-  const needsBefore = before !== undefined && before !== 0x20 && before !== 0x09 && before !== 0x0a && before !== 0x0d;
+  // Nor after a byte-order mark: the value of an empty document starts right after the prefix marks (v1.12 FR-009).
+  const afterMark = at >= 3 && bytes[at - 3] === 0xef && bytes[at - 2] === 0xbb && before === 0xbf;
+  const needsBefore = before !== undefined && before !== 0x20 && before !== 0x09 && before !== 0x0a && before !== 0x0d && !afterMark;
   return `${needsBefore ? " " : ""}${text}${after === 0x23 ? " " : ""}`;
 }
 

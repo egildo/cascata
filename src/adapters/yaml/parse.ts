@@ -452,7 +452,7 @@ function buildMappingEntries(mapAst: MapNode, ctx: WalkContext, depth: number): 
     // Even when the key itself is invalid, the value may still contain
     // further, independent violations (FR-019) — keep walking it, just
     // never add it under a key we refused.
-    const valueNode = pair.value !== null ? walkNode(pair.value, ctx, depth + 1) : undefined;
+    const valueNode = pair.value !== null ? walkNode(pair.value, ctx, depth + 1) : nullAfterKey(keyAst, ctx, depth + 1);
 
     if (keyResult === undefined) {
       continue;
@@ -470,6 +470,24 @@ function buildMappingEntries(mapAst: MapNode, ctx: WalkContext, depth: number): 
     }
   }
   return entries;
+}
+
+/**
+ * The value of a pair that has no value node at all — a bare `? a` (v1.12 FR-010), or `{a}` in flow:
+ * a null scalar spanning zero width at the end of the key, as `a:` already gets one where its colon
+ * ends. §4.2 keeps null, an absent key and an empty value as three states; before v1.12 the key was
+ * dropped. Counted and depth-checked like any value built.
+ */
+function nullAfterKey(keyAst: ParsedNode, ctx: WalkContext, depth: number): Node | undefined {
+  const end = requireRange(keyAst)[1];
+  const span = toSourceSpan([end, end, end], ctx);
+  const depthDiagnostic = checkDepthLimit(depth, ctx.limits, span);
+  if (depthDiagnostic !== undefined) {
+    ctx.diagnostics.add(depthDiagnostic);
+    return undefined;
+  }
+  countBuilt(ctx);
+  return createNullScalar(span);
 }
 
 function convertMapping(mapAst: MapNode, ctx: WalkContext, depth: number): Node | undefined {
@@ -787,8 +805,11 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   let tree: Node | undefined;
   if (doc.contents === null) {
     // Empty, comment-only, or whitespace-only input: valid, a null scalar
-    // spanning zero width at offset 0 (contracts/parse-api.md).
-    tree = createNullScalar(createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: documentByteLength }));
+    // spanning zero width (contracts/parse-api.md) — after the document's
+    // prefix marks (v1.12 FR-009), not before them: a mark is stored bytes
+    // since v1.9, and a value written at offset 0 would precede it.
+    const at = prefixMarks.length > 0 ? (prefixMarks[prefixMarks.length - 1] ?? 0) + 1 : 0;
+    tree = createNullScalar(buildSourceSpan(spanContext, at, at));
   } else {
     const written = countWritten(doc);
     const expansion: ExpansionState = { built: 0, written, budget: limits.expansionRatio * written + limits.expansionAllowance, depth: 0, site: undefined };

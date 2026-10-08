@@ -1,0 +1,15 @@
+{
+  "name": "write/empty-comment-locate",
+  "cites": "v1.12 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "input": "# c\n",
+  "pointer": "",
+  "expect": {
+    "located": {
+      "start": 0,
+      "end": 0,
+      "kind": "null"
+    }
+  }
+}

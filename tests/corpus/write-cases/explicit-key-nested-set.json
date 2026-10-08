@@ -1,0 +1,18 @@
+{
+  "name": "write/explicit-key-nested-set",
+  "cites": "v1.12 FR-010",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "m:\n  ? a\n",
+  "pointer": "/m/a",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "edit": {
+      "start": 8,
+      "end": 8,
+      "bytes": "\n  : 1"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "write/empty-after-mark-comment-set",
+  "cites": "v1.12 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "inputBytes": [
+    239,
+    187,
+    191,
+    35,
+    32,
+    99,
+    10
+  ],
+  "pointer": "",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 3,
+      "bytes": "1 "
+    }
+  }
+}

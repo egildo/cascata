@@ -90,6 +90,18 @@ export interface Found {
   readonly sharedWith?: readonly SourceSpan[];
   /** YAML, under `"warn"` and `"allow"` (v1.12 FR-007): the pointer of every node of the document that holds these bytes, read before the edit — each must read the value set after it. */
   readonly copies?: readonly string[];
+  /**
+   * YAML (v1.12 FR-010): the value of a key written with no value at all (`? a`). `indicator` is what the
+   * edit must add before the value — a line break, the key's indentation and `: ` — or `undefined` in a
+   * flow collection, where the value is refused rather than spelled.
+   */
+  readonly bareKey?: { readonly indicator: string | undefined };
+  /**
+   * YAML (v1.12 FR-011): the scalar's explicit tag. `holds` is the one kind the tag can hold. `drop` is
+   * where the tag starts and where the bytes kept after it begin (an anchor written after the tag, then
+   * the value), when the tag is on the value's own line; absent, the tag cannot be removed by this writer.
+   */
+  readonly tag?: { readonly holds: ScalarKind | undefined; readonly drop?: { readonly start: number; readonly kept: number } };
 }
 
 export type FindResult = { readonly ok: true; readonly found: Found } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -243,8 +255,29 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   if (text === undefined) {
     return refuse("edit-unrepresentable", `${options.format.toUpperCase()} has no spelling for ${describeValue(value)}`);
   }
-  const encoded = new TextEncoder().encode(options.format === "yaml" && found.end === found.start ? yamlPadding(bytes, found.start, text) : text);
-  const edit: Edit = { start: found.start, end: found.end, bytes: encoded };
+  let spelled = text;
+  if (found.bareKey !== undefined) {
+    // A key with no value (`? a`): the value needs the indicator the document lacks, on its own line (v1.12 FR-010).
+    if (found.bareKey.indicator === undefined) return refuse("edit-unsupported", "A key with no value inside a flow collection is not written; only a key that has a value, or a block mapping's `? key`, can take one");
+    if (found.sharedBy !== undefined) return refuse("edit-unsupported", "A key with no value inside a shared mapping is not written");
+    spelled = found.bareKey.indicator + yamlPadding(bytes, found.start, text).trimStart();
+  } else if (options.format === "yaml" && found.end === found.start) {
+    spelled = yamlPadding(bytes, found.start, text);
+  }
+  let start = found.start;
+  let encoded = new TextEncoder().encode(spelled);
+  if (found.tag !== undefined && found.tag.holds !== kind) {
+    // A tag that cannot hold the value is not written over it (v1.12 FR-011): the edit widens over the tag and the
+    // space after it, and carries again whatever sat between them and the value (an anchor written after the tag).
+    if (found.tag.drop === undefined) return refuse("edit-unsupported", `The value's explicit tag cannot hold ${describeValue(value)}, and it is not on the value's own line, where this writer could remove it`);
+    const kept = bytes.subarray(found.tag.drop.kept, found.start);
+    const joined = new Uint8Array(kept.length + encoded.length);
+    joined.set(kept, 0);
+    joined.set(encoded, kept.length);
+    start = found.tag.drop.start;
+    encoded = joined;
+  }
+  const edit: Edit = { start, end: found.end, bytes: encoded };
 
   // The safety net: read the edit back. A value that does not come back as the
   // value set (an explicit `!!str` tag over a number, say) is refused, not returned.

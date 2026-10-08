@@ -1,0 +1,19 @@
+{
+  "name": "write/empty-after-mark-locate",
+  "cites": "v1.12 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "inputBytes": [
+    239,
+    187,
+    191
+  ],
+  "pointer": "",
+  "expect": {
+    "located": {
+      "start": 3,
+      "end": 3,
+      "kind": "null"
+    }
+  }
+}

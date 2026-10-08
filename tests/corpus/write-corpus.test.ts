@@ -12,7 +12,7 @@ import { runWriteCase } from "./write-runner.js";
 
 const WRITE_CASES_DIR = join(dirname(fileURLToPath(import.meta.url)), "write-cases");
 
-describe("write conformance corpus (v1.10)", () => {
+describe("write conformance corpus (v1.10, v1.12)", () => {
   const files = readdirSync(WRITE_CASES_DIR).filter((name) => name.endsWith(".json")).sort();
 
   it("discovers write cases", () => {

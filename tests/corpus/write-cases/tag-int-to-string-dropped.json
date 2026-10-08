@@ -1,0 +1,18 @@
+{
+  "name": "write/tag-int-to-string-dropped",
+  "cites": "v1.12 FR-011",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: !!int 1\n",
+  "pointer": "/a",
+  "value": {
+    "string": "x"
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 10,
+      "bytes": "x"
+    }
+  }
+}

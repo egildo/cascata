@@ -9,6 +9,7 @@
  * itself, rather than importing the writer's rule.
  */
 
+import { parseDocument } from "yaml";
 import { parseJsonBytes } from "../../src/adapters/json/parse.js";
 import { locate, setValue } from "../../src/index.js";
 import type { EditValue } from "../../src/index.js";
@@ -133,8 +134,15 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
     return { name: testCase.name, passed: false, failures };
   }
   const replaced = resolvePointer(before.tree, testCase.pointer);
-  if (replaced !== undefined && (replaced.span.start !== edit.start || replaced.span.end !== edit.end)) {
-    failures.push(`L3: the edit range ${edit.start}-${edit.end} is not the value's span ${replaced.span.start}-${replaced.span.end}`);
+  // L3: the edit is the value's span — widened, where a tag cannot hold the value, over that tag and the blanks
+  // after it (v1.12 FR-011); an anchor written after the tag is then carried again at the start of the edit's bytes.
+  if (replaced !== undefined) {
+    const dropped = new TextDecoder().decode(bytes.subarray(edit.start, replaced.span.start));
+    const tagDrop = /^!(<[^>]*>|\S*)[ \t]+(&\S+[ \t]+)?$/.exec(dropped);
+    const widenedOverTag = edit.start < replaced.span.start && tagDrop !== null && text.startsWith(tagDrop[2] ?? "");
+    if ((replaced.span.start !== edit.start && !widenedOverTag) || replaced.span.end !== edit.end) {
+      failures.push(`L3: the edit range ${edit.start}-${edit.end} is not the value's span ${replaced.span.start}-${replaced.span.end}`);
+    }
   }
   const applied = new Uint8Array(bytes.length - (edit.end - edit.start) + edit.bytes.length);
   applied.set(bytes.subarray(0, edit.start), 0);
@@ -144,6 +152,12 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
   if (!after.ok) {
     failures.push("the edited document does not parse");
     return { name: testCase.name, passed: false, failures };
+  }
+  // A third witness for YAML (v1.12 FR-011): `yaml` itself, which Cascata's reader overrules only by ignoring this
+  // warning — a tag that cannot hold its value (`!!int x`) is read as intended by Cascata alone.
+  if (testCase.format === "yaml") {
+    const unresolved = parseDocument(new TextDecoder("utf-8", { ignoreBOM: true }).decode(applied)).warnings.filter((w) => w.code === "TAG_RESOLVE_FAILED");
+    if (unresolved.length > 0) failures.push(`the edited document carries a tag that cannot hold its value: ${unresolved[0]?.message ?? ""}`);
   }
   const kind = expectedKind(value, replaced);
   // The places that share the value's bytes — the pointer itself, and under "warn" and "allow" every alias

@@ -1,6 +1,6 @@
 {
   "name": "write/explicit-tag-conflict",
-  "cites": "v1.10 FR-004",
+  "cites": "v1.12 FR-011",
   "format": "yaml",
   "call": "setValue",
   "input": "a: !!str 3\n",
@@ -9,10 +9,10 @@
     "number": 4
   },
   "expect": {
-    "diagnostic": {
-      "code": "edit-unsupported",
-      "start": 9,
-      "end": 10
+    "edit": {
+      "start": 3,
+      "end": 10,
+      "bytes": "4"
     }
   }
 }

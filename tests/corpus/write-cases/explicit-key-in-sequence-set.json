@@ -1,0 +1,18 @@
+{
+  "name": "write/explicit-key-in-sequence-set",
+  "cites": "v1.12 FR-010",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "- ? a\n",
+  "pointer": "/0/a",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "edit": {
+      "start": 5,
+      "end": 5,
+      "bytes": "\n  : 1"
+    }
+  }
+}

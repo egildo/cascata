@@ -1,0 +1,15 @@
+{
+  "name": "write/explicit-key-locate",
+  "cites": "v1.12 FR-010",
+  "format": "yaml",
+  "call": "locate",
+  "input": "? a\n",
+  "pointer": "/a",
+  "expect": {
+    "located": {
+      "start": 3,
+      "end": 3,
+      "kind": "null"
+    }
+  }
+}

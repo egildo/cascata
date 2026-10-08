@@ -1,0 +1,15 @@
+{
+  "name": "write/flow-key-without-value-locate",
+  "cites": "v1.12 FR-010",
+  "format": "yaml",
+  "call": "locate",
+  "input": "{a}\n",
+  "pointer": "/a",
+  "expect": {
+    "located": {
+      "start": 2,
+      "end": 2,
+      "kind": "null"
+    }
+  }
+}
