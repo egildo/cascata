@@ -142,13 +142,13 @@ section of a report has been worth more than the diff.
 
 ## Conventions
 
-- **`SPEC.md` is frozen as of v1.0** (§15's freeze rule). A *correction* is always permitted; an
-  *addition* is permitted while no existing meaning changes; **changing an existing meaning requires
-  v2.0**. The engineering constitution does not freeze — it governs process, not the language.
-  **Check every proposed refusal against the rule's own example**, "a rule that starts refusing what
-  it accepted" — v1.9 nearly shipped a lone-CR refusal that was exactly that. The reading §15 (v1.9)
-  makes explicit: refusing what a standard §12 mandates itself refuses is a correction; refusing what
-  that standard accepts needs v2.0.
+- **`SPEC.md` is a living document** (§15, "Amending this document", v1.12.1; it was frozen from
+  v1.0 to v1.12). There is no version gate: the owner rules each change. What stays is the naming
+  discipline — every amendment is an explicit article change with a §15 entry, and **every change of
+  behaviour is named in one sentence** ("such a mapping, which loaded, is refused"). A refusal that
+  YAML 1.2.2 or another §12 standard does not itself make is still worth flagging to the owner as a
+  departure from the standard; it is no longer forbidden. Older entries speak the freeze's
+  vocabulary (*correction*, *addition*, *v2.0*): read them as history.
 - Conventional commits. End messages with the co-author trailer for whichever model authored them.
 - Never amend, rebase, or force-push. Add commits.
 - Tick task checkboxes in `specs/NNN-*/tasks.md` as you complete them.

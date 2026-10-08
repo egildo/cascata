@@ -191,7 +191,7 @@ Node 22 or later. TypeScript declarations are included. Exports: `@egildo/cascat
 
 ## Status
 
-**v1.11**, and the specification is frozen. A correction to `SPEC.md` is always permitted, an addition is permitted while no existing meaning changes, and changing an existing meaning requires v2.0. Every release since v1.0 has been an addition, a correction, or both. Nothing a schema meant before any of them means anything else after.
+**v1.12.1.** The specification was frozen from v1.0 to v1.12 — every release in that span was an addition, a correction, or both, and nothing a schema meant changed. At v1.12.1 the freeze was retired: `SPEC.md` is now a living document, amended by named article with an entry in its §15, which names every change of behaviour in a sentence. v1.12.1 itself refuses three things that used to load (a second `<<` merge key, an unknown keyword in a type entry, a malformed type entry) and splits one diagnostic code into four.
 
 The pipeline, in the order the library runs it:
 

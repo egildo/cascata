@@ -10,10 +10,11 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.11.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
-frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
-meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
-first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh, v1.8 the eighth, v1.9 the ninth, v1.10 the tenth, v1.11 the eleventh. The first eight are
+**v1.12.1.** `SPEC.md` is a living document since v1.12.1: amended by named article with an entry in
+§15, which names every change of behaviour in a sentence, and no longer gated by version. All eight
+milestones of its §14 roadmap shipped at v1.0, which froze it (§15's freeze rule, retired at v1.12.1: a
+*correction* always, an *addition* while no existing meaning changed, a changed meaning only at v2.0).
+v1.1 was the first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh, v1.8 the eighth, v1.9 the ninth, v1.10 the tenth, v1.11 the eleventh. The first eight are
 additions — Article VIII's accumulated demand and type generator, then a second format adapter, then the
 launching schema, then a namespace the host can own, then a library that loads in a browser realm, then config
 documents the embedder names ranked after the entry, then a sandbox the caller may grant more than one root for, then a scalar under `append` taken as a list of one. v1.9 is corrections only: offsets count the stored
@@ -86,10 +87,10 @@ pnpm install
 
 ## Public surface
 
-Everything below is exported from the package root. **v1.0 is the first release carrying a
-compatibility promise**, and it is the promise `SPEC.md` §15 makes about the *language*: a
-correction always; an addition while no existing meaning changes; a changed meaning only at v2.0.
-The TypeScript surface follows the same rule.
+Everything below is exported from the package root. From v1.0 to v1.12 the surface carried the
+compatibility promise `SPEC.md` §15 made about the *language* (a correction always; an addition while
+no existing meaning changed; a changed meaning only at v2.0). Since v1.12.1 it changes as `SPEC.md`
+does: by the owner's ruling, every change of behaviour named in §15.
 
 ### `parse(bytes, options)`
 
@@ -1214,11 +1215,11 @@ Extends every catalogue above, unchanged.
 | `demand-unsatisfiable` | **`info`** — two demands at one position admit no common value (`string` in one layer, `int` in another). The position accumulates to `never` and the lint names both demands. Whole-chain validation already refuses every value there; this is the first time the contradiction is visible with **no document in hand** (§18) |
 | `emit-identifier-collision` | Two type names that escape to one TypeScript identifier. The emission is refused whole — "a generator error, not a coin toss" (§18) |
 
-### The emitted mapping is a compatibility promise
+### The emitted mapping is the contract
 
-Every row of the mapping from accumulated demand to TypeScript ships under §15's freeze rule from
-this release: a *correction* stays permitted, an *addition* stays permitted while no existing row
-changes meaning, and changing a row requires v2.0. The rows are listed in
+Every row of the mapping from accumulated demand to TypeScript is part of the contract from this
+release; a change to a row is named in `SPEC.md` §15 (until v1.12.1, each row was a compatibility
+promise under §15's freeze rule). The rows are listed in
 `specs/010-type-generator/contracts/emitted-type.md` §1. JSDoc, as above, is explicitly outside that
 promise.
 
