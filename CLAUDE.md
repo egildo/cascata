@@ -99,6 +99,12 @@ section of a report has been worth more than the diff.
   the *string* `"1\r"`, silently. It also admits a byte-order mark at the start of a later line into
   a plain key, which YAML 1.2.2 forbids. Both are Cascata's to correct (v1.9, SPEC.md §4.2). A lone
   CR swapped for an LF changes no offset; anything that changes a length does.
+- **`yaml` has two quadratic paths and one exponential one, all Cascata's to bound** (v1.10).
+  `Alias#resolve` walks the document per alias (4,000 aliases: ten seconds), so aliases resolve from
+  one anchor table and no module calls it; `uniqueKeys` scans a mapping per key (32,000 keys:
+  eighteen seconds), so it is off and Cascata's own duplicate check, with a map, is the guard; and
+  copying aliases expands "billion laughs" exponentially, so expansion has a budget. A size cap in
+  bytes bounds none of these — measure the work, not the input.
 - **Offsets count stored bytes; line and column count what a person sees** (v1.9). A carriage
   return and a leading byte-order mark are in every offset and in no column. Any fix that removes
   bytes before parsing must add them back to offsets, as `rustc` learned when `cargo fix` broke on
