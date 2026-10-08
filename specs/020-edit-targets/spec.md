@@ -22,7 +22,8 @@ needs. The joining step itself is Provenance's (its `specs/joining/`), and depen
   provided value inside the schema document. Derive it from the document's own tree (the node whose
   span is the entry's span), not by string arithmetic on the merged pointer.
 - **FR-002** **`editTarget(configuration, pointer)`** answers `{ ok: true, location, pointer, format }`
-  — the winning value's document (its `origin.id`), the pointer inside it (FR-001), and `"yaml"` or
+  — the winning value's document (its location: `origin.id`, or for a delegated fragment, whose id is
+  `<location> #graft=N`, its `origin.label` — corrected after implementation), the pointer inside it (FR-001), and `"yaml"` or
   `"json"` — or `{ ok: false, diagnostics }`. It reads no file.
 - **FR-003** **Refusals**, each `level: "error"`:
   - `edit-target-absent` — no value at the merged pointer (`why()` answers `unknown-pointer`);
