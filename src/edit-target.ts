@@ -123,7 +123,8 @@ export function editTarget(configuration: MergedConfiguration, pointer: string, 
     }
     const format = formatForLocation(location);
     if (format !== "yaml" && format !== "json") {
-      return refuse("edit-no-writer", `The value at '${pointer}' is in ${location}, a format with no writer`, node.span);
+      // Every format Cascata reads has a writer (v1.12.1); a format that does not brings its own refusal with it.
+      throw new Error(`Internal error: editTarget(): ${location} was read, and its format has no writer`);
     }
     // Among copies the answer is a convention (v1.12 FR-007): the merged pointer's, else the same last segment, else the first.
     const chosen = pointerInDocument(layer.tree, node.span, pointer) ?? inDocument[0] ?? "";

@@ -268,7 +268,8 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   if (found.tag !== undefined && found.tag.holds !== kind) {
     // A tag that cannot hold the value is not written over it (v1.12 FR-011): the edit widens over the tag and the
     // space after it, and carries again whatever sat between them and the value (an anchor written after the tag).
-    if (found.tag.drop === undefined) return refuse("edit-tag-elsewhere", `The value's explicit tag cannot hold ${describeValue(value)}, and this writer could not find where it is written`);
+    // `yaml` resolved a tag, so its tokens hold one (v1.12.1): not finding it is a bug, not the document's fault.
+    if (found.tag.drop === undefined) throw new Error("Internal error: setValue(): the value has an explicit tag, and the parser's tokens show none");
     const kept = bytes.subarray(found.tag.drop.kept, found.start);
     const joined = new Uint8Array(kept.length + encoded.length);
     joined.set(kept, 0);

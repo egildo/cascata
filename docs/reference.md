@@ -1407,7 +1407,6 @@ All `level: "error"`, positioned at the span named — except `edit-target-share
 | `edit-container` | a mapping or a sequence: setting a container is an insertion, not written yet | the value |
 | `edit-block-scalar` | a block scalar (`\|`, `>`), whose style is not reproduced | the value |
 | `edit-bare-key-in-flow` | a key with no value inside a flow collection (`{a}`, `{? a}`; v1.12) | the value |
-| `edit-tag-elsewhere` | an explicit tag that cannot hold the value set and that the writer cannot find in the parser's tokens (the safety net: since v1.12.1 a tag on an earlier line or under a `%TAG` handle is dropped) | the value |
 | `edit-read-back` | a scalar that would not read back as the value set (the safety net; no known input reaches it) | the value |
 | `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
 
@@ -1448,7 +1447,6 @@ All `level: "error"` — except `edit-target-shared` under `sharedEdits: "warn"`
 |---|---|---|
 | `edit-target-absent` | no value at the pointer in the merged configuration | the nearest existing ancestor |
 | `edit-container` | the value is a mapping or a sequence (a container, merged or not) | the value |
-| `edit-no-writer` | the value's document is in a format with no writer (none is read without one today) | the value |
 | `edit-target-shared` | the value's document holds more than one node at its position — an anchor and its aliases, or a merge key's copies — or (v1.12) the document is read at more than one place (delegated to twice, or both a layer and a fragment); writing it would change every place that shares it (under the default `"refuse"` the writer refuses the same alias copies). `related` names each other place: another copy, or another graft's delegating value. Under `sharedEdits: "warn"` (v1.12) the target is answered and this code comes with it at `level: "info"`; under `"allow"` nothing is said | the value |
 | `edit-target-inherited` | the winning value was supplied by a schema's `provide`; the message names the schema's location and says the edit would change a default every document under it shares | the provided value, in the schema document |
 | `edit-target-remote` | the winning value's document was read over `https://` | the value, in that document |

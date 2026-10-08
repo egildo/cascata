@@ -305,27 +305,23 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  * - `edit-block-scalar` — a block scalar (`|`, `>`), whose style is not reproduced.
  * - `edit-bare-key-in-flow` — a key with no value inside a flow collection
  *   (`{a}`), which has nowhere to put a `:` (v1.12).
- * - `edit-tag-elsewhere` — an explicit tag that cannot hold the value and whose
- *   bytes `yaml`'s tokens do not show; since v1.12.1 a tag on an earlier line or
- *   under a `%TAG` handle is dropped, so no known input reaches it.
  * - `edit-read-back` — the edit did not read back as the value set: the
  *   safety net, which no known input reaches.
- * - `edit-no-writer` — from `editTarget`, a value whose document's format has
- *   no writer; no format is read without one today.
  *
- * All positioned at the value. The six codes are v1.12.1's split of
- * `edit-unsupported`, which named all six and a seventh refusal (a key with
- * no value inside a shared mapping) that v1.12.1 dropped (SPEC.md §15).
+ * All positioned at the value. They are v1.12.1's split of `edit-unsupported`,
+ * which named seven refusals: these four; a key with no value inside a shared
+ * mapping, dropped; and a tag the writer could not find and a format with no
+ * writer, both unreachable and now internal errors (SPEC.md §15).
  * - `edit-unrepresentable` — the format cannot spell the value (JSON has no
  *   `NaN` or infinity; no format has a lone surrogate); positioned at the
  *   value it would have replaced.
  */
-export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unrepresentable", "edit-container", "edit-block-scalar", "edit-bare-key-in-flow", "edit-tag-elsewhere", "edit-read-back", "edit-no-writer"] as const;
+export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unrepresentable", "edit-container", "edit-block-scalar", "edit-bare-key-in-flow", "edit-read-back"] as const;
 
 /**
  * Which document an edit belongs in (v1.11, `SPEC.md` Article IX, §19) — specs/020-edit-targets
  * FR-003. Both are `level: "error"` and come only from `editTarget`. `edit-target-absent`,
- * `edit-container`, `edit-no-writer` and `edit-target-shared` (above) are the other refusals it gives.
+ * `edit-container` and `edit-target-shared` (above) are the other refusals it gives.
  *
  * - `edit-target-inherited` — the winning value was supplied by a schema's `provide`; editing it
  *   would change a default every document under that schema shares. Positioned at the value in
