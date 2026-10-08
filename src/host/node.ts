@@ -125,7 +125,10 @@ export function createNodeHost(options?: NodeHostOptions): Host {
 
     async canonicalize(location: string): Promise<string | undefined> {
       try {
-        return realpathSync(location);
+        // `.native` is the operating system's realpath(3): it follows links AND answers the path's true
+        // spelling (case on a case-folding file system, Unicode normalization). The JavaScript
+        // implementation keeps the spelling it was given, so two spellings of one file were two identities.
+        return realpathSync.native(location);
       } catch {
         return undefined;
       }
