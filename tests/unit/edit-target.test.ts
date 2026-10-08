@@ -188,17 +188,39 @@ describe("v1.11 FR-002 — a value overriding a schema's", () => {
   });
 });
 
-describe("v1.11 FR-002 — aliases", () => {
-  it("/b, an alias of /a, is /b in its own document", async () => {
+describe("v1.11 FR-003 — refused: shared (round 2: refuse rather than guess)", () => {
+  // Alias and merge-key copies keep the anchor's span, so a value that has copies cannot be told from them.
+  // "a: &x 1\nb: *x\n": the `1` is bytes 6-7, and both nodes carry it. Writing either changes the other.
+  it("an anchored value and its alias are both shared: /a and /b, positioned at the value (bytes 6-7)", async () => {
     const configuration = await build("/virtual/e.yaml", { "/virtual/e.yaml": "a: &x 1\nb: *x\n" });
-    expect(editTarget(configuration, "/b")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/b", format: "yaml" });
+    for (const pointer of ["/a", "/b"]) {
+      const diagnostic = refusal(editTarget(configuration, pointer));
+      expect(diagnostic.code, pointer).toBe("edit-target-shared");
+      expect([diagnostic.primary.start, diagnostic.primary.end], pointer).toEqual([6, 7]);
+    }
   });
-});
 
-describe("v1.11 FR-002 — an alias inside a fragment", () => {
-  it("/levels/b is /b in the fragment (the value is shared; the writer will refuse it, but the address is right)", async () => {
+  // "base: &b\n  k: 1\nw:\n  <<: *b\n": the first line is 8 bytes and a newline, so the `1` is at 9 (spaces), 11 (k), 12 (colon), 13 (space), 14: bytes 14-15.
+  it("a merge-key copy and its source are both shared: /w/k and /base/k (bytes 14-15)", async () => {
+    const configuration = await build("/virtual/e.yaml", { "/virtual/e.yaml": "base: &b\n  k: 1\nw:\n  <<: *b\n" });
+    for (const pointer of ["/w/k", "/base/k"]) {
+      const diagnostic = refusal(editTarget(configuration, pointer));
+      expect(diagnostic.code, pointer).toBe("edit-target-shared");
+      expect([diagnostic.primary.start, diagnostic.primary.end], pointer).toEqual([14, 15]);
+    }
+  });
+
+  it("an alias inside a delegated fragment is shared too", async () => {
     const configuration = await build("/virtual/project.yaml", { "/virtual/project.yaml": "$schema: ./root.yaml\nlevels: ./levels.yaml\n", "/virtual/levels.yaml": "a: &x 1\nb: *x\n" });
-    expect(editTarget(configuration, "/levels/b")).toEqual({ ok: true, location: "/virtual/levels.yaml", pointer: "/b", format: "yaml" });
+    expect(refusal(editTarget(configuration, "/levels/b")).code).toBe("edit-target-shared");
+    expect(refusal(editTarget(configuration, "/levels/a")).code).toBe("edit-target-shared");
+  });
+
+  it("controls: a key that overrides a merged one is the document's own, and an anchor nothing aliases is not shared", async () => {
+    const merged = await build("/virtual/e.yaml", { "/virtual/e.yaml": "base: &b\n  k: 1\nw:\n  <<: *b\n  k: 2\n" });
+    expect(editTarget(merged, "/w/k")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/w/k", format: "yaml" });
+    const lone = await build("/virtual/e.yaml", { "/virtual/e.yaml": "a: &x 1\nb: 2\n" });
+    expect(editTarget(lone, "/a")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/a", format: "yaml" });
   });
 });
 

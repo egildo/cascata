@@ -97,35 +97,28 @@ export function resolvePointer(root: Node, pointer: string): Node | undefined {
 }
 
 /**
- * The pointer, inside its own document, of the node in `root` whose span is `target`
- * (same origin id, same bytes) — or `undefined` when no node has it (v1.11 FR-001).
+ * Every pointer, inside its own document, of a node in `root` whose span is `target`
+ * (same origin id, same bytes), in walk order (sorted keys, items in order) — at most
+ * `limit` of them (v1.11 FR-001).
  *
  * `root` is a layer's whole tree, which holds the nodes of any fragment grafted into it
  * (v0.6): a fragment's nodes carry their own origin, and their pointer restarts at the
- * fragment's root, so the answer is the pointer in the document that wrote the value —
- * never the pointer in `root`. It is derived by walking the tree, not by trimming a
- * pointer into the merged result.
+ * fragment's root, so the answers are pointers in the document that wrote the value —
+ * never in `root`. They are derived by walking the tree, not by trimming a pointer into
+ * the merged result.
  *
- * Several nodes can share one span: an alias or a merge key expands to a copy that
- * keeps the anchor's span (SPEC.md §4.2). Among equal spans, the one whose pointer is
- * `hint` is chosen; failing that (the hint is a pointer into a merged tree, and the node
- * is in a fragment), the first whose last segment is the hint's; failing that, the first
- * in walk order (sorted keys, items in order). The walk is iterative and visits each node
- * once.
+ * More than one means copies: an alias or a merge key expands to a node that keeps the
+ * anchor's span (SPEC.md §4.2). The walk is iterative and visits each node once.
  */
-export function pointerInDocument(root: Node, target: SourceSpan, hint?: string): string | undefined {
+export function pointersInDocument(root: Node, target: SourceSpan, limit = Number.POSITIVE_INFINITY): string[] {
   const id = target.origin.id;
-  const tail = (p: string): string => p.slice(p.lastIndexOf("/") + 1);
-  let first: string | undefined;
-  let sameKey: string | undefined;
+  const found: string[] = [];
   const stack: { readonly node: Node; readonly pointer: string }[] = [{ node: root, pointer: "" }];
-  for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
+  for (let item = stack.pop(); item !== undefined && found.length < limit; item = stack.pop()) {
     const { node, pointer } = item;
     const own = node.span.origin.id === id;
     if (own && node.span.start === target.start && node.span.end === target.end) {
-      if (pointer === hint) return pointer;
-      first ??= pointer;
-      if (hint !== undefined && tail(pointer) === tail(hint)) sameKey ??= pointer;
+      found.push(pointer);
     }
     // A child of a node of another document restarts at its own root, so only a node of this document extends the pointer.
     const children: { readonly node: Node; readonly pointer: string }[] = [];
@@ -139,5 +132,18 @@ export function pointerInDocument(root: Node, target: SourceSpan, hint?: string)
       if (child !== undefined) stack.push(child);
     }
   }
-  return sameKey ?? first;
+  return found;
+}
+
+/**
+ * One pointer for `target`, for a caller that reports rather than acts (`why()`). When
+ * copies share the span the choice is a convention, not a fact: the one equal to `hint`
+ * (the merged pointer being asked about); else the first whose last segment is the
+ * hint's (a fragment's pointer is not the merged one); else the first in walk order.
+ * A caller that writes must not use this: it uses `pointersInDocument` and refuses copies.
+ */
+export function pointerInDocument(root: Node, target: SourceSpan, hint?: string): string | undefined {
+  const candidates = pointersInDocument(root, target);
+  const tail = (p: string): string => p.slice(p.lastIndexOf("/") + 1);
+  return candidates.find((p) => p === hint) ?? (hint === undefined ? undefined : candidates.find((p) => tail(p) === tail(hint))) ?? candidates[0];
 }

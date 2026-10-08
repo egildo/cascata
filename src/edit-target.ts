@@ -21,7 +21,7 @@ import { createDiagnostic, type Diagnostic } from "./diagnostics/diagnostic.js";
 import type { DiagnosticCode } from "./diagnostics/codes.js";
 import type { MergedConfiguration } from "./merge/provenance.js";
 import type { Node } from "./model/node.js";
-import { pointerInDocument, resolvePointer } from "./model/pointer.js";
+import { pointersInDocument, resolvePointer } from "./model/pointer.js";
 import type { SourceSpan } from "./model/span.js";
 
 /** The document and in-document pointer where the value at a merged pointer is written, or why there is none. */
@@ -61,8 +61,9 @@ export function editTarget(configuration: MergedConfiguration, pointer: string):
   const location = configuration.delegationBreadcrumbs.has(origin.id) ? origin.label : origin.id;
   for (let index = configuration.layers.length - 1; index >= 0; index--) {
     const layer = configuration.layers[index];
-    const inDocument = layer === undefined ? undefined : pointerInDocument(layer.tree, node.span, pointer);
-    if (layer === undefined || inDocument === undefined) {
+    // Two is enough to know: more than one node with this span means copies (an alias, a merge key).
+    const inDocument = layer === undefined ? [] : pointersInDocument(layer.tree, node.span, 2);
+    if (layer === undefined || inDocument.length === 0) {
       continue;
     }
     if (layer.role === "schema") {
@@ -75,7 +76,13 @@ export function editTarget(configuration: MergedConfiguration, pointer: string):
     if (format !== "yaml" && format !== "json") {
       return refuse("edit-unsupported", `The value at '${pointer}' is in ${location}, a format with no writer`, node.span);
     }
-    return { ok: true, location, pointer: inDocument, format };
+    const [only, copy] = inDocument;
+    if (only === undefined || copy !== undefined) {
+      // Writing one of several nodes that share a span would change the others. The writer refuses the same
+      // values (`edit-target-shared`); refusing here is not a guess about which of them the caller meant.
+      return refuse("edit-target-shared", `The value at '${pointer}' is one of several nodes of ${location} that share one position (an anchor and its aliases, or a merge key's copies); writing it would change every place that shares it`, node.span);
+    }
+    return { ok: true, location, pointer: only, format };
   }
   return refuse("edit-unsupported", `The value at '${pointer}' could not be placed in any document of the configuration`, node.span);
 }

@@ -519,8 +519,8 @@ layer it is usually the merged pointer; for a value grafted from a delegated fra
 (`/L1/elevation` where the merged pointer is `/levels/L1/elevation`); for a schema's `provide` it is where the
 provided value sits in the schema document (`/keys/defaults/provide/height`). It is the pointer of the entry's
 *value*, so for a pointer into a list's item the entries are the list's, with the list's pointers. Where an alias
-or a merge key gives two nodes one span, the node at the pointer asked about is chosen, then the node with the
-same last segment, then the first. Added at answer time like `delegatedFrom`; the stored `ProvenanceRecord`
+or a merge key gives two nodes one span, `why()` — which reports, and does not act — chooses by convention: the node at the pointer asked about, then the node with the
+same last segment, then the first (`editTarget` refuses such a value instead, below). Added at answer time like `delegatedFrom`; the stored `ProvenanceRecord`
 does not carry it.
 
 ### Merge and provenance types
@@ -1422,6 +1422,7 @@ All `level: "error"`.
 |---|---|---|
 | `edit-target-absent` | no value at the pointer in the merged configuration | the nearest existing ancestor |
 | `edit-unsupported` | the value is a mapping or a sequence (a container, merged or not) | the value |
+| `edit-target-shared` | the value's document holds more than one node at its position — an anchor and its aliases, or a merge key's copies — so writing it would change every place that shares it (the writer refuses the same values). `editTarget` does not pick one of them | the value |
 | `edit-target-inherited` | the winning value was supplied by a schema's `provide`; the message names the schema's location and says the edit would change a default every document under it shares | the provided value, in the schema document |
 | `edit-target-remote` | the winning value's document was read over `https://` | the value, in that document |
 
