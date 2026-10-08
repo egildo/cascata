@@ -1,0 +1,15 @@
+{
+  "name": "write/pointer-leading-zero-json",
+  "cites": "v1.10 FR-009",
+  "format": "json",
+  "call": "locate",
+  "input": "[\"a\", \"b\"]\n",
+  "pointer": "/01",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-absent",
+      "start": 0,
+      "end": 10
+    }
+  }
+}

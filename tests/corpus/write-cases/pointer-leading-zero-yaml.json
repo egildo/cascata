@@ -1,0 +1,15 @@
+{
+  "name": "write/pointer-leading-zero-yaml",
+  "cites": "v1.10 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "input": "[a, b, c, d, e, f, g, h, i, j, k]\n",
+  "pointer": "/01",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-absent",
+      "start": 0,
+      "end": 33
+    }
+  }
+}

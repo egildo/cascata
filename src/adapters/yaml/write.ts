@@ -24,7 +24,7 @@ import { isAlias, isMap, isNode, isScalar, isSeq } from "yaml";
 import type { Document, Node as YamlNode } from "yaml";
 import type { Diagnostic } from "../../diagnostics/diagnostic.js";
 import type { Node, ScalarKind } from "../../model/node.js";
-import { pointersInDocument, resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
+import { ARRAY_INDEX, pointersInDocument, resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
 import type { Origin, SourceSpan } from "../../model/span.js";
 import { editDiagnostic, type FindResult, type Found, type ScalarStyle, type SharedEdits } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
@@ -210,7 +210,7 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
       next = lookup(node, segment, anchors, spans, via);
       inFlow ||= node.flow === true;
     } else if (isSeq(node)) {
-      const item = /^\d+$/.test(segment) ? node.items[Number(segment)] : undefined;
+      const item = ARRAY_INDEX.test(segment) ? node.items[Number(segment)] : undefined;
       next = item === undefined ? undefined : { value: asNode(item), via };
       inFlow ||= node.flow === true;
     }

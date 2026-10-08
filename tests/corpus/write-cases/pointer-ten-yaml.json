@@ -1,0 +1,15 @@
+{
+  "name": "write/pointer-ten-yaml",
+  "cites": "v1.10 FR-009",
+  "format": "yaml",
+  "call": "locate",
+  "input": "[a, b, c, d, e, f, g, h, i, j, k]\n",
+  "pointer": "/10",
+  "expect": {
+    "located": {
+      "start": 31,
+      "end": 32,
+      "kind": "string"
+    }
+  }
+}

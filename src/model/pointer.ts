@@ -60,6 +60,9 @@ export function pointerFromPath(path: readonly (string | number)[]): string {
   return "/" + path.map((segment) => escapePointerSegment(String(segment))).join("/");
 }
 
+/** RFC 6901 §4: an array index is `0` or digits with no leading zero. Shared by every pointer walk. */
+export const ARRAY_INDEX = /^(?:0|[1-9]\d*)$/;
+
 /**
  * Resolve an RFC 6901 pointer against a `Node` tree. `""` selects the root.
  * Returns `undefined` when the pointer names nothing in this tree — never
@@ -85,7 +88,8 @@ export function resolvePointer(root: Node, pointer: string): Node | undefined {
     if (current.type === "mapping") {
       current = current.entries.get(segment);
     } else if (current.type === "sequence") {
-      if (!/^\d+$/.test(segment)) {
+      // RFC 6901's array index: `0`, or digits with no leading zero (v1.12.1); `01` names no item.
+      if (!ARRAY_INDEX.test(segment)) {
         return undefined;
       }
       current = current.items[Number(segment)];

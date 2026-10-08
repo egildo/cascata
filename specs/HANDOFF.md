@@ -94,8 +94,6 @@ the writers under the case's own policy.
 
 ## Open edges (noticed, not fixed)
 
-- **Pointer segments with a leading zero (`01`)** are accepted as sequence indices (`^\d+$` in `yaml/write.ts` and
-  `resolvePointer`); RFC 6901 forbids them. (`+1` is rejected; the 020 handoff said otherwise.)
 - **A later document's prefix mark** is reported as misplaced beside `multiple-documents`.
 - **Explicit tags under a `%TAG` handle**, or on an earlier line than the value, cannot be dropped: refused.
 - **`edit-unsupported` is overloaded** (container, block scalar, read-back failure, flow bare key, tag elsewhere, bare key in a shared
