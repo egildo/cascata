@@ -704,7 +704,13 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   // everything past this point speaks stored indices.
   const prefixMarks = documentPrefixMarks(text);
   const yamlText = removePrefixMarks(text.replace(LONE_CARRIAGE_RETURN, "\n"), prefixMarks);
-  const doc = parseDocument(yamlText, { intAsBigInt: true, merge: true });
+  // `uniqueKeys: false` (v1.10, specs/019 round 2): `yaml`'s own duplicate check
+  // compares every new pair with every pair already in the mapping, so one flat
+  // mapping of 32,000 keys took 18 s to parse and 0.18 s without it. Cascata
+  // never used that error (`readerErrorDiagnostic` drops it: `duplicateKeyDiagnostic`
+  // names the first occurrence, which `yaml`'s does not) and the AST is the same
+  // either way, so `buildMappingEntries`' own map-based check is the only one.
+  const doc = parseDocument(yamlText, { intAsBigInt: true, merge: true, uniqueKeys: false });
   if (prefixMarks.length > 0) {
     const toStored = storedIndexer(prefixMarks);
     visit(doc, {
