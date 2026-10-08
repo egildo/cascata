@@ -235,10 +235,10 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   }
   const diagnostics: readonly Diagnostic[] = found.sharedBy !== undefined && sharedEdits === "warn" ? [sharedInfo(found)] : [];
   if (found.node.type !== "scalar") {
-    return refuse("edit-unsupported", `Setting a ${found.node.type} is an insertion, which is not written yet; only a scalar can be replaced`);
+    return refuse("edit-container", `Setting a ${found.node.type} is an insertion, which is not written yet; only a scalar can be replaced`);
   }
   if (found.style === "block") {
-    return refuse("edit-unsupported", "A block scalar ('|' or '>') is not rewritten; only a plain or quoted scalar can be replaced");
+    return refuse("edit-block-scalar", "A block scalar ('|' or '>') is not rewritten; only a plain or quoted scalar can be replaced");
   }
   if (typeof value === "string" && LONE_SURROGATE.test(value)) {
     return refuse("edit-unrepresentable", "A string with an unpaired UTF-16 surrogate cannot be encoded as UTF-8");
@@ -258,7 +258,7 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   let spelled = text;
   if (found.bareKey !== undefined) {
     // A key with no value (`? a`): the value needs the indicator the document lacks, on its own line (v1.12 FR-010).
-    if (found.bareKey.indicator === undefined) return refuse("edit-unsupported", "A key with no value inside a flow collection is not written; only a key that has a value, or a block mapping's `? key`, can take one");
+    if (found.bareKey.indicator === undefined) return refuse("edit-bare-key-in-flow", "A key with no value inside a flow collection is not written; only a key that has a value, or a block mapping's `? key`, can take one");
     if (found.sharedBy !== undefined) return refuse("edit-unsupported", "A key with no value inside a shared mapping is not written");
     spelled = found.bareKey.indicator + yamlPadding(bytes, found.start, text).trimStart();
   } else if (options.format === "yaml" && found.end === found.start) {
@@ -269,7 +269,7 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   if (found.tag !== undefined && found.tag.holds !== kind) {
     // A tag that cannot hold the value is not written over it (v1.12 FR-011): the edit widens over the tag and the
     // space after it, and carries again whatever sat between them and the value (an anchor written after the tag).
-    if (found.tag.drop === undefined) return refuse("edit-unsupported", `The value's explicit tag cannot hold ${describeValue(value)}, and it is not on the value's own line, where this writer could remove it`);
+    if (found.tag.drop === undefined) return refuse("edit-tag-elsewhere", `The value's explicit tag cannot hold ${describeValue(value)}, and it is not on the value's own line, where this writer could remove it`);
     const kept = bytes.subarray(found.tag.drop.kept, found.start);
     const joined = new Uint8Array(kept.length + encoded.length);
     joined.set(kept, 0);
@@ -282,7 +282,7 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   // The safety net: read the edit back. A value that does not come back as the
   // value set (an explicit `!!str` tag over a number, say) is refused, not returned.
   if (!readsBack(bytes, options, [pointer, ...(found.copies ?? [])], edit, kind, value)) {
-    return refuse("edit-unsupported", `${describeValue(value)} could not be written here and read back as the same value`);
+    return refuse("edit-read-back", `${describeValue(value)} could not be written here and read back as the same value`);
   }
   return { ok: true, edit, diagnostics };
 }

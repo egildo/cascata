@@ -110,23 +110,23 @@ describe("v1.11 FR-003 — refused: absent", () => {
 });
 
 describe("v1.11 FR-003 — refused: a container", () => {
-  it("/walls/W1, one layer's mapping, is edit-unsupported at its span (project.yaml bytes 88-99)", async () => {
+  it("/walls/W1, one layer's mapping, is edit-container at its span (project.yaml bytes 88-99)", async () => {
     const diagnostic = refusal(editTarget(await cascade(), "/walls/W1"));
-    expect(diagnostic.code).toBe("edit-unsupported");
+    expect(diagnostic.code).toBe("edit-container");
     expect(diagnostic.primary.origin.id).toBe("/virtual/project.yaml");
     expect([diagnostic.primary.start, diagnostic.primary.end]).toEqual([88, 99]);
   });
 
-  it("/walls, synthesized from two layers, is edit-unsupported", async () => {
-    expect(refusal(editTarget(await cascade(), "/walls")).code).toBe("edit-unsupported");
+  it("/walls, synthesized from two layers, is edit-container", async () => {
+    expect(refusal(editTarget(await cascade(), "/walls")).code).toBe("edit-container");
   });
 
   it("the root is a container", async () => {
-    expect(refusal(editTarget(await cascade(), "")).code).toBe("edit-unsupported");
+    expect(refusal(editTarget(await cascade(), "")).code).toBe("edit-container");
   });
 
   it("a whole accumulated list is a container (FR-004)", async () => {
-    expect(refusal(editTarget(await cascade(), "/styles")).code).toBe("edit-unsupported");
+    expect(refusal(editTarget(await cascade(), "/styles")).code).toBe("edit-container");
   });
 });
 

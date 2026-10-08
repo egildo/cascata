@@ -10,7 +10,7 @@
   },
   "expect": {
     "diagnostic": {
-      "code": "edit-unsupported",
+      "code": "edit-tag-elsewhere",
       "start": 11,
       "end": 12
     }

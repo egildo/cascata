@@ -1393,7 +1393,7 @@ the text (a single-quoted scalar doubles an embedded `'`); where it cannot, doub
 JSON: RFC 8259 §7, non-ASCII written as itself. A string with an unpaired surrogate has no UTF-8 spelling.
 
 **Every edit is read back** before it is returned. One that does not come back as the value set is refused as
-`edit-unsupported`, not guessed. (Until v1.12 an explicit `!!str` tag over a number was the example; since
+`edit-read-back` (`edit-unsupported` until v1.12.1), not guessed. (Until v1.12 an explicit `!!str` tag over a number was the example; since
 v1.12 a tag that cannot hold the value is dropped instead — see "v1.12" below.)
 
 ### v1.10 diagnostic codes
@@ -1404,7 +1404,12 @@ All `level: "error"`, positioned at the span named — except `edit-target-share
 |---|---|---|
 | `edit-target-absent` | no value at the pointer | the nearest existing ancestor |
 | `edit-target-shared` | the value is reached through a YAML alias or merge key, **or it, or a container above it, is anchored and an alias points there** — writing it would change every place that shares it. Since v1.12, `level: "error"` only under `sharedEdits: "refuse"` (the default); under `"warn"` the edit is answered with this code at `level: "info"`, at the value, `related` naming each alias (v1.12, above) | the (first) alias |
-| `edit-unsupported` | a block scalar (`\|`, `>`), a mapping or a sequence (setting a container is an insertion, not written yet), a key with no value inside a flow collection (`{a}`, `{? a}`; v1.12), a value whose explicit tag cannot hold the value set and is not on the value's own line (v1.12), or a scalar that would not read back as the value set | the value |
+| `edit-container` | a mapping or a sequence: setting a container is an insertion, not written yet | the value |
+| `edit-block-scalar` | a block scalar (`\|`, `>`), whose style is not reproduced | the value |
+| `edit-bare-key-in-flow` | a key with no value inside a flow collection (`{a}`, `{? a}`; v1.12) | the value |
+| `edit-tag-elsewhere` | an explicit tag that cannot hold the value set and is not on the value's own line (v1.12) | the value |
+| `edit-read-back` | a scalar that would not read back as the value set (the safety net; no known input reaches it) | the value |
+| `edit-unsupported` | a key with no value inside a shared mapping, under `sharedEdits` `"warn"`/`"allow"` (v1.12). Until v1.12.1 this one code also named each of the five above, told apart only by message | the value |
 | `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
 
 Inserting and deleting are not here (§19).
@@ -1443,7 +1448,8 @@ All `level: "error"` — except `edit-target-shared` under `sharedEdits: "warn"`
 | Code | When | Positioned at |
 |---|---|---|
 | `edit-target-absent` | no value at the pointer in the merged configuration | the nearest existing ancestor |
-| `edit-unsupported` | the value is a mapping or a sequence (a container, merged or not) | the value |
+| `edit-container` | the value is a mapping or a sequence (a container, merged or not); `edit-unsupported` until v1.12.1 | the value |
+| `edit-no-writer` | the value's document is in a format with no writer (none is read without one today) | the value |
 | `edit-target-shared` | the value's document holds more than one node at its position — an anchor and its aliases, or a merge key's copies — or (v1.12) the document is read at more than one place (delegated to twice, or both a layer and a fragment); writing it would change every place that shares it (under the default `"refuse"` the writer refuses the same alias copies). `related` names each other place: another copy, or another graft's delegating value. Under `sharedEdits: "warn"` (v1.12) the target is answered and this code comes with it at `level: "info"`; under `"allow"` nothing is said | the value |
 | `edit-target-inherited` | the winning value was supplied by a schema's `provide`; the message names the schema's location and says the edit would change a default every document under it shares | the provided value, in the schema document |
 | `edit-target-remote` | the winning value's document was read over `https://` | the value, in that document |
@@ -1518,11 +1524,11 @@ before.
 - A key written with no value at all — `? a`, or `{a}` in a flow mapping — reads as `a: null`, the null spanning
   zero width at the end of the key (it was dropped; §4.2 keeps null, an absent key and an empty value apart).
   `setValue("/a", 1)` on `? a\n` writes `\n: 1` at `3..3`, giving `? a\n: 1\n`; nested, the new line carries the
-  `?`'s indentation. In a flow collection it is refused, `edit-unsupported`.
+  `?`'s indentation. In a flow collection it is refused, `edit-bare-key-in-flow`.
 - A tagged scalar keeps its tag where the tag holds the kind written (`!!int` an integer, `!!float` a decimal,
   `!!str` a string, `!!bool`, `!!null`; the `!<tag:yaml.org,2002:…>` form likewise) and loses it where it cannot:
   `a: !!int 1` set to `"x"` is the edit `3..10` → `x`, so `a: x`, never `!!int x`. An anchor written after the tag
-  is carried into the edit. A tag that must go but is not on the value's own line is `edit-unsupported`.
+  is carried into the edit. A tag that must go but is not on the value's own line is `edit-tag-elsewhere`.
 
 **Two corrections of cost** (v1.12, §15): a node's column is two lookups in a table built with the byte table,
 so one long line reads in time linear in its length; and the pointers of a tree are indexed once, on first use,

@@ -300,24 +300,33 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  *   under `sharedEdits: "refuse"` (the default); under `"warn"` (v1.12) the
  *   edit is answered with this code at `level: "info"`, positioned at the
  *   value, `related` naming every other place the write changes.
- * - `edit-unsupported` — a block scalar, a mapping or a sequence (setting a
- *   container is an insertion, not written yet), a scalar the writer could
- *   not write and read back, and since v1.12 a key with no value inside a flow
- *   collection and a tag that cannot hold the value but is not on the value's
- *   own line (one on it is dropped instead, v1.12 FR-011), a key with no
- *   value inside a shared mapping under `"warn"`/`"allow"`, and from
- *   `editTarget` a value whose document has no writer; positioned at the
- *   value.
+ * - `edit-unsupported` — a key with no value inside a shared mapping under
+ *   `"warn"`/`"allow"`; positioned at the value. Until v1.12.1 it also named
+ *   each refusal below, which callers could tell apart only by message.
+ * - `edit-container` — a mapping or a sequence: setting a container is an
+ *   insertion, not written yet (also from `editTarget`).
+ * - `edit-block-scalar` — a block scalar (`|`, `>`), whose style is not reproduced.
+ * - `edit-bare-key-in-flow` — a key with no value inside a flow collection
+ *   (`{a}`), which has nowhere to put a `:` (v1.12).
+ * - `edit-tag-elsewhere` — an explicit tag that cannot hold the value and is
+ *   not on the value's own line, where it could be dropped (v1.12 FR-011).
+ * - `edit-read-back` — the edit did not read back as the value set: the
+ *   safety net, which no known input reaches.
+ * - `edit-no-writer` — from `editTarget`, a value whose document's format has
+ *   no writer; no format is read without one today.
+ *
+ * All positioned at the value. The six codes are v1.12.1's split of
+ * `edit-unsupported` (SPEC.md §15).
  * - `edit-unrepresentable` — the format cannot spell the value (JSON has no
  *   `NaN` or infinity; no format has a lone surrogate); positioned at the
  *   value it would have replaced.
  */
-export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unsupported", "edit-unrepresentable"] as const;
+export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unsupported", "edit-unrepresentable", "edit-container", "edit-block-scalar", "edit-bare-key-in-flow", "edit-tag-elsewhere", "edit-read-back", "edit-no-writer"] as const;
 
 /**
  * Which document an edit belongs in (v1.11, `SPEC.md` Article IX, §19) — specs/020-edit-targets
  * FR-003. Both are `level: "error"` and come only from `editTarget`. `edit-target-absent`,
- * `edit-unsupported` and `edit-target-shared` (above) are the other three refusals it gives.
+ * `edit-container`, `edit-no-writer` and `edit-target-shared` (above) are the other refusals it gives.
  *
  * - `edit-target-inherited` — the winning value was supplied by a schema's `provide`; editing it
  *   would change a default every document under that schema shares. Positioned at the value in

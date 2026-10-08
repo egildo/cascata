@@ -10,7 +10,7 @@
   },
   "expect": {
     "diagnostic": {
-      "code": "edit-unsupported",
+      "code": "edit-container",
       "start": 6,
       "end": 12
     }

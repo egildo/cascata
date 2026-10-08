@@ -10,7 +10,7 @@
   },
   "expect": {
     "diagnostic": {
-      "code": "edit-unsupported",
+      "code": "edit-bare-key-in-flow",
       "start": 4,
       "end": 4
     }

@@ -10,7 +10,7 @@
   },
   "expect": {
     "diagnostic": {
-      "code": "edit-unsupported",
+      "code": "edit-block-scalar",
       "start": 6,
       "end": 20
     }

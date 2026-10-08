@@ -102,7 +102,7 @@ export function editTarget(configuration: MergedConfiguration, pointer: string, 
     return refuse("edit-target-absent", `There is no value at '${pointer}' in the merged configuration`, found.span);
   }
   if (node.type !== "scalar") {
-    return refuse("edit-unsupported", `The value at '${pointer}' is a ${node.type}; setting a container is an insertion, which is not written yet, so only a scalar has an edit target`, node.span);
+    return refuse("edit-container", `The value at '${pointer}' is a ${node.type}; setting a container is an insertion, which is not written yet, so only a scalar has an edit target`, node.span);
   }
 
   const origin = node.span.origin;
@@ -123,7 +123,7 @@ export function editTarget(configuration: MergedConfiguration, pointer: string, 
     }
     const format = formatForLocation(location);
     if (format !== "yaml" && format !== "json") {
-      return refuse("edit-unsupported", `The value at '${pointer}' is in ${location}, a format with no writer`, node.span);
+      return refuse("edit-no-writer", `The value at '${pointer}' is in ${location}, a format with no writer`, node.span);
     }
     // Among copies the answer is a convention (v1.12 FR-007): the merged pointer's, else the same last segment, else the first.
     const chosen = pointerInDocument(layer.tree, node.span, pointer) ?? inDocument[0] ?? "";
@@ -143,5 +143,6 @@ export function editTarget(configuration: MergedConfiguration, pointer: string, 
     const diagnostics = sharedEdits === "warn" ? [createDiagnostic({ level: "info", code: "edit-target-shared", message: `The value at '${pointer}' ${why}; the edit also changes every place named here`, primary: node.span, related })] : [];
     return { ok: true, location, pointer: chosen, format, diagnostics };
   }
-  return refuse("edit-unsupported", `The value at '${pointer}' could not be placed in any document of the configuration`, node.span);
+  // Every merged node came from some layer's tree, so this is a bug, not a document's fault (v1.12.1).
+  throw new Error(`Internal error: editTarget(): the value at '${pointer}' is in no layer of the configuration`);
 }

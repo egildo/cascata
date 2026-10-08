@@ -95,11 +95,9 @@ the writers under the case's own policy.
 ## Open edges (noticed, not fixed)
 
 - **Explicit tags under a `%TAG` handle**, or on an earlier line than the value, cannot be dropped: refused.
-- **`edit-unsupported` is overloaded** (container, block scalar, read-back failure, flow bare key, tag elsewhere, bare key in a shared
-  mapping; from `editTarget`, a format with no writer);
-  callers tell them apart only by message.
-- **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-unsupported` from a
-  read-back failure, a bare key in a shared mapping, `editTarget`'s no-writer format, a `%TAG` tag.
+- **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-read-back` (no known input
+  reaches it), `edit-unsupported` for a bare key in a shared mapping, `edit-no-writer` (no format is read without a
+  writer), `edit-tag-elsewhere` for a `%TAG` tag.
 - **Settled, not defects (v1.12.1):** JSON has no expansion budget because it has no aliases; `locate`'s `kind`
   is a scalar's kind or a container's type (`mapping`/`sequence`), as the type and reference say, and renaming it needs v2.0.
 - **A bare key inside a shared mapping** is refused under `"warn"`/`"allow"` (invented in 022, not specified).
