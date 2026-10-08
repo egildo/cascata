@@ -1,0 +1,27 @@
+/**
+ * What makes two fetches the same document — `SPEC.md` §6.1;
+ * data-model.md "Document Identity".
+ *
+ * Here rather than in `src/resolve/` for the reason given in
+ * `reference.ts`: `graph/` needs the shape and may not import `resolve/`.
+ * Computing a hash is `resolve/identity.ts`'s job; this module is the
+ * shape alone and pulls in no crypto.
+ */
+/**
+ * Location plus content hash.
+ *
+ * Two documents are the same when their **hashes** match, whatever their locations. Dedup *before*
+ * reading uses `location` alone, because `hash` does not exist yet — research D5 splits the two
+ * deliberately, and cycle detection depends on the location half being answerable first.
+ *
+ * The hash is over the document's **exact bytes**, not a canonical form (`SPEC.md` §6.1, amended:
+ * RFC 8785/JCS cannot represent this model's exact integers or its int/float distinction, and would
+ * collide on values the model holds unequal).
+ */
+export interface DocumentIdentity {
+    /** The absolute resolved location — a real path, or a normalized URL. */
+    readonly location: string;
+    /** Lowercase hex SHA-256 over the exact bytes; 64 characters. */
+    readonly hash: string;
+}
+//# sourceMappingURL=identity.d.ts.map
