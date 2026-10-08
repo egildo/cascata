@@ -448,6 +448,9 @@ function withBreadcrumb(configuration: MergedConfiguration, entry: ProvenanceEnt
  * defensive — the fold records spans of the nodes of `layer.tree`, so it is not reachable.
  */
 function withPointer(entry: ProvenanceEntry, mergedPointer: string): WhyEntry {
+  // `?? mergedPointer` is a guard, kept on purpose (v1.12 FR-012): unreachable, because every entry's span is
+  // the span of a node of its own layer's tree (the fold records the node it was handed), so the index always
+  // finds at least one pointer; were that ever false, the merged pointer is the least wrong answer.
   return { ...entry, pointer: pointerInDocument(entry.layer.tree, entry.span, mergedPointer) ?? mergedPointer };
 }
 

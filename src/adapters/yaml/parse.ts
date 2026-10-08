@@ -255,7 +255,12 @@ interface WalkContext extends SpanContext {
   readonly expansion: ExpansionState;
 }
 
-/** Where to point if the budget is crossed with no alias in sight — unreachable (without an alias, nodes built never exceed nodes written), but a diagnostic must have a span. */
+/**
+ * Where to point if the budget is crossed with no alias in sight. A guard, kept on purpose (v1.12 FR-012):
+ * unreachable, because without an alias or merge key the walk builds at most one node per node written
+ * (and a bare key's null, v1.12 FR-010, is one per key written), which never crosses a budget of ten
+ * times that plus an allowance; but a diagnostic must have a span, and this one costs nothing.
+ */
 function outcomeRootSpan(ctx: SpanContext, doc: Document): SourceSpan {
   return toSourceSpan(doc.contents?.range ?? [0, 0, 0], ctx);
 }

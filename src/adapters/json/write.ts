@@ -11,7 +11,7 @@
 import { editDiagnostic, type FindResult } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
 import type { Node } from "../../model/node.js";
-import { resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
+import { resolvePointer } from "../../model/pointer.js";
 import type { Origin, SourceSpan } from "../../model/span.js";
 import { parseJsonBytes } from "./parse.js";
 
@@ -46,5 +46,3 @@ export function parseBack(bytes: Uint8Array, origin: Origin, limits: Partial<Par
 export function renderJsonString(text: string): string {
   return JSON.stringify(text);
 }
-
-export { unescapePointerSegment };

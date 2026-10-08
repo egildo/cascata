@@ -42,21 +42,22 @@ expands (and is then confined), which §5.3 had always shown and §15 had forbid
 | **v1.4** | **host-resolvable identity** — an optional `Host.locate` lets a host own a URI scheme, so `$adopts: beltype:document` names a document by identity rather than by a path that differs on every machine; plus the correction that `sandboxRoot: "/"` contains everything under it |
 | **v1.5** | **it loads where Node does not** — `node:crypto`, the `Buffer` global, `node:path` and `node:os` are gone from the library proper: SHA-256 is arithmetic of its own, byte length is counted rather than encoded, and path semantics are an optional `Host.paths` the shipped Node host answers with `node:path`'s own functions |
 | **v1.6** | **overrides** — `resolve()`/`load()` accept `overrides`, config documents the embedder names, read after the entry's chain and ranked after it in the order given, governed by every demand, `final` and `append` the pedigree accumulated exactly as the entry is; built for an embedder whose operator sets a key from a command line |
-| **v1.7** | **sandbox roots** — `sandboxRoot` takes a list, and a schema's `~/` expands and is then confined, so a house schema shared by every project on a machine has a lawful door; plus the correction that an absent file under a symlinked root is `document-unreachable` and not `sandbox-escape`, and `posixPaths` exported from `cascata/paths` |
+| **v1.7** | **sandbox roots** — `sandboxRoot` takes a list, and a schema's `~/` expands and is then confined, so a house schema shared by every project on a machine has a lawful door; plus the correction that an absent file under a symlinked root is `document-unreachable` and not `sandbox-escape`, and `posixPaths` exported from `@egildo/cascata/paths` |
 | **v1.8** | **a scalar under `append`** — a single value contributed to a key under `cascade: append` is taken as a list of one and appended, with an `info` notice (`append-scalar-wrapped`) at the author's own position; a mapping is still refused (`SPEC.md` §5.3) |
 | **v1.9** | **spans count stored bytes** — corrections only: offsets count the document's stored bytes, a carriage return and a leading byte-order mark included, so a span slices exactly its node's text; line and column count what a person sees, with LF, CRLF and a lone CR each ending a line; a lone CR in YAML reads as the line break YAML 1.2.2 says it is, and a byte-order mark outside a document prefix or a quoted scalar is `malformed-document` (`SPEC.md` §4.2) |
 | **v1.10** | **writing a value back, and bounded cost** — `locate` and `setValue` rewrite one YAML or JSON value in place, in the file's own style, every other byte untouched (`SPEC.md` Article IX); aliases resolve in one pass, the parser's quadratic duplicate-key check is replaced by Cascata's own, and alias expansion has a budget (`expansion-limit-exceeded`), so a few hundred bytes of nested aliases are refused rather than expanded (§4.2, §11) |
 | **v1.11** | **edit targets, and writers** — `editTarget` answers which document, and which pointer inside it, holds the value that won at a merged pointer (a schema's `provide` and a remote document are refused by name); `why()` entries carry that in-document `pointer`; `yamlWriter()` and `jsonWriter()` offer `locate`/`setValue` in the editing stage's shape from `@egildo/cascata/writers` (`SPEC.md` Article IX)  |
+| **v1.12** | **after the review** — `sharedEdits` (`refuse`, `warn`, `allow`) on `setValue`, `editTarget` and the writers, with a file delegated to at two places counted as shared; columns and in-document pointers computed once, restoring the bounded-cost claim for long lines and for asking about every value; an empty document located after its marks, a bare `? a` read as `a: null`, a tag dropped where it cannot hold the value written (`SPEC.md` Article IX, §15) |
 
-Full detail lives in `specs/001-…` through `specs/016-…`, each with its own `spec.md`, `plan.md`,
+Full detail lives in `specs/001-…` through `specs/022-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
 the same surface.
 
 ## Quick start
 
 ```typescript
-import { load } from "cascata";
-import { createNodeHost } from "cascata/host/node";
+import { load } from "@egildo/cascata";
+import { createNodeHost } from "@egildo/cascata/host/node";
 
 interface Site {
   readonly styles: readonly string[];
@@ -96,7 +97,7 @@ The primary entry point. Takes bytes, because that is the only boundary at which
 UTF-8 mandate is enforceable — see the note on `parseText` below.
 
 ```typescript
-import { parse, createOrigin } from "cascata";
+import { parse, createOrigin } from "@egildo/cascata";
 
 const origin = createOrigin("config.yaml", "config.yaml"); // id, then a human-readable label
 const result = parse(new TextEncoder().encode("a: 1\nb: 2\n"), { origin });
@@ -130,7 +131,8 @@ if (result.ok) {
 **Behavioral contract** (contracts/parse-api.md):
 
 1. Never throws for a bad *document* — a malformed, hostile, or unportable document produces
-   `{ ok: false, diagnostics }`. Exceptions are reserved for programmer error (a missing `origin`).
+   `{ ok: false, diagnostics }`. Exceptions are reserved for programmer error (a missing `origin`) and
+   for an internal inconsistency (an `Internal error: …` guard the reader keeps), which is a bug to report.
 2. Total: every input produces one of the two outcomes; none hangs, none exhausts memory.
 3. Deterministic: identical input yields identical trees and identical diagnostic order, every run.
 4. One call reports **every** floor violation it can detect, not just the first (FR-019).
@@ -188,8 +190,9 @@ set regardless of order, sequences by items in order. Spans and origins take no 
 
 ### Diagnostic codes
 
-Stable, part of the public contract (contracts/diagnostics.md). Every diagnostic carries a `code`, a
-human-readable `message`, a `primary: SourceSpan`, and zero or more labelled `related: RelatedSpan[]`.
+Stable, part of the public contract (contracts/diagnostics.md). Every diagnostic carries a `level`
+(`"error"` or `"info"`, since v0.7), a `code`, a human-readable `message`, a `primary: SourceSpan`, and zero or
+more labelled `related: RelatedSpan[]`; one about a value inside a delegated fragment also carries `delegatedFrom` (v0.6).
 Since v0.4, a diagnostic produced by `validate()` additionally carries `pointer?: string` (an RFC 6901
 pointer into the **merged** configuration), `demand?: { pointer: string; span: SourceSpan }` (the
 violated demand's own position, in its declaring document), and `pedigreePosition?: number` (the
@@ -225,17 +228,18 @@ Prefer `parse()` wherever you hold bytes.
 
 **v0.2.** Follows the entry document's `$schema` — and every ancestor's `$adopts` — into an acyclic
 graph and an ordered, root-to-leaf **pedigree** of schema identities (contracts/resolve-api.md).
-References may be local paths or `https://` URLs; a schema takes exactly one `$adopts` parent
+References may be local paths, `https://` URLs, or (since v1.4) a scheme the host claims through `Host.locate`; a schema takes exactly one `$adopts` parent
 (`SPEC.md` §6.1, §9), so the pedigree is always a chain, never a tree.
 
 ```typescript
-import { resolve } from "cascata";
+import { resolve } from "@egildo/cascata";
+import { createNodeHost } from "@egildo/cascata/host/node";
 
 // config.yaml: "$schema: ./house.yaml"
 // house.yaml:  "$adopts: ./core.yaml"
 // core.yaml:   "$id: core"                (no further $adopts — the chain's root)
 
-const result = await resolve("./config.yaml", { sandboxRoot: process.cwd() });
+const result = await resolve("./config.yaml", { host: createNodeHost(), sandboxRoot: process.cwd() });
 
 if (result.ok) {
   result.graph; // every document read, entry first, acyclic
@@ -262,13 +266,14 @@ if (result.ok) {
   depends on this asymmetry). Granted, never ambient, member-wise: `undefined`, `""`, `[]`, and a list
   with a member that is not a non-empty string all throw. Delegation is confined by the same set —
   there is one sandbox, not one per mechanism.
-- **`options.cacheDir?: string`** — where fetched remote documents are cached on disk (v0.2 FR-016).
-  Optional in the type, but resolution throws the moment it reaches an `https://` reference with none
-  supplied — granted, never ambient, the same posture as `sandboxRoot`, enforced only where it becomes
-  load-bearing. A purely local chain needs neither `cacheDir` nor network access.
-- **`options.transport?: Transport`** — an injection point for the HTTP layer (used by this project's
-  own hermetic test suite to supply recorded responses; contracts/recorded-responses.md). Omit it for
-  the real network.
+- **`options.host: Host`** — **required** (v0.7, Article VI): the library's only route to local bytes,
+  canonical identity and cache storage; a missing or malformed host throws. The on-disk cache directory
+  v0.2 took as `cacheDir` moved behind it: `createNodeHost({ cacheDir })`. A purely local chain needs
+  neither a cache directory nor a transport.
+- **`options.transport?: Transport`** — the HTTP layer. There is no default (v0.7): the library never calls
+  `fetch` itself, so resolution throws the moment it reaches an `https://` reference with none supplied —
+  granted, never ambient, as `sandboxRoot` is. Pass `createNodeTransport()` from `@egildo/cascata/host/node`
+  for the real network, or a recorded transport in tests (contracts/recorded-responses.md).
 - **`options.maxChainLength?: number`** — default `32`; a longer chain is refused as
   `chain-limit-exceeded`.
 - **`options.limits?: Partial<{ maxRedirects: number; requestTimeoutMs: number; maxBytes: number }>`**
@@ -276,15 +281,16 @@ if (result.ok) {
   is enforced **during** streaming, so a server advertising a small body and sending an unbounded one
   is cut off mid-stream, not measured after the fact.
 
-**`ResolveResult`** is `{ ok: true, graph: Graph, pedigree: Pedigree } | { ok: false, diagnostics: Diagnostic[] }`
-— never both. `Graph.documents[0]` is always the entry document; `Pedigree` never includes it (it
+**`ResolveResult`** is `{ ok: true, graph, pedigree, delegationBreadcrumbs, paths, diagnostics } | { ok: false, diagnostics }`
+— never both; the `ok` branch's `diagnostics` holds only `info` lints. Pass the whole result to `merge()` so the
+breadcrumbs and the path facility are carried through. `Graph.documents[0]` is always the entry document; `Pedigree` never includes it (it
 answers "what schemas am I bound by", and the config is not an answer to that — v0.2 FR-011).
 
 **Behavioral contract** (contracts/resolve-api.md):
 
 1. Never throws for bad *input* — unreachable documents, cycles, pin mismatches, sandbox escapes are
-   all diagnostics. Exceptions remain for programmer error: a missing `sandboxRoot`, or a remote
-   reference reached with no `cacheDir` supplied.
+   all diagnostics. Exceptions remain for programmer error: a missing or malformed `sandboxRoot` or
+   `host`, or a remote reference reached with no `transport` supplied.
 2. Total: cycles are detected, chain length is capped, fetches time out — nothing hangs.
 3. Deterministic: the same inputs and cache state produce the same graph, the same pedigree order, and
    the same diagnostics in the same order, every run (v0.2 SC-009).
@@ -298,7 +304,7 @@ answers "what schemas am I bound by", and the config is not an answer to that �
 interface Reference {
   text: string; // what was written — a relative path, a `~/`-prefixed path (expanded for a local document under either authority since v1.7), or an absolute URL
   span: SourceSpan; // where it was written, in the document that wrote it
-  kind: "schema" | "adopts" | "delegate"; // v0.6
+  kind: "schema" | "adopts" | "delegate" | "override"; // "delegate" v0.6, "override" v1.6
   authority: "config-authored" | "schema-authored"; // decides sandbox treatment — never from the text
   pin?: string; // the stated `$pin`, if any
 }
@@ -312,6 +318,7 @@ interface PedigreeEntry {
   identity: DocumentIdentity;
   via: Reference; // the reference that brought this schema into the chain
   verified: boolean; // whether `via.pin` was present and matched (v0.2 FR-026)
+  finalAgainstForking: boolean; // v0.7: the schema declared authority.finalAgainstForking (recorded, consulted by nothing in v1)
 }
 
 type Pedigree = readonly PedigreeEntry[]; // root to leaf; a chain, never a tree (v1 single-parent adoption)
@@ -325,11 +332,11 @@ that failed** (v0.2 FR-023).
 
 | Code | Refuses |
 |---|---|
-| `document-unreachable` | A referenced document that does not exist, cannot be read, or timed out |
+| `document-unreachable` | A referenced document that does not exist or cannot be read. A remote fetch that times out or fails falls back to a stale cached copy, else it is `document-not-cached` |
 | `reference-cycle` | A reference closing a loop, naming every reference in the cycle, in chain order |
 | `multiple-adoption` | A sequence value for `$adopts`/`$schema` — v1 adopts exactly one parent (`SPEC.md` §6.1, §9) |
 | `chain-limit-exceeded` | A chain longer than `maxChainLength` |
-| `unsupported-scheme` | A reference whose scheme is not HTTPS or a relative path — `http:`, `file:`, `data:` |
+| `unsupported-scheme` | A reference whose scheme is not HTTPS, not a relative path, and not claimed by `Host.locate` (v1.4) — `http:`, `file:`, `data:` |
 | `sandbox-escape` | A **schema-authored** local reference resolving outside every granted sandbox root, including through a symlink. A reference to a file that merely does not *exist* is `document-unreachable`, not this (v1.7 FR-001/FR-002) |
 | `pin-mismatch` | Fetched bytes whose hash differs from the stated `$pin` — names both expected and actual; the bytes never enter the graph |
 | `malformed-pin` | A `$pin` that is not a well-formed `sha256:<64 hex digits>` value |
@@ -380,8 +387,8 @@ favicon: ./icon.png             # NOT granted — stays the literal string (§8.
 - **Article VI in practice**: remote delegation asks the same injectable `Transport` remote
   `$schema`/`$adopts` fetches already use (v0.2) — the host answers with bytes or the transport
   reports a failure, and either way `resolve()` returns an ordinary diagnostic, never an exception.
-  Local delegation reads still go through `node:fs` directly, unlike remote ones — Article VI's own
-  unification of local reads into the identical seam is v0.7 work, not v0.6's.
+  Since v0.7, local delegation reads go through the same `Host` as every other read (`host.read`); no file
+  under `src/` outside the shipped Node host imports `node:fs`.
 - **The breadcrumb** (§10, the last of Principle III's phased diagnostic fields): a diagnostic about a
   value inside a fragment carries `delegatedFrom`, naming the chain of delegating positions outermost
   to innermost; a diagnostic about a non-delegated value carries none at all. `canonicalSentence`
@@ -415,13 +422,14 @@ vocabulary, `SPEC.md` §9 amended) and `final` by the fold's own whole-stack res
 below, and Delegation above.
 
 ```typescript
-import { resolve, merge, why } from "cascata";
+import { resolve, merge, why } from "@egildo/cascata";
+import { createNodeHost } from "@egildo/cascata/host/node";
 
 // core.yaml:   "$id: core" with `keys: { timeout: { provide: 30 }, styles: { cascade: append, provide: [reset.css] } }`
 // house.yaml:  "$adopts: ./core.yaml" with `keys: { styles: { provide: [house.css] } }`
 // config.yaml: "$schema: ./house.yaml" with `styles: [project.css]`
 
-const resolved = await resolve("./config.yaml", { sandboxRoot: process.cwd() });
+const resolved = await resolve("./config.yaml", { host: createNodeHost(), sandboxRoot: process.cwd() });
 if (!resolved.ok) throw new Error("resolve failed");
 
 const result = merge({ graph: resolved.graph, pedigree: resolved.pedigree });
@@ -435,9 +443,11 @@ if (result.ok) {
 
 - **`resolved: { graph: Graph; pedigree: Pedigree }`** — exactly what a successful `resolve()` call
   produces; `merge()` performs no I/O of its own and reads no file (contracts/merge-api.md point 5).
-- **`MergeResult`** is `{ ok: true, configuration: MergedConfiguration } | { ok: false, diagnostics: Diagnostic[] }`
-  — never both. `ok: false` is reached only by malformed merge policy (see "v0.3 diagnostic codes"
-  below) — never by anything about the config's own data, since values themselves cannot be malformed.
+- **`MergeResult`** is `{ ok: true, configuration: MergedConfiguration, diagnostics } | { ok: false, diagnostics: Diagnostic[] }`
+  — never both; the `ok` branch's `diagnostics` holds only `info` lints (v1.8: `append-scalar-wrapped`). `ok: false` is
+  reached only by malformed merge policy (see "v0.3 diagnostic codes" below) or, since v0.7, by a schema
+  redeclaring a key an ancestor sealed `final` (`final-key-redeclared`) — never by anything about the config's own
+  data, since values themselves cannot be malformed.
 
 **Behavioral contract** (contracts/merge-api.md):
 
@@ -520,7 +530,8 @@ layer it is usually the merged pointer; for a value grafted from a delegated fra
 provided value sits in the schema document (`/keys/defaults/provide/height`). It is the pointer of the entry's
 *value*, so for a pointer into a list's item the entries are the list's, with the list's pointers. Where an alias
 or a merge key gives two nodes one span, `why()` — which reports, and does not act — chooses by convention: the node at the pointer asked about, then the node with the
-same last segment, then the first (`editTarget` refuses such a value instead, below). Added at answer time like `delegatedFrom`; the stored `ProvenanceRecord`
+same last segment, then the first. `editTarget` refuses such a value under its default `sharedEdits: "refuse"`, and
+under `"warn"` or `"allow"` (v1.12) answers the pointer this same convention chooses (below). Added at answer time like `delegatedFrom`; the stored `ProvenanceRecord`
 does not carry it.
 
 ### Merge and provenance types
@@ -551,6 +562,9 @@ interface MergedConfiguration {
   provenance: ProvenanceRecord;
   pedigree: Pedigree; // carried through from resolve(), unchanged
   layers: readonly Layer[]; // since v0.4 — root to leaf, what foldConfiguration already computed
+  delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]>; // v0.6 — by graft origin id
+  finalState: ReadonlyMap<string, KeyFinalState>; // v0.7 — the whole stack's final resolution
+  paths?: PathFacility; // v1.5 — stamped by resolve(), read by resource()
 }
 ```
 
@@ -597,13 +611,14 @@ pipeline stage, reachable independently of `merge()`, consuming only its output 
 argument — `MergedConfiguration.layers` already carries what this stage needs).
 
 ```typescript
-import { resolve, merge, validate } from "cascata";
+import { resolve, merge, validate } from "@egildo/cascata";
+import { createNodeHost } from "@egildo/cascata/host/node";
 
 // core.yaml:   `keys: { styles: { demand: { type: url } } }`
 // house.yaml:  `$adopts: ./core.yaml` — restates nothing for styles
 // config.yaml: `$schema: ./house.yaml` with `styles: "not-a-url"`
 
-const resolved = await resolve("./config.yaml", { sandboxRoot: process.cwd() });
+const resolved = await resolve("./config.yaml", { host: createNodeHost(), sandboxRoot: process.cwd() });
 if (!resolved.ok) throw new Error("resolve failed");
 const merged = merge({ graph: resolved.graph, pedigree: resolved.pedigree });
 if (!merged.ok) throw new Error("merge failed");
@@ -621,8 +636,8 @@ if (result.ok) {
 }
 ```
 
-- **`ValidateResult`** is `{ ok: true, certified: MergedConfiguration } | { ok: false, diagnostics: Diagnostic[] }`
-  — never both. `certified` is `configuration` itself, unchanged: `validate()` never mutates the tree
+- **`ValidateResult`** is `{ ok: true, certified: MergedConfiguration, diagnostics } | { ok: false, diagnostics: Diagnostic[] }`
+  — never a certificate beside an error; the `ok` branch's `diagnostics` carries any `info` lints (v0.7 FR-002). `certified` is `configuration` itself, unchanged: `validate()` never mutates the tree
   (FR-034) and performs no I/O or reference resolution (FR-035) — every document it needs is already
   on `configuration.layers`.
 
@@ -722,7 +737,8 @@ keys:
 - **A collision — two declarations of one name in layers that are *not* ancestor/descendant — remains
   an error** (FR-016b), reserved for a future multi-adoption world. `$adopts` is single-parent and
   chain-only in v1 (§6.1), so every pedigree is one linear chain and every pair of layers is related:
-  this collision path is implemented, correctly generalized, and **structurally unreachable at this
+  this collision path is a reserved stub — `collisionDiagnostics` and `qualifierCollisionDiagnostics` keep their
+  names, signatures and codes but return no diagnostic, unconditionally — **structurally unreachable at this
   milestone** — documented as such in `src/validate/types.ts` rather than left to look like live
   protection. Redefining a *built-in* name (`string`, `url`, ...) is a separate rule and stays
   reachable: `builtin-type-redeclared` (FR-018), since there is no "narrowing chain" for a name no
@@ -806,8 +822,8 @@ call anywhere under `src/` except the one named exemption, `src/host/node.ts`. T
 not merely refrain from reading a disk there.
 
 ```typescript
-import { load } from "cascata";
-import { createNodeHost, createNodeTransport } from "cascata/host/node";
+import { load } from "@egildo/cascata";
+import { createNodeHost, createNodeTransport } from "@egildo/cascata/host/node";
 
 const result = await load("./site.yaml", {
   sandboxRoot: process.cwd(),
@@ -850,8 +866,8 @@ consequence worth stating plainly: **an embedder on Windows using a custom host 
 
 ```typescript
 import { createRequire } from "node:module";
-import type { Host } from "cascata";
-import { createNodeHost } from "cascata/host/node.js";
+import type { Host } from "@egildo/cascata";
+import { createNodeHost } from "@egildo/cascata/host/node.js";
 
 const require = createRequire(import.meta.url);
 const base = createNodeHost();
@@ -926,8 +942,8 @@ promotes a reserved key to data; the fold's stripping rule is unchanged.
 ### `metaValidate(options)` — self-hosting
 
 ```typescript
-import { metaValidate } from "cascata";
-import { createNodeHost, nodeMetaSchemaLocation } from "cascata/host/node";
+import { metaValidate } from "@egildo/cascata";
+import { createNodeHost, nodeMetaSchemaLocation } from "@egildo/cascata/host/node";
 
 const result = await metaValidate({
   host: createNodeHost(),
@@ -979,7 +995,7 @@ Seven milestones produced a positioned, frozen `Node` tree and no way to read it
 `project()` is that gap closed.
 
 ```typescript
-import { project } from "cascata";
+import { project } from "@egildo/cascata";
 
 const { value, diagnostics } = project<{ readonly server: { readonly host: string } }>(result.configuration);
 value.server.host;   // ordinary data
@@ -1084,7 +1100,7 @@ layers alone: no configuration takes part, and positions are *shapes* — `value
 every entry and every element, not the entries and elements of some document.
 
 It is a stage in its own right (Principle IV) and is reachable with no emitter in sight, from
-`cascata/generate`. A future JSON Schema exporter is a second printer over the same tree, never a
+`@egildo/cascata/generate`. A future JSON Schema exporter is a second printer over the same tree, never a
 second walk.
 
 A named type is recorded as a **reference**, never unrolled, which is the whole termination
@@ -1143,8 +1159,8 @@ and wording may change without a version bump. The types may not.
 ### `generateTypes(schemaLocation, options)` — the one call
 
 ```typescript
-import { generateTypes } from "cascata";
-import { createNodeHost } from "cascata/host/node";
+import { generateTypes } from "@egildo/cascata";
+import { createNodeHost } from "@egildo/cascata/host/node";
 
 const result = await generateTypes("./schema/project.yaml", { host: createNodeHost(), sandboxRoot: process.cwd() });
 if (result.ok) {
@@ -1161,8 +1177,8 @@ schema the language refuses is never emitted from. Returns
 throw for a fact about the world (Article VI). `rootName` names the root alias; the default is the
 leaf `$id`'s qualifier, else `Configuration`.
 
-`accumulate` and `generate` are exported from the package root **and** from `cascata/generate`,
-declared like `cascata/host/node`.
+`accumulate` and `generate` are exported from the package root **and** from `@egildo/cascata/generate`,
+declared like `@egildo/cascata/host/node`.
 
 ### Soundness is the conformance rule, and the validator is the oracle
 
@@ -1171,8 +1187,9 @@ declared like `cascata/host/node`.
 
 `tests/unit/generate-oracle.test.ts` asserts exactly that, over the whole validate corpus and over
 the meta-schema against itself: every accepting case is projected, written as a TypeScript literal,
-and typechecked in memory against the emitted type. The generator therefore has **no expected
-outputs written by hand** except the executed pair above.
+and typechecked in memory against the emitted type. The oracle therefore needs **no expected
+outputs written by hand**; the unit tests that pin single mapping rows (`generate-shapes`, `generate-leaves`,
+`generate-types`) do write theirs, and the executed pair above is the documented one.
 
 ### Named limits
 
@@ -1220,8 +1237,8 @@ a delegated fragment may be in a different format than the document that grafts 
 §3's format-blindness has promised since before there were two formats to be blind about.
 
 ```typescript
-import { load } from "cascata";
-import { createNodeHost } from "cascata/host/node.js";
+import { load } from "@egildo/cascata";
+import { createNodeHost } from "@egildo/cascata/host/node.js";
 
 const result = await load("./settings.json", { host: createNodeHost(), sandboxRoot: process.cwd() });
 ```
@@ -1313,7 +1330,7 @@ implementing. Measured against the published surface with `deno check`, which sa
 "declares 'Host' locally, but it is not exported". Nothing about either type changed.
 
 ```typescript
-import type { Host, HostReadResult } from "cascata";
+import type { Host, HostReadResult } from "@egildo/cascata";
 
 class MyHost implements Host {
   async read(location: string): Promise<HostReadResult> { /* … */ }
@@ -1335,7 +1352,7 @@ locate(bytes, options, "/walls/W2/height");
 // { ok: true, start: 47, end: 50, kind: "float" } — stored bytes (§4.2), 0-based, end exclusive
 
 setValue(bytes, options, "/walls/W2/height", 3.4);
-// { ok: true, edit: { start: 47, end: 50, bytes: Uint8Array [ ...'3.4' ] } }
+// { ok: true, edit: { start: 47, end: 50, bytes: Uint8Array [ ...'3.4' ] }, diagnostics: [] }
 // put `edit.bytes` in place of bytes[start, end); every other byte of the file is the caller's to keep
 ```
 
@@ -1343,10 +1360,13 @@ setValue(bytes, options, "/walls/W2/height", 3.4);
   (`string`, `int`, `float`, `bool`, `null`) or `mapping`/`sequence` — or `{ ok: false, diagnostics }`.
   A document that does not parse gives the parse's own diagnostics. A container and a block scalar are
   located like any value; only `setValue` refuses them.
-- `setValue(bytes, options, pointer, value)` answers `{ ok: true, edit: { start, end, bytes } }` or
+- `setValue(bytes, options, pointer, value)` answers `{ ok: true, edit: { start, end, bytes }, diagnostics }` (`diagnostics`
+  empty except under `sharedEdits: "warn"`, v1.12) or
   `{ ok: false, diagnostics }`. `value` is `string`, `number`, `bigint`, `boolean` or `null`. Neither function
   throws for a document or a value — only for programmer error (no `origin`, a `format` other than
-  `"yaml"`/`"json"`, a pointer that is neither empty nor starts with `/`, a value that is not a scalar).
+  `"yaml"`/`"json"`, a pointer that is neither empty nor starts with `/`, a value that is not a scalar, and
+  since v1.12 a `sharedEdits` that is none of the three), or on an internal inconsistency (an
+  `Internal error: …` guard in the YAML writer, unreachable in every probe), which is a bug to report.
 - `EditOptions`, `Edit`, `EditValue`, `LocatedKind`, `LocateResult`, `SetValueResult` are exported types.
 
 **The three laws**, each a conformance case, each also checked by round-tripping the edit through `parse`:
@@ -1354,7 +1374,8 @@ setValue(bytes, options, "/walls/W2/height", 3.4);
 1. *Nothing changed, nothing written* — a value equal to the one there gives the bytes already there, in
    whatever spelling they had (`3.20` set to `3.2` writes `3.20`).
 2. *What you set is what you read* — the edited document reads back the value set, of the kind below.
-3. *Only the value moves* — the edit's range is exactly the value's span (§4.2): a quoted scalar's quotes in,
+3. *Only the value moves* — the edit's range is exactly the value's span (§4.2) — except, since v1.12, an explicit tag on
+   the value's line that cannot hold the value set, which the range widens over with its blanks: a quoted scalar's quotes in,
    a trailing comment out. CRLF, a byte-order mark, a lone CR, non-ASCII elsewhere: all outside the range.
 
 **Kind is kept.** A `number` over a `float` is a float (`3` over `3.2` is `3.0`); over an `int`, an int if
@@ -1371,8 +1392,9 @@ the text (a single-quoted scalar doubles an embedded `'`); where it cannot, doub
 (`\n`, `\x01`, `\u2028`, `\uFEFF`). In a flow collection a plain string also avoids `,`, `[`, `]`, `{`, `}`.
 JSON: RFC 8259 §7, non-ASCII written as itself. A string with an unpaired surrogate has no UTF-8 spelling.
 
-**Every edit is read back** before it is returned. One that does not come back as the value set (an explicit
-`!!str` tag over a number, say) is refused as `edit-unsupported`, not guessed.
+**Every edit is read back** before it is returned. One that does not come back as the value set is refused as
+`edit-unsupported`, not guessed. (Until v1.12 an explicit `!!str` tag over a number was the example; since
+v1.12 a tag that cannot hold the value is dropped instead — see "v1.12" below.)
 
 ### v1.10 diagnostic codes
 
@@ -1382,7 +1404,7 @@ All `level: "error"`, positioned at the span named — except `edit-target-share
 |---|---|---|
 | `edit-target-absent` | no value at the pointer | the nearest existing ancestor |
 | `edit-target-shared` | the value is reached through a YAML alias or merge key, **or it, or a container above it, is anchored and an alias points there** — writing it would change every place that shares it. Since v1.12, `level: "error"` only under `sharedEdits: "refuse"` (the default); under `"warn"` the edit is answered with this code at `level: "info"`, at the value, `related` naming each alias (v1.12, above) | the (first) alias |
-| `edit-unsupported` | a block scalar (`\|`, `>`), a mapping or a sequence (setting a container is an insertion, not written yet), or a scalar that would not read back as the value set | the value |
+| `edit-unsupported` | a block scalar (`\|`, `>`), a mapping or a sequence (setting a container is an insertion, not written yet), a key with no value inside a flow collection (`{a}`, `{? a}`; v1.12), a value whose explicit tag cannot hold the value set and is not on the value's own line (v1.12), or a scalar that would not read back as the value set | the value |
 | `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
 
 Inserting and deleting are not here (§19).
@@ -1397,11 +1419,11 @@ Inserting and deleting are not here (§19).
 import { editTarget } from "@egildo/cascata";
 
 editTarget(configuration, "/walls/W2/height");
-// { ok: true, location: "/project/override.yaml", pointer: "/walls/W2/height", format: "yaml" }
+// { ok: true, location: "/project/override.yaml", pointer: "/walls/W2/height", format: "yaml", diagnostics: [] }
 editTarget(configuration, "/levels/L1/elevation"); // the key `levels` delegates to levels.yaml
-// { ok: true, location: "/project/levels.yaml", pointer: "/L1/elevation", format: "yaml" }
+// { ok: true, location: "/project/levels.yaml", pointer: "/L1/elevation", format: "yaml", diagnostics: [] }
 editTarget(configuration, "/styles/3"); // the fourth item of a list under `cascade: append`
-// { ok: true, location: "/project/override.yaml", pointer: "/styles/0", format: "yaml" }
+// { ok: true, location: "/project/override.yaml", pointer: "/styles/0", format: "yaml", diagnostics: [] }
 ```
 
 Takes a merged configuration (`merge()`, or `load()`'s `.configuration`) and an RFC 6901 pointer into it; answers
@@ -1409,7 +1431,7 @@ the document that holds the winning value — a config layer, an override, or a 
 the pointer *inside that document*, and its format (`"yaml"` or `"json"`, by extension). `location` is the
 document's `origin.id`; for a delegated fragment, whose id is `<location> #graft=N`, it is the fragment's own
 location. It reads no file: hand `location`'s bytes and `pointer` to a writer. It throws only for a pointer that
-is neither empty nor starts with `/`.
+is neither empty nor starts with `/` (and, since v1.12, a `sharedEdits` that is none of the three).
 
 An item of a list under `cascade: append` has its own document and its own index in it, whatever its place in the
 merged list. A pointer to the whole list is a container.
@@ -1422,7 +1444,7 @@ All `level: "error"` — except `edit-target-shared` under `sharedEdits: "warn"`
 |---|---|---|
 | `edit-target-absent` | no value at the pointer in the merged configuration | the nearest existing ancestor |
 | `edit-unsupported` | the value is a mapping or a sequence (a container, merged or not) | the value |
-| `edit-target-shared` | the value's document holds more than one node at its position — an anchor and its aliases, or a merge key's copies — or (v1.12) the document is delegated to at more than one place; writing it would change every place that shares it (the writer refuses the same alias copies). `related` names each other place: another copy, or another graft's delegating value. Under `sharedEdits: "warn"` (v1.12) the target is answered and this code comes with it at `level: "info"`; under `"allow"` nothing is said | the value |
+| `edit-target-shared` | the value's document holds more than one node at its position — an anchor and its aliases, or a merge key's copies — or (v1.12) the document is read at more than one place (delegated to twice, or both a layer and a fragment); writing it would change every place that shares it (under the default `"refuse"` the writer refuses the same alias copies). `related` names each other place: another copy, or another graft's delegating value. Under `sharedEdits: "warn"` (v1.12) the target is answered and this code comes with it at `level: "info"`; under `"allow"` nothing is said | the value |
 | `edit-target-inherited` | the winning value was supplied by a schema's `provide`; the message names the schema's location and says the edit would change a default every document under it shares | the provided value, in the schema document |
 | `edit-target-remote` | the winning value's document was read over `https://` | the value, in that document |
 
@@ -1438,7 +1460,7 @@ import { yamlWriter, jsonWriter } from "@egildo/cascata/writers";
 const writer = yamlWriter();
 writer.claims("/project/Walls.YML");                     // true — .yaml and .yml, any case; jsonWriter(): .json
 writer.locate(bytes, "/walls/W2/height");                // { ok: true, start: 47, end: 50 }
-writer.write(bytes, "/walls/W2/height", 3.4);            // { ok: true, edit: { start: 47, end: 50, bytes } }
+writer.write(bytes, "/walls/W2/height", 3.4);            // { ok: true, edit: { start: 47, end: 50, bytes }, diagnostics: [] }
 writer.write(bytes, "/walls", 1);                        // { ok: false, reason: "…" }
 ```
 
@@ -1450,7 +1472,8 @@ Only programmer error throws, as with the verbs. Types: `Writer`, `WriterLocateR
 
 ## v1.12 — shared edits
 
-`SPEC.md` Article IX (§19), an **addition** (§15): the default is what the law was.
+`SPEC.md` Article IX (§19), an **addition** (§15). The default refuses what v1.11 refused and, new in v1.12, a value whose
+file is read at more than one place, which v1.11's `editTarget` answered.
 
 A value is **shared** when one write to its bytes changes more than one place: it is reached through a YAML
 alias or merge key, it (or a container above it) is anchored and aliased, or — new in v1.12 — its document is
@@ -1471,7 +1494,7 @@ const writers = [yamlWriter({ sharedEdits: "warn" }), jsonWriter({ sharedEdits: 
 
 | `sharedEdits` | A shared value |
 |---|---|
-| `"refuse"` (default) | refused, `edit-target-shared`, `level: "error"` — v1.11's behaviour |
+| `"refuse"` (default) | refused, `edit-target-shared`, `level: "error"` — v1.11's behaviour, plus a file read at more than one place (v1.12) |
 | `"warn"` | answered, with one `edit-target-shared` at `level: "info"`: primary at the value, `related` naming every other place the write changes (each alias that holds it; for `editTarget`, each other copy and the delegating value of each other graft) |
 | `"allow"` | answered, and nothing said |
 
@@ -1485,6 +1508,25 @@ copy. A policy other than the three is programmer error and throws. Types: `Shar
 
 Nothing else moves to the policy: inherited, remote, absent values, containers and block scalars are refused as
 before.
+
+**Three corrections at the edges** (v1.12, §15):
+
+- An empty document — nothing, or only comments and blank lines — is a null located **after its prefix
+  byte-order marks**: a document of one mark (`EF BB BF`) locates `3..3`, as does a mark followed by `# c`; with
+  no mark, `0..0` as before. `setValue` on `""` writes the value there, with no space after the mark and a space
+  before a comment.
+- A key written with no value at all — `? a`, or `{a}` in a flow mapping — reads as `a: null`, the null spanning
+  zero width at the end of the key (it was dropped; §4.2 keeps null, an absent key and an empty value apart).
+  `setValue("/a", 1)` on `? a\n` writes `\n: 1` at `3..3`, giving `? a\n: 1\n`; nested, the new line carries the
+  `?`'s indentation. In a flow collection it is refused, `edit-unsupported`.
+- A tagged scalar keeps its tag where the tag holds the kind written (`!!int` an integer, `!!float` a decimal,
+  `!!str` a string, `!!bool`, `!!null`; the `!<tag:yaml.org,2002:…>` form likewise) and loses it where it cannot:
+  `a: !!int 1` set to `"x"` is the edit `3..10` → `x`, so `a: x`, never `!!int x`. An anchor written after the tag
+  is carried into the edit. A tag that must go but is not on the value's own line is `edit-unsupported`.
+
+**Two corrections of cost** (v1.12, §15): a node's column is two lookups in a table built with the byte table,
+so one long line reads in time linear in its length; and the pointers of a tree are indexed once, on first use,
+so `why()` and `editTarget()` on every value of a configuration are linear in it.
 
 ## Scripts
 

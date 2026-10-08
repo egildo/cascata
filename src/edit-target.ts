@@ -54,13 +54,13 @@ function where(span: SourceSpan): string {
 /**
  * Every other place a write to `node`'s bytes changes (v1.12 FR-006): the other nodes of its own
  * document that share its span (an anchor and its aliases, a merge key's copies), and every other
- * graft of its location. A fragment's origin id is unique per graft and its label is the location;
- * a graft is named by the place that grafted it, the delegating key's value. Also answers the
- * grafting places of the location, its own included, for the message.
+ * graft of its location — or a layer read from the same file. A fragment's origin id is unique per
+ * graft and its label is the location; a graft is named by the place that grafted it, the delegating
+ * key's value. Also answers every place the location is read, its own included, for the message.
  */
-function otherPlaces(configuration: MergedConfiguration, node: Node, location: string, inDocument: readonly string[], chosen: string): { readonly related: RelatedSpan[]; readonly grafts: SourceSpan[] } {
+function otherPlaces(configuration: MergedConfiguration, node: Node, location: string, inDocument: readonly string[], chosen: string): { readonly related: RelatedSpan[]; readonly places: string[] } {
   const related: RelatedSpan[] = inDocument.filter((p) => p !== chosen).map((p) => ({ label: `the same value at '${p}' in ${location}`, span: node.span }));
-  const grafts: SourceSpan[] = [];
+  const places: string[] = [];
   const seen = new Set<string>();
   for (const layer of configuration.layers) {
     for (const [id, label] of originsInTree(layer.tree)) {
@@ -69,7 +69,7 @@ function otherPlaces(configuration: MergedConfiguration, node: Node, location: s
       const hops = configuration.delegationBreadcrumbs.get(id);
       if ((hops !== undefined ? label : id) !== location) continue;
       const grafted = hops?.[hops.length - 1]?.span;
-      if (grafted !== undefined) grafts.push(grafted);
+      places.push(grafted !== undefined ? `delegated to at ${where(grafted)}` : "read as a layer");
       if (id === node.span.origin.id) continue;
       for (const p of pointersAt(layer.tree, id, node.span.start, node.span.end)) {
         const copy = hops === undefined ? resolvePointer(layer.tree, p) : undefined;
@@ -78,7 +78,7 @@ function otherPlaces(configuration: MergedConfiguration, node: Node, location: s
       }
     }
   }
-  return { related, grafts };
+  return { related, places };
 }
 
 export function editTarget(configuration: MergedConfiguration, pointer: string, options: EditTargetOptions = {}): EditTargetResult {
@@ -123,14 +123,14 @@ export function editTarget(configuration: MergedConfiguration, pointer: string, 
     }
     // Among copies the answer is a convention (v1.12 FR-007): the merged pointer's, else the same last segment, else the first.
     const chosen = pointerInDocument(layer.tree, node.span, pointer) ?? inDocument[0] ?? "";
-    const { related, grafts } = otherPlaces(configuration, node, location, inDocument, chosen);
+    const { related, places } = otherPlaces(configuration, node, location, inDocument, chosen);
     if (related.length === 0) {
       return { ok: true, location, pointer: chosen, format, diagnostics: [] };
     }
     const why =
       inDocument.length > 1
         ? `is one of several nodes of ${location} that share one position (an anchor and its aliases, or a merge key's copies)`
-        : `is in ${location}, which is delegated to at ${grafts.length} places (${grafts.map(where).join(", ")})`;
+        : `is in ${location}, which the configuration reads at ${places.length} places (${places.join("; ")})`;
     if (sharedEdits === "refuse") {
       // Writing one of several places that share these bytes would change the others. The writer refuses the alias copies too
       // (`edit-target-shared`); refusing here is not a guess about which of them the caller meant.

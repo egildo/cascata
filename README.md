@@ -113,7 +113,7 @@ Rules are written in the host format, the way JSON Schema is JSON describing JSO
 
 | Keyword | Meaning | Composes by |
 |---|---|---|
-| `demand` | a constraint: `type`, `required`, `enum`, `min`/`max`, `pattern`, `keys`, `items`, `values`, `seal` | intersection, only ever narrower |
+| `demand` | a constraint: `type`, `required`, `enum`, `min`/`max`, `minLength`/`maxLength`, `pattern`, `accept`, `keys`, `items`, `values`, `seal` | intersection, only ever narrower |
 | `provide` | a value injected where the config is silent | replaced or appended downstream, unless sealed |
 | `cascade` | `replace` (default) or `append`, per key | may tighten toward `append`, never back; under `append` a single value is taken as a list of one, with a notice |
 | `final` | freezes a key from this layer down | cannot be undeclared |
@@ -177,7 +177,7 @@ Cascata is not on npm yet (the name is taken by an unrelated package). Install f
 pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.11.1-dist"
 ```
 
-Node 22 or later. TypeScript declarations are included. Exports: `@egildo/cascata`, `@egildo/cascata/generate`, `@egildo/cascata/paths`, `@egildo/cascata/host/node`.
+Node 22 or later. TypeScript declarations are included. Exports: `@egildo/cascata`, `@egildo/cascata/generate`, `@egildo/cascata/paths`, `@egildo/cascata/writers`, `@egildo/cascata/host/node`.
 
 ## Read next
 
@@ -201,13 +201,13 @@ text → adapter → positioned model → resolve → graph → merge → valida
 
 Each stage is public and independently callable. `load()` is the composition.
 
-Not in v1, by decision rather than omission: editing configuration files, arbitrary computation in schemas, and a command-line tool. Cascata is the library a tool embeds; the tool owns the command line.
+Not in v1, by decision rather than omission: rewriting whole configuration files (Cascata writes back one value at a time, in place — `SPEC.md` Article IX), arbitrary computation in schemas, and a command-line tool. Cascata is the library a tool embeds; the tool owns the command line.
 
 ## Working on it
 
 ```bash
 pnpm install
-pnpm test        # the conformance corpus and the unit suite
+pnpm test        # the conformance corpus and the unit suite, then the wall-clock tests, serially
 pnpm typecheck   # tsc --noEmit, strict, noUncheckedIndexedAccess
 pnpm build       # emit dist/
 ```

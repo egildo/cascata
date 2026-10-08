@@ -48,6 +48,20 @@ describe("v1.12 FR-006 — a file grafted at two places is shared", () => {
     expect(diagnostic.message).toContain("/virtual/project.yaml:3:8");
   });
 
+  it("a file read as an override and also delegated to (by itself) is shared too: one edit changes both places", async () => {
+    // more.yaml: L0 1 :2 LF3, two spaces, `elevation` 6-14, :15 sp16, `0` 17, LF18; `levels:` 19-25, sp26, `./more.yaml` (11 bytes) 27-38.
+    const more = "L1:\n  elevation: 0\nlevels: ./more.yaml\n";
+    const configuration = await build("/virtual/project.yaml", { "/virtual/more.yaml": more }, { overrides: ["./more.yaml"] });
+    for (const pointer of ["/L1/elevation", "/levels/L1/elevation"]) {
+      const diagnostic = only(editTarget(configuration, pointer));
+      expect(diagnostic.level, pointer).toBe("error");
+      expect(diagnostic.message, pointer).toContain("read as a layer");
+      expect(diagnostic.message, pointer).toContain("delegated to at /virtual/more.yaml:3:9");
+    }
+    const graft = only(editTarget(configuration, "/L1/elevation"));
+    expect(graft.related.map((r) => bytesOf(r.span))).toEqual([["/virtual/more.yaml", 27, 38]]);
+  });
+
   it("/other/L1/elevation under refuse: the same, naming levels's delegating value (29-42)", async () => {
     const diagnostic = only(editTarget(await grafted(), "/other/L1/elevation"));
     expect(diagnostic.level).toBe("error");

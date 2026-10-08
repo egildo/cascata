@@ -77,9 +77,11 @@ export const MERGE_POLICY_CODES = ["unknown-cascade-strategy", "unimplemented-ca
  * `keys.<name>.demand`, before any value is checked against it.
  * `unimplemented-demand-keyword` and `unimplemented-types-section` are
  * deliberately distinct from `unknown-demand-keyword`, mirroring
- * `unimplemented-cascade-strategy` vs. `unknown-cascade-strategy` in v0.3:
- * `accept`, `format`, and `types:` are named by §7/§9 and arrive in v0.5,
- * so an author writing them is early, not wrong.
+ * `unimplemented-cascade-strategy` vs. `unknown-cascade-strategy` in v0.3
+ * (an early keyword is not a wrong one). Both have been unreachable since
+ * v0.5: `accept`, `keys` and `types:` were built then, and `format` was
+ * dropped rather than built (§15), so `format:` is `unknown-demand-keyword`.
+ * Codes are never repurposed, so both stay in the catalogue.
  *
  * **`unknown-key-vocabulary-keyword` joins this list in v0.7 part 2**
  * (`SPEC.md` §9, Constitution Principle VI). It polices a **key
@@ -117,9 +119,10 @@ export const VALIDATE_VIOLATION_CODES = ["type-mismatch", "range-violated", "len
  * vocabulary (`demand`/`accept` only) — distinct from `unknown-demand-keyword`,
  * which polices `keys.<name>.demand` instead. `type-name-collision` and
  * `type-qualifier-collision` are two independent namespaces (unqualified
- * names; `$id`-derived qualifiers) — see research.md D1 for why collision
- * is unconditional, including a redeclaration that would look like
- * narrowing read in isolation. `depth-limit-exceeded` (v0.1) and
+ * names; `$id`-derived qualifiers), both unreachable in v1: a redeclaration
+ * down the chain is a narrowing (§15; validate-case T034, reworked), and only
+ * two unrelated declarations — impossible with single-parent `$adopts` —
+ * would collide. Kept, never repurposed. `depth-limit-exceeded` (v0.1) and
  * `unknown-type-name` (v0.4) are reused for this milestone's own new
  * hazards/unresolvable-name reasons rather than repurposed with new codes
  * — see contracts/diagnostics.md for why each reuse is the identical
@@ -253,7 +256,7 @@ export const OUTPUT_SURFACE_CODES = ["malformed-section", "precision-narrowed"] 
  * **`emit-identifier-collision`** is `level: "error"` — Article VIII's
  * "two names that escape to one identifier are a generator error, not a
  * coin toss". Two `types:` entries whose names differ in Cascata (`a-b`
- * and `a_b`) but escape to one TypeScript identifier cannot both be
+ * and `a b`, which both escape to `$a_b`) but escape to one TypeScript identifier cannot both be
  * emitted, and picking one silently would make the generated type say
  * something no schema said. The emission is refused whole. Distinct from
  * `type-name-collision` (two *unrelated declarations* of one name, §7's
@@ -263,7 +266,6 @@ export const OUTPUT_SURFACE_CODES = ["malformed-section", "precision-narrowed"] 
  */
 export const GENERATOR_CODES = ["demand-unsatisfiable", "emit-identifier-collision"] as const;
 
-/** Every stable diagnostic code, in the catalogue's declaration order. v0.1's through v0.5's codes are unchanged; v0.6 only appends. */
 /**
  * Overrides (v1.6, `SPEC.md` Article VI — §16; specs/014-overrides FR-005).
  *
@@ -282,23 +284,30 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
 
 /**
  * Writing a value back (v1.10, `SPEC.md` Article IX, §19) — specs/018-write-value
- * FR-007 and FR-009. All four are `level: "error"` and come only from
- * `locate` and `setValue`; nothing in the reading pipeline raises them.
+ * FR-007 and FR-009. They come from `locate`, `setValue` (and the writers
+ * built on them) and `editTarget`; nothing in the reading pipeline raises
+ * them. Each is `level: "error"`, except `edit-target-shared` under
+ * `sharedEdits: "warn"` (below).
  *
  * - `edit-target-absent` — no value at the pointer; positioned at the nearest
  *   existing ancestor.
  * - `edit-target-shared` — the value is reached through a YAML alias or merge
  *   key, or it (or a container above it) is anchored and aliased, or (from
- *   `editTarget`, v1.12) its document is grafted at more than one place, so
+ *   `editTarget`, v1.12) its file is read at more than one place in the
+ *   configuration (grafted twice, or a layer that is also grafted), so
  *   writing it would change every place that shares it. From the writer,
  *   positioned at the alias; from `editTarget`, at the value. `level: "error"`
  *   under `sharedEdits: "refuse"` (the default); under `"warn"` (v1.12) the
  *   edit is answered with this code at `level: "info"`, positioned at the
  *   value, `related` naming every other place the write changes.
  * - `edit-unsupported` — a block scalar, a mapping or a sequence (setting a
- *   container is an insertion, not written yet), or a scalar the writer could
- *   not write and read back (an explicit tag that disagrees with the value);
- *   positioned at the value.
+ *   container is an insertion, not written yet), a scalar the writer could
+ *   not write and read back, and since v1.12 a key with no value inside a flow
+ *   collection and a tag that cannot hold the value but is not on the value's
+ *   own line (one on it is dropped instead, v1.12 FR-011), a key with no
+ *   value inside a shared mapping under `"warn"`/`"allow"`, and from
+ *   `editTarget` a value whose document has no writer; positioned at the
+ *   value.
  * - `edit-unrepresentable` — the format cannot spell the value (JSON has no
  *   `NaN` or infinity; no format has a lone surrogate); positioned at the
  *   value it would have replaced.
@@ -307,8 +316,8 @@ export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-uns
 
 /**
  * Which document an edit belongs in (v1.11, `SPEC.md` Article IX, §19) — specs/020-edit-targets
- * FR-003. Both are `level: "error"` and come only from `editTarget`. `edit-target-absent` and
- * `edit-unsupported` (above) are the other two refusals it gives.
+ * FR-003. Both are `level: "error"` and come only from `editTarget`. `edit-target-absent`,
+ * `edit-unsupported` and `edit-target-shared` (above) are the other three refusals it gives.
  *
  * - `edit-target-inherited` — the winning value was supplied by a schema's `provide`; editing it
  *   would change a default every document under that schema shares. Positioned at the value in
@@ -318,6 +327,7 @@ export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-uns
  */
 export const EDIT_TARGET_CODES = ["edit-target-inherited", "edit-target-remote"] as const;
 
+/** Every stable diagnostic code, in the catalogue's declaration order. Each version only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
