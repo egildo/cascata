@@ -1,11 +1,11 @@
 {
-  "name": "write/shared-locate-ignores-policy",
+  "name": "write/shared-locate-refuse",
   "cites": "v1.12 FR-005",
   "format": "yaml",
   "call": "locate",
   "input": "base: &h 3.2\nW1: *h\n",
   "pointer": "/W1",
-  "sharedEdits": "allow",
+  "sharedEdits": "refuse",
   "expect": {
     "diagnostic": {
       "code": "edit-target-shared",

@@ -1498,8 +1498,8 @@ const writers = [yamlWriter({ sharedEdits: "warn" }), jsonWriter({ sharedEdits: 
 | `"warn"` | answered, with one `edit-target-shared` at `level: "info"`: primary at the value, `related` naming every other place the write changes (each alias that holds it; for `editTarget`, each other copy and the delegating value of each other graft) |
 | `"allow"` | answered, and nothing said |
 
-Entry points: `EditOptions.sharedEdits` for `setValue` (accepted, and ignored, by `locate`, which answers as under
-`"refuse"`); the third argument of `editTarget(configuration, pointer, { sharedEdits })`; `yamlWriter({ sharedEdits })`
+Entry points: `EditOptions.sharedEdits` for `setValue` and `locate` (since v1.12.1 `locate` follows it: under `"warn"`
+and `"allow"` it answers the bytes `setValue` writes, and says nothing; until then it answered as under `"refuse"`); the third argument of `editTarget(configuration, pointer, { sharedEdits })`; `yamlWriter({ sharedEdits })`
 and `jsonWriter({ sharedEdits })`. Every `ok` result of `setValue`, `editTarget` and a writer's `write` now carries
 `diagnostics`, empty except under `"warn"`. Under `"warn"` and `"allow"` the edit lands on the bytes that hold the
 value — for an alias or merge-key copy, the anchor's — and the read-back checks the value at the pointer and at every

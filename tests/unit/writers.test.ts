@@ -93,7 +93,8 @@ describe("v1.11 FR-005 — equivalence with locate and setValue over every v1.10
     const writer = testCase.format === "yaml" ? yamlWriter({ sharedEdits: testCase.sharedEdits }) : jsonWriter({ sharedEdits: testCase.sharedEdits });
 
     it(`${testCase.name}: locate`, () => {
-      const direct = locate(bytes, { format: testCase.format, origin }, testCase.pointer);
+      // v1.12.1: the direct call under the same policy, since `locate` follows it.
+      const direct = locate(bytes, { format: testCase.format, origin, ...(testCase.sharedEdits !== undefined ? { sharedEdits: testCase.sharedEdits } : {}) }, testCase.pointer);
       const viaWriter = writer.locate(bytes, testCase.pointer);
       if (direct.ok) {
         expect(viaWriter).toEqual({ ok: true, start: direct.start, end: direct.end });

@@ -47,7 +47,7 @@ export interface EditOptions {
   readonly format: EditFormat;
   readonly origin: Origin;
   readonly limits?: Partial<ParseLimits>;
-  /** v1.12: whether `setValue` writes a shared value; `"refuse"` when absent. Accepted and ignored by `locate`, which answers as under `"refuse"`. */
+  /** v1.12: whether `setValue` writes a shared value; `"refuse"` when absent. `locate` follows it too (v1.12.1): under `"warn"` and `"allow"` it answers the bytes `setValue` writes. */
   readonly sharedEdits?: SharedEdits;
 }
 
@@ -141,8 +141,8 @@ function kindOf(node: Node): LocatedKind {
  */
 export function locate(bytes: Uint8Array, options: EditOptions, pointer: string): LocateResult {
   requireArguments(options, pointer, "locate");
-  // `sharedEdits` is accepted and ignored (v1.12 FR-005): a value reached through an alias is located as under "refuse".
-  const result = find(bytes, options, pointer, "refuse");
+  // Under "warn" and "allow" a value reached through an alias is located at the bytes `setValue` would write (v1.12.1).
+  const result = find(bytes, options, pointer, options.sharedEdits ?? "refuse");
   if (!result.ok) {
     return result;
   }

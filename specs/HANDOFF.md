@@ -37,7 +37,7 @@ where it can hold the value; a kept tag does not relax quoting (`!!str "4"`).
 
 **Shared values (022).** `findYaml(…, sharedEdits)`: under `"refuse"` a path through an alias or merge key is
 refused at the alias, as since 018; under `"warn"`/`"allow"` the walk resolves the final alias too and answers the
-anchored node's bytes. `locate` always calls it with `"refuse"` (FR-005: accepted and ignored). `editTarget`
+anchored node's bytes. `locate` calls it with the writer's own policy (v1.12.1; it had always passed `"refuse"`). `editTarget`
 (`src/edit-target.ts`) counts copies in the document *and* every other origin whose location is the same file —
 a graft (`delegationBreadcrumbs.has(id)` → its label is the location) or a layer read from that file — via
 `originsInTree` and `pointersAt` in `src/model/pointer.ts`.
@@ -94,7 +94,6 @@ the writers under the case's own policy.
 
 ## Open edges (noticed, not fixed)
 
-- **`locate` ignores `sharedEdits`**, so a writer's `locate` refuses an alias copy its `write` writes under `"allow"`.
 - **Pointer segments with a leading zero (`01`)** are accepted as sequence indices (`^\d+$` in `yaml/write.ts` and
   `resolvePointer`); RFC 6901 forbids them. (`+1` is rejected; the 020 handoff said otherwise.)
 - **A later document's prefix mark** is reported as misplaced beside `multiple-documents`.
