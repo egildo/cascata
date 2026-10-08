@@ -70,4 +70,4 @@ composer's, upstream of every line of this library.
 
 - [x] T001 anchor table, writer and reader migrated, sweep and oracle tests
 - [x] T002 `ParseLimits`, the code, the budget, the counted cases
-- [ ] T003 reference.md, report
+- [x] T003 reference.md, report

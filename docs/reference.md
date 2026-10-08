@@ -111,10 +111,18 @@ if (result.ok) {
   `parseText` below — but prefer this whenever you can supply bytes instead.
 - **`options.origin: Origin`** — required. Which document this is, for diagnostics that need to name
   their source. Build one with `createOrigin(id, label)`.
-- **`options.limits?: Partial<{ maxDepth: number; maxBytes: number }>`** — overrides the resource caps
-  (defaults: `maxDepth: 64`, `maxBytes: 8 MiB`; contracts/parse-api.md "Limits"). Depth counts the root
+- **`options.limits?: Partial<{ maxDepth: number; maxBytes: number; expansionRatio: number; expansionAllowance: number }>`** —
+  overrides the resource caps (defaults: `maxDepth: 64`, `maxBytes: 8 MiB`, `expansionRatio: 10`,
+  `expansionAllowance: 10,000`; contracts/parse-api.md "Limits"). Depth counts the root
   as 0, each nested collection adds 1, and a merge-folded mapping counts at the depth of the mapping
-  receiving it, not at the depth where its anchor happens to be written.
+  receiving it, not at the depth where its anchor happens to be written. **The expansion budget (v1.10,
+  YAML only):** the model never contains references (§4.2), so every alias is expanded into a copy, and the
+  tree may hold at most `expansionRatio × W + expansionAllowance` model nodes, where *W* is the number of
+  nodes the document writes (scalars, mappings, sequences, the root; keys are not nodes; an alias is one
+  node, however much it expands to). It is counted as the expansion proceeds, so a "billion laughs" stops
+  at the alias that crosses the budget instead of exhausting memory. Sharing a 20-node profile across a
+  thousand records is far inside it; a 100-node anchor repeated a thousand times is not, and wants
+  `expansionRatio: 100`. JSON has no aliases and is not counted.
 
 **Behavioral contract** (contracts/parse-api.md):
 
@@ -195,6 +203,7 @@ with no changes (constitution Principle III's phased contract; see "v0.4 diagnos
 | `depth-limit-exceeded` | Nesting past `maxDepth`, at the node where the limit was crossed |
 | `size-limit-exceeded` | Input larger than `maxBytes`, refused before parsing (zero-width at offset 0). Since v0.2, also reused for a fetched remote document whose body exceeds `resolve()`'s `limits.maxBytes` — enforced **during** streaming, anchored to the reference that fetched it |
 | `alias-cycle` | An alias referring to content that encloses itself, at the closing alias |
+| `expansion-limit-exceeded` | **v1.10.** Expanding aliases (and merge keys) took the tree past `expansionRatio × W + expansionAllowance` nodes, at the outermost alias being expanded when the count crossed (for a merge key, its value). The message names W, the budget and the count reached. One diagnostic, then the read stops |
 | `malformed-document` | Input the underlying reader cannot parse at all, or an otherwise-uncategorized reader error |
 
 ### `parseText(text, options)`
