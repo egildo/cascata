@@ -16,7 +16,7 @@
  *      table calling them "byte offsets". They diverge for any character
  *      above U+007F. `SourceSpan.start`/`.end` are contractually bytes
  *      (data-model.md), so this file converts, via a single-pass byte
- *      offset table built once per document (`buildByteOffsetTable`) —
+ *      offset table built once per document (`buildOffsetTables`) —
  *      not by re-encoding a growing prefix per node, which would be
  *      quadratic in document size.
  *   2. `LineCounter#linePos().col` is also UTF-16-code-unit-based, not
@@ -25,13 +25,14 @@
  *      requiring a UTF-16 surrogate pair) before the position in
  *      question. `LineCounter` is trusted for the *line* number only
  *      (newlines are never surrogate halves, so line-counting is
- *      unaffected); column is recomputed by counting actual Unicode code
- *      points from that line's start.
+ *      unaffected); column is recomputed in code points, from a second
+ *      table built in the same pass as the byte table (v1.12 FR-001: two
+ *      lookups per node, never a count from the line's start).
  *
  * A leading byte-order mark is **kept** (v1.9, SPEC.md §4.2): it is three
  * stored bytes, so `byteOffsetTable` counts it in every offset after it,
  * and a mark at the very start of the stored bytes is never a column
- * (`codePointColumn`; any other U+FEFF is a character). Prefix marks are
+ * (`buildOffsetTables`; any other U+FEFF is a character). Prefix marks are
  * removed from the text `yaml` reads and its indices mapped back (`marks.ts`).
  *
  * Revised for User Story 2 (Phase 4): FR-019 requires one read to report
@@ -96,49 +97,58 @@ function utf8ByteLengthOfCodePoint(codePoint: number): number {
 }
 
 /**
- * Build a UTF-16-code-unit-index -> UTF-8-byte-offset table in one pass
- * over the text, indexed 0..text.length inclusive. A surrogate pair's
- * second unit is never itself a valid query point for `yaml`'s ranges (they
- * always land on code-point boundaries), but it is filled in defensively
- * with the byte offset of the code point it belongs to.
+ * Build, in one pass over the text and indexed 0..text.length inclusive, two
+ * tables: UTF-16-code-unit index -> UTF-8 byte offset, and UTF-16-code-unit
+ * index -> columns before it (v1.12 FR-001). A surrogate pair's second unit is
+ * never itself a valid query point for `yaml`'s ranges (they always land on
+ * code-point boundaries), but it is filled in defensively with the entries of
+ * the code point it belongs to.
+ *
+ * A column is a code point, except the one U+FEFF never counted: a byte-order
+ * mark at the very start of the stored bytes, index 0 (SPEC.md §4.2, v1.9: it
+ * is what an editor's decoder drops). Any other mark — a second one in a
+ * prefix, one inside a quoted scalar — is a character like any other. Every
+ * mark is still a byte, which the byte table counts.
+ *
+ * A node's column is then two lookups (`codePointColumn`). Before v1.12 it was
+ * counted from the start of its line for every node, so one line of N flow
+ * items cost N² (issue #9); the table is built once, and an alias copy that
+ * re-measures its anchor out of document order reads the same two entries.
  */
-function buildByteOffsetTable(text: string): Uint32Array {
-  const table = new Uint32Array(text.length + 1);
+function buildOffsetTables(text: string): { readonly bytes: Uint32Array; readonly columns: Uint32Array } {
+  const bytes = new Uint32Array(text.length + 1);
+  const columns = new Uint32Array(text.length + 1);
   let byteOffset = 0;
+  let column = 0;
   let index = 0;
   while (index < text.length) {
-    table[index] = byteOffset;
+    bytes[index] = byteOffset;
+    columns[index] = column;
     const codePoint = text.codePointAt(index) ?? 0;
     const isAstral = codePoint > 0xffff;
     if (isAstral) {
-      table[index + 1] = byteOffset;
+      bytes[index + 1] = byteOffset;
+      columns[index + 1] = column;
     }
     byteOffset += utf8ByteLengthOfCodePoint(codePoint);
+    if (!(index === 0 && codePoint === BYTE_ORDER_MARK_UNIT)) {
+      column += 1;
+    }
     index += isAstral ? 2 : 1;
   }
-  table[text.length] = byteOffset;
-  return table;
+  bytes[text.length] = byteOffset;
+  columns[text.length] = column;
+  return { bytes, columns };
 }
 
-/**
- * Count actual Unicode code points (not UTF-16 units) from `lineStart` up to
- * `target`, 1-based. The one U+FEFF never counted is a byte-order mark at the
- * very start of the stored bytes, index 0 (SPEC.md §4.2, v1.9: it is what an
- * editor's decoder drops); any other — a second mark in a prefix, one inside
- * a quoted scalar — is a character like any other. Every mark is still a
- * byte, which `byteOffsetTable` counts.
- */
-function codePointColumn(text: string, lineStart: number, target: number): number {
-  let count = 0;
-  let index = lineStart;
-  while (index < target) {
-    const codePoint = text.codePointAt(index);
-    if (!(index === 0 && codePoint === BYTE_ORDER_MARK_UNIT)) {
-      count += 1;
-    }
-    index += codePoint !== undefined && codePoint > 0xffff ? 2 : 1;
-  }
-  return count + 1;
+/** The column table alone (`buildOffsetTables`), for its witness in `tests/unit/columns.test.ts`. */
+export function buildColumnTable(text: string): Uint32Array {
+  return buildOffsetTables(text).columns;
+}
+
+/** The 1-based column of `target` on the line starting at `lineStart`: the columns between them, plus one. */
+function codePointColumn(columnTable: Uint32Array, lineStart: number, target: number): number {
+  return (columnTable[target] ?? 0) - (columnTable[lineStart] ?? 0) + 1;
 }
 
 interface SpanContext {
@@ -146,6 +156,7 @@ interface SpanContext {
   readonly text: string;
   readonly lineCounter: LineCounter;
   readonly byteOffsetTable: Uint32Array;
+  readonly columnTable: Uint32Array;
   readonly documentByteLength: number;
 }
 
@@ -164,7 +175,7 @@ function buildSourceSpan(ctx: SpanContext, startIndex: number, endIndex: number)
     start: byteOffsetAt(ctx, startIndex),
     end: byteOffsetAt(ctx, endIndex),
     line: ctx.lineCounter.linePos(startIndex).line,
-    column: codePointColumn(ctx.text, lineStartIndex(ctx, startIndex), startIndex),
+    column: codePointColumn(ctx.columnTable, lineStartIndex(ctx, startIndex), startIndex),
     documentLength: ctx.documentByteLength,
   });
 }
@@ -693,9 +704,9 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   // v1.9: the mark is kept — every offset counts the stored bytes (SPEC.md §4.2).
   const text = rawText;
   const documentByteLength = rawByteLength;
-  const byteOffsetTable = buildByteOffsetTable(text);
+  const { bytes: byteOffsetTable, columns: columnTable } = buildOffsetTables(text);
   const lineCounter = new LineCounter();
-  const spanContext: SpanContext = { origin, text, lineCounter, byteOffsetTable, documentByteLength };
+  const spanContext: SpanContext = { origin, text, lineCounter, byteOffsetTable, columnTable, documentByteLength };
   const diagnostics = new DiagnosticCollector();
 
   // v1.9 FR-005: every prefix mark is removed from what `yaml` reads (see

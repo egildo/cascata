@@ -97,6 +97,76 @@ export function resolvePointer(root: Node, pointer: string): Node | undefined {
 }
 
 /**
+ * The pointers of one tree, by span (v1.12 FR-003): for each origin id, its label, and for each
+ * (start, end) of a node of that origin, every pointer of such a node inside its own document, in
+ * walk order. Built once per root on first use and kept in a `WeakMap` keyed by the root: trees are
+ * frozen, so the index is never stale, and it is freed with the tree.
+ */
+interface PointerIndex {
+  /** origin id -> origin label (for a delegated fragment, the label is its location). */
+  readonly labels: ReadonlyMap<string, string>;
+  /** origin id -> `start:end` -> pointers in walk order. */
+  readonly bySpan: ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>;
+}
+
+const indexes = new WeakMap<Node, PointerIndex>();
+let indexBuilds = 0;
+
+/** How many pointer indexes have been built since the module loaded — the witness that asking twice builds once (v1.12 FR-004). */
+export function pointerIndexBuilds(): number {
+  return indexBuilds;
+}
+
+/**
+ * One iterative walk in the order `pointersInDocument` has always answered in (sorted keys, items
+ * in order). A child of a node of another document restarts at its own root, so only a child of a
+ * node of the same document extends its parent's pointer.
+ */
+function buildPointerIndex(root: Node): PointerIndex {
+  indexBuilds += 1;
+  const labels = new Map<string, string>();
+  const bySpan = new Map<string, Map<string, string[]>>();
+  const stack: { readonly node: Node; readonly pointer: string }[] = [{ node: root, pointer: "" }];
+  for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
+    const { node, pointer } = item;
+    const id = node.span.origin.id;
+    labels.set(id, node.span.origin.label);
+    let spans = bySpan.get(id);
+    if (spans === undefined) {
+      spans = new Map();
+      bySpan.set(id, spans);
+    }
+    const key = `${node.span.start}:${node.span.end}`;
+    const pointers = spans.get(key);
+    if (pointers === undefined) spans.set(key, [pointer]);
+    else pointers.push(pointer);
+    const childPointer = (child: Node, segment: string): string => (child.span.origin.id === id ? `${pointer}/${segment}` : "");
+    if (node.type === "mapping") {
+      const children = [...node.entries];
+      for (let i = children.length - 1; i >= 0; i--) {
+        const entry = children[i];
+        if (entry !== undefined) stack.push({ node: entry[1], pointer: childPointer(entry[1], escapePointerSegment(entry[0])) });
+      }
+    } else if (node.type === "sequence") {
+      for (let i = node.items.length - 1; i >= 0; i--) {
+        const child = node.items[i];
+        if (child !== undefined) stack.push({ node: child, pointer: childPointer(child, String(i)) });
+      }
+    }
+  }
+  return { labels, bySpan };
+}
+
+function indexOf(root: Node): PointerIndex {
+  let index = indexes.get(root);
+  if (index === undefined) {
+    index = buildPointerIndex(root);
+    indexes.set(root, index);
+  }
+  return index;
+}
+
+/**
  * Every pointer, inside its own document, of a node in `root` whose span is `target`
  * (same origin id, same bytes), in walk order (sorted keys, items in order) — at most
  * `limit` of them (v1.11 FR-001).
@@ -108,31 +178,21 @@ export function resolvePointer(root: Node, pointer: string): Node | undefined {
  * the merged result.
  *
  * More than one means copies: an alias or a merge key expands to a node that keeps the
- * anchor's span (SPEC.md §4.2). The walk is iterative and visits each node once.
+ * anchor's span (SPEC.md §4.2). The walk is done once per tree, on first use, and every
+ * later call is a lookup (v1.12 FR-003: asking about every value was quadratic, issue #10).
  */
 export function pointersInDocument(root: Node, target: SourceSpan, limit = Number.POSITIVE_INFINITY): string[] {
-  const id = target.origin.id;
-  const found: string[] = [];
-  const stack: { readonly node: Node; readonly pointer: string }[] = [{ node: root, pointer: "" }];
-  for (let item = stack.pop(); item !== undefined && found.length < limit; item = stack.pop()) {
-    const { node, pointer } = item;
-    const own = node.span.origin.id === id;
-    if (own && node.span.start === target.start && node.span.end === target.end) {
-      found.push(pointer);
-    }
-    // A child of a node of another document restarts at its own root, so only a node of this document extends the pointer.
-    const children: { readonly node: Node; readonly pointer: string }[] = [];
-    if (node.type === "mapping") {
-      for (const [key, child] of node.entries) children.push({ node: child, pointer: own ? `${pointer}/${escapePointerSegment(key)}` : "" });
-    } else if (node.type === "sequence") {
-      node.items.forEach((child, index) => children.push({ node: child, pointer: own ? `${pointer}/${index}` : "" }));
-    }
-    for (let i = children.length - 1; i >= 0; i--) {
-      const child = children[i];
-      if (child !== undefined) stack.push(child);
-    }
-  }
-  return found;
+  const found = indexOf(root).bySpan.get(target.origin.id)?.get(`${target.start}:${target.end}`) ?? [];
+  return found.slice(0, limit);
+}
+
+/**
+ * Every origin of a node in `root` with its label, in the order first met — so a caller can find
+ * every graft of one location (a fragment's origin id is unique per graft; its label is the
+ * location, v1.12 FR-006). Read from the same index as `pointersInDocument`.
+ */
+export function originsInTree(root: Node): ReadonlyMap<string, string> {
+  return indexOf(root).labels;
 }
 
 /**
