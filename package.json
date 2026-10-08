@@ -56,7 +56,9 @@
     "meta"
   ],
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run && vitest run --config vitest.timing.config.ts",
+    "test:main": "vitest run",
+    "test:timing": "vitest run --config vitest.timing.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
     "dist-tag": "sh scripts/dist-tag.sh"

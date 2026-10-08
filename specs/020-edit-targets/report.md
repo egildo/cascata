@@ -132,3 +132,95 @@ biggest trap here); that **layer trees already contain the grafted fragment node
 pointer must restart at a graft root; that **alias copies share spans**, which makes "find the node by span"
 ambiguous; and that `InMemoryHost` plus `RecordedTransport` is enough to test remote fragments and overrides with
 no cache directory. `tests/unit/overrides.test.ts` was the best template for in-memory cascades.
+
+# Round 2
+
+## 1. Refuse rather than guess
+
+`editTarget` no longer tie-breaks. `pointersInDocument(root, span, limit)` (`src/model/pointer.ts`) returns every node of a
+document's tree that carries the span; `editTarget` asks for two, and **more than one is `edit-target-shared`**, primary at the
+merged node's span, whichever of them the merged pointer is. `why()` keeps `pointerInDocument`'s deterministic convention (the
+merged pointer, then the same last key, then the first) because it reports and does not act; the doc says so.
+
+**What I chose for "the merged pointer is one of the candidates and the others are copies of it":** still shared. The writer's
+own rule (SPEC.md §19 "shared") counts both the alias and the anchor's owner as shared (`anchor-owner-is-shared` in the write
+corpus), so any value with a copy is refused by the writer; refusing it earlier, with the same code, is the same verdict, not a
+stricter one. A key that overrides a merged one has its own span and is not shared (control case, answered `ok`). So the case
+"several nodes, none shared" does not exist in a YAML document: copies come only from aliases and merge keys. The one exception
+I can construct, two distinct zero-width values at one offset, I could not produce from a real document and did not test.
+
+Tests (hand-derived, red against the round 1 code, 3 red): `a: &x 1` / `b: *x` -- `/a` and `/b` both refused at bytes 6-7; a
+merge-key copy and its source (`base: &b` / `  k: 1` / `w:` / `  <<: *b`) -- `/w/k` and `/base/k` both refused at bytes 14-15;
+an alias inside a delegated fragment; and two controls (an overriding key and an unaliased anchor answer `ok`). **My own wrong
+count again**: I first wrote the merge-key bytes as 15-16; `base: &b` is 8 bytes plus a newline, so the `1` is at 14. The run
+disagreed, I recounted by hand, the test was wrong. The round 1 tests that asserted the tie-break through `editTarget` (`/b` is
+`/b`; an alias inside a fragment is `/b`) asserted behaviour this round reverses; they are replaced, not loosened (round 1 tests
+of this milestone, not a prior milestone's). `why()`'s tie-break tests are untouched.
+
+Sabotage (backup, `SABOTAGE` comment, restored, `diff -r` clean): restoring the tie-break (copies not refused) -- 3 red, exactly
+the three new refusal cases; refusing every value -- 12 red, the ok rows and the controls (so the refusal cases are not passing
+vacuously).
+
+## 2. Wall-clock tests out of the parallel run
+
+**Every test that reads a clock** (`grep performance.now|Date.now|hrtime`): eight files. Seven assert on elapsed time or a
+ratio; `generate-oracle.test.ts` (FR-038) reads the clock to log and asserts only `> 0`, so it stays where it is. `src/resolve/fetch.ts`
+uses `Date.now()` for cache freshness, not a test.
+
+| Test | Was | Now |
+|---|---|---|
+| `anchor-table`: "reading 4,000 and 8,000 aliases costs a small multiple of yaml's own parse..." | `unit/` | `tests/timing/anchor-table.timing.test.ts` |
+| `accumulate`: "depths 10, 15, 18 and 24 scale by a ratio, not by a power" | `unit/` | `tests/timing/accumulate.timing.test.ts` |
+| `composition-bound`: "doubling the depth does not square the work" | `unit/` | `tests/timing/composition-bound.timing.test.ts` |
+| `duplicate-keys`: "16000 keys...", "32000 keys...", "the writer's reads (locate: one; setValue: two...)" | `unit/` | `tests/timing/duplicate-keys.timing.test.ts` |
+| `metaschema`: "stays LINEAR on adversarial input" | `unit/` | `tests/timing/metaschema.timing.test.ts` |
+| `validate-totality`: "doubling the alternatives does not quadruple the work", "a 907 KB, 130,000-alternative union ... returns in well under the minute" | `unit/` | `tests/timing/validate-totality.timing.test.ts` |
+| `bounded-cost`: "eight levels ... refused at once, in well under a second, never built" | `unit/` | **both**: the timing assertion verbatim in `tests/timing/bounded-cost.timing.test.ts`; the main-suite copy now **counts** |
+
+Moved verbatim: the `describe`/`it` names, the bodies and every bound (`< 8`, `< 20`, `< 40`, `3 * library + 500`, `5 * floor + 600`,
+`< 10_000`, `< 50`, `< 1000`) are unchanged; each timing file copies only the helpers it needs. **One conversion to a count**,
+in `bounded-cost`: the eight-level bomb has W = 1 + 11 + 11 x 8 = 100, budget = 10 x 100 + 10,000 = 11,000, and the diagnostic
+names the count it stopped at, 11,001 (hand-derived; passed on first run). That proves "never built" better than a clock does.
+The clock bound is kept too, in the timing project, so nothing is loosened. The other tests cannot count their work without
+instrumenting `src/` (the quadratic costs are array copies and regex backtracking, and the ratio tests compare against
+`yaml`'s own parse by definition), so they stay clock tests, serially.
+
+**The runner.** `vitest.timing.config.ts`: `tests/timing/**`, `fileParallelism: false`, `pool: "forks"`, `singleFork: true`.
+`vitest.config.ts` excludes `tests/timing/**`. `package.json`: `test` = `vitest run && vitest run --config vitest.timing.config.ts`,
+`test:main`, `test:timing`. Test count: 2981 before this round's item 2; main 2972 + timing 10 = 2982 (the one more is the
+`bounded-cost` case that now exists in both places).
+
+**Five runs of `pnpm test`.** On this machine the baseline was already busy (load average 10-15 on 10 cores) and the pre-change
+tree passed **5 of 5** runs when I ran it as-is, so I could not reproduce "every run fails one" without more load. I therefore
+repeated the experiment with ten busy-loop processes (`yes > /dev/null`) running alongside, the same load for both trees:
+
+| | fully green runs of 5 |
+|---|---|
+| before (commit b09a593), as-is | 5 |
+| before, under 10 busy loops | **3** (run 3: `metaschema` "stays LINEAR"; run 4: `validate-totality` "doubling the alternatives") |
+| after (this commit), under 10 busy loops | **5** |
+
+The two failures are exactly the ones you named. Five runs is a small sample and the "after" result under synthetic load is
+evidence, not proof: the timing project still measures time, only without the parallel suite alongside it. If it still flakes
+on your machine, the next step is not to loosen a bound but to raise the repeat count in `fastest()`/`timeOf()` (best of 2-3
+today) -- I did not, to honour "do not loosen".
+
+Sabotage of the new project: switching `uniqueKeys` back on in `src/adapters/yaml/parse.ts` (the v1.10 quadratic) made all three
+`duplicate-keys` timing tests red from the serial project (`16213 ms` against a bound of `1481 ms` at 32,000 keys); restored.
+
+## What `CLAUDE.md` should gain (yours to add)
+
+> **Wall-clock tests live in `tests/timing/`** and run serially after the main suite (`pnpm test` runs both; `pnpm test:main`,
+> `pnpm test:timing` run one). A test that asserts on elapsed time or a ratio of elapsed times goes there, never in
+> `tests/unit/`; where the work can be counted (nodes built, calls made), count it in the main suite instead. Never loosen a
+> bound to stop a flake: a timing failure in the serial project is a real failure.
+
+The older HANDOFF advice "rerun that file alone" is superseded by the new HANDOFF section (the old paragraph is left as history).
+
+## Still wrong, or not done
+
+- The timing suite is serial but not isolated from the rest of the machine (other processes, other agents). Under the same
+  synthetic load the serial project passed 5 of 5; that is a sample, not a guarantee.
+- `generate-oracle` FR-038 keeps reading the clock without asserting it.
+- Unused imports remain in the originals of the files I removed tests from (`parseDocument`, `locate`, `setValue`, ...);
+  `tsc` does not flag them and I left them rather than touch more lines than the moves required.

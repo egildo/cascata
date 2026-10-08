@@ -99,12 +99,20 @@ describe("the bomb (FR-003, FR-004)", () => {
     expect(d?.message).toMatch(/\b10451\b/);
   });
 
-  it("eight levels (430 bytes: 30 for l0 and 50 a level) is refused at once, in well under a second, never built", () => {
+  // The wall-clock half of this case ("in well under a second") is tests/timing/bounded-cost.timing.test.ts.
+  // Here the same fact is counted: W = 1 + 11 + 11 x 8 = 100, budget = 10 x 100 + 10,000 = 11,000, and the expansion
+  // stopped at the first node past it, 11,001 -- of the 1.2 billion the eight levels would build -- so it was never built.
+  it("eight levels (430 bytes: 30 for l0 and 50 a level) is refused at once, never built: the count stops at the budget, 11,001", () => {
     const text = bomb(8);
     expect(text.length).toBe(430);
-    const start = performance.now();
-    expect(refusals(text)).toEqual(["expansion-limit-exceeded"]);
-    expect(performance.now() - start).toBeLessThan(1000);
+    const result = read(text);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics.map((d) => d.code)).toEqual(["expansion-limit-exceeded"]);
+    const message = result.diagnostics[0]?.message ?? "";
+    expect(message).toMatch(/\b100\b/);
+    expect(message).toMatch(/\b11000\b/);
+    expect(message).toMatch(/\b11001\b/);
   });
 
   it("raised through the parse limits it loads (FR-005): ratio 1000 admits the three-level bomb", () => {

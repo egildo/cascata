@@ -143,3 +143,16 @@ reader as a second witness and restates FR-006 itself rather than importing the 
   a remote fragment or override needs only `RecordedTransport` plus `allowRemoteDelegation: true`, no cache directory.
 - **`/tmp/sab.py`-style sabotage driver**: a list of (file, old, new, tests), run each, restore, `diff -r` against the backup. Pass stderr too (`stderr=STDOUT`) or the `FAIL` lines are missing.
 - Open edges: `editTarget` answers `ok: true` for a value the writer will refuse (shared, block scalar); a writer throws on a malformed pointer; inserting and deleting are still unbuilt.
+
+## 2026-10-08 (round 2) — wall-clock tests are their own project
+
+- **`pnpm test` is now two runs**: `vitest run` (everything except `tests/timing/`, in parallel) and then
+  `vitest run --config vitest.timing.config.ts` (`pnpm test:timing`: `tests/timing/**`, one file at a time, single fork,
+  nothing alongside). `pnpm test:main` runs the first alone. A timing failure is now a real failure to investigate:
+  the parallel load that made the old ratio tests flake is gone. The "rerun that file alone" advice above no longer applies
+  to the ratio tests; it still applies to a main-suite test you suspect of load-sensitivity (none known).
+- **A new test that asserts on elapsed time or a ratio of elapsed times goes in `tests/timing/`** (`*.timing.test.ts`),
+  never in `tests/unit/`. Where the work can be counted (nodes built, calls made) count it in the main suite instead, as
+  `bounded-cost` does for the eight-level bomb (W = 100, budget 11,000, stopped at 11,001); keep the clock only for what
+  cannot be counted. `generate-oracle`'s FR-038 reads the clock but asserts nothing about it (`> 0`), so it stays.
+- The moved tests keep their assertions and their `describe`/`it` names; each timing file says which file it came from.

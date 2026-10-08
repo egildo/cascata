@@ -265,25 +265,6 @@ describe("v0.7 part 2 / research.md W-1 — typeExpr's pattern is a SUPERSET of 
       expect(pattern.test(bad), `expected the pattern to refuse ${JSON.stringify(bad)}`).toBe(false);
     }
   });
-
-  it("stays LINEAR on adversarial input — the quadratic form must not come back (research.md W-1)", () => {
-    const pattern = typeExprPattern();
-    const timeFor = (length: number): number => {
-      const input = `a${" ".repeat(length)}`;
-      const started = process.hrtime.bigint();
-      pattern.test(input);
-      return Number(process.hrtime.bigint() - started) / 1e6;
-    };
-    timeFor(1000); // warm up, so the first measurement is not compile time
-    const small = Math.max(timeFor(4000), 0.001);
-    const large = timeFor(16_000);
-    // Quadratic was measured at 4x per doubling: 4000 -> 16000 is two
-    // doublings, so ~16x. A generous ceiling of 8x still fails that and
-    // passes anything linear, without turning a timing measurement into a
-    // flaky assertion.
-    expect(large / small, `4000 chars: ${small}ms, 16000 chars: ${large}ms`).toBeLessThan(8);
-    expect(large).toBeLessThan(50);
-  });
 });
 
 describe("v0.7 part 2 — the depth cap versus the deepest document this project has produced", () => {
