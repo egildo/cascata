@@ -19,7 +19,7 @@ two new codes, one new entry point (`@egildo/cascata/writers`), one new field on
 ## Tasks
 
 - [x] T1 (step 1): tests for `why()` pointers, red; `pointerInDocument`, `why()`; green; commit.
-- [ ] T2 (step 2): tests for `editTarget`, red; the module, codes, export; green; commit.
+- [x] T2 (step 2): tests for `editTarget`, red; the module, codes, export; green; commit.
 - [ ] T3 (step 3): tests for writers (018 write-cases equivalence, claims), red; `src/writers.ts`, `package.json`; green; commit.
 - [ ] T4 (step 4): docs/reference.md, report, sabotage table; green; commit.
 - [ ] T5: sabotage runs (four from the spec, plus mine), each watched red and restored.

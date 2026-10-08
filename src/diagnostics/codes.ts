@@ -300,6 +300,19 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  */
 export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unsupported", "edit-unrepresentable"] as const;
 
+/**
+ * Which document an edit belongs in (v1.11, `SPEC.md` Article IX, §19) — specs/020-edit-targets
+ * FR-003. Both are `level: "error"` and come only from `editTarget`. `edit-target-absent` and
+ * `edit-unsupported` (above) are the other two refusals it gives.
+ *
+ * - `edit-target-inherited` — the winning value was supplied by a schema's `provide`; editing it
+ *   would change a default every document under that schema shares. Positioned at the value in
+ *   the schema document, and the message names the schema's location.
+ * - `edit-target-remote` — the winning value's document was read over `https://`; a remote
+ *   document is never an edit target. Positioned at the value in that document.
+ */
+export const EDIT_TARGET_CODES = ["edit-target-inherited", "edit-target-remote"] as const;
+
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
   ...RESOURCE_LIMIT_CODES,
@@ -318,6 +331,7 @@ export const DIAGNOSTIC_CODES = [
   ...GENERATOR_CODES,
   ...OVERRIDE_CODES,
   ...EDIT_CODES,
+  ...EDIT_TARGET_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */
