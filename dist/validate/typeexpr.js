@@ -1,0 +1,239 @@
+/**
+ * §9.1's leaf DSL grammar — SPEC.md §9.1 (settled), v0.4 FR-008 through
+ * FR-012; specs/004-constraint-checker/contracts/demand-vocabulary.md.
+ *
+ * ```ebnf
+ * TypeExpr := Union
+ * Union    := Array ( "|" Array )*
+ * Array    := Primary "[]"*
+ * Primary  := Name | "(" Union ")"
+ * Name     := Ident ( "/" Ident )?          (* qualified: core/resource *)
+ * Ident    := [A-Za-z_] [A-Za-z0-9_-]*
+ * ```
+ *
+ * `[]` binds tighter than `|` (TypeScript precedence) — encoded directly in
+ * the recursive-descent structure below: `parseArray` (which consumes
+ * trailing `[]`) is called by `parseUnion`, never the reverse, so
+ * `string | string[]` parses as `Union[Array[string], Array[string[]]]`,
+ * never as `Array[Union[string, string][]]`. `(string | int)[]` needs the
+ * parens for exactly this reason — `parsePrimary` is what recurses back
+ * into `parseUnion` inside `( )`.
+ *
+ * Canonical form is a flattened, deduped **set** of `(name, depth)` pairs
+ * (FR-010) — order in the source text carries no meaning for equality.
+ * This module still returns that set **sorted** (by depth, then by name
+ * via `compareByCodePoint` — the same code-point ordering rule §4.2
+ * mandates everywhere else this codebase orders strings), so two
+ * expressions that are equal produce byte-identical `alternatives` arrays,
+ * which is what makes `type-mismatch` checking (`src/validate/
+ * constraints.ts`) a straightforward array walk rather than needing its
+ * own set-equality helper.
+ *
+ * Name resolution against FR-011's closed built-in set is a *separate*
+ * step (`resolveAlternative` below), not part of parsing: a qualified name
+ * (`core/resource`) parses successfully under the grammar (the `Name`
+ * production allows it) but cannot resolve to anything until v0.5's named
+ * types exist. This mirrors `src/validate/vocabulary.ts`'s split between
+ * "read/parse what is there" and "judge whether it is legal" — parsing
+ * answers "is this well-formed", resolution answers "does this book
+ * anywhere real".
+ *
+ * **Position tracking, this milestone's scope**: `unknown-type-name` and
+ * `malformed-type-expression` diagnostics anchor to the **whole `type:`
+ * value's own span**, not a computed sub-span for one name or token within
+ * the DSL string. Recovering a byte-precise sub-span would mean re-doing
+ * line/column math against a scalar's own source text — the same class of
+ * work `src/adapters/yaml/parse.ts` already does once, at parse time, for
+ * every node. Duplicating it here for one string's internal structure was
+ * judged not worth it for this milestone: the whole expression's span
+ * already opens the right file at the right key, and a `type:` value is
+ * normally short enough that "which name inside it" is not a research
+ * project once "which line" is known. Recorded here, and in
+ * contracts/diagnostics.md, as a deliberate simplification rather than an
+ * oversight.
+ */
+import { compareByCodePoint } from "../model/node.js";
+import { extend } from "../extend.js";
+/** FR-011's closed set of type names this milestone resolves. */
+export const BUILTIN_TYPE_NAMES = ["string", "int", "float", "bool", "null", "mapping", "sequence", "url", "path"];
+const BUILTIN_TYPE_NAME_SET = new Set(BUILTIN_TYPE_NAMES);
+const IDENT_START = /[A-Za-z_]/;
+const IDENT_CONT = /[A-Za-z0-9_-]/;
+function tokenize(source) {
+    const tokens = [];
+    let index = 0;
+    while (index < source.length) {
+        const ch = source[index];
+        if (ch === undefined) {
+            break;
+        }
+        if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
+            index += 1;
+            continue;
+        }
+        if (ch === "|" || ch === "(" || ch === ")" || ch === "[" || ch === "]" || ch === "/") {
+            tokens.push({ kind: "punct", value: ch });
+            index += 1;
+            continue;
+        }
+        if (IDENT_START.test(ch)) {
+            let end = index + 1;
+            while (end < source.length) {
+                const next = source[end];
+                if (next === undefined || !IDENT_CONT.test(next)) {
+                    break;
+                }
+                end += 1;
+            }
+            tokens.push({ kind: "ident", value: source.slice(index, end) });
+            index = end;
+            continue;
+        }
+        return { ok: false, reason: `unexpected character '${ch}' at offset ${index}` };
+    }
+    return { ok: true, tokens };
+}
+// --- Recursive-descent parser ------------------------------------------
+class ParseError extends Error {
+}
+class Parser {
+    tokens;
+    position = 0;
+    constructor(tokens) {
+        this.tokens = tokens;
+    }
+    peek() {
+        return this.tokens[this.position];
+    }
+    advance() {
+        const token = this.tokens[this.position];
+        if (token === undefined) {
+            throw new ParseError("unexpected end of type expression");
+        }
+        this.position += 1;
+        return token;
+    }
+    expectPunct(value) {
+        const token = this.advance();
+        if (token.kind !== "punct" || token.value !== value) {
+            throw new ParseError(`expected '${value}'`);
+        }
+    }
+    /** `Name := Ident ( "/" Ident )?` */
+    parseName() {
+        const first = this.advance();
+        if (first.kind !== "ident") {
+            throw new ParseError("expected a type name");
+        }
+        if (this.peek()?.kind === "punct" && this.peek()?.value === "/") {
+            this.expectPunct("/");
+            const second = this.advance();
+            if (second.kind !== "ident") {
+                throw new ParseError("expected a qualified name segment after '/'");
+            }
+            return `${first.value}/${second.value}`;
+        }
+        return first.value;
+    }
+    /** `Primary := Name | "(" Union ")"` */
+    parsePrimary() {
+        const token = this.peek();
+        if (token === undefined) {
+            throw new ParseError("expected a type name or '('");
+        }
+        if (token.kind === "punct" && token.value === "(") {
+            this.expectPunct("(");
+            const inner = this.parseUnion();
+            this.expectPunct(")");
+            return inner;
+        }
+        const name = this.parseName();
+        return [{ name, depth: 0 }];
+    }
+    /** `Array := Primary "[]"*` */
+    parseArray() {
+        let alternatives = this.parsePrimary();
+        while (this.peek()?.kind === "punct" && this.peek()?.value === "[") {
+            this.expectPunct("[");
+            this.expectPunct("]");
+            alternatives = alternatives.map((alt) => ({ name: alt.name, depth: alt.depth + 1 }));
+        }
+        return alternatives;
+    }
+    /**
+     * `Union := Array ( "|" Array )*`
+     *
+     * Appends in place. The obvious form — `alternatives = [...alternatives,
+     * ...more]` — reallocates and copies the whole accumulated list once per
+     * `|`, which is **Θ(n²)** in the number of alternatives: measured at a
+     * clean 4x per doubling (62 ms at 10,000 alternatives, 496 ms at 20,000,
+     * 2.3 s at 40,000, 8.9 s at 80,000, 34 s at 160,000). A 907 KB schema
+     * carrying a 130,000-alternative union — well inside §11's 8 MB cap —
+     * therefore cost about a minute of CPU and returned a correct answer,
+     * which is not a totality violation but is a legal document buying an
+     * unbounded amount of work. Found during the v0.7 part 2 review.
+     *
+     * `extend` rather than `push(...more)`: a call-site spread is what
+     * `src/extend.ts` exists to keep out of this codebase, and reintroducing
+     * one here to fix a different scaling problem would trade Θ(n²) for a
+     * `RangeError`. The arrays appended here are freshly built by
+     * `parseArray`/`parsePrimary` and referenced by nothing else, so mutating
+     * in place is safe; the resulting order is identical, and `canonicalize`
+     * sorts it regardless.
+     */
+    parseUnion() {
+        const alternatives = this.parseArray();
+        while (this.peek()?.kind === "punct" && this.peek()?.value === "|") {
+            this.expectPunct("|");
+            extend(alternatives, this.parseArray());
+        }
+        return alternatives;
+    }
+    atEnd() {
+        return this.position >= this.tokens.length;
+    }
+}
+/** Sort and dedupe a flat alternative list into FR-010's canonical set form. */
+function canonicalize(alternatives) {
+    const seen = new Map();
+    for (const alt of alternatives) {
+        seen.set(`${alt.depth} ${alt.name}`, alt);
+    }
+    return [...seen.values()].sort((a, b) => (a.depth !== b.depth ? a.depth - b.depth : compareByCodePoint(a.name, b.name)));
+}
+/**
+ * Parse a `type` value's source text into canonical form (FR-008, FR-009,
+ * FR-010). A `TypeExpr` with zero alternatives cannot occur — the grammar
+ * has no production for an empty expression, so an empty or
+ * whitespace-only `source` is a parse failure (`Primary` requires a name
+ * or `(`), never a vacuously-true "no alternatives" result.
+ */
+export function parseTypeExpression(source) {
+    const tokenized = tokenize(source);
+    if (!tokenized.ok) {
+        return { ok: false, reason: tokenized.reason };
+    }
+    const parser = new Parser(tokenized.tokens);
+    try {
+        const alternatives = parser.parseUnion();
+        if (!parser.atEnd()) {
+            return { ok: false, reason: "unexpected trailing content after a complete type expression" };
+        }
+        return { ok: true, value: { alternatives: canonicalize(alternatives) } };
+    }
+    catch (error) {
+        if (error instanceof ParseError) {
+            return { ok: false, reason: error.message };
+        }
+        throw error;
+    }
+}
+/** Whether `alternative`'s name resolves against FR-011's built-in set — depth plays no part in resolution, only in matching a value later. */
+export function resolvesToBuiltin(alternative) {
+    return BUILTIN_TYPE_NAME_SET.has(alternative.name);
+}
+/** Every alternative in `expr` that fails to resolve against FR-011's built-in set (a typo, or a qualified/named-type reference — named types do not exist until v0.5). Empty when every alternative resolves. */
+export function unresolvedAlternatives(expr) {
+    return expr.alternatives.filter((alt) => !resolvesToBuiltin(alt));
+}
+//# sourceMappingURL=typeexpr.js.map
