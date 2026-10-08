@@ -94,15 +94,13 @@ the writers under the case's own policy.
 
 ## Open edges (noticed, not fixed)
 
-- **A later document's prefix mark** is reported as misplaced beside `multiple-documents`.
 - **Explicit tags under a `%TAG` handle**, or on an earlier line than the value, cannot be dropped: refused.
 - **`edit-unsupported` is overloaded** (container, block scalar, read-back failure, flow bare key, tag elsewhere, bare key in a shared
   mapping; from `editTarget`, a format with no writer);
   callers tell them apart only by message.
 - **Merge-key diagnostics** for a list point at the whole list, not the one alias.
 - **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-unsupported` from a
-  read-back failure, a bare key in a shared mapping, `editTarget`'s no-writer format, a `%TAG` tag; a later
-  document's prefix mark.
+  read-back failure, a bare key in a shared mapping, `editTarget`'s no-writer format, a `%TAG` tag.
 - **JSON has no expansion budget**, and `locate` of a container reports `mapping`/`sequence` as `kind`.
 - **A bare key inside a shared mapping** is refused under `"warn"`/`"allow"` (invented in 022, not specified).
 - Inserting and deleting entries are still unbuilt (§4.3's format-preserving tree).

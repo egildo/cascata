@@ -1,0 +1,17 @@
+{
+  "name": "document-shape/multi-document-mark-inside-later-document",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "a: 1\n---\n\ufeffb: 2\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "multiple-documents",
+        "line": 2,
+        "column": 1,
+        "start": 5,
+        "end": 8
+      }
+    ]
+  }
+}

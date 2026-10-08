@@ -1,0 +1,17 @@
+{
+  "name": "document-shape/mark-mid-document-misplaced",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "a: 1\n\ufeffb: 2\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 2,
+        "column": 1,
+        "start": 5,
+        "end": 8
+      }
+    ]
+  }
+}

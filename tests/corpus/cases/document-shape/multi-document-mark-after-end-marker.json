@@ -1,0 +1,17 @@
+{
+  "name": "document-shape/multi-document-mark-after-end-marker",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "a: 1\n...\n\ufeffb: 2\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "multiple-documents",
+        "line": 3,
+        "column": 2,
+        "start": 12,
+        "end": 15
+      }
+    ]
+  }
+}

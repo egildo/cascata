@@ -60,3 +60,14 @@ describe("v1.12 FR-010 — a key with no value is a null", () => {
     expect(result.ok ? [] : result.diagnostics.map((d) => d.code)).toEqual(["duplicate-key"]);
   });
 });
+
+describe("v1.12.1 — a second document is reported once, in Cascata's own words", () => {
+  it("the message names neither the yaml package nor a function of it", () => {
+    for (const text of ["a: 1\n---\nb: 2\n", "a: 1\n...\nb: 2\n"]) {
+      const result = parse(new TextEncoder().encode(text), { origin });
+      if (result.ok) throw new Error(text);
+      expect(result.diagnostics.map((d) => d.code)).toEqual(["multiple-documents"]);
+      expect(result.diagnostics[0]?.message).toBe("A configuration file holds one YAML document; a second one begins here");
+    }
+  });
+});

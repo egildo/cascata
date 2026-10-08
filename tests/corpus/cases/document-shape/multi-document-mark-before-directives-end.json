@@ -1,0 +1,17 @@
+{
+  "name": "document-shape/multi-document-mark-before-directives-end",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "a: 1\n\ufeff---\nb: 2\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "multiple-documents",
+        "line": 2,
+        "column": 2,
+        "start": 8,
+        "end": 11
+      }
+    ]
+  }
+}

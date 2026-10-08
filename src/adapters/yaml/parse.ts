@@ -66,7 +66,7 @@ import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsup
 import { checkDepthLimit, checkSizeLimit, expansionLimitDiagnostic, resolveLimits, type ParseLimits } from "../limits.js";
 import { buildAnchorTable, type AnchorTable } from "./anchors.js";
 import { countWritten } from "./budget.js";
-import { allMarks, documentPrefixMarks, removePrefixMarks, storedIndexer } from "./marks.js";
+import { allMarks, documentPrefixMarks, laterDocumentMark, removePrefixMarks, storedIndexer } from "./marks.js";
 import { findFirstInvalidUtf8ByteOffset, locateByteOffset, utf8ByteLength } from "../encoding.js";
 
 // `yaml` merges each of these classes with a `.Parsed` namespace member
@@ -654,6 +654,22 @@ function findMisplacedMarks(text: string, prefixMarks: readonly number[], doc: D
   return misplaced;
 }
 
+/**
+ * Where a second document begins (v1.12.1, SPEC.md §4.2): `cut`, the stored index from which nothing more is
+ * reported (the end of the first document, so a later document's prefix is after it), and `at`, where
+ * `multiple-documents` points (three characters from there: the marker, as since v0.1). `yaml` reports a second
+ * document after `---` or `...`, but reads a mark ahead of a `---` as content, so that form is found here.
+ */
+function findSecondDocument(text: string, prefixMarks: readonly number[], doc: Document, toStored: (index: number) => number): { readonly cut: number; readonly at: number } | undefined {
+  const error = doc.errors.find((candidate) => candidate.code === "MULTIPLE_DOCS");
+  const reported = error === undefined ? undefined : { cut: doc.range === undefined ? error.pos[0] : toStored(doc.range[2]), at: error.pos[0] };
+  const later = laterDocumentMark(text, prefixMarks);
+  if (later !== undefined && (reported === undefined || later.mark < reported.cut)) {
+    return { cut: later.mark, at: later.marker };
+  }
+  return reported;
+}
+
 interface YamlReaderError {
   readonly code: string;
   readonly message: string;
@@ -667,9 +683,8 @@ interface YamlReaderError {
  * reports it with the `related` first-occurrence span contracts/
  * diagnostics.md requires, which `yaml`'s own error (only the second
  * occurrence's position) cannot supply on its own. `MULTIPLE_DOCS` is
- * narrowed to the 3-character marker itself (contracts: "the second
- * document marker"), not `yaml`'s own wider span, which covers everything
- * after the first document. Everything else becomes `malformed-document`,
+ * excluded too: `findSecondDocument` reports it, once, in Cascata's own words
+ * (v1.12.1). Everything else becomes `malformed-document`,
  * using the reader's own reported position as-is.
  *
  * `doc.warnings` (`TAG_RESOLVE_FAILED`, the only warning this adapter's
@@ -682,11 +697,10 @@ function readerErrorDiagnostic(error: YamlReaderError, ctx: SpanContext): Diagno
   if (error.code === "DUPLICATE_KEY") {
     return undefined;
   }
-  const [start, end] = error.pos;
   if (error.code === "MULTIPLE_DOCS") {
-    const markerSpan = toSourceSpan([start, start + 3, start + 3], ctx);
-    return createDiagnostic({ level: "error", code: "multiple-documents", message: error.message, primary: markerSpan });
+    return undefined; // `findSecondDocument` (v1.12.1)
   }
+  const [start, end] = error.pos;
   return createDiagnostic({ level: "error", code: "malformed-document", message: error.message, primary: toSourceSpan([start, end, end], ctx) });
 }
 
@@ -745,8 +759,8 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   // names the first occurrence, which `yaml`'s does not) and the AST is the same
   // either way, so `buildMappingEntries`' own map-based check is the only one.
   const doc = parseDocument(yamlText, { intAsBigInt: true, merge: true, uniqueKeys: false });
+  const toStored = prefixMarks.length > 0 ? storedIndexer(prefixMarks) : (index: number) => index;
   if (prefixMarks.length > 0) {
-    const toStored = storedIndexer(prefixMarks);
     visit(doc, {
       Node(_key, node) {
         if (node.range != null) {
@@ -784,7 +798,14 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   // A mark outside a document prefix and a quoted scalar is not YAML 1.2.2
   // (`yaml` admits most of them silently). Where `yaml` also errored at the
   // mark, Cascata's diagnostic stands in for it rather than doubling it.
-  const misplacedMarks = findMisplacedMarks(text, prefixMarks, doc);
+  // v1.12.1: where a second document begins — `yaml`'s own error, or a mark ahead of a `---` it does not see as a
+  // marker — Cascata says so once, at the second document, and says nothing about anything from its prefix on.
+  const secondDocument = findSecondDocument(text, prefixMarks, doc, toStored);
+  const multipleDocuments =
+    secondDocument === undefined
+      ? undefined
+      : createDiagnostic({ level: "error", code: "multiple-documents", message: "A configuration file holds one YAML document; a second one begins here", primary: toSourceSpan([secondDocument.at, secondDocument.at + 3, secondDocument.at + 3], spanContext) });
+  const misplacedMarks = findMisplacedMarks(text, prefixMarks, doc).filter((offset) => secondDocument === undefined || offset < secondDocument.cut);
   const misplacedAt = new Set(misplacedMarks);
   for (const offset of misplacedMarks) {
     diagnostics.add(
@@ -831,6 +852,10 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
     }
   }
 
+  if (multipleDocuments !== undefined && secondDocument !== undefined) {
+    const cut = toSourceSpan([secondDocument.cut, secondDocument.cut, secondDocument.cut], spanContext).start;
+    return { ok: false, diagnostics: [multipleDocuments, ...diagnostics.all().filter((diagnostic) => diagnostic.primary.start < cut)].sort((a, b) => a.primary.start - b.primary.start) };
+  }
   if (!diagnostics.isEmpty) {
     return { ok: false, diagnostics: diagnostics.all() };
   }

@@ -25,12 +25,18 @@ export const BYTE_ORDER_MARK = "﻿";
  * content (including `---`, `%` directives, anything else). A mark after
  * whitespace, or inside a comment, is not recorded: it is not in a prefix.
  *
- * Only the first prefix is scanned. A document after `...` may have its own,
- * but Cascata refuses a second document anyway (`multiple-documents`).
+ * Only the first prefix is scanned. A later document may have its own — after
+ * `...`, or ahead of its `---` — but Cascata refuses a second document anyway
+ * (`multiple-documents`); `laterDocumentMark` finds the one form `yaml` misses.
  */
 export function documentPrefixMarks(text: string): number[] {
+  return scanPrefix(text, 0).marks;
+}
+
+/** A prefix from `from`: its marks, and the index where content begins (or `text.length`). */
+function scanPrefix(text: string, from: number): { readonly marks: number[]; readonly content: number } {
   const marks: number[] = [];
-  let index = 0;
+  let index = from;
   for (;;) {
     while (text[index] === BYTE_ORDER_MARK) {
       marks.push(index);
@@ -41,15 +47,33 @@ export function documentPrefixMarks(text: string): number[] {
     if (text[probe] === "#") {
       while (probe < text.length && text[probe] !== "\n" && text[probe] !== "\r") probe += 1;
     }
-    if (probe >= text.length) return marks;
+    if (probe >= text.length) return { marks, content: text.length };
     if (text[probe] === "\r" && text[probe + 1] === "\n") {
       index = probe + 2;
     } else if (text[probe] === "\n" || text[probe] === "\r") {
       index = probe + 1;
     } else {
-      return marks; // content begins on this line
+      return { marks, content: index }; // content begins on this line
     }
   }
+}
+
+/**
+ * The first mark after the leading prefix that opens a later document's prefix ahead of its `---`
+ * (YAML 1.2.2's `c-byte-order-mark l-comment* l-explicit-document`), with the marker's index; v1.12.1.
+ * `yaml` does not see such a `---` as a marker at all, so it reports no second document there.
+ */
+export function laterDocumentMark(text: string, prefixMarks: readonly number[]): { readonly mark: number; readonly marker: number } | undefined {
+  const inPrefix = new Set(prefixMarks);
+  for (const mark of allMarks(text)) {
+    if (inPrefix.has(mark) || (mark > 0 && text[mark - 1] !== "\n" && text[mark - 1] !== "\r")) continue;
+    const marker = scanPrefix(text, mark).content;
+    const after = text[marker + 3];
+    if (text.startsWith("---", marker) && (after === undefined || after === " " || after === "\t" || after === "\n" || after === "\r")) {
+      return { mark, marker };
+    }
+  }
+  return undefined;
 }
 
 /** Every U+FEFF in `text`, as UTF-16 indices. */
