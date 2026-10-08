@@ -32,6 +32,14 @@
       "types": "./dist/paths.d.ts",
       "import": "./dist/paths.js"
     },
+    "./writers": {
+      "types": "./dist/writers.d.ts",
+      "import": "./dist/writers.js"
+    },
+    "./writers.js": {
+      "types": "./dist/writers.d.ts",
+      "import": "./dist/writers.js"
+    },
     "./host/node": {
       "types": "./dist/host/node.d.ts",
       "import": "./dist/host/node.js"
