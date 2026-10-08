@@ -201,7 +201,7 @@ with no changes (constitution Principle III's phased contract; see "v0.4 diagnos
 
 | Code | Refuses |
 |---|---|
-| `duplicate-key` | The same key twice in one mapping — including a quoting-only collision (`"host"` vs `host`) — with the first occurrence attached as a `related` span |
+| `duplicate-key` | The same key twice in one mapping — including a quoting-only collision (`"host"` vs `host`), and since v1.12.1 a second merge key `<<` (several sources go in one list, `<<: [*a, *b]`) — with the first occurrence attached as a `related` span |
 | `non-string-key` | A key that isn't text: a complex (sequence/mapping) key, or a non-text scalar key (`1:`, `true:`, `null:`) |
 | `unsupported-tag` | Any tag outside the YAML 1.2 core schema — `!!binary`, `!!timestamp`, `!!set`, `!!omap`, and any unknown tag. The span points at the tagged *value*, not the tag token itself — the underlying reader exposes no position for a tag without the CST layer `SPEC.md` §4.3 defers |
 | `multiple-documents` | More than one document in the input, at the second document's `---` (or, after `...`, its first content). Since v1.12.1 it is the only diagnostic about anything from the second document's prefix on, and a byte-order mark ahead of a later `---` is that document's prefix, not a misplaced mark |

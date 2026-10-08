@@ -78,11 +78,11 @@ export function nonStringKeyDiagnostic(span: SourceSpan): Diagnostic {
  * first (FR-018) — the field research established is load-bearing, since
  * `yaml`'s own `DUPLICATE_KEY` error reports only the second occurrence.
  */
-export function duplicateKeyDiagnostic(laterSpan: SourceSpan, firstSpan: SourceSpan): Diagnostic {
+export function duplicateKeyDiagnostic(laterSpan: SourceSpan, firstSpan: SourceSpan, message = "The same key appears more than once in this mapping"): Diagnostic {
   const related: RelatedSpan[] = [{ label: "first occurrence", span: firstSpan }];
   return createDiagnostic({ level: "error",
     code: "duplicate-key",
-    message: "The same key appears more than once in this mapping",
+    message,
     primary: laterSpan,
     related,
   });

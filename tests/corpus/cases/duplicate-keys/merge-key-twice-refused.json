@@ -1,0 +1,26 @@
+{
+  "name": "duplicate-keys/merge-key-twice-refused",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "a: &a {x: 1}\nb: &b {y: 2}\nc:\n  <<: *a\n  <<: *b\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "duplicate-key",
+        "line": 5,
+        "column": 3,
+        "start": 40,
+        "end": 42,
+        "related": [
+          {
+            "label": "first occurrence",
+            "line": 4,
+            "column": 3,
+            "start": 31,
+            "end": 33
+          }
+        ]
+      }
+    ]
+  }
+}

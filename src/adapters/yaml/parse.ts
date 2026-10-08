@@ -438,11 +438,19 @@ function foldMergeSource(source: MapNode, target: Map<string, Node>, ctx: WalkCo
 function buildMappingEntries(mapAst: MapNode, ctx: WalkContext, depth: number): Map<string, Node> {
   const entries = new Map<string, Node>();
   const firstOccurrence = new Map<string, SourceSpan>();
+  let firstMergeKey: SourceSpan | undefined;
 
   for (const pair of mapAst.items) {
     const keyAst: ParsedNode = pair.key;
 
     if (isMergeKeyPair(keyAst)) {
+      // A second `<<` is a duplicate key like any other (v1.12.1, SPEC.md §4.2); `yaml` accepts it silently.
+      const keySpan = toSourceSpan(requireRange(keyAst), ctx);
+      if (firstMergeKey !== undefined) {
+        ctx.diagnostics.add(duplicateKeyDiagnostic(keySpan, firstMergeKey, "A merge key ('<<') appears more than once in this mapping; merge several sources with one list, '<<: [*a, *b]'"));
+        continue;
+      }
+      firstMergeKey = keySpan;
       const mergeValueSpan = pair.value !== null ? toSourceSpan(requireRange(pair.value), ctx) : toSourceSpan(requireRange(keyAst), ctx);
       const sources = mergeSources(pair.value, ctx.anchors, ctx.activePath, mergeValueSpan, (diagnostic) => ctx.diagnostics.add(diagnostic), (item) => toSourceSpan(requireRange(item), ctx));
       expandingAt(mergeValueSpan, ctx, () => {
