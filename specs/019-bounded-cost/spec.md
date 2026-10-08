@@ -23,8 +23,8 @@ release as 018 (v1.10).
   (`resolveAlias`, `mergeSources`) and `src/adapters/yaml/write.ts` (four sites).
 - **Unbounded expansion.** Cascata copies every alias's target into the tree (§4.2: the model never
   contains references). Ten aliases per level, nested: 180 bytes at three levels read in 0.02 s,
-  230 bytes at four in 0.12 s, 280 bytes at five in 1.2 s. Eight levels, under 400 bytes, would run
-  for hours and exhaust memory. The 8 MiB cap measures bytes and never sees it.
+  230 bytes at four in 0.12 s, 280 bytes at five in 1.2 s. Eight levels, 430 bytes, would run for
+  hours and exhaust memory. The 8 MiB cap measures bytes and never sees it.
 
 ## Requirements
 
@@ -54,6 +54,16 @@ release as 018 (v1.10).
 - **FR-006** **JSON is unaffected**: it has no aliases. Its parse path neither counts nor refuses.
 - **FR-007** **No other behavior moves.** Every existing test is unchanged. A document within the
   budget reads to the identical tree, spans and diagnostics as before.
+
+*As built (from the report), each a correction of this spec:* a merge key's value is counted like
+any other value, an alias in it as one node — read literally, "one node" would let `<<: {…20,000
+entries…}` refuse a document that expands nothing. The diagnostic points at the **outermost** alias
+being expanded, and for a merge key at its value. Its message gives the count where the read
+stopped (budget + 1); the full *E* is never learned. *E* counts nodes built, including merged entries
+an explicit key then overrides. The refusal stops the walk and keeps diagnostics already collected.
+The timing witness compares against `yaml`'s own parse rather than against a doubling, because the
+parser underneath was itself superlinear (see round 2). Counting keys as nodes is caught by the
+written-node pins, not by the bomb's position.
 
 ## Conformance
 
