@@ -41,7 +41,7 @@ import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js"
 import { readDemandVocabulary, readNestedKeysMapping, recursiveVocabularyProblems, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
 import { checkEnum, checkMax, checkMaxLength, checkMin, checkMinLength, checkPattern, requiredViolationCause, type ViolationSite } from "./constraints.js";
 import { dedupeViolations, renderViolation, type Demand, type Violation, type ViolationReason } from "./violation.js";
-import { allDeclarations, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, declarationsOfLayers, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
+import { allDeclarations, typeVocabularyProblems, builtinCollisionDiagnostics, collisionDiagnostics, cycleDiagnostics, declarationsOfLayers, qualifierCollisionDiagnostics, resolveTypeName, type TypeDeclaration } from "./types.js";
 import { parseTypeExpression, type Alternative, type TypeExpression } from "./typeexpr.js";
 import { readDirectives, reservedKeyValue } from "./directives.js";
 import type { KeyFinalState } from "../merge/final.js";
@@ -1151,6 +1151,7 @@ export function schemaVocabularyProblems(layers: readonly Layer[]): readonly Dia
   for (const layer of layers) {
     extend(diagnostics, vocabularyProblemsForLayer(layer, knownDeclaredNames));
   }
+  extend(diagnostics, typeVocabularyProblems(layers));
   extend(diagnostics, collisionDiagnostics(allDecls));
   extend(diagnostics, builtinCollisionDiagnostics(allDecls));
   extend(diagnostics, qualifierCollisionDiagnostics(layers));
@@ -1182,6 +1183,7 @@ export function checkConfiguration(configuration: MergedConfiguration, options: 
   for (const layer of configuration.layers) {
     extend(vocabularyDiagnostics, vocabularyProblemsForLayer(layer, knownDeclaredNames));
   }
+  extend(vocabularyDiagnostics, typeVocabularyProblems(configuration.layers));
   extend(vocabularyDiagnostics, collisionDiagnostics(allDecls));
   extend(vocabularyDiagnostics, builtinCollisionDiagnostics(allDecls));
   extend(vocabularyDiagnostics, qualifierCollisionDiagnostics(configuration.layers));

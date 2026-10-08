@@ -178,10 +178,13 @@ export function allDeclarations(configuration: MergedConfiguration): readonly Ty
   return declarationsOfLayers(configuration.layers);
 }
 
-/** Every closed-vocabulary/shape problem found reading every layer's own `types:` section. */
-export function allTypeVocabularyProblems(configuration: MergedConfiguration): readonly Diagnostic[] {
+/**
+ * Every closed-vocabulary/shape problem found reading every layer's own `types:` section. Exported since v0.5
+ * and called from nowhere until v1.12.1 (SPEC.md §15), so these refusals were catalogued and never raised.
+ */
+export function typeVocabularyProblems(layers: readonly Layer[]): readonly Diagnostic[] {
   const problems: Diagnostic[] = [];
-  for (const layer of configuration.layers) {
+  for (const layer of layers) {
     for (const problem of readTypeDeclarations(layer).problems) {
       problems.push(problem.diagnostic);
     }

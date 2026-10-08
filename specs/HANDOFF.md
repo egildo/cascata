@@ -93,12 +93,10 @@ the writers under the case's own policy.
 
 ## Open edges (noticed, not fixed)
 
-- **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-read-back` (no known input
-  reaches it), `edit-no-writer` (no format is read without a
-  writer), `edit-tag-elsewhere` (no known input reaches it
-  since v1.12.1).
+- **Unreachable safety net:** `edit-read-back` (an edit that would not read back), kept as a refusal so a writer
+  bug reaches a live editor as a refusal rather than a crash; no known input reaches it.
 - **Settled, not defects (v1.12.1):** JSON has no expansion budget because it has no aliases; `locate`'s `kind`
-  is a scalar's kind or a container's type (`mapping`/`sequence`), as the type and reference say, and renaming it needs v2.0.
+  is a scalar's kind or a container's type (`mapping`/`sequence`), as the type and reference say; renaming it gains nothing.
 - Inserting and deleting entries are still unbuilt (§4.3's format-preserving tree).
 - **Parked (v1.12.1): parse once, ask many.** Every `locate`/`setValue` parses the whole document, so checking N
   values of one document costs N parses. The cure is a writer that opens bytes once and answers many pointers;
