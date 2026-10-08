@@ -288,8 +288,13 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  * - `edit-target-absent` — no value at the pointer; positioned at the nearest
  *   existing ancestor.
  * - `edit-target-shared` — the value is reached through a YAML alias or merge
- *   key, so writing it would change every place that shares it; positioned at
- *   the alias.
+ *   key, or it (or a container above it) is anchored and aliased, or (from
+ *   `editTarget`, v1.12) its document is grafted at more than one place, so
+ *   writing it would change every place that shares it. From the writer,
+ *   positioned at the alias; from `editTarget`, at the value. `level: "error"`
+ *   under `sharedEdits: "refuse"` (the default); under `"warn"` (v1.12) the
+ *   edit is answered with this code at `level: "info"`, positioned at the
+ *   value, `related` naming every other place the write changes.
  * - `edit-unsupported` — a block scalar, a mapping or a sequence (setting a
  *   container is an insertion, not written yet), or a scalar the writer could
  *   not write and read back (an explicit tag that disagrees with the value);

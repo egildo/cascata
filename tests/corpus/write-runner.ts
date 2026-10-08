@@ -61,6 +61,17 @@ function leaves(node: Node, pointer: string, into: Map<string, string>): void {
   }
 }
 
+/** Every pointer of a node whose span is `start`-`end` (a value and its alias and merge-key copies share one). */
+function nodesAt(node: Node, pointer: string, start: number, end: number): string[] {
+  const found = node.span.start === start && node.span.end === end ? [pointer] : [];
+  if (node.type === "mapping") {
+    for (const [key, child] of node.entries) found.push(...nodesAt(child, `${pointer}/${key.replace(/~/g, "~0").replace(/\//g, "~1")}`, start, end));
+  } else if (node.type === "sequence") {
+    node.items.forEach((child, index) => found.push(...nodesAt(child, `${pointer}/${index}`, start, end)));
+  }
+  return found;
+}
+
 function describe(diagnostics: readonly Diagnostic[]): string {
   return diagnostics.map((d) => `${d.code} at ${d.primary.start}-${d.primary.end}`).join(", ");
 }
@@ -68,7 +79,7 @@ function describe(diagnostics: readonly Diagnostic[]): string {
 export function runWriteCase(testCase: WriteCase): WriteCaseResult {
   const failures: string[] = [];
   const bytes = writeSourceOf(testCase);
-  const options = { format: testCase.format, origin: createOrigin("write-case", "write-case") };
+  const options = { format: testCase.format, origin: createOrigin("write-case", "write-case"), sharedEdits: testCase.sharedEdits };
   const { expect } = testCase;
 
   if (testCase.call === "locate") {
@@ -100,6 +111,13 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
     return { name: testCase.name, passed: false, failures };
   }
   const { edit } = result;
+  // v1.12 FR-005: under "warn" one info names what else the edit changes; under "refuse" and "allow", nothing is said.
+  const infos = result.diagnostics.map((d) => `${d.level} ${d.code} at ${d.primary.start}-${d.primary.end}`);
+  if (testCase.sharedEdits === "warn") {
+    if (infos.length !== 1 || infos[0] !== `info edit-target-shared at ${edit.start}-${edit.end}`) failures.push(`under warn, expected one info edit-target-shared at the value, got [${infos.join(", ")}]`);
+  } else if (infos.length !== 0) {
+    failures.push(`under ${testCase.sharedEdits}, expected no diagnostic with the edit, got [${infos.join(", ")}]`);
+  }
   const text = new TextDecoder("utf-8", { fatal: false, ignoreBOM: true }).decode(edit.bytes);
   if (edit.start !== expect.edit.start || edit.end !== expect.edit.end) {
     failures.push(`expected range ${expect.edit.start}-${expect.edit.end}, got ${edit.start}-${edit.end}`);
@@ -128,15 +146,24 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
     return { name: testCase.name, passed: false, failures };
   }
   const kind = expectedKind(value, replaced);
-  if (!sameScalar(resolvePointer(after.tree, testCase.pointer), kind, value)) {
-    failures.push(`L2: the edited document does not read ${String(value)} as a ${kind} at ${testCase.pointer}`);
+  // The places that share the value's bytes — the pointer itself, and under "warn" and "allow" every alias
+  // and merge-key copy of it (v1.12 FR-007) — each read the value set; every other leaf is untouched.
+  const sharing = replaced === undefined ? [testCase.pointer] : nodesAt(before.tree, "", replaced.span.start, replaced.span.end);
+  if (!sharing.includes(testCase.pointer)) sharing.push(testCase.pointer);
+  if (testCase.sharedEdits === "refuse" && sharing.length > 1) failures.push(`under refuse, an edit was answered for a value with copies: ${sharing.join(", ")}`);
+  for (const pointer of sharing) {
+    if (!sameScalar(resolvePointer(after.tree, pointer), kind, value)) {
+      failures.push(`L2: the edited document does not read ${String(value)} as a ${kind} at ${pointer}`);
+    }
   }
   const was = new Map<string, string>();
   const now = new Map<string, string>();
   leaves(before.tree, "", was);
   leaves(after.tree, "", now);
-  now.delete(testCase.pointer);
-  was.delete(testCase.pointer);
+  for (const pointer of sharing) {
+    now.delete(pointer);
+    was.delete(pointer);
+  }
   if ([...was].map(([k, v]) => `${k}=${v}`).join("\n") !== [...now].map(([k, v]) => `${k}=${v}`).join("\n")) {
     failures.push("L3: some other value changed when the edit was applied");
   }

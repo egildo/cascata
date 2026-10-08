@@ -28,6 +28,8 @@ export interface AnchorTable {
   targetOf(alias: Alias): YamlNode | undefined;
   /** The first alias, in document order, that refers to `node` (the node is shared if there is one). */
   firstAliasTo(node: YamlNode): Alias | undefined;
+  /** Every alias that refers to `node`, in document order (v1.12: the places a shared edit also changes). */
+  aliasesTo(node: YamlNode): readonly Alias[];
 }
 
 function anchorOf(node: YamlNode): string | undefined {
@@ -38,7 +40,7 @@ function anchorOf(node: YamlNode): string | undefined {
 export function buildAnchorTable(doc: Document): AnchorTable {
   const holders = new Map<string, YamlNode>();
   const targets = new Map<Alias, YamlNode | undefined>();
-  const firstAlias = new Map<YamlNode, Alias>();
+  const aliases = new Map<YamlNode, Alias[]>();
 
   // A stack of nodes and pairs, popped in document order: children are pushed in reverse.
   const stack: unknown[] = [doc.contents];
@@ -52,7 +54,11 @@ export function buildAnchorTable(doc: Document): AnchorTable {
     if (isAlias(item)) {
       const target = holders.get(item.source);
       targets.set(item, target);
-      if (target !== undefined && !firstAlias.has(target)) firstAlias.set(target, item);
+      if (target !== undefined) {
+        const list = aliases.get(target);
+        if (list === undefined) aliases.set(target, [item]);
+        else list.push(item);
+      }
       continue;
     }
     const anchor = anchorOf(item);
@@ -66,6 +72,7 @@ export function buildAnchorTable(doc: Document): AnchorTable {
 
   return {
     targetOf: (alias) => targets.get(alias),
-    firstAliasTo: (node) => firstAlias.get(node),
+    firstAliasTo: (node) => aliases.get(node)?.[0],
+    aliasesTo: (node) => aliases.get(node) ?? [],
   };
 }

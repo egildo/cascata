@@ -38,11 +38,13 @@ export interface WriteCase {
   readonly inputBytes?: readonly number[];
   readonly pointer: string;
   readonly value?: WriteValue;
+  /** v1.12 FR-005: the policy the call is made under; `"refuse"` when absent. */
+  readonly sharedEdits: "refuse" | "warn" | "allow";
   readonly expect: WriteExpect;
 }
 
-/** `v1.10 FR-003` — a write case cites the milestone's own requirement numbers, qualified. */
-const CITES_PATTERN = /^v1\.10 FR-\d+$/;
+/** `v1.10 FR-003`, `v1.12 FR-011` — a write case cites the milestone's own requirement numbers, qualified. */
+const CITES_PATTERN = /^v1\.1[02] FR-\d+$/;
 
 function fail(source: string, reason: string): never {
   throw new Error(`Write case ${source} cannot be interpreted: ${reason}`);
@@ -133,6 +135,8 @@ export function parseWriteCase(raw: unknown, source: string): WriteCase {
   const hasValue = raw["value"] !== undefined;
   if (call === "setValue" && !hasValue) fail(source, "a setValue case needs a 'value'");
   if (call === "locate" && hasValue) fail(source, "a locate case takes no 'value'");
+  const sharedEdits = raw["sharedEdits"] ?? "refuse";
+  if (sharedEdits !== "refuse" && sharedEdits !== "warn" && sharedEdits !== "allow") fail(source, "'sharedEdits' must be 'refuse', 'warn' or 'allow'");
   const expect = parseExpect(raw["expect"], source);
   if (call === "locate" && "edit" in expect) fail(source, "a locate case cannot expect an edit");
   if (call === "setValue" && "located" in expect) fail(source, "a setValue case cannot expect a location");
@@ -142,6 +146,7 @@ export function parseWriteCase(raw: unknown, source: string): WriteCase {
     format,
     call,
     pointer,
+    sharedEdits,
     expect,
     ...(typeof input === "string" ? { input } : {}),
     ...(Array.isArray(inputBytes) ? { inputBytes: inputBytes.map(Number) } : {}),

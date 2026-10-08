@@ -76,11 +76,11 @@ export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, Proven
 
 // Writing a value back (v1.10, SPEC.md Article IX): `locate` and `setValue`.
 export { locate, setValue } from "./adapters/edit.js";
-export type { Edit, EditFormat, EditOptions, EditValue, LocatedKind, LocateResult, SetValueResult } from "./adapters/edit.js";
+export type { Edit, EditFormat, EditOptions, EditValue, LocatedKind, LocateResult, SetValueResult, SharedEdits } from "./adapters/edit.js";
 
 // Which document an edit belongs in (v1.11, SPEC.md Article IX): `editTarget`.
 export { editTarget } from "./edit-target.js";
-export type { EditTargetResult } from "./edit-target.js";
+export type { EditTargetOptions, EditTargetResult } from "./edit-target.js";
 
 /** The result of one `parse()`/`parseText()` call. Never both a tree and diagnostics. */
 export type ParseResult = { readonly ok: true; readonly tree: Node } | { readonly ok: false; readonly diagnostics: Diagnostic[] };

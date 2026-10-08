@@ -182,8 +182,12 @@ function indexOf(root: Node): PointerIndex {
  * later call is a lookup (v1.12 FR-003: asking about every value was quadratic, issue #10).
  */
 export function pointersInDocument(root: Node, target: SourceSpan, limit = Number.POSITIVE_INFINITY): string[] {
-  const found = indexOf(root).bySpan.get(target.origin.id)?.get(`${target.start}:${target.end}`) ?? [];
-  return found.slice(0, limit);
+  return pointersAt(root, target.origin.id, target.start, target.end).slice(0, limit);
+}
+
+/** `pointersInDocument` by origin id and bytes, for a caller asking about every graft of one location (v1.12 FR-006). */
+export function pointersAt(root: Node, originId: string, start: number, end: number): readonly string[] {
+  return indexOf(root).bySpan.get(originId)?.get(`${start}:${end}`) ?? [];
 }
 
 /**

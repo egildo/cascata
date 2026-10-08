@@ -14,12 +14,18 @@
  */
 
 import { formatForLocation } from "./adapters/registry.js";
-import { locate, setValue, type Edit, type EditFormat, type EditValue } from "./adapters/edit.js";
+import { locate, setValue, type Edit, type EditFormat, type EditValue, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
 import { createOrigin } from "./model/span.js";
 
 export type WriterLocateResult = { readonly ok: true; readonly start: number; readonly end: number } | { readonly ok: false; readonly reason: string };
 
-export type WriterWriteResult = { readonly ok: true; readonly edit: Edit } | { readonly ok: false; readonly reason: string };
+/** `diagnostics` on success (v1.12): empty, or under `sharedEdits: "warn"` the one `info` naming what else the edit changes. */
+export type WriterWriteResult = { readonly ok: true; readonly edit: Edit; readonly diagnostics: Extract<SetValueResult, { ok: true }>["diagnostics"] } | { readonly ok: false; readonly reason: string };
+
+/** What a writer is made with (v1.12 FR-005): whether it writes a shared value. JSON has no sharing and accepts it, so one object can make both. */
+export interface WriterOptions {
+  readonly sharedEdits?: SharedEdits;
+}
 
 /** One format's editing plug-in. */
 export interface Writer {
@@ -33,8 +39,8 @@ export interface Writer {
 
 const ORIGIN = createOrigin("writer", "writer");
 
-function writer(format: EditFormat): Writer {
-  const options = { format, origin: ORIGIN };
+function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
+  const options = { format, origin: ORIGIN, ...(writerOptions.sharedEdits !== undefined ? { sharedEdits: writerOptions.sharedEdits } : {}) };
   return {
     claims: (location) => formatForLocation(location) === format,
     locate(bytes, path) {
@@ -49,13 +55,13 @@ function writer(format: EditFormat): Writer {
 }
 
 /** Claims `.yaml` and `.yml`. */
-export function yamlWriter(): Writer {
-  return writer("yaml");
+export function yamlWriter(options?: WriterOptions): Writer {
+  return writer("yaml", options);
 }
 
-/** Claims `.json`. */
-export function jsonWriter(): Writer {
-  return writer("json");
+/** Claims `.json`. Accepts `sharedEdits`, which changes nothing: JSON shares no value. */
+export function jsonWriter(options?: WriterOptions): Writer {
+  return writer("json", options);
 }
 
-export type { Edit, EditValue };
+export type { Edit, EditValue, SharedEdits };

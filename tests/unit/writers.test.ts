@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { locate, setValue, createOrigin } from "../../src/index.js";
-import type { EditValue } from "../../src/index.js";
+import type { Diagnostic, EditValue } from "../../src/index.js";
 import { jsonWriter, yamlWriter } from "../../src/writers.js";
 import { loadWriteCase, writeSourceOf } from "../corpus/write-case.js";
 
@@ -54,13 +54,13 @@ describe("v1.11 FR-005 — the shape", () => {
     const bytes = ENCODER.encode("a: 1\n");
     expect(yamlWriter().locate(bytes, "/a")).toEqual({ ok: true, start: 3, end: 4 });
     const written = yamlWriter().write(bytes, "/a", 2);
-    expect(written).toEqual({ ok: true, edit: { start: 3, end: 4, bytes: ENCODER.encode("2") } });
+    expect(written).toEqual({ ok: true, edit: { start: 3, end: 4, bytes: ENCODER.encode("2") }, diagnostics: [] });
   });
 
   it("JSON: `{\"a\": 1}` is bytes 6-7; writing 2.5 replaces exactly them", () => {
     const bytes = ENCODER.encode('{"a": 1}');
     expect(jsonWriter().locate(bytes, "/a")).toEqual({ ok: true, start: 6, end: 7 });
-    expect(jsonWriter().write(bytes, "/a", 2.5)).toEqual({ ok: true, edit: { start: 6, end: 7, bytes: ENCODER.encode("2.5") } });
+    expect(jsonWriter().write(bytes, "/a", 2.5)).toEqual({ ok: true, edit: { start: 6, end: 7, bytes: ENCODER.encode("2.5") }, diagnostics: [] });
   });
 
   it("a refusal is { ok: false, reason } with the first diagnostic's message — absent, container, unreadable", () => {
@@ -89,7 +89,8 @@ describe("v1.11 FR-005 — equivalence with locate and setValue over every v1.10
   for (const file of files) {
     const testCase = loadWriteCase(join(CASES, file));
     const bytes = writeSourceOf(testCase);
-    const writer = testCase.format === "yaml" ? yamlWriter() : jsonWriter();
+    // v1.12: each made under the case's own policy.
+    const writer = testCase.format === "yaml" ? yamlWriter({ sharedEdits: testCase.sharedEdits }) : jsonWriter({ sharedEdits: testCase.sharedEdits });
 
     it(`${testCase.name}: locate`, () => {
       const direct = locate(bytes, { format: testCase.format, origin }, testCase.pointer);
@@ -104,10 +105,12 @@ describe("v1.11 FR-005 — equivalence with locate and setValue over every v1.10
     if (testCase.call === "setValue") {
       it(`${testCase.name}: write`, () => {
         const value = testCase.value as EditValue;
-        const direct = setValue(bytes, { format: testCase.format, origin }, testCase.pointer, value);
+        const direct = setValue(bytes, { format: testCase.format, origin, sharedEdits: testCase.sharedEdits }, testCase.pointer, value);
         const viaWriter = writer.write(bytes, testCase.pointer, value);
         if (direct.ok) {
-          expect(viaWriter).toEqual({ ok: true, edit: direct.edit });
+          // The diagnostics' origins differ (the writer's is synthetic); everything else is the same.
+          const plain = (ds: readonly Diagnostic[]) => ds.map((d) => [d.level, d.code, d.message, d.primary.start, d.primary.end, d.related.map((r) => [r.label, r.span.start, r.span.end])]);
+          expect(viaWriter.ok && { ...viaWriter, diagnostics: plain(viaWriter.diagnostics) }).toEqual({ ok: true, edit: direct.edit, diagnostics: plain(direct.diagnostics) });
         } else {
           expect(viaWriter).toEqual({ ok: false, reason: direct.diagnostics[0]?.message });
         }

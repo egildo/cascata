@@ -22,27 +22,27 @@ function refusal(result: ReturnType<typeof editTarget>) {
 
 describe("v1.11 FR-002 — a value some config layer supplied", () => {
   it("/walls/W1/height is project.yaml's, at the same pointer", async () => {
-    expect(editTarget(await cascade(), "/walls/W1/height")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/walls/W1/height", format: "yaml" });
+    expect(editTarget(await cascade(), "/walls/W1/height")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/walls/W1/height", format: "yaml", diagnostics: [] });
   });
 
   it("/walls/W2/height is the override's", async () => {
-    expect(editTarget(await cascade(), "/walls/W2/height")).toEqual({ ok: true, location: "/virtual/override.yaml", pointer: "/walls/W2/height", format: "yaml" });
+    expect(editTarget(await cascade(), "/walls/W2/height")).toEqual({ ok: true, location: "/virtual/override.yaml", pointer: "/walls/W2/height", format: "yaml", diagnostics: [] });
   });
 
   it("a JSON project config answers format json", async () => {
     const configuration = await build("/virtual/project.json", { "/virtual/project.json": PROJECT_JSON }, { overrides: ["./override.yaml"] });
-    expect(editTarget(configuration, "/walls/W1/height")).toEqual({ ok: true, location: "/virtual/project.json", pointer: "/walls/W1/height", format: "json" });
-    expect(editTarget(configuration, "/walls/W2/height")).toEqual({ ok: true, location: "/virtual/override.yaml", pointer: "/walls/W2/height", format: "yaml" });
+    expect(editTarget(configuration, "/walls/W1/height")).toEqual({ ok: true, location: "/virtual/project.json", pointer: "/walls/W1/height", format: "json", diagnostics: [] });
+    expect(editTarget(configuration, "/walls/W2/height")).toEqual({ ok: true, location: "/virtual/override.yaml", pointer: "/walls/W2/height", format: "yaml", diagnostics: [] });
   });
 
   it("a value from a delegated fragment is in the fragment's file, at the fragment's pointer", async () => {
-    expect(editTarget(await cascade(), "/levels/L1/elevation")).toEqual({ ok: true, location: "/virtual/levels.yaml", pointer: "/L1/elevation", format: "yaml" });
+    expect(editTarget(await cascade(), "/levels/L1/elevation")).toEqual({ ok: true, location: "/virtual/levels.yaml", pointer: "/L1/elevation", format: "yaml", diagnostics: [] });
   });
 
   it("a JSON fragment under a YAML config answers format json, and the fragment's location, not its graft id", async () => {
     const project = ["$schema: ./root.yaml", "levels: ./levels.json", ""].join("\n");
     const configuration = await build("/virtual/project.yaml", { "/virtual/project.yaml": project, "/virtual/levels.json": LEVELS_JSON });
-    expect(editTarget(configuration, "/levels/L1/elevation")).toEqual({ ok: true, location: "/virtual/levels.json", pointer: "/L1/elevation", format: "json" });
+    expect(editTarget(configuration, "/levels/L1/elevation")).toEqual({ ok: true, location: "/virtual/levels.json", pointer: "/L1/elevation", format: "json", diagnostics: [] });
   });
 
   it("reads no file", async () => {
@@ -139,19 +139,19 @@ describe("v1.11 FR-004 — one item of an accumulated list", () => {
 
   it("items 1 and 2 are project.yaml's items 0 and 1", async () => {
     const configuration = await cascade();
-    expect(editTarget(configuration, "/styles/1")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/styles/0", format: "yaml" });
-    expect(editTarget(configuration, "/styles/2")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/styles/1", format: "yaml" });
+    expect(editTarget(configuration, "/styles/1")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/styles/0", format: "yaml", diagnostics: [] });
+    expect(editTarget(configuration, "/styles/2")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/styles/1", format: "yaml", diagnostics: [] });
   });
 
   it("item 3 is the override's item 0", async () => {
-    expect(editTarget(await cascade(), "/styles/3")).toEqual({ ok: true, location: "/virtual/override.yaml", pointer: "/styles/0", format: "yaml" });
+    expect(editTarget(await cascade(), "/styles/3")).toEqual({ ok: true, location: "/virtual/override.yaml", pointer: "/styles/0", format: "yaml", diagnostics: [] });
   });
 
   it("an item of a list that replaces is the winning layer's, at its own index", async () => {
     const root = ["keys:", "  tags:", "    demand:", "      type: sequence", "    provide:", "      - x", "      - y", ""].join("\n");
     const entry = ["$schema: ./root.yaml", "tags:", "  - p", "  - q", "  - r", ""].join("\n");
     const configuration = await build("/virtual/e.yaml", { "/virtual/root.yaml": root, "/virtual/e.yaml": entry });
-    expect(editTarget(configuration, "/tags/2")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/tags/2", format: "yaml" });
+    expect(editTarget(configuration, "/tags/2")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/tags/2", format: "yaml", diagnostics: [] });
   });
 });
 
@@ -159,7 +159,7 @@ describe("v1.11 FR-004 — a scalar wrapped into a list (v1.8)", () => {
   it("project.yaml's `styles: only.css` is the list's item 1 and the document's /styles — the scalar itself", async () => {
     const project = ["$schema: ./root.yaml", "styles: only.css", ""].join("\n");
     const configuration = await build("/virtual/project.yaml", { "/virtual/project.yaml": project });
-    expect(editTarget(configuration, "/styles/1")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/styles", format: "yaml" });
+    expect(editTarget(configuration, "/styles/1")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/styles", format: "yaml", diagnostics: [] });
   });
 });
 
@@ -167,7 +167,7 @@ describe("v1.11 FR-002 — a fragment an override delegated to", () => {
   it("is the fragment's file, at the fragment's pointer", async () => {
     const override = ["levels: ./more.yaml", ""].join("\n");
     const configuration = await build("/virtual/project.yaml", { "/virtual/over2.yaml": override, "/virtual/more.yaml": "L9:\n  elevation: 9\n", "/virtual/project.yaml": "$schema: ./root.yaml\n" }, { overrides: ["./over2.yaml"] });
-    expect(editTarget(configuration, "/levels/L9/elevation")).toEqual({ ok: true, location: "/virtual/more.yaml", pointer: "/L9/elevation", format: "yaml" });
+    expect(editTarget(configuration, "/levels/L9/elevation")).toEqual({ ok: true, location: "/virtual/more.yaml", pointer: "/L9/elevation", format: "yaml", diagnostics: [] });
   });
 });
 
@@ -184,7 +184,7 @@ describe("v1.11 FR-002 — a value overriding a schema's", () => {
     const root = ["keys:", "  title:", "    demand:", "      type: string", "    provide: Untitled", ""].join("\n");
     const entry = ["$schema: ./root.yaml", "title: Mine", ""].join("\n");
     const configuration = await build("/virtual/e.yaml", { "/virtual/root.yaml": root, "/virtual/e.yaml": entry });
-    expect(editTarget(configuration, "/title")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/title", format: "yaml" });
+    expect(editTarget(configuration, "/title")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/title", format: "yaml", diagnostics: [] });
   });
 });
 
@@ -218,9 +218,9 @@ describe("v1.11 FR-003 — refused: shared (round 2: refuse rather than guess)",
 
   it("controls: a key that overrides a merged one is the document's own, and an anchor nothing aliases is not shared", async () => {
     const merged = await build("/virtual/e.yaml", { "/virtual/e.yaml": "base: &b\n  k: 1\nw:\n  <<: *b\n  k: 2\n" });
-    expect(editTarget(merged, "/w/k")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/w/k", format: "yaml" });
+    expect(editTarget(merged, "/w/k")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/w/k", format: "yaml", diagnostics: [] });
     const lone = await build("/virtual/e.yaml", { "/virtual/e.yaml": "a: &x 1\nb: 2\n" });
-    expect(editTarget(lone, "/a")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/a", format: "yaml" });
+    expect(editTarget(lone, "/a")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/a", format: "yaml", diagnostics: [] });
   });
 });
 

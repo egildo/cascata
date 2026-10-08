@@ -1376,12 +1376,12 @@ JSON: RFC 8259 §7, non-ASCII written as itself. A string with an unpaired surro
 
 ### v1.10 diagnostic codes
 
-All `level: "error"`, positioned at the span named.
+All `level: "error"`, positioned at the span named — except `edit-target-shared` under `sharedEdits: "warn"` (v1.12).
 
 | Code | When | Positioned at |
 |---|---|---|
 | `edit-target-absent` | no value at the pointer | the nearest existing ancestor |
-| `edit-target-shared` | the value is reached through a YAML alias or merge key, **or it, or a container above it, is anchored and an alias points there** — writing it would change every place that shares it | the (first) alias |
+| `edit-target-shared` | the value is reached through a YAML alias or merge key, **or it, or a container above it, is anchored and an alias points there** — writing it would change every place that shares it. Since v1.12, `level: "error"` only under `sharedEdits: "refuse"` (the default); under `"warn"` the edit is answered with this code at `level: "info"`, at the value, `related` naming each alias (v1.12, above) | the (first) alias |
 | `edit-unsupported` | a block scalar (`\|`, `>`), a mapping or a sequence (setting a container is an insertion, not written yet), or a scalar that would not read back as the value set | the value |
 | `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
 
@@ -1416,13 +1416,13 @@ merged list. A pointer to the whole list is a container.
 
 ### v1.11 diagnostic codes
 
-All `level: "error"`.
+All `level: "error"` — except `edit-target-shared` under `sharedEdits: "warn"` (v1.12).
 
 | Code | When | Positioned at |
 |---|---|---|
 | `edit-target-absent` | no value at the pointer in the merged configuration | the nearest existing ancestor |
 | `edit-unsupported` | the value is a mapping or a sequence (a container, merged or not) | the value |
-| `edit-target-shared` | the value's document holds more than one node at its position — an anchor and its aliases, or a merge key's copies — so writing it would change every place that shares it (the writer refuses the same values). `editTarget` does not pick one of them | the value |
+| `edit-target-shared` | the value's document holds more than one node at its position — an anchor and its aliases, or a merge key's copies — or (v1.12) the document is delegated to at more than one place; writing it would change every place that shares it (the writer refuses the same alias copies). `related` names each other place: another copy, or another graft's delegating value. Under `sharedEdits: "warn"` (v1.12) the target is answered and this code comes with it at `level: "info"`; under `"allow"` nothing is said | the value |
 | `edit-target-inherited` | the winning value was supplied by a schema's `provide`; the message names the schema's location and says the edit would change a default every document under it shares | the provided value, in the schema document |
 | `edit-target-remote` | the winning value's document was read over `https://` | the value, in that document |
 
@@ -1447,6 +1447,44 @@ stage expects, met by shape (nothing here names or imports that library). They a
 a synthetic origin and add no behaviour: `path` is an RFC 6901 pointer, `value` is `string | number | bigint |
 boolean | null`, the bytes are the document as stored, and a refusal's `reason` is the first diagnostic's message.
 Only programmer error throws, as with the verbs. Types: `Writer`, `WriterLocateResult`, `WriterWriteResult`.
+
+## v1.12 — shared edits
+
+`SPEC.md` Article IX (§19), an **addition** (§15): the default is what the law was.
+
+A value is **shared** when one write to its bytes changes more than one place: it is reached through a YAML
+alias or merge key, it (or a container above it) is anchored and aliased, or — new in v1.12 — its document is
+delegated to at more than one place, so one edit to the file changes every graft of it. Whether a shared value
+is written is the embedder's policy, `sharedEdits`, passed where its writers and edit targets are made (there is
+no global):
+
+```ts
+import { editTarget, setValue, type SharedEdits } from "@egildo/cascata";
+import { yamlWriter, jsonWriter } from "@egildo/cascata/writers";
+
+setValue(bytes, { format: "yaml", origin, sharedEdits: "warn" }, "/W1", 3.4);
+// { ok: true, edit: { start: 9, end: 12, bytes }, diagnostics: [ { level: "info", code: "edit-target-shared", … } ] }
+editTarget(configuration, "/levels/L1/elevation", { sharedEdits: "allow" });
+// { ok: true, location: "/project/levels.yaml", pointer: "/L1/elevation", format: "yaml", diagnostics: [] }
+const writers = [yamlWriter({ sharedEdits: "warn" }), jsonWriter({ sharedEdits: "warn" })]; // JSON shares nothing; it accepts the option
+```
+
+| `sharedEdits` | A shared value |
+|---|---|
+| `"refuse"` (default) | refused, `edit-target-shared`, `level: "error"` — v1.11's behaviour |
+| `"warn"` | answered, with one `edit-target-shared` at `level: "info"`: primary at the value, `related` naming every other place the write changes (each alias that holds it; for `editTarget`, each other copy and the delegating value of each other graft) |
+| `"allow"` | answered, and nothing said |
+
+Entry points: `EditOptions.sharedEdits` for `setValue` (accepted, and ignored, by `locate`, which answers as under
+`"refuse"`); the third argument of `editTarget(configuration, pointer, { sharedEdits })`; `yamlWriter({ sharedEdits })`
+and `jsonWriter({ sharedEdits })`. Every `ok` result of `setValue`, `editTarget` and a writer's `write` now carries
+`diagnostics`, empty except under `"warn"`. Under `"warn"` and `"allow"` the edit lands on the bytes that hold the
+value — for an alias or merge-key copy, the anchor's — and the read-back checks the value at the pointer and at every
+copy. A policy other than the three is programmer error and throws. Types: `SharedEdits`, `EditTargetOptions`,
+`WriterOptions` (from `@egildo/cascata/writers`).
+
+Nothing else moves to the policy: inherited, remote, absent values, containers and block scalars are refused as
+before.
 
 ## Scripts
 

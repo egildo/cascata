@@ -26,7 +26,7 @@ import type { Diagnostic } from "../../diagnostics/diagnostic.js";
 import type { Node } from "../../model/node.js";
 import { resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
 import type { Origin, SourceSpan } from "../../model/span.js";
-import { editDiagnostic, type FindResult, type Found, type ScalarStyle } from "../edit.js";
+import { editDiagnostic, type FindResult, type Found, type ScalarStyle, type SharedEdits } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
 import type { AnchorTable } from "./anchors.js";
 import { parseYamlBytes, type YamlSpans } from "./parse.js";
@@ -108,7 +108,64 @@ function firstAliasTo(node: YamlNode, anchors: AnchorTable, spans: YamlSpans): S
   return alias?.range != null ? spans.spanOf(alias.range) : undefined;
 }
 
-export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined, pointer: string): FindResult {
+/** Each node's parent in the AST (a pair is skipped: a key's and a value's parent is the mapping). One walk. */
+function parentsOf(doc: Document): Map<YamlNode, YamlNode> {
+  const parents = new Map<YamlNode, YamlNode>();
+  const stack: YamlNode[] = doc.contents !== null && isNode(doc.contents) ? [doc.contents] : [];
+  for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
+    const children: YamlNode[] = [];
+    if (isMap(node)) {
+      for (const pair of node.items) {
+        const key = asNode(pair.key);
+        const value = asNode(pair.value);
+        if (key !== null) children.push(key);
+        if (value !== null) children.push(value);
+      }
+    } else if (isSeq(node)) {
+      for (const item of node.items) {
+        const child = asNode(item);
+        if (child !== null) children.push(child);
+      }
+    }
+    for (const child of children) {
+      parents.set(child, node);
+      stack.push(child);
+    }
+  }
+  return parents;
+}
+
+/**
+ * Every alias whose expansion holds `holder` (v1.12 FR-005, `"warn"`): an alias to it or to any
+ * container above it — a merge key's alias among them — and, since such an alias is itself a
+ * place in the document, every alias to a container above that alias, and so on. Document order.
+ */
+function aliasesHolding(holder: YamlNode, doc: Document, anchors: AnchorTable, spans: YamlSpans): SourceSpan[] {
+  const parents = parentsOf(doc);
+  const seen = new Set<YamlNode>();
+  const found: SourceSpan[] = [];
+  const work: YamlNode[] = [holder];
+  for (let place = work.pop(); place !== undefined; place = work.pop()) {
+    for (let at: YamlNode | undefined = place; at !== undefined; at = parents.get(at)) {
+      for (const alias of anchors.aliasesTo(at)) {
+        if (seen.has(alias)) continue;
+        seen.add(alias);
+        if (alias.range != null) found.push(spans.spanOf(alias.range));
+        work.push(alias);
+      }
+    }
+  }
+  return found.sort((a, b) => a.start - b.start);
+}
+
+/**
+ * The value at `pointer`, as the reader measured it. Under `sharedEdits: "refuse"` a value reached
+ * through an alias or merge key is refused here (`edit-target-shared`, at the alias); under `"warn"`
+ * and `"allow"` (v1.12 FR-007) the walk goes through the alias and answers the bytes that hold the
+ * value — the anchored node's — with `sharedBy` set, so `setValue` knows the edit changes more than
+ * one place.
+ */
+export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined, pointer: string, sharedEdits: SharedEdits): FindResult {
   const captured: { doc?: Document; spans?: YamlSpans; anchors?: AnchorTable } = {};
   const outcome = parseYamlBytes(bytes, origin, limits, (doc, spans, anchors) => {
     captured.doc = doc;
@@ -173,17 +230,24 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
   if (isAlias(node)) {
     const aliasSpan = node.range != null ? spans.spanOf(node.range) : undefined;
     via ??= aliasSpan;
+    const target = anchors.targetOf(node);
+    if (target !== undefined && sharedEdits !== "refuse") node = target;
   }
-  if (via !== undefined) {
+  if (via !== undefined && sharedEdits === "refuse") {
     const diagnostic: Diagnostic = editDiagnostic("edit-target-shared", `The value at '${pointer}' is reached through an alias or merge key; writing it would change every place that shares it`, via);
     return { ok: false, diagnostics: [diagnostic] };
   }
+  sharedBy = via ?? sharedBy;
   const span = spanOfNode(node, spans);
   const modelNode: Node | undefined = resolvePointer(outcome.tree, pointer);
   if (span === undefined || modelNode === undefined) {
     throw new Error("Internal error: the YAML reader and the AST walk disagree about where a value is");
   }
-  return { ok: true, found: { start: span.start, end: span.end, node: modelNode, span, style: styleOf(node), inFlow: reach.inFlow, ...(sharedBy !== undefined ? { sharedBy } : {}) } };
+  const sharedWith = sharedBy !== undefined && sharedEdits === "warn" ? aliasesHolding(node, doc, anchors, spans) : undefined;
+  return {
+    ok: true,
+    found: { start: span.start, end: span.end, node: modelNode, span, style: styleOf(node), inFlow: reach.inFlow, ...(sharedBy !== undefined ? { sharedBy } : {}), ...(sharedWith !== undefined ? { sharedWith } : {}) },
+  };
 }
 
 /** Parse bytes the way the reader does, for the read-back; `undefined` if they do not parse. */

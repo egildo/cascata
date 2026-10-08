@@ -1,0 +1,19 @@
+{
+  "name": "write/shared-merge-key-allow",
+  "cites": "v1.12 FR-007",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &b\n  h: 1\nW1:\n  <<: *b\n",
+  "pointer": "/W1/h",
+  "value": {
+    "number": 2
+  },
+  "sharedEdits": "allow",
+  "expect": {
+    "edit": {
+      "start": 14,
+      "end": 15,
+      "bytes": "2"
+    }
+  }
+}

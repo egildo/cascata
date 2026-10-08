@@ -1,0 +1,19 @@
+{
+  "name": "write/shared-alias-allow",
+  "cites": "v1.12 FR-007",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &h 3.2\nW1: *h\n",
+  "pointer": "/W1",
+  "value": {
+    "number": 3.4
+  },
+  "sharedEdits": "allow",
+  "expect": {
+    "edit": {
+      "start": 9,
+      "end": 12,
+      "bytes": "3.4"
+    }
+  }
+}

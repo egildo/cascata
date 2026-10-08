@@ -1,0 +1,19 @@
+{
+  "name": "write/shared-alias-refuse",
+  "cites": "v1.12 FR-005",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &h 3.2\nW1: *h\n",
+  "pointer": "/W1",
+  "value": {
+    "number": 3.4
+  },
+  "sharedEdits": "refuse",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-shared",
+      "start": 17,
+      "end": 19
+    }
+  }
+}

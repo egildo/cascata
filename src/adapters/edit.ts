@@ -24,7 +24,7 @@
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticCode } from "../diagnostics/codes.js";
 import type { Node, ScalarKind } from "../model/node.js";
-import { resolvePointer } from "../model/pointer.js";
+import { pointersInDocument, resolvePointer } from "../model/pointer.js";
 import type { Origin, SourceSpan } from "../model/span.js";
 import type { ParseLimits } from "./limits.js";
 import { findJson, parseBack as parseBackJson, renderJsonString } from "./json/write.js";
@@ -32,11 +32,23 @@ import { findYaml, parseBack as parseBackYaml, renderYamlString, yamlNonFinite, 
 
 export type EditFormat = "yaml" | "json";
 
+/**
+ * Whether a **shared** value is written (SPEC.md Article IX, v1.12 FR-005): one an alias or merge
+ * key shares, or (for `editTarget`) one whose document is grafted at more than one place. `refuse`,
+ * the default, is what the law was: `edit-target-shared`, `level: "error"`. `warn` answers the edit
+ * with one `edit-target-shared` at `level: "info"` naming every other place the write changes.
+ * `allow` answers it and says nothing. Set by the embedder where its writers and edit targets are
+ * made; never global.
+ */
+export type SharedEdits = "refuse" | "warn" | "allow";
+
 /** What `locate` and `setValue` read, as `parse` reads: the format, which document the bytes came from (required), and the limits. */
 export interface EditOptions {
   readonly format: EditFormat;
   readonly origin: Origin;
   readonly limits?: Partial<ParseLimits>;
+  /** v1.12: whether `setValue` writes a shared value; `"refuse"` when absent. Accepted and ignored by `locate`, which answers as under `"refuse"`. */
+  readonly sharedEdits?: SharedEdits;
 }
 
 /** The kind of a located value: a scalar's model kind (§4.1), or `mapping`/`sequence`. */
@@ -56,7 +68,8 @@ export interface Edit {
   readonly bytes: Uint8Array;
 }
 
-export type SetValueResult = { readonly ok: true; readonly edit: Edit } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+/** `diagnostics` on success (v1.12): empty, or under `sharedEdits: "warn"` the one `info` naming what else the edit changes. */
+export type SetValueResult = { readonly ok: true; readonly edit: Edit; readonly diagnostics: readonly Diagnostic[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /** How a value was written, so a string can keep the style of the scalar it replaces. */
 export type ScalarStyle = "plain" | "single" | "double" | "block" | "json";
@@ -71,8 +84,10 @@ export interface Found {
   readonly style: ScalarStyle;
   /** Inside a flow collection (`[a, b]`, `{k: v}`): where `,`, `[`, `]`, `{` and `}` end a plain scalar. */
   readonly inFlow: boolean;
-  /** YAML: the first alias that shares this value (it, or a container above it, is anchored and aliased). `locate` still answers; `setValue` refuses. */
+  /** YAML: the first alias that shares this value (it, or a container above it, is anchored and aliased). `locate` still answers; `setValue` refuses under `"refuse"`. */
   readonly sharedBy?: SourceSpan;
+  /** YAML, under `"warn"` (v1.12 FR-005): every alias whose expansion holds this value, in document order — the other places the write changes. */
+  readonly sharedWith?: readonly SourceSpan[];
 }
 
 export type FindResult = { readonly ok: true; readonly found: Found } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -88,13 +103,16 @@ function requireArguments(options: EditOptions, pointer: string, fnName: string)
   if (options.origin === undefined || options.origin === null) {
     throw new Error(`${fnName}() requires 'origin' identifying the document these bytes came from`);
   }
+  if (options.sharedEdits !== undefined && options.sharedEdits !== "refuse" && options.sharedEdits !== "warn" && options.sharedEdits !== "allow") {
+    throw new Error(`${fnName}(): sharedEdits must be "refuse", "warn" or "allow", got ${JSON.stringify(options.sharedEdits)}`);
+  }
   if (typeof pointer !== "string" || (pointer !== "" && !pointer.startsWith("/"))) {
     throw new Error(`${fnName}(): malformed JSON Pointer ${JSON.stringify(pointer)}: must be empty or start with '/'`);
   }
 }
 
-function find(bytes: Uint8Array, options: EditOptions, pointer: string): FindResult {
-  return options.format === "yaml" ? findYaml(bytes, options.origin, options.limits, pointer) : findJson(bytes, options.origin, options.limits, pointer);
+function find(bytes: Uint8Array, options: EditOptions, pointer: string, sharedEdits: SharedEdits): FindResult {
+  return options.format === "yaml" ? findYaml(bytes, options.origin, options.limits, pointer, sharedEdits) : findJson(bytes, options.origin, options.limits, pointer);
 }
 
 function kindOf(node: Node): LocatedKind {
@@ -109,7 +127,8 @@ function kindOf(node: Node): LocatedKind {
  */
 export function locate(bytes: Uint8Array, options: EditOptions, pointer: string): LocateResult {
   requireArguments(options, pointer, "locate");
-  const result = find(bytes, options, pointer);
+  // `sharedEdits` is accepted and ignored (v1.12 FR-005): a value reached through an alias is located as under "refuse".
+  const result = find(bytes, options, pointer, "refuse");
   if (!result.ok) {
     return result;
   }
@@ -189,16 +208,18 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   if (!(typeof value === "string" || typeof value === "number" || typeof value === "bigint" || typeof value === "boolean" || value === null)) {
     throw new TypeError("setValue() takes a scalar value: string, number, bigint, boolean or null");
   }
-  const result = find(bytes, options, pointer);
+  const sharedEdits = options.sharedEdits ?? "refuse";
+  const result = find(bytes, options, pointer, sharedEdits);
   if (!result.ok) {
     return result;
   }
   const { found } = result;
   const refuse = (code: DiagnosticCode, message: string): SetValueResult => ({ ok: false, diagnostics: [editDiagnostic(code, message, found.span)] });
 
-  if (found.sharedBy !== undefined) {
+  if (found.sharedBy !== undefined && sharedEdits === "refuse") {
     return { ok: false, diagnostics: [editDiagnostic("edit-target-shared", "This value is anchored and an alias shares it; writing it would change every place that shares it", found.sharedBy)] };
   }
+  const diagnostics: readonly Diagnostic[] = found.sharedBy !== undefined && sharedEdits === "warn" ? [sharedInfo(found)] : [];
   if (found.node.type !== "scalar") {
     return refuse("edit-unsupported", `Setting a ${found.node.type} is an insertion, which is not written yet; only a scalar can be replaced`);
   }
@@ -213,7 +234,7 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   const existing = bytes.subarray(found.start, found.end);
   // L1: the value is already there, so the bytes already there stay — whatever their spelling.
   if (equalsValue(found.node, kind, value)) {
-    return { ok: true, edit: { start: found.start, end: found.end, bytes: Uint8Array.from(existing) } };
+    return { ok: true, edit: { start: found.start, end: found.end, bytes: Uint8Array.from(existing) }, diagnostics };
   }
 
   const text = scalarText(value, kind, options, found);
@@ -228,7 +249,19 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   if (!readsBack(bytes, options, pointer, edit, kind, value)) {
     return refuse("edit-unsupported", `${describeValue(value)} could not be written here and read back as the same value`);
   }
-  return { ok: true, edit };
+  return { ok: true, edit, diagnostics };
+}
+
+/** Under `"warn"`: the edit is answered, and this says so — at the value, naming every alias that shares it (v1.12 FR-005). */
+function sharedInfo(found: Found): Diagnostic {
+  const others = found.sharedWith ?? [];
+  return createDiagnostic({
+    level: "info",
+    code: "edit-target-shared",
+    message: `This value is shared; the edit also changes ${others.length === 1 ? "the place an alias shares it" : `the ${others.length} places aliases share it`}`,
+    primary: found.span,
+    related: others.map((span) => ({ label: "an alias that shares this value", span })),
+  });
 }
 
 function readsBack(bytes: Uint8Array, options: EditOptions, pointer: string, edit: Edit, kind: ScalarKind, value: EditValue): boolean {
@@ -239,5 +272,10 @@ function readsBack(bytes: Uint8Array, options: EditOptions, pointer: string, edi
   const tree = options.format === "yaml" ? parseBackYaml(applied, options.origin, options.limits) : parseBackJson(applied, options.origin, options.limits);
   if (tree === undefined) return false;
   const node = resolvePointer(tree, pointer);
-  return node !== undefined && equalsValue(node, kind, value);
+  if (node === undefined || !equalsValue(node, kind, value)) return false;
+  // Every copy of the value — an alias, a merge key — is a node with its span (v1.12 FR-007): each reads the value set.
+  return pointersInDocument(tree, node.span).every((copy) => {
+    const at = resolvePointer(tree, copy);
+    return at !== undefined && equalsValue(at, kind, value);
+  });
 }
