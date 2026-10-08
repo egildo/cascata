@@ -98,3 +98,71 @@ code, not the tests.
 11. **§15 cites Go's and Java's limits** (a ratio "more generous for small documents"; SnakeYAML's 50 aliases
     per collection). I did not check either; they are not mine to vouch for.
 12. **Nothing bounds the 018 writer's read-back separately**: it is two reads, each under the budget.
+
+---
+
+# Round 2: `yaml`'s own duplicate-key check
+
+Tests 2564 before, 2577 after (13 in `tests/unit/duplicate-keys.test.ts`). Commit `a7132b4`, and the report/comment
+commit after it. No existing test changed; the one edit to an existing test file is the comment and baseline of
+round 1's own timing witness in `tests/unit/anchor-table.test.ts` (below).
+
+## The cause, and the fix
+
+`yaml`'s `parseDocument` compares each new pair with every pair already in the mapping (`uniqueKeys`, on by
+default). Round 1 mistook that for the composer being superlinear in anchors: a mapping with no anchors at all
+is just as slow. The reader now passes `uniqueKeys: false`. It is the only `parseDocument` call in `src/`; the
+writer reads through the reader, so locate (one read) and setValue (two) get it too.
+
+Measured here, one flat mapping of N keys (`key<i>: <i>`), milliseconds:
+
+| N | `yaml` default, the read, before | `yaml` with `uniqueKeys: false` | the read, after | `locate` after | `setValue` after |
+|---|---|---|---|---|---|
+| 8,000 | ~0.35 s (yours) | 60 | 98 | 85 | 187 |
+| 16,000 | 3,206 | 86 | 161 | 168 | 334 |
+| 32,000 | 18,054 (`locate` 19,455) | 165 | 321 | 338 | 652 |
+
+The read is about twice `yaml`'s own parse and doubles when N does. Other shapes at 8,000 and 32,000 are all
+linear now (32,000 anchors alone 381 ms; anchors-and-aliases 412; 32,000 aliases in a sequence 202; 4,000
+nested mappings 318): the "composer superlinear in anchors" of round 1 was this and nothing else.
+
+## Nothing observable changes
+
+- `yaml`'s `DUPLICATE_KEY` was already discarded: `readerErrorDiagnostic` returns `undefined` for it, so no
+  path ever mapped it to `malformed-document`. Its position only fed the misplaced-byte-order-mark de-duplication
+  (`misplacedAt`), which looks for errors at a mark, and a `DUPLICATE_KEY` is at a key's start.
+- The AST is identical with the check on and off, for all 26 documents of the battery: every node's type, range,
+  value and anchor, every pair, and the warnings (checked by a probe, kept out of the tree).
+- Cascata's diagnostics (code, level, message, primary, related) for those 26 documents are byte-identical
+  before and after: a snapshot taken against the code as it stood, compared with a snapshot after.
+- The battery: plain; `a` and `"a"` and `'a'` and `"a"`; flow mappings; three occurrences; a key written
+  twice around a merge key and one beside a merged key; a duplicate inside an anchored mapping reached by a merge;
+  non-ASCII (`é`, `日本`, and NFC against NFD, which are different keys to both); an empty key spelled two ways;
+  `~` against `null`; `&k a` against `*k`; `? a` against `a`; a key with a trailing space; a mark-prefixed key.
+- Kept as tests: hand-counted positions for the duplicate cases (the later key's span, the first occurrence as
+  `related`, in bytes), and a coverage property: **every pair `yaml` flags is a Cascata `duplicate-key` (or a key
+  Cascata refuses outright as `non-string-key`) at the same byte.** The probe also showed the other direction:
+  `&k a: 1` / `*k : 2` is a duplicate Cascata catches and `yaml`'s check never did.
+- Cascata's check was already linear: `buildMappingEntries` keeps `firstOccurrence` in a `Map`, and merge folding
+  tests `target.has`. Nothing to fix.
+
+## Sabotage
+
+| Sabotage | Went red |
+|---|---|
+| `uniqueKeys` back to the default | the 16,000-key witness (1,515 ms against yaml's 97, over its 1,085 bound); at 32,000 it is ~100x |
+| Cascata's duplicate check removed | six hand-counted cases, and in the corpus `duplicate-keys/literal-duplicate-refused`, `duplicate-keys/quoted-vs-plain-collision`, `multi-violation/three-violations-far-apart-all-reported` — Cascata's check, not the parser's, is the guard |
+
+## Still wrong
+
+1. **Round 1's report says `yaml`'s composer is superlinear in anchors and §4.2's sentence was corrected on that
+   basis.** It was `uniqueKeys`. The sentence "reading a document costs time and memory in proportion to its
+   size" is now true for the shapes measured, but the §15 entry's description of the cause is not; `SPEC.md` was
+   not mine to edit.
+2. **Round 1's timing witness had the same blind spot**: it compared against `parseDocument` with the default
+   `uniqueKeys`, which is superlinear on a flat mapping of 8,000 keys, so the bound 3x was loose for the wrong
+   reason. It now compares against `uniqueKeys: false`; the comment is corrected; it still passes.
+3. **The 16,000-key witness is a thin red** (a bound of ~1.1 s against 1.5 s with the check back on, on this machine
+   under load); the 32,000-key one is the decisive witness (about 100x). It is rerun-tolerant, and not weakened.
+4. **Not done, not asked:** a mapping with 32,000 *merge keys*, deep nesting at the depth cap, and a sequence of
+   mappings each with many keys were not separately timed.

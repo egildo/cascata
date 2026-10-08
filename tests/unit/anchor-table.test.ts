@@ -148,19 +148,21 @@ describe("linear time: the witness (the sweep above is the guarantee)", () => {
     return best;
   };
   /**
-   * Cascata's read against `yaml`'s own `parseDocument` of the same text. The
-   * whole read alone is not the thing to time: `yaml`'s composer is itself
-   * superlinear in anchors (4,000 anchors and aliases in 0.4 s, 8,000 in
-   * 1.7 s, no Cascata code involved), which is upstream's and which nothing
-   * in this library can reach. The 9.6 s v1.10 removed was all on this side
-   * of the line, so the witness is the read relative to the parse beneath it.
+   * Cascata's read against `yaml`'s own `parseDocument` of the same text, with
+   * its duplicate-key check off (as the reader runs it): the floor Cascata
+   * cannot go below. Round 1 of this milestone mistook the superlinear cost it
+   * saw in that parse for the composer's anchors; it was `uniqueKeys` (every
+   * new pair against every pair before it in one mapping), and
+   * `tests/unit/duplicate-keys.test.ts` owns it now. The 9.6 s that v1.10 removed
+   * from alias resolution was all on Cascata's side of the line, so the witness
+   * is the read relative to the parse beneath it.
    */
   const times = (n: number): { library: number; whole: number } => {
     const text = lines(n);
     const bytes = new TextEncoder().encode(text);
     const origin = { id: "t", label: "t" };
     return {
-      library: fastest(() => void parseDocument(text, { merge: true })),
+      library: fastest(() => void parseDocument(text, { merge: true, uniqueKeys: false })),
       whole: fastest(() => expect(parse(bytes, { origin }).ok).toBe(true)),
     };
   };
