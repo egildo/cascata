@@ -1,0 +1,17 @@
+{
+  "name": "expansion/merge-key-single-not-a-mapping",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "b: &b 5\nc:\n  <<: *b\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 3,
+        "column": 7,
+        "start": 17,
+        "end": 19
+      }
+    ]
+  }
+}

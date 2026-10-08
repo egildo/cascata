@@ -1,0 +1,17 @@
+{
+  "name": "expansion/merge-key-list-item-not-a-mapping",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "a: &a {x: 1}\nb: &b 5\nc:\n  <<: [*a, *b]\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 4,
+        "column": 12,
+        "start": 35,
+        "end": 37
+      }
+    ]
+  }
+}

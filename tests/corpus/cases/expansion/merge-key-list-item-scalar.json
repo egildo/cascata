@@ -1,0 +1,17 @@
+{
+  "name": "expansion/merge-key-list-item-scalar",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "a: &a {x: 1}\nc:\n  <<: [*a, 7]\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 3,
+        "column": 12,
+        "start": 27,
+        "end": 28
+      }
+    ]
+  }
+}

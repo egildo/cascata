@@ -1,0 +1,17 @@
+{
+  "name": "expansion/merge-key-list-item-unknown-alias",
+  "cites": "\u00a74.2",
+  "format": "yaml",
+  "input": "a: &a {x: 1}\nc:\n  <<: [*a, *zz]\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "malformed-document",
+        "line": 3,
+        "column": 12,
+        "start": 27,
+        "end": 30
+      }
+    ]
+  }
+}

@@ -125,6 +125,7 @@ export function mergeSources(
   activePath: ReadonlySet<object>,
   mergeValueSpan: SourceSpan,
   report: (diagnostic: Diagnostic) => void,
+  itemSpan: (item: ParsedNode) => SourceSpan,
 ): MapNode[] {
   if (value === null) {
     report(malformedDocumentDiagnostic("A merge key ('<<') must have a value", mergeValueSpan));
@@ -133,13 +134,15 @@ export function mergeSources(
   const candidates = isSeq(value) ? value.items : [value];
   const sources: MapNode[] = [];
   for (const candidate of candidates) {
-    const target = isAlias(candidate) ? resolveAlias(candidate, anchors, activePath, mergeValueSpan) : { ok: true as const, target: candidate };
+    // In a list, an item's error is the item's (v1.12.1); a single value's is the value's.
+    const span = isSeq(value) ? itemSpan(candidate) : mergeValueSpan;
+    const target = isAlias(candidate) ? resolveAlias(candidate, anchors, activePath, span) : { ok: true as const, target: candidate };
     if (!target.ok) {
       report(target.diagnostic);
       continue;
     }
     if (!isMap(target.target)) {
-      report(malformedDocumentDiagnostic("A merge key ('<<') must resolve to a mapping, or a sequence of mappings", mergeValueSpan));
+      report(malformedDocumentDiagnostic("A merge key ('<<') must resolve to a mapping, or a sequence of mappings", span));
       continue;
     }
     sources.push(target.target);

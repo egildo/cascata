@@ -444,7 +444,7 @@ function buildMappingEntries(mapAst: MapNode, ctx: WalkContext, depth: number): 
 
     if (isMergeKeyPair(keyAst)) {
       const mergeValueSpan = pair.value !== null ? toSourceSpan(requireRange(pair.value), ctx) : toSourceSpan(requireRange(keyAst), ctx);
-      const sources = mergeSources(pair.value, ctx.anchors, ctx.activePath, mergeValueSpan, (diagnostic) => ctx.diagnostics.add(diagnostic));
+      const sources = mergeSources(pair.value, ctx.anchors, ctx.activePath, mergeValueSpan, (diagnostic) => ctx.diagnostics.add(diagnostic), (item) => toSourceSpan(requireRange(item), ctx));
       expandingAt(mergeValueSpan, ctx, () => {
         for (const source of sources) {
           foldMergeSource(source, entries, ctx, depth);

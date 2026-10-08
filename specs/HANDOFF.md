@@ -98,7 +98,6 @@ the writers under the case's own policy.
 - **`edit-unsupported` is overloaded** (container, block scalar, read-back failure, flow bare key, tag elsewhere, bare key in a shared
   mapping; from `editTarget`, a format with no writer);
   callers tell them apart only by message.
-- **Merge-key diagnostics** for a list point at the whole list, not the one alias.
 - **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-unsupported` from a
   read-back failure, a bare key in a shared mapping, `editTarget`'s no-writer format, a `%TAG` tag.
 - **JSON has no expansion budget**, and `locate` of a container reports `mapping`/`sequence` as `kind`.
