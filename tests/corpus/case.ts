@@ -138,6 +138,9 @@ const CITES_PATTERN = /^§\d+(?:\.\d+)*$/;
 export interface ExpectedLimits {
   readonly maxDepth?: number;
   readonly maxBytes?: number;
+  /** v1.10 (specs/019-bounded-cost): the expansion budget is `expansionRatio` x (nodes written) + `expansionAllowance`. */
+  readonly expansionRatio?: number;
+  readonly expansionAllowance?: number;
 }
 
 /**
@@ -400,14 +403,24 @@ function parseExpectedLimits(raw: unknown, source: string): ExpectedLimits {
   if (!isPlainObject(raw)) {
     fail(source, "'limits' must be an object when present");
   }
-  const { maxDepth, maxBytes } = raw;
+  const { maxDepth, maxBytes, expansionRatio, expansionAllowance } = raw;
   if (maxDepth !== undefined && (typeof maxDepth !== "number" || !Number.isInteger(maxDepth) || maxDepth < 0)) {
     fail(source, `'limits.maxDepth' must be a non-negative integer when present, got ${JSON.stringify(maxDepth)}`);
   }
   if (maxBytes !== undefined && (typeof maxBytes !== "number" || !Number.isInteger(maxBytes) || maxBytes < 0)) {
     fail(source, `'limits.maxBytes' must be a non-negative integer when present, got ${JSON.stringify(maxBytes)}`);
   }
-  return { ...(maxDepth !== undefined ? { maxDepth } : {}), ...(maxBytes !== undefined ? { maxBytes } : {}) };
+  for (const [name, value] of [["expansionRatio", expansionRatio], ["expansionAllowance", expansionAllowance]] as const) {
+    if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) {
+      fail(source, `'limits.${name}' must be a non-negative number when present, got ${JSON.stringify(value)}`);
+    }
+  }
+  return {
+    ...(maxDepth !== undefined ? { maxDepth } : {}),
+    ...(maxBytes !== undefined ? { maxBytes } : {}),
+    ...(typeof expansionRatio === "number" ? { expansionRatio } : {}),
+    ...(typeof expansionAllowance === "number" ? { expansionAllowance } : {}),
+  };
 }
 
 function parseSourceFields(raw: Record<string, unknown>, source: string): ConformanceCaseSourceFields {

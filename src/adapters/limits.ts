@@ -22,11 +22,20 @@ import { createSourceSpan, type Origin, type SourceSpan } from "../model/span.js
 export interface ParseLimits {
   readonly maxDepth: number;
   readonly maxBytes: number;
+  /**
+   * v1.10 (SPEC.md §4.2, §11, §15): the expanded tree may hold at most
+   * `expansionRatio` times the model nodes the document writes, plus
+   * `expansionAllowance`. YAML only — JSON has no aliases.
+   */
+  readonly expansionRatio: number;
+  readonly expansionAllowance: number;
 }
 
 export const DEFAULT_LIMITS: ParseLimits = {
   maxDepth: 64,
   maxBytes: 8 * 1024 * 1024,
+  expansionRatio: 10,
+  expansionAllowance: 10_000,
 };
 
 /** Fill in any limit a caller did not specify with the default. */
@@ -34,6 +43,8 @@ export function resolveLimits(overrides: Partial<ParseLimits> | undefined): Pars
   return {
     maxDepth: overrides?.maxDepth ?? DEFAULT_LIMITS.maxDepth,
     maxBytes: overrides?.maxBytes ?? DEFAULT_LIMITS.maxBytes,
+    expansionRatio: overrides?.expansionRatio ?? DEFAULT_LIMITS.expansionRatio,
+    expansionAllowance: overrides?.expansionAllowance ?? DEFAULT_LIMITS.expansionAllowance,
   };
 }
 
@@ -69,6 +80,23 @@ export function checkDepthLimit(depth: number, limits: ParseLimits, span: Source
   return createDiagnostic({ level: "error",
     code: "depth-limit-exceeded",
     message: `Nesting depth ${depth} exceeds the ${limits.maxDepth}-level limit`,
+    primary: span,
+  });
+}
+
+/**
+ * `expansion-limit-exceeded` (v1.10, SPEC.md §11): expanding the alias at
+ * `span` took the tree past `limits.expansionRatio x written +
+ * limits.expansionAllowance` nodes. `built` is the count at the moment the
+ * budget was crossed — the first node past it, because the count is kept as
+ * the expansion proceeds and the read stops there.
+ */
+export function expansionLimitDiagnostic(built: number, written: number, limits: ParseLimits, span: SourceSpan): Diagnostic {
+  const budget = limits.expansionRatio * written + limits.expansionAllowance;
+  return createDiagnostic({
+    level: "error",
+    code: "expansion-limit-exceeded",
+    message: `Expanding this alias builds more of the document than it is allowed to: it writes ${written} nodes, so the expanded tree may hold at most ${limits.expansionRatio} x ${written} + ${limits.expansionAllowance} = ${budget}, and it had reached ${built}`,
     primary: span,
   });
 }

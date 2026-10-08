@@ -1,0 +1,18 @@
+{
+  "name": "limits/expansion-bomb-three-levels",
+  "cites": "§11",
+  "format": "yaml",
+  "input": "l0: &l0 [x,x,x,x,x,x,x,x,x,x]\nl1: &l1 [*l0,*l0,*l0,*l0,*l0,*l0,*l0,*l0,*l0,*l0]\nl2: &l2 [*l1,*l1,*l1,*l1,*l1,*l1,*l1,*l1,*l1,*l1]\nl3: &l3 [*l2,*l2,*l2,*l2,*l2,*l2,*l2,*l2,*l2,*l2]\n",
+  "expect": {
+    "diagnostics": [
+      {
+        "code": "expansion-limit-exceeded",
+        "line": 4,
+        "column": 42,
+        "start": 171,
+        "end": 174,
+        "text": "*l2"
+      }
+    ]
+  }
+}

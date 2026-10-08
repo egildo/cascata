@@ -62,8 +62,9 @@ import {
 import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span.js";
 import { resolveAlias, isMergeKeyPair, mergeSources } from "./expand.js";
 import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsupportedTagDiagnostic } from "./floor.js";
-import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "../limits.js";
+import { checkDepthLimit, checkSizeLimit, expansionLimitDiagnostic, resolveLimits, type ParseLimits } from "../limits.js";
 import { buildAnchorTable, type AnchorTable } from "./anchors.js";
+import { countWritten } from "./budget.js";
 import { allMarks, documentPrefixMarks, removePrefixMarks, storedIndexer } from "./marks.js";
 import { findFirstInvalidUtf8ByteOffset, locateByteOffset, utf8ByteLength } from "../encoding.js";
 
@@ -239,6 +240,47 @@ interface WalkContext extends SpanContext {
   /** Accumulates every floor violation found during the walk (FR-019). */
   readonly diagnostics: DiagnosticCollector;
   readonly limits: ParseLimits;
+  /** The expansion budget (v1.10 FR-003): nodes built so far against what the document may expand to. */
+  readonly expansion: ExpansionState;
+}
+
+/** Where to point if the budget is crossed with no alias in sight — unreachable (without an alias, nodes built never exceed nodes written), but a diagnostic must have a span. */
+function outcomeRootSpan(ctx: SpanContext, doc: Document): SourceSpan {
+  return toSourceSpan(doc.contents?.range ?? [0, 0, 0], ctx);
+}
+
+/** Thrown by the walk the moment the budget is crossed; caught once, in `parseYaml`, and turned into the one diagnostic. */
+class ExpansionLimitCrossed extends Error {}
+
+interface ExpansionState {
+  built: number;
+  readonly written: number;
+  readonly budget: number;
+  /** How many aliases (or merge sources) the walk is currently inside. */
+  depth: number;
+  /** The outermost alias being expanded — the one the diagnostic points at, as the author wrote it. */
+  site: SourceSpan | undefined;
+}
+
+/** Count one model node built; past the budget, stop the whole walk. */
+function countBuilt(ctx: WalkContext): void {
+  ctx.expansion.built += 1;
+  if (ctx.expansion.built > ctx.expansion.budget) {
+    throw new ExpansionLimitCrossed();
+  }
+}
+
+/** Run `expand` as the expansion of the alias at `site`: the outermost such site is the one reported. */
+function expandingAt<T>(site: SourceSpan, ctx: WalkContext, expand: () => T): T {
+  if (ctx.expansion.depth === 0) {
+    ctx.expansion.site = site;
+  }
+  ctx.expansion.depth += 1;
+  try {
+    return expand();
+  } finally {
+    ctx.expansion.depth -= 1;
+  }
 }
 
 function hasAnchor(node: unknown): node is { anchor?: string } {
@@ -387,9 +429,11 @@ function buildMappingEntries(mapAst: MapNode, ctx: WalkContext, depth: number): 
     if (isMergeKeyPair(keyAst)) {
       const mergeValueSpan = pair.value !== null ? toSourceSpan(requireRange(pair.value), ctx) : toSourceSpan(requireRange(keyAst), ctx);
       const sources = mergeSources(pair.value, ctx.anchors, ctx.activePath, mergeValueSpan, (diagnostic) => ctx.diagnostics.add(diagnostic));
-      for (const source of sources) {
-        foldMergeSource(source, entries, ctx, depth);
-      }
+      expandingAt(mergeValueSpan, ctx, () => {
+        for (const source of sources) {
+          foldMergeSource(source, entries, ctx, depth);
+        }
+      });
       continue;
     }
 
@@ -468,7 +512,7 @@ function walkNode(astNode: ParsedNode, ctx: WalkContext, depth: number): Node | 
       ctx.diagnostics.add(resolution.diagnostic);
       return undefined;
     }
-    return walkAnchoredTarget(resolution.target, ctx, depth);
+    return expandingAt(aliasSpan, ctx, () => walkAnchoredTarget(resolution.target, ctx, depth));
   }
   return walkAnchoredTarget(astNode, ctx, depth);
 }
@@ -486,14 +530,23 @@ function walkAnchoredTarget(astNode: ScalarNode | MapNode | SeqNode, ctx: WalkCo
     ctx.activePath.add(astNode);
   }
   try {
+    // Every model node is counted as it is built (v1.10 FR-003), the
+    // expansion of an alias or a merge key included — which is where a tree
+    // grows past what the document writes.
     if (isScalar(astNode)) {
-      return convertScalar(astNode, ctx);
+      const built = convertScalar(astNode, ctx);
+      if (built !== undefined) countBuilt(ctx);
+      return built;
     }
     if (isMap(astNode)) {
-      return convertMapping(astNode, ctx, depth);
+      const built = convertMapping(astNode, ctx, depth);
+      if (built !== undefined) countBuilt(ctx);
+      return built;
     }
     if (isSeq(astNode)) {
-      return convertSequence(astNode, ctx, depth);
+      const built = convertSequence(astNode, ctx, depth);
+      if (built !== undefined) countBuilt(ctx);
+      return built;
     }
     throw new Error("Internal error: encountered an AST node of an unrecognized shape during the walk");
   } finally {
@@ -720,8 +773,19 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
     // spanning zero width at offset 0 (contracts/parse-api.md).
     tree = createNullScalar(createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: documentByteLength }));
   } else {
-    const ctx: WalkContext = { ...spanContext, anchors, activePath: new Set(), diagnostics, limits };
-    tree = walkNode(doc.contents, ctx, 0);
+    const written = countWritten(doc);
+    const expansion: ExpansionState = { built: 0, written, budget: limits.expansionRatio * written + limits.expansionAllowance, depth: 0, site: undefined };
+    const ctx: WalkContext = { ...spanContext, anchors, activePath: new Set(), diagnostics, limits, expansion };
+    try {
+      tree = walkNode(doc.contents, ctx, 0);
+    } catch (error) {
+      if (!(error instanceof ExpansionLimitCrossed)) {
+        throw error;
+      }
+      // The walk stopped at the node that crossed the budget, inside the
+      // expansion of `site`. One diagnostic; the read goes no further.
+      diagnostics.add(expansionLimitDiagnostic(expansion.built, written, limits, expansion.site ?? outcomeRootSpan(spanContext, doc)));
+    }
   }
 
   if (!diagnostics.isEmpty) {

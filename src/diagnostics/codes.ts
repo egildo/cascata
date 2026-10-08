@@ -23,7 +23,7 @@ export const PORTABILITY_FLOOR_CODES = [
 ] as const;
 
 /** Resource limits (SPEC.md §11). */
-export const RESOURCE_LIMIT_CODES = ["depth-limit-exceeded", "size-limit-exceeded", "alias-cycle"] as const;
+export const RESOURCE_LIMIT_CODES = ["depth-limit-exceeded", "size-limit-exceeded", "alias-cycle", "expansion-limit-exceeded"] as const;
 
 /** Syntax. The one code that wraps a dependency's error rather than expressing a Cascata rule. */
 export const SYNTAX_CODES = ["malformed-document"] as const;
