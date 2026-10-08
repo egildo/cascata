@@ -28,9 +28,10 @@
  */
 
 import { isAlias, isMap, isScalar, isSeq } from "yaml";
-import type { Alias, Document, ParsedNode, Scalar, YAMLMap, YAMLSeq } from "yaml";
+import type { Alias, ParsedNode, Scalar, YAMLMap, YAMLSeq } from "yaml";
 import { createDiagnostic, type Diagnostic } from "../../diagnostics/diagnostic.js";
 import type { SourceSpan } from "../../model/span.js";
+import type { AnchorTable } from "./anchors.js";
 import { aliasCycleDiagnostic } from "./floor.js";
 
 // See parse.ts's module doc for why `.Parsed` is used throughout rather
@@ -80,8 +81,10 @@ export function isMergeKeyPair(key: ParsedNode): boolean {
  * (contracts/diagnostics.md) for a cycle, and the only position available
  * for a dangling reference.
  */
-export function resolveAlias(alias: Alias, doc: Document, activePath: ReadonlySet<object>, aliasSpan: SourceSpan): AliasResolution {
-  const target = alias.resolve(doc);
+export function resolveAlias(alias: Alias, anchors: AnchorTable, activePath: ReadonlySet<object>, aliasSpan: SourceSpan): AliasResolution {
+  // The anchor table, not `Alias#resolve`: that walks the whole document per
+  // alias (v1.10, SPEC.md §15), and answers exactly what the table does.
+  const target = anchors.targetOf(alias);
   if (target === undefined) {
     return { ok: false, diagnostic: malformedDocumentDiagnostic(`Alias '*${alias.source}' does not refer to any defined anchor`, aliasSpan) };
   }
@@ -89,19 +92,19 @@ export function resolveAlias(alias: Alias, doc: Document, activePath: ReadonlySe
     return { ok: false, diagnostic: aliasCycleDiagnostic(alias.source, aliasSpan) };
   }
   if (target.range == null) {
-    // Only reachable if `doc` was never actually produced by
-    // `parseDocument` — every node that library parses has a range.
+    // Only reachable if the table was never built from a document
+    // `parseDocument` produced — every node that library parses has a range.
     throw new Error("Internal error: alias resolved to a node with no range");
   }
-  // `Alias#resolve` is declared to return the bare `Scalar | YAMLMap |
-  // YAMLSeq` classes rather than their `.Parsed` variants — an
+  // The table holds the bare `Scalar | YAMLMap | YAMLSeq` classes (and the
+  // `Node` union around them) rather than their `.Parsed` variants — an
   // imprecision in `yaml`'s own types, since anything reachable through a
   // `Document` this adapter ever holds (always built by `parseDocument`)
   // is in fact fully parsed, as just confirmed by the range check above.
   // This corrects for that library-typing gap; it is not a cast on
   // Cascata's own node model, which is what the constitution's ban on
   // assertion casts is about.
-  return { ok: true, target: target as AliasTarget };
+  return { ok: true, target: target as AliasTarget }; // the one documented cast, on yaml's own AST types
 }
 
 /**
@@ -118,7 +121,7 @@ export function resolveAlias(alias: Alias, doc: Document, activePath: ReadonlySe
  */
 export function mergeSources(
   value: ParsedNode | null,
-  doc: Document,
+  anchors: AnchorTable,
   activePath: ReadonlySet<object>,
   mergeValueSpan: SourceSpan,
   report: (diagnostic: Diagnostic) => void,
@@ -130,7 +133,7 @@ export function mergeSources(
   const candidates = isSeq(value) ? value.items : [value];
   const sources: MapNode[] = [];
   for (const candidate of candidates) {
-    const target = isAlias(candidate) ? resolveAlias(candidate, doc, activePath, mergeValueSpan) : { ok: true as const, target: candidate };
+    const target = isAlias(candidate) ? resolveAlias(candidate, anchors, activePath, mergeValueSpan) : { ok: true as const, target: candidate };
     if (!target.ok) {
       report(target.diagnostic);
       continue;

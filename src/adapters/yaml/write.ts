@@ -20,7 +20,7 @@
  * The probe behind each clause is in `specs/018-write-value/plan.md`.
  */
 
-import { isAlias, isMap, isNode, isScalar, isSeq, visit } from "yaml";
+import { isAlias, isMap, isNode, isScalar, isSeq } from "yaml";
 import type { Document, Node as YamlNode } from "yaml";
 import type { Diagnostic } from "../../diagnostics/diagnostic.js";
 import type { Node } from "../../model/node.js";
@@ -28,6 +28,7 @@ import { resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
 import type { Origin, SourceSpan } from "../../model/span.js";
 import { editDiagnostic, type FindResult, type Found, type ScalarStyle } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
+import type { AnchorTable } from "./anchors.js";
 import { parseYamlBytes, type YamlSpans } from "./parse.js";
 
 // --- finding a value ------------------------------------------------------
@@ -48,21 +49,21 @@ function isMergeKey(key: unknown): boolean {
   return isScalar(key) && typeof key.value === "symbol";
 }
 
-function keyText(key: YamlNode | null, doc: Document): string | undefined {
+function keyText(key: YamlNode | null, anchors: AnchorTable): string | undefined {
   if (key === null) return undefined;
   if (isScalar(key)) return typeof key.value === "string" ? key.value : undefined;
   if (isAlias(key)) {
-    const target = key.resolve(doc);
+    const target = anchors.targetOf(key);
     return target !== undefined && isScalar(target) && typeof target.value === "string" ? target.value : undefined;
   }
   return undefined;
 }
 
 /** `segment` in `map`: a direct pair, else through a merge key (earlier sources win), remembering the alias it came through. */
-function lookup(map: YamlNode, segment: string, doc: Document, spans: YamlSpans, via: SourceSpan | undefined): { value: YamlNode | null; via: SourceSpan | undefined } | undefined {
+function lookup(map: YamlNode, segment: string, anchors: AnchorTable, spans: YamlSpans, via: SourceSpan | undefined): { value: YamlNode | null; via: SourceSpan | undefined } | undefined {
   if (!isMap(map)) return undefined;
   for (const pair of map.items) {
-    if (!isMergeKey(pair.key) && keyText(asNode(pair.key), doc) === segment) {
+    if (!isMergeKey(pair.key) && keyText(asNode(pair.key), anchors) === segment) {
       return { value: asNode(pair.value), via };
     }
   }
@@ -71,10 +72,10 @@ function lookup(map: YamlNode, segment: string, doc: Document, spans: YamlSpans,
     if (!isMergeKey(pair.key) || value === null) continue;
     for (const candidate of isSeq(value) ? value.items.map(asNode) : [value]) {
       if (candidate === null) continue;
-      const source = isAlias(candidate) ? candidate.resolve(doc) : candidate;
+      const source = isAlias(candidate) ? anchors.targetOf(candidate) : candidate;
       if (source === undefined) continue;
       const aliasSpan = isAlias(candidate) && candidate.range != null ? spans.spanOf(candidate.range) : undefined;
-      const found = lookup(source, segment, doc, spans, via ?? aliasSpan);
+      const found = lookup(source, segment, anchors, spans, via ?? aliasSpan);
       if (found !== undefined) return found;
     }
   }
@@ -101,34 +102,24 @@ function styleOf(node: YamlNode): ScalarStyle {
   }
 }
 
-/** The first alias (in document order) that resolves to `node`, if the node carries an anchor anyone uses. */
-function firstAliasTo(node: YamlNode, doc: Document, spans: YamlSpans): SourceSpan | undefined {
-  if (!("anchor" in node) || typeof node.anchor !== "string" || node.anchor === "") return undefined;
-  let first: SourceSpan | undefined;
-  visit(doc, {
-    Alias(_key, alias) {
-      // The name first: `resolve` walks the document, and a document may hold thousands of aliases to other anchors.
-      if (first === undefined && alias.range != null && alias.source === node.anchor && alias.resolve(doc) === node) {
-        first = spans.spanOf(alias.range);
-        return visit.BREAK;
-      }
-      return undefined;
-    },
-  });
-  return first;
+/** The first alias (in document order) that refers to `node`, if anyone uses it — the table knows, from the one walk that built it. */
+function firstAliasTo(node: YamlNode, anchors: AnchorTable, spans: YamlSpans): SourceSpan | undefined {
+  const alias = anchors.firstAliasTo(node);
+  return alias?.range != null ? spans.spanOf(alias.range) : undefined;
 }
 
 export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined, pointer: string): FindResult {
-  const captured: { doc?: Document; spans?: YamlSpans } = {};
-  const outcome = parseYamlBytes(bytes, origin, limits, (doc, spans) => {
+  const captured: { doc?: Document; spans?: YamlSpans; anchors?: AnchorTable } = {};
+  const outcome = parseYamlBytes(bytes, origin, limits, (doc, spans, anchors) => {
     captured.doc = doc;
+    captured.anchors = anchors;
     captured.spans = spans;
   });
   if (!outcome.ok) {
     return outcome;
   }
-  const { doc, spans } = captured;
-  if (doc === undefined || spans === undefined) {
+  const { doc, spans, anchors } = captured;
+  if (doc === undefined || spans === undefined || anchors === undefined) {
     throw new Error("Internal error: the YAML reader parsed a document without handing it over");
   }
   const segments = pointer === "" ? [] : pointer.slice(1).split("/").map(unescapePointerSegment);
@@ -146,20 +137,20 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
   // A value is shared not only when reached through an alias but when it, or
   // any container above it, is anchored and an alias points there: writing it
   // would change the alias's copy too (the round trip in the corpus caught this).
-  let sharedBy: SourceSpan | undefined = firstAliasTo(doc.contents, doc, spans);
+  let sharedBy: SourceSpan | undefined = firstAliasTo(doc.contents, anchors, spans);
   let reach: Reach = { node: doc.contents, via: undefined, inFlow: false };
   let ancestor = spanOfNode(doc.contents, spans) ?? rootSpan;
   for (const segment of segments) {
     let { node, via, inFlow } = reach;
     if (isAlias(node)) {
-      const target = node.resolve(doc);
+      const target = anchors.targetOf(node);
       if (target === undefined) return absent(ancestor);
       via ??= node.range != null ? spans.spanOf(node.range) : undefined;
       node = target;
     }
     let next: { value: YamlNode | null; via: SourceSpan | undefined } | undefined;
     if (isMap(node)) {
-      next = lookup(node, segment, doc, spans, via);
+      next = lookup(node, segment, anchors, spans, via);
       inFlow ||= node.flow === true;
     } else if (isSeq(node)) {
       const item = /^\d+$/.test(segment) ? node.items[Number(segment)] : undefined;
@@ -174,7 +165,7 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
       if (modelNode === undefined) return absent(ancestor);
       return { ok: true, found: { start: modelNode.span.start, end: modelNode.span.end, node: modelNode, span: modelNode.span, style: "plain", inFlow } };
     }
-    sharedBy ??= firstAliasTo(next.value, doc, spans);
+    sharedBy ??= firstAliasTo(next.value, anchors, spans);
     reach = { node: next.value, via: next.via, inFlow };
   }
 

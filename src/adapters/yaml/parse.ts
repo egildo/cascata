@@ -63,6 +63,7 @@ import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span
 import { resolveAlias, isMergeKeyPair, mergeSources } from "./expand.js";
 import { duplicateKeyDiagnostic, isUnsupportedTag, nonStringKeyDiagnostic, unsupportedTagDiagnostic } from "./floor.js";
 import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "../limits.js";
+import { buildAnchorTable, type AnchorTable } from "./anchors.js";
 import { allMarks, documentPrefixMarks, removePrefixMarks, storedIndexer } from "./marks.js";
 import { findFirstInvalidUtf8ByteOffset, locateByteOffset, utf8ByteLength } from "../encoding.js";
 
@@ -231,7 +232,8 @@ function requireRange(node: { range?: Range | null }): Range {
 }
 
 interface WalkContext extends SpanContext {
-  readonly doc: Document;
+  /** Every alias's target, from one walk (v1.10 FR-001): `Alias#resolve` is never called. */
+  readonly anchors: AnchorTable;
   /** AST node references currently on the active expansion path (research D3). */
   readonly activePath: Set<object>;
   /** Accumulates every floor violation found during the walk (FR-019). */
@@ -321,7 +323,7 @@ function convertScalar(scalarAst: ScalarNode, ctx: WalkContext): Node | undefine
 function deriveMappingKey(keyAst: ParsedNode, ctx: WalkContext): { key: string; span: SourceSpan } | undefined {
   const keySpan = toSourceSpan(requireRange(keyAst), ctx);
   if (isAlias(keyAst)) {
-    const resolution = resolveAlias(keyAst, ctx.doc, ctx.activePath, keySpan);
+    const resolution = resolveAlias(keyAst, ctx.anchors, ctx.activePath, keySpan);
     if (!resolution.ok) {
       ctx.diagnostics.add(resolution.diagnostic);
       return undefined;
@@ -384,7 +386,7 @@ function buildMappingEntries(mapAst: MapNode, ctx: WalkContext, depth: number): 
 
     if (isMergeKeyPair(keyAst)) {
       const mergeValueSpan = pair.value !== null ? toSourceSpan(requireRange(pair.value), ctx) : toSourceSpan(requireRange(keyAst), ctx);
-      const sources = mergeSources(pair.value, ctx.doc, ctx.activePath, mergeValueSpan, (diagnostic) => ctx.diagnostics.add(diagnostic));
+      const sources = mergeSources(pair.value, ctx.anchors, ctx.activePath, mergeValueSpan, (diagnostic) => ctx.diagnostics.add(diagnostic));
       for (const source of sources) {
         foldMergeSource(source, entries, ctx, depth);
       }
@@ -461,7 +463,7 @@ function convertSequence(seqAst: SeqNode, ctx: WalkContext, depth: number): Node
 function walkNode(astNode: ParsedNode, ctx: WalkContext, depth: number): Node | undefined {
   if (isAlias(astNode)) {
     const aliasSpan = toSourceSpan(requireRange(astNode), ctx);
-    const resolution = resolveAlias(astNode, ctx.doc, ctx.activePath, aliasSpan);
+    const resolution = resolveAlias(astNode, ctx.anchors, ctx.activePath, aliasSpan);
     if (!resolution.ok) {
       ctx.diagnostics.add(resolution.diagnostic);
       return undefined;
@@ -622,7 +624,7 @@ export interface YamlSpans {
   readonly tightSpanOf: (range: Range) => SourceSpan;
 }
 
-export type YamlDocumentHook = (doc: Document, spans: YamlSpans) => void;
+export type YamlDocumentHook = (doc: Document, spans: YamlSpans, anchors: AnchorTable) => void;
 
 export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Partial<ParseLimits>, onDocument?: YamlDocumentHook): ParseOutcome {
   const limits = resolveLimits(limitOverrides);
@@ -683,7 +685,8 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
     );
   }
 
-  onDocument?.(doc, { spanOf: (range) => toSourceSpan(range, spanContext), tightSpanOf: (range) => toTightCollectionSpan(range, spanContext) });
+  const anchors = buildAnchorTable(doc);
+  onDocument?.(doc, { spanOf: (range) => toSourceSpan(range, spanContext), tightSpanOf: (range) => toTightCollectionSpan(range, spanContext) }, anchors);
 
   // A mark outside a document prefix and a quoted scalar is not YAML 1.2.2
   // (`yaml` admits most of them silently). Where `yaml` also errored at the
@@ -717,7 +720,7 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
     // spanning zero width at offset 0 (contracts/parse-api.md).
     tree = createNullScalar(createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: documentByteLength }));
   } else {
-    const ctx: WalkContext = { ...spanContext, doc, activePath: new Set(), diagnostics, limits };
+    const ctx: WalkContext = { ...spanContext, anchors, activePath: new Set(), diagnostics, limits };
     tree = walkNode(doc.contents, ctx, 0);
   }
 
