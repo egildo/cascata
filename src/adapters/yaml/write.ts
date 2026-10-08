@@ -24,7 +24,7 @@ import { isAlias, isMap, isNode, isScalar, isSeq } from "yaml";
 import type { Document, Node as YamlNode } from "yaml";
 import type { Diagnostic } from "../../diagnostics/diagnostic.js";
 import type { Node } from "../../model/node.js";
-import { resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
+import { pointersInDocument, resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
 import type { Origin, SourceSpan } from "../../model/span.js";
 import { editDiagnostic, type FindResult, type Found, type ScalarStyle, type SharedEdits } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
@@ -244,9 +244,22 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
     throw new Error("Internal error: the YAML reader and the AST walk disagree about where a value is");
   }
   const sharedWith = sharedBy !== undefined && sharedEdits === "warn" ? aliasesHolding(node, doc, anchors, spans) : undefined;
+  // Every node the reader says holds this value's bytes — the value, its alias and merge-key copies, by the model's
+  // span rather than the walk's, so a walk that stopped short of the bytes is caught — for the read-back to check each.
+  const copies = sharedBy !== undefined ? pointersInDocument(outcome.tree, modelNode.span) : undefined;
   return {
     ok: true,
-    found: { start: span.start, end: span.end, node: modelNode, span, style: styleOf(node), inFlow: reach.inFlow, ...(sharedBy !== undefined ? { sharedBy } : {}), ...(sharedWith !== undefined ? { sharedWith } : {}) },
+    found: {
+      start: span.start,
+      end: span.end,
+      node: modelNode,
+      span,
+      style: styleOf(node),
+      inFlow: reach.inFlow,
+      ...(sharedBy !== undefined ? { sharedBy } : {}),
+      ...(sharedWith !== undefined ? { sharedWith } : {}),
+      ...(copies !== undefined ? { copies } : {}),
+    },
   };
 }
 

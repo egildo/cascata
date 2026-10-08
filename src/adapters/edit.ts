@@ -24,7 +24,7 @@
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticCode } from "../diagnostics/codes.js";
 import type { Node, ScalarKind } from "../model/node.js";
-import { pointersInDocument, resolvePointer } from "../model/pointer.js";
+import { resolvePointer } from "../model/pointer.js";
 import type { Origin, SourceSpan } from "../model/span.js";
 import type { ParseLimits } from "./limits.js";
 import { findJson, parseBack as parseBackJson, renderJsonString } from "./json/write.js";
@@ -88,6 +88,8 @@ export interface Found {
   readonly sharedBy?: SourceSpan;
   /** YAML, under `"warn"` (v1.12 FR-005): every alias whose expansion holds this value, in document order — the other places the write changes. */
   readonly sharedWith?: readonly SourceSpan[];
+  /** YAML, under `"warn"` and `"allow"` (v1.12 FR-007): the pointer of every node of the document that holds these bytes, read before the edit — each must read the value set after it. */
+  readonly copies?: readonly string[];
 }
 
 export type FindResult = { readonly ok: true; readonly found: Found } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -246,7 +248,7 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
 
   // The safety net: read the edit back. A value that does not come back as the
   // value set (an explicit `!!str` tag over a number, say) is refused, not returned.
-  if (!readsBack(bytes, options, pointer, edit, kind, value)) {
+  if (!readsBack(bytes, options, [pointer, ...(found.copies ?? [])], edit, kind, value)) {
     return refuse("edit-unsupported", `${describeValue(value)} could not be written here and read back as the same value`);
   }
   return { ok: true, edit, diagnostics };
@@ -264,18 +266,17 @@ function sharedInfo(found: Found): Diagnostic {
   });
 }
 
-function readsBack(bytes: Uint8Array, options: EditOptions, pointer: string, edit: Edit, kind: ScalarKind, value: EditValue): boolean {
+function readsBack(bytes: Uint8Array, options: EditOptions, pointers: readonly string[], edit: Edit, kind: ScalarKind, value: EditValue): boolean {
   const applied = new Uint8Array(bytes.length - (edit.end - edit.start) + edit.bytes.length);
   applied.set(bytes.subarray(0, edit.start), 0);
   applied.set(edit.bytes, edit.start);
   applied.set(bytes.subarray(edit.end), edit.start + edit.bytes.length);
   const tree = options.format === "yaml" ? parseBackYaml(applied, options.origin, options.limits) : parseBackJson(applied, options.origin, options.limits);
   if (tree === undefined) return false;
-  const node = resolvePointer(tree, pointer);
-  if (node === undefined || !equalsValue(node, kind, value)) return false;
-  // Every copy of the value — an alias, a merge key — is a node with its span (v1.12 FR-007): each reads the value set.
-  return pointersInDocument(tree, node.span).every((copy) => {
-    const at = resolvePointer(tree, copy);
-    return at !== undefined && equalsValue(at, kind, value);
+  // The pointer asked about, and under "warn" and "allow" every place that shared the value's bytes before the edit
+  // (v1.12 FR-007): each reads the value set, or the edit did not land where the value is held.
+  return pointers.every((at) => {
+    const node = resolvePointer(tree, at);
+    return node !== undefined && equalsValue(node, kind, value);
   });
 }
