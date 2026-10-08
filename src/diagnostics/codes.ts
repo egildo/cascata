@@ -305,8 +305,9 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  * - `edit-block-scalar` — a block scalar (`|`, `>`), whose style is not reproduced.
  * - `edit-bare-key-in-flow` — a key with no value inside a flow collection
  *   (`{a}`), which has nowhere to put a `:` (v1.12).
- * - `edit-tag-elsewhere` — an explicit tag that cannot hold the value and is
- *   not on the value's own line, where it could be dropped (v1.12 FR-011).
+ * - `edit-tag-elsewhere` — an explicit tag that cannot hold the value and whose
+ *   bytes `yaml`'s tokens do not show; since v1.12.1 a tag on an earlier line or
+ *   under a `%TAG` handle is dropped, so no known input reaches it.
  * - `edit-read-back` — the edit did not read back as the value set: the
  *   safety net, which no known input reaches.
  * - `edit-no-writer` — from `editTarget`, a value whose document's format has

@@ -30,9 +30,8 @@ the `?`), or `undefined` in flow, which `setValue` refuses.
 spelling, the nothing-changed law, the shared policy, the tag drop, and the **read-back** (apply to a copy,
 reparse, compare at the pointer *and* at every pointer that held the value's bytes before the edit, `Found.copies`).
 `yaml/write.ts` walks the pointer through the `yaml` AST and owns string spelling, `aliasesHolding` (the
-transitive set of aliases a "warn" names) and `tagOnLine` (the tag found by scanning back along the value's line;
-`yaml` exposes no tag range). Invariants: the edit range is exactly the reader's span, except that a dropped tag
-widens it leftwards over the tag and its blanks; nothing outside it moves; a quoted scalar keeps its quote style
+transitive set of aliases a "warn" names) and `tagDrop` (the tag found in `yaml`'s CST tokens, v1.12.1; `yaml`'s AST exposes no tag range). Invariants: the edit range is exactly the reader's span, except that a dropped tag
+widens it leftwards over the tag and its blanks (and the blanks before it when a line break follows, v1.12.1); nothing outside it moves; a quoted scalar keeps its quote style
 where it can hold the value; a kept tag does not relax quoting (`!!str "4"`).
 
 **Shared values (022).** `findYaml(…, sharedEdits)`: under `"refuse"` a path through an alias or merge key is
@@ -94,10 +93,10 @@ the writers under the case's own policy.
 
 ## Open edges (noticed, not fixed)
 
-- **Explicit tags under a `%TAG` handle**, or on an earlier line than the value, cannot be dropped: refused.
 - **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-read-back` (no known input
   reaches it), `edit-no-writer` (no format is read without a
-  writer), `edit-tag-elsewhere` for a `%TAG` tag.
+  writer), `edit-tag-elsewhere` (no known input reaches it
+  since v1.12.1).
 - **Settled, not defects (v1.12.1):** JSON has no expansion budget because it has no aliases; `locate`'s `kind`
   is a scalar's kind or a container's type (`mapping`/`sequence`), as the type and reference say, and renaming it needs v2.0.
 - Inserting and deleting entries are still unbuilt (§4.3's format-preserving tree).

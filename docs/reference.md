@@ -1407,7 +1407,7 @@ All `level: "error"`, positioned at the span named — except `edit-target-share
 | `edit-container` | a mapping or a sequence: setting a container is an insertion, not written yet | the value |
 | `edit-block-scalar` | a block scalar (`\|`, `>`), whose style is not reproduced | the value |
 | `edit-bare-key-in-flow` | a key with no value inside a flow collection (`{a}`, `{? a}`; v1.12) | the value |
-| `edit-tag-elsewhere` | an explicit tag that cannot hold the value set and is not on the value's own line (v1.12) | the value |
+| `edit-tag-elsewhere` | an explicit tag that cannot hold the value set and that the writer cannot find in the parser's tokens (the safety net: since v1.12.1 a tag on an earlier line or under a `%TAG` handle is dropped) | the value |
 | `edit-read-back` | a scalar that would not read back as the value set (the safety net; no known input reaches it) | the value |
 | `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
 
@@ -1527,7 +1527,7 @@ before.
 - A tagged scalar keeps its tag where the tag holds the kind written (`!!int` an integer, `!!float` a decimal,
   `!!str` a string, `!!bool`, `!!null`; the `!<tag:yaml.org,2002:…>` form likewise) and loses it where it cannot:
   `a: !!int 1` set to `"x"` is the edit `3..10` → `x`, so `a: x`, never `!!int x`. An anchor written after the tag
-  is carried into the edit. A tag that must go but is not on the value's own line is `edit-tag-elsewhere`.
+  is carried into the edit. Since v1.12.1 the tag is found from the parser's own tokens wherever it is written — on an earlier line (`a: !!int` / `  1` set to `"x"` gives `a:` / `  x`, the blank before the tag going with it when a line break follows), with a comment between, or under a `%TAG` handle — and everything between it and the value is carried again.
 
 **Two corrections of cost** (v1.12, §15): a node's column is two lookups in a table built with the byte table,
 so one long line reads in time linear in its length; and the pointers of a tree are indexed once, on first use,

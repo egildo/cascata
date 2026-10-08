@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { editTarget, merge, resolve } from "../../src/index.js";
 import { RecordedTransport } from "../corpus/transport.js";
-import { yamlWriter } from "../../src/writers.js";
+import { jsonWriter, yamlWriter } from "../../src/writers.js";
 import { InMemoryHost } from "./host-test-double.js";
 import { LEVELS, LEVELS_JSON, PROJECT_JSON, ROOT, build, cascade, files } from "./edit-target-fixture.js";
 
@@ -228,16 +228,16 @@ describe("v1.11 FR-003 — refused: shared (round 2: refuse rather than guess)",
 describe("v1.12.1 — editTarget answers where; only the writer answers whether", () => {
   // Each refusal is visible only in the document's bytes, or depends on the value: editTarget sees neither, so it answers ok.
   const rows = [
-    { name: "a block scalar", text: "note: |\n  hi\n", pointer: "/note", value: "x", reason: /block scalar/ },
-    { name: "a key with no value in a flow mapping", text: "m: {a}\n", pointer: "/m/a", value: "x", reason: /flow collection/ },
-    { name: "a tag off the value's line that cannot hold the value", text: "a: !!int\n  4\n", pointer: "/a", value: "x", reason: /explicit tag/ },
+    { name: "a block scalar", file: "/virtual/e.yaml", text: "note: |\n  hi\n", pointer: "/note", value: "x", reason: /block scalar/ },
+    { name: "a key with no value in a flow mapping", file: "/virtual/e.yaml", text: "m: {a}\n", pointer: "/m/a", value: "x", reason: /flow collection/ },
+    { name: "a value the format cannot spell (NaN in JSON)", file: "/virtual/e.json", text: '{"a": 1.5}\n', pointer: "/a", value: Number.NaN, reason: /no spelling/ },
   ];
   for (const row of rows) {
     it(`${row.name}: editTarget is ok, the writer refuses`, async () => {
-      const configuration = await build("/virtual/e.yaml", { "/virtual/e.yaml": row.text });
-      const target = editTarget(configuration, row.pointer);
-      expect(target).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: row.pointer, format: "yaml", diagnostics: [] });
-      const written = yamlWriter().write(ENCODER.encode(row.text), row.pointer, row.value);
+      const configuration = await build(row.file, { [row.file]: row.text });
+      const format = row.file.endsWith(".json") ? "json" : "yaml";
+      expect(editTarget(configuration, row.pointer)).toEqual({ ok: true, location: row.file, pointer: row.pointer, format, diagnostics: [] });
+      const written = (format === "json" ? jsonWriter() : yamlWriter()).write(ENCODER.encode(row.text), row.pointer, row.value);
       expect(written.ok).toBe(false);
       if (!written.ok) expect(written.reason).toMatch(row.reason);
     });

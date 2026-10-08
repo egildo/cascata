@@ -20,7 +20,7 @@
  * The probe behind each clause is in `specs/018-write-value/plan.md`.
  */
 
-import { isAlias, isMap, isNode, isScalar, isSeq } from "yaml";
+import { isAlias, isMap, isNode, isScalar, isSeq, Parser } from "yaml";
 import type { Document, Node as YamlNode } from "yaml";
 import type { Diagnostic } from "../../diagnostics/diagnostic.js";
 import type { Node, ScalarKind } from "../../model/node.js";
@@ -250,7 +250,7 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
   if (span === undefined || modelNode === undefined) {
     throw new Error("Internal error: the YAML reader and the AST walk disagree about where a value is");
   }
-  const tag = isScalar(node) && typeof node.tag === "string" ? { holds: TAG_HOLDS.get(node.tag), ...tagOnLine(bytes, span.start, node.tag) } : undefined;
+  const tag = isScalar(node) && typeof node.tag === "string" && node.range != null ? { holds: TAG_HOLDS.get(node.tag), ...tagDrop(bytes, spans, node.range[0]) } : undefined;
   const sharedWith = sharedBy !== undefined && sharedEdits === "warn" ? aliasesHolding(node, doc, anchors, spans) : undefined;
   // Every node the reader says holds this value's bytes — the value, its alias and merge-key copies, by the model's
   // span rather than the walk's, so a walk that stopped short of the bytes is caught — for the read-back to check each.
@@ -283,37 +283,55 @@ const TAG_HOLDS: ReadonlyMap<string, ScalarKind> = new Map<string, ScalarKind>([
 
 const isBlank = (byte: number | undefined): boolean => byte === 0x20 || byte === 0x09;
 
-/**
- * Where the explicit tag `resolved` of the value starting at `valueStart` is written, if it is on the
- * value's own line (v1.12 FR-011): `yaml`'s ranges start at the value, after its properties, and expose
- * no tag token, so the line is scanned back — over blanks, then at most two properties (`!tag` and
- * `&anchor`, in either order). The token found must be the tag `yaml` resolved, in the `!!` or the
- * verbatim `!<…>` form; anything else (a `%TAG` handle, a tag on an earlier line) is not found.
- */
-function tagOnLine(bytes: Uint8Array, valueStart: number, resolved: string): { drop?: { start: number; kept: number } } {
-  let at = valueStart;
-  for (let property = 0; property < 2; property += 1) {
-    while (at > 0 && isBlank(bytes[at - 1])) at -= 1;
-    const end = at;
-    if (end === valueStart && property === 0) return {}; // nothing blank between a property and the value: no property
-    if (bytes[end - 1] === 0x3e /* > */) {
-      // A verbatim tag, `!<…>`: its URI may hold characters a shorthand cannot.
-      while (at > 0 && !(bytes[at - 1] === 0x21 && bytes[at] === 0x3c)) at -= 1;
-      at -= 1;
-    } else {
-      while (at > 0 && !isBlank(bytes[at - 1]) && bytes[at - 1] !== 0x0a && bytes[at - 1] !== 0x0d && ![0x2c, 0x5b, 0x5d, 0x7b, 0x7d].includes(bytes[at - 1] ?? 0)) at -= 1;
+/** Every token `yaml`'s CST holds, in the parser's text, in document order. Iterative: a document may nest deeply. */
+function sourceTokens(text: string): { readonly type: string; readonly offset: number; readonly end: number }[] {
+  const found: { type: string; offset: number; end: number }[] = [];
+  const work: unknown[] = [];
+  for (const token of new Parser().parse(text)) work.push(token);
+  while (work.length > 0) {
+    const at = work.pop();
+    if (Array.isArray(at)) {
+      for (const item of at) work.push(item);
+    } else if (typeof at === "object" && at !== null) {
+      const fields: Record<string, unknown> = { ...at };
+      const { type, offset, source } = fields;
+      if (typeof type === "string" && typeof offset === "number" && typeof source === "string") found.push({ type, offset, end: offset + source.length });
+      for (const value of Object.values(fields)) if (typeof value === "object" && value !== null) work.push(value);
     }
-    if (at < 0) return {};
-    const token = new TextDecoder().decode(bytes.subarray(at, end));
-    if (token.startsWith("&")) continue; // an anchor: stays, and the tag may be before it
-    const written = token.startsWith("!<") && token.endsWith(">") ? token.slice(2, -1) : token.startsWith("!!") ? `tag:yaml.org,2002:${token.slice(2)}` : undefined;
-    if (written !== resolved) return {};
-    // The tag and the blanks after it go; whatever follows them (an anchor written after the tag) is carried again.
-    let kept = end;
-    while (isBlank(bytes[kept])) kept += 1;
-    return { drop: { start: at, kept } };
   }
-  return {};
+  return found.sort((a, b) => a.offset - b.offset);
+}
+
+/**
+ * Where the explicit tag of the value starting at stored index `valueAt` is, and where the bytes kept after it
+ * begin (v1.12 FR-011; v1.12.1). The tag is read from `yaml`'s own tokens, not scanned for: going back from the
+ * value over blanks, line breaks, comments and an anchor, the first other token is the tag or there is none. So
+ * a tag on an earlier line, and one under a `%TAG` handle, are found as one on the value's line is. The tag and
+ * the blanks after it go; if a line break follows them, so do the blanks before it (`a:` keeps no trailing space).
+ * Everything else between the tag and the value — a line break, a comment, an anchor — is carried again.
+ */
+function tagDrop(bytes: Uint8Array, spans: YamlSpans, valueAt: number): { drop?: { start: number; kept: number } } {
+  const tokens = sourceTokens(spans.parserText);
+  let index = tokens.length - 1;
+  while (index >= 0 && spans.toStored(tokens[index]?.offset ?? 0) >= valueAt) index -= 1;
+  for (; index >= 0; index -= 1) {
+    const token = tokens[index];
+    if (token === undefined || token.type === "tag") break;
+    if (token.type !== "space" && token.type !== "newline" && token.type !== "comment" && token.type !== "anchor") return {};
+  }
+  const tag = tokens[index];
+  if (tag === undefined) return {};
+  const byteAt = (parserIndex: number): number => {
+    const stored = spans.toStored(parserIndex);
+    return spans.spanOf([stored, stored, stored]).start;
+  };
+  let start = byteAt(tag.offset);
+  let kept = byteAt(tag.end);
+  while (isBlank(bytes[kept])) kept += 1;
+  if (bytes[kept] === 0x0a || bytes[kept] === 0x0d) {
+    while (isBlank(bytes[start - 1])) start -= 1;
+  }
+  return { drop: { start, kept } };
 }
 
 /** Parse bytes the way the reader does, for the read-back; `undefined` if they do not parse. */

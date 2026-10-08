@@ -98,8 +98,8 @@ export interface Found {
   readonly bareKey?: { readonly indicator: string | undefined };
   /**
    * YAML (v1.12 FR-011): the scalar's explicit tag. `holds` is the one kind the tag can hold. `drop` is
-   * where the tag starts and where the bytes kept after it begin (an anchor written after the tag, then
-   * the value), when the tag is on the value's own line; absent, the tag cannot be removed by this writer.
+   * where the tag starts and where the bytes kept after it begin (an anchor, a comment, a line break, then
+   * the value); since v1.12.1 found wherever the tag is, so absent only when `yaml`'s tokens show none.
    */
   readonly tag?: { readonly holds: ScalarKind | undefined; readonly drop?: { readonly start: number; readonly kept: number } };
 }
@@ -268,7 +268,7 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   if (found.tag !== undefined && found.tag.holds !== kind) {
     // A tag that cannot hold the value is not written over it (v1.12 FR-011): the edit widens over the tag and the
     // space after it, and carries again whatever sat between them and the value (an anchor written after the tag).
-    if (found.tag.drop === undefined) return refuse("edit-tag-elsewhere", `The value's explicit tag cannot hold ${describeValue(value)}, and it is not on the value's own line, where this writer could remove it`);
+    if (found.tag.drop === undefined) return refuse("edit-tag-elsewhere", `The value's explicit tag cannot hold ${describeValue(value)}, and this writer could not find where it is written`);
     const kept = bytes.subarray(found.tag.drop.kept, found.start);
     const joined = new Uint8Array(kept.length + encoded.length);
     joined.set(kept, 0);

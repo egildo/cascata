@@ -135,11 +135,15 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
   }
   const replaced = resolvePointer(before.tree, testCase.pointer);
   // L3: the edit is the value's span — widened, where a tag cannot hold the value, over that tag and the blanks
-  // after it (v1.12 FR-011); an anchor written after the tag is then carried again at the start of the edit's bytes.
+  // after it (v1.12 FR-011), and over the blanks before it when a line break follows (v1.12.1); whatever sat between
+  // them and the value (line breaks, blanks, comments, an anchor; v1.12.1) is then carried again at the start of the
+  // edit's bytes.
   if (replaced !== undefined) {
     const dropped = new TextDecoder().decode(bytes.subarray(edit.start, replaced.span.start));
-    const tagDrop = /^!(<[^>]*>|\S*)[ \t]+(&\S+[ \t]+)?$/.exec(dropped);
-    const widenedOverTag = edit.start < replaced.span.start && tagDrop !== null && text.startsWith(tagDrop[2] ?? "");
+    const tagDrop = /^([ \t]*)!(?:<[^>]*>|\S*)[ \t]*((?:[ \t]|\r\n|\n|\r|#[^\r\n]*|&\S+)*)$/.exec(dropped);
+    const before = tagDrop?.[1] ?? "";
+    const kept = tagDrop?.[2] ?? "";
+    const widenedOverTag = edit.start < replaced.span.start && tagDrop !== null && text.startsWith(kept) && (before === "" || /^[\r\n]/.test(kept));
     if ((replaced.span.start !== edit.start && !widenedOverTag) || replaced.span.end !== edit.end) {
       failures.push(`L3: the edit range ${edit.start}-${edit.end} is not the value's span ${replaced.span.start}-${replaced.span.end}`);
     }

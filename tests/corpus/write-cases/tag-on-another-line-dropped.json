@@ -1,5 +1,5 @@
 {
-  "name": "write/tag-on-another-line-refused",
+  "name": "write/tag-on-another-line-dropped",
   "cites": "v1.12 FR-011",
   "format": "yaml",
   "call": "setValue",
@@ -9,10 +9,10 @@
     "string": "x"
   },
   "expect": {
-    "diagnostic": {
-      "code": "edit-tag-elsewhere",
-      "start": 11,
-      "end": 12
+    "edit": {
+      "start": 2,
+      "end": 12,
+      "bytes": "\n  x"
     }
   }
 }

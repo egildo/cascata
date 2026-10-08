@@ -731,6 +731,13 @@ export interface YamlSpans {
   readonly spanOf: (range: Range) => SourceSpan;
   /** A block mapping's or sequence's span, with the trailing line break trimmed (`toTightCollectionSpan`). */
   readonly tightSpanOf: (range: Range) => SourceSpan;
+  /**
+   * The text `yaml` was given (prefix marks removed, a lone CR read as LF), and the map from an index into it to
+   * a stored one (v1.12.1). For the writer's tokens, which `yaml`'s CST counts in the parser's text: a tag's own
+   * bytes are in no AST range.
+   */
+  readonly parserText: string;
+  readonly toStored: (parserIndex: number) => number;
 }
 
 export type YamlDocumentHook = (doc: Document, spans: YamlSpans, anchors: AnchorTable) => void;
@@ -801,7 +808,7 @@ export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Part
   }
 
   const anchors = buildAnchorTable(doc);
-  onDocument?.(doc, { spanOf: (range) => toSourceSpan(range, spanContext), tightSpanOf: (range) => toTightCollectionSpan(range, spanContext) }, anchors);
+  onDocument?.(doc, { spanOf: (range) => toSourceSpan(range, spanContext), tightSpanOf: (range) => toTightCollectionSpan(range, spanContext), parserText: yamlText, toStored }, anchors);
 
   // A mark outside a document prefix and a quoted scalar is not YAML 1.2.2
   // (`yaml` admits most of them silently). Where `yaml` also errored at the
