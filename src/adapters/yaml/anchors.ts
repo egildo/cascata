@@ -13,7 +13,8 @@
  * node that currently holds it, and at each alias a lookup. The answers are
  * `yaml`'s own, which `tests/unit/anchor-table.test.ts` checks with
  * `Alias#resolve` as the oracle — in the test only; nothing under `src/`
- * calls it (`tests/unit/layering.test.ts`).
+ * calls it (`tests/unit/anchor-table.test.ts`, "FR-001: nothing under src/
+ * calls Alias#resolve").
  *
  * The walk is iterative, not recursive: a document may nest as deep as the
  * parser managed to build, and the depth cap (§11) is applied by the

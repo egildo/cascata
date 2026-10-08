@@ -204,7 +204,8 @@ export function originsInTree(root: Node): ReadonlyMap<string, string> {
  * copies share the span the choice is a convention, not a fact: the one equal to `hint`
  * (the merged pointer being asked about); else the first whose last segment is the
  * hint's (a fragment's pointer is not the merged one); else the first in walk order.
- * A caller that writes must not use this: it uses `pointersInDocument` and refuses copies.
+ * A caller that writes under the default `sharedEdits: "refuse"` must not use this: it uses `pointersInDocument`
+ * and refuses copies. `editTarget` uses it under `"warn"`/`"allow"`, where answering one copy is the point (v1.12 FR-007).
  */
 export function pointerInDocument(root: Node, target: SourceSpan, hint?: string): string | undefined {
   const candidates = pointersInDocument(root, target);

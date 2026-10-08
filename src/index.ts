@@ -964,7 +964,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
       bytes = cached;
     } else {
       if (state.remote === undefined) {
-        throw new Error("resolve() requires 'cacheDir' to fetch a remote delegation target — the same 'granted, never ambient' posture as 'sandboxRoot'");
+        throw new Error("resolve() requires 'transport' to fetch a remote delegation target — the same 'granted, never ambient' posture as 'sandboxRoot'");
       }
       const fetched = await resolveRemoteDocument(target.url, reference.pin, state.remote);
       if (!fetched.ok) {

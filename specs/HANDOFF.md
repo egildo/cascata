@@ -107,11 +107,6 @@ the writers under the case's own policy.
   mapping; from `editTarget`, a format with no writer);
   callers tell them apart only by message.
 - **Merge-key diagnostics** for a list point at the whole list, not the one alias.
-- **Stale comments outside 022's sweep**, reported not fixed: `src/validate/types.ts`'s module doc calls the
-  collision functions "correctly generalized" (they return `[]`); `src/adapters/yaml/anchors.ts` says the
-  `Alias#resolve` sweep is in `layering.test.ts` (it is in `anchor-table.test.ts`); `src/model/pointer.ts` says a
-  caller that writes must not use `pointerInDocument` (`editTarget` now does, by FR-007's convention); the
-  remote-delegation throw in `src/index.ts` still says "requires 'cacheDir'" (it means `transport`).
 - **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-unsupported` from a
   read-back failure, a bare key in a shared mapping, `editTarget`'s no-writer format, a `%TAG` tag; a later
   document's prefix mark; `editTarget` answering ok on a block scalar.

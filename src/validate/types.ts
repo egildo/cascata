@@ -22,9 +22,9 @@
  * regardless (FR-028).
  *
  * `collisionDiagnostics` (FR-016b) and `qualifierCollisionDiagnostics`
- * (FR-019a, extended by the same reasoning) are kept, correctly
- * generalized, for the multi-adoption future — but are **structurally
- * unreachable in v1**: `declarations` and `configuration.layers` can
+ * (FR-019a, extended by the same reasoning) are kept as reserved stubs —
+ * names, signatures and codes, returning no diagnostic — for the
+ * multi-adoption future, and are **structurally unreachable in v1**: `declarations` and `configuration.layers` can
  * only ever hold layers from one chain, so there is no way, at this
  * milestone, to construct two "unrelated" declarations for either
  * function to find. See each function's own doc comment — the lesson
