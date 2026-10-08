@@ -174,7 +174,7 @@ Remote schemas are pinned by SHA-256 (`$pin`), fetched over HTTPS only, cached p
 Cascata is not on npm yet (the name is taken by an unrelated package). Install from git, using a `-dist` tag, which carries the built output so consumers need no compiler:
 
 ```bash
-pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.11.1-dist"
+pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.12.0-dist"
 ```
 
 Node 22 or later. TypeScript declarations are included. Exports: `@egildo/cascata`, `@egildo/cascata/generate`, `@egildo/cascata/paths`, `@egildo/cascata/writers`, `@egildo/cascata/host/node`.
