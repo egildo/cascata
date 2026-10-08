@@ -100,7 +100,8 @@ the writers under the case's own policy.
   callers tell them apart only by message.
 - **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-unsupported` from a
   read-back failure, a bare key in a shared mapping, `editTarget`'s no-writer format, a `%TAG` tag.
-- **JSON has no expansion budget**, and `locate` of a container reports `mapping`/`sequence` as `kind`.
+- **Settled, not defects (v1.12.1):** JSON has no expansion budget because it has no aliases; `locate`'s `kind`
+  is a scalar's kind or a container's type (`mapping`/`sequence`), as the type and reference say, and renaming it needs v2.0.
 - **A bare key inside a shared mapping** is refused under `"warn"`/`"allow"` (invented in 022, not specified).
 - Inserting and deleting entries are still unbuilt (§4.3's format-preserving tree).
 - **Parked (v1.12.1): parse once, ask many.** Every `locate`/`setValue` parses the whole document, so checking N
