@@ -1,6 +1,6 @@
 # Report: A Document's Cost Is Bounded by Its Size (v1.10)
 
-Tests 2493 before, 2564 after (23 in `anchor-table.test.ts`, 24 in `bounded-cost.test.ts`, one corpus case,
+Tests 2493 before, 2564 after (23 in `anchor-table.test.ts`, 26 in `bounded-cost.test.ts`, one corpus case,
 and the sweeps that now see the new files). `pnpm typecheck` and `pnpm test` green at each commit; no
 SABOTAGE residue. `SPEC.md` not edited, version not bumped, nothing pushed. **No existing test changed**
 (FR-007): the only edit to existing test files is `tests/corpus/case.ts` learning two more `limits` fields.
