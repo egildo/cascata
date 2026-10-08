@@ -129,3 +129,17 @@ reader as a second witness and restates FR-006 itself rather than importing the 
 - Governance: refusing what the mandated standard (§12) itself refuses is a correction; refusing what it accepts
   needs v2.0 (§15). Check any new refusal against that before writing it.
 - Commits happen the moment `pnpm typecheck && pnpm test` is green, small enough for the 600 s watchdog.
+
+## 2026-10-08 — added by the 020 implementer (edit targets and writers)
+
+- **A delegated fragment's `origin.id` is `<location> #graft=N`, not a location.** The location is `origin.label`;
+  `configuration.delegationBreadcrumbs.has(origin.id)` tells the two apart. A fragment is not a `Layer`: its nodes sit
+  inside the delegating layer's `tree`, with their own origin, and a pointer inside the fragment restarts at the graft root.
+- **Several nodes can share one span** (alias and merge-key copies keep the anchor's span). `pointerInDocument`
+  (`src/model/pointer.ts`) breaks the tie by the merged pointer, then by last key. Any new "find the node for this span" code needs the same care.
+- **The merged tree holds the original nodes by reference**, so a merged scalar still carries its own document's span:
+  `editTarget` needs no counting for a list item under `append`, and a scalar wrapped by v1.8 is the document's `/styles`, not `/styles/0`.
+- **Template for an in-memory cascade**: `tests/unit/edit-target-fixture.ts` (`build`, `cascade`, `files`) with `InMemoryHost`;
+  a remote fragment or override needs only `RecordedTransport` plus `allowRemoteDelegation: true`, no cache directory.
+- **`/tmp/sab.py`-style sabotage driver**: a list of (file, old, new, tests), run each, restore, `diff -r` against the backup. Pass stderr too (`stderr=STDOUT`) or the `FAIL` lines are missing.
+- Open edges: `editTarget` answers `ok: true` for a value the writer will refuse (shared, block scalar); a writer throws on a malformed pointer; inserting and deleting are still unbuilt.

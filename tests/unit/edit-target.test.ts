@@ -155,6 +155,30 @@ describe("v1.11 FR-004 — one item of an accumulated list", () => {
   });
 });
 
+describe("v1.11 FR-004 — a scalar wrapped into a list (v1.8)", () => {
+  it("project.yaml's `styles: only.css` is the list's item 1 and the document's /styles — the scalar itself", async () => {
+    const project = ["$schema: ./root.yaml", "styles: only.css", ""].join("\n");
+    const configuration = await build("/virtual/project.yaml", { "/virtual/project.yaml": project });
+    expect(editTarget(configuration, "/styles/1")).toEqual({ ok: true, location: "/virtual/project.yaml", pointer: "/styles", format: "yaml" });
+  });
+});
+
+describe("v1.11 FR-002 — a fragment an override delegated to", () => {
+  it("is the fragment's file, at the fragment's pointer", async () => {
+    const override = ["levels: ./more.yaml", ""].join("\n");
+    const configuration = await build("/virtual/project.yaml", { "/virtual/over2.yaml": override, "/virtual/more.yaml": "L9:\n  elevation: 9\n", "/virtual/project.yaml": "$schema: ./root.yaml\n" }, { overrides: ["./over2.yaml"] });
+    expect(editTarget(configuration, "/levels/L9/elevation")).toEqual({ ok: true, location: "/virtual/more.yaml", pointer: "/L9/elevation", format: "yaml" });
+  });
+});
+
+describe("v1.11 FR-003 — an override read over https", () => {
+  it("is edit-target-remote", async () => {
+    const transport = new RecordedTransport([{ url: "https://example.test/over.yaml", method: "GET", outcome: { kind: "response", response: { status: 200, headers: {}, body: ENCODER.encode("walls:\n  W9:\n    height: 1.5\n") } } }]);
+    const configuration = await build("/virtual/project.yaml", {}, { transport, overrides: ["https://example.test/over.yaml"] });
+    expect(refusal(editTarget(configuration, "/walls/W9/height")).code).toBe("edit-target-remote");
+  });
+});
+
 describe("v1.11 FR-002 — a value overriding a schema's", () => {
   it("a config value over a provided one targets the config: the schema's value lost", async () => {
     const root = ["keys:", "  title:", "    demand:", "      type: string", "    provide: Untitled", ""].join("\n");
@@ -168,6 +192,13 @@ describe("v1.11 FR-002 — aliases", () => {
   it("/b, an alias of /a, is /b in its own document", async () => {
     const configuration = await build("/virtual/e.yaml", { "/virtual/e.yaml": "a: &x 1\nb: *x\n" });
     expect(editTarget(configuration, "/b")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/b", format: "yaml" });
+  });
+});
+
+describe("v1.11 FR-002 — an alias inside a fragment", () => {
+  it("/levels/b is /b in the fragment (the value is shared; the writer will refuse it, but the address is right)", async () => {
+    const configuration = await build("/virtual/project.yaml", { "/virtual/project.yaml": "$schema: ./root.yaml\nlevels: ./levels.yaml\n", "/virtual/levels.yaml": "a: &x 1\nb: *x\n" });
+    expect(editTarget(configuration, "/levels/b")).toEqual({ ok: true, location: "/virtual/levels.yaml", pointer: "/b", format: "yaml" });
   });
 });
 

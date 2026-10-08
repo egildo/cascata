@@ -123,6 +123,15 @@ describe("v1.11 FR-001 — aliases give two nodes one span; the pointer asked ab
   });
 });
 
+describe("v1.11 FR-001 — an alias inside a fragment: the merged pointer is not the fragment's, so the key breaks the tie", () => {
+  // levels.yaml: "a: &x 1\nb: *x\n" — both values are bytes 6-7 of the fragment.
+  it("/levels/b is /b, and /levels/a is /a", async () => {
+    const configuration = await build("/virtual/project.yaml", { "/virtual/project.yaml": "$schema: ./root.yaml\nlevels: ./levels.yaml\n", "/virtual/levels.yaml": "a: &x 1\nb: *x\n" });
+    expect((await entriesAt(configuration, "/levels/b"))[0]?.pointer).toBe("/b");
+    expect((await entriesAt(configuration, "/levels/a"))[0]?.pointer).toBe("/a");
+  });
+});
+
 describe("v1.11 FR-001 — a JSON document", () => {
   it("answers the same way", async () => {
     const configuration = await build("/virtual/project.json", { "/virtual/project.json": '{\n  "$schema": "./root.yaml",\n  "walls": {\n    "W1": {\n      "height": 3.2\n    }\n  }\n}\n' });

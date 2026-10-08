@@ -46,6 +46,7 @@ expands (and is then confined), which §5.3 had always shown and §15 had forbid
 | **v1.8** | **a scalar under `append`** — a single value contributed to a key under `cascade: append` is taken as a list of one and appended, with an `info` notice (`append-scalar-wrapped`) at the author's own position; a mapping is still refused (`SPEC.md` §5.3) |
 | **v1.9** | **spans count stored bytes** — corrections only: offsets count the document's stored bytes, a carriage return and a leading byte-order mark included, so a span slices exactly its node's text; line and column count what a person sees, with LF, CRLF and a lone CR each ending a line; a lone CR in YAML reads as the line break YAML 1.2.2 says it is, and a byte-order mark outside a document prefix or a quoted scalar is `malformed-document` (`SPEC.md` §4.2) |
 | **v1.10** | **writing a value back, and bounded cost** — `locate` and `setValue` rewrite one YAML or JSON value in place, in the file's own style, every other byte untouched (`SPEC.md` Article IX); aliases resolve in one pass, the parser's quadratic duplicate-key check is replaced by Cascata's own, and alias expansion has a budget (`expansion-limit-exceeded`), so a few hundred bytes of nested aliases are refused rather than expanded (§4.2, §11) |
+| **v1.11** | **edit targets, and writers** — `editTarget` answers which document, and which pointer inside it, holds the value that won at a merged pointer (a schema's `provide` and a remote document are refused by name); `why()` entries carry that in-document `pointer`; `yamlWriter()` and `jsonWriter()` offer `locate`/`setValue` in the editing stage's shape from `@egildo/cascata/writers` (`SPEC.md` Article IX)  |
 
 Full detail lives in `specs/001-…` through `specs/016-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
@@ -495,11 +496,12 @@ const styles = why(result.configuration, "/styles");
 
 **`WhyResult`** is one of three outcomes, all reachable and deliberately distinct:
 
-- **`{ kind: "chain", entries: ProvenanceEntry[] }`** — a value or a container exactly one layer
+- **`{ kind: "chain", entries: WhyEntry[] }`** — a value or a container exactly one layer
   wrote, ordered winner-first for a `replace`-terminated chain, or chronologically root-first for one
   ending in accumulation. Each `ProvenanceEntry` carries its contributing `layer`, its `span` in that
   layer's real document, and its `outcome`: `"won"`, `"overridden"`, or `"accumulated"`.
-- **`{ kind: "synthesized", contributors: ProvenanceEntry[] }`** — a mapping **two or more layers
+  Each entry also carries `pointer` (v1.11, below the list).
+- **`{ kind: "synthesized", contributors: WhyEntry[] }`** — a mapping **two or more layers
   independently contributed to** (whether or not their own keys overlap), so no single layer wrote
   what is actually there; `contributors` names each one rather than being empty.
 - **`{ kind: "unknown-pointer" }`** — the pointer names nothing in the merged tree, distinct from
@@ -510,6 +512,16 @@ For a key under `cascade: append`, every entry is `"accumulated"` and `why()` ne
 winner — reporting the last contributor as though it had won would misdescribe the one strategy where
 nothing is overridden. A pointer into a sequence *item* answers for the nearest enclosing recorded
 pointer (mapping-key granularity — items have no contribution history distinct from their sequence's).
+
+**`pointer` (v1.11).** Every entry `why()` returns carries `pointer`: the RFC 6901 pointer of the entry's value
+*inside its own document* (`span.origin`), found in that document's own tree by the entry's span. For a config
+layer it is usually the merged pointer; for a value grafted from a delegated fragment it is the fragment's own
+(`/L1/elevation` where the merged pointer is `/levels/L1/elevation`); for a schema's `provide` it is where the
+provided value sits in the schema document (`/keys/defaults/provide/height`). It is the pointer of the entry's
+*value*, so for a pointer into a list's item the entries are the list's, with the list's pointers. Where an alias
+or a merge key gives two nodes one span, the node at the pointer asked about is chosen, then the node with the
+same last segment, then the first. Added at answer time like `delegatedFrom`; the stored `ProvenanceRecord`
+does not carry it.
 
 ### Merge and provenance types
 
@@ -528,6 +540,9 @@ interface ProvenanceEntry {
   span: SourceSpan; // where in that layer's real document
   outcome: "won" | "overridden" | "accumulated";
 }
+
+// what why() returns (v1.11): the stored entry plus its pointer inside its own document
+type WhyEntry = ProvenanceEntry & { pointer: string };
 
 type ProvenanceRecord = ReadonlyMap<string, readonly ProvenanceEntry[]>; // RFC 6901 pointer -> chain
 
@@ -1370,7 +1385,67 @@ All `level: "error"`, positioned at the span named.
 | `edit-unsupported` | a block scalar (`\|`, `>`), a mapping or a sequence (setting a container is an insertion, not written yet), or a scalar that would not read back as the value set | the value |
 | `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
 
-Inserting and deleting, and which document an edit to a *merged* value belongs in, are not here (§19).
+Inserting and deleting are not here (§19).
+
+## v1.11 — which document an edit belongs in, and writers
+
+`SPEC.md` Article IX (§19), two **additions** (§15): nothing read changes and nothing accepted is refused.
+
+### `editTarget(configuration, pointer)`
+
+```ts
+import { editTarget } from "@egildo/cascata";
+
+editTarget(configuration, "/walls/W2/height");
+// { ok: true, location: "/project/override.yaml", pointer: "/walls/W2/height", format: "yaml" }
+editTarget(configuration, "/levels/L1/elevation"); // the key `levels` delegates to levels.yaml
+// { ok: true, location: "/project/levels.yaml", pointer: "/L1/elevation", format: "yaml" }
+editTarget(configuration, "/styles/3"); // the fourth item of a list under `cascade: append`
+// { ok: true, location: "/project/override.yaml", pointer: "/styles/0", format: "yaml" }
+```
+
+Takes a merged configuration (`merge()`, or `load()`'s `.configuration`) and an RFC 6901 pointer into it; answers
+the document that holds the winning value — a config layer, an override, or a fragment a config delegated to —
+the pointer *inside that document*, and its format (`"yaml"` or `"json"`, by extension). `location` is the
+document's `origin.id`; for a delegated fragment, whose id is `<location> #graft=N`, it is the fragment's own
+location. It reads no file: hand `location`'s bytes and `pointer` to a writer. It throws only for a pointer that
+is neither empty nor starts with `/`.
+
+An item of a list under `cascade: append` has its own document and its own index in it, whatever its place in the
+merged list. A pointer to the whole list is a container.
+
+### v1.11 diagnostic codes
+
+All `level: "error"`.
+
+| Code | When | Positioned at |
+|---|---|---|
+| `edit-target-absent` | no value at the pointer in the merged configuration | the nearest existing ancestor |
+| `edit-unsupported` | the value is a mapping or a sequence (a container, merged or not) | the value |
+| `edit-target-inherited` | the winning value was supplied by a schema's `provide`; the message names the schema's location and says the edit would change a default every document under it shares | the provided value, in the schema document |
+| `edit-target-remote` | the winning value's document was read over `https://` | the value, in that document |
+
+The first two are v1.10's codes. A schema's value read over `https://` is `edit-target-inherited` (the schema is the
+more useful name). Whether an edit to an inherited value should change the default or add an override nearer the
+user is the view-update question, which Article IX leaves open.
+
+### Writers: `@egildo/cascata/writers`
+
+```ts
+import { yamlWriter, jsonWriter } from "@egildo/cascata/writers";
+
+const writer = yamlWriter();
+writer.claims("/project/Walls.YML");                     // true — .yaml and .yml, any case; jsonWriter(): .json
+writer.locate(bytes, "/walls/W2/height");                // { ok: true, start: 47, end: 50 }
+writer.write(bytes, "/walls/W2/height", 3.4);            // { ok: true, edit: { start: 47, end: 50, bytes } }
+writer.write(bytes, "/walls", 1);                        // { ok: false, reason: "…" }
+```
+
+`{ claims(location), locate(bytes, path), write(bytes, path, value) }` — the shape a source-graph library's editing
+stage expects, met by shape (nothing here names or imports that library). They are `locate` and `setValue` with
+a synthetic origin and add no behaviour: `path` is an RFC 6901 pointer, `value` is `string | number | bigint |
+boolean | null`, the bytes are the document as stored, and a refusal's `reason` is the first diagnostic's message.
+Only programmer error throws, as with the verbs. Types: `Writer`, `WriterLocateResult`, `WriterWriteResult`.
 
 ## Scripts
 

@@ -108,12 +108,16 @@ export function resolvePointer(root: Node, pointer: string): Node | undefined {
  *
  * Several nodes can share one span: an alias or a merge key expands to a copy that
  * keeps the anchor's span (SPEC.md §4.2). Among equal spans, the one whose pointer is
- * `hint` is chosen, and otherwise the first in walk order (sorted keys, items in order).
- * The walk is iterative and visits each node once.
+ * `hint` is chosen; failing that (the hint is a pointer into a merged tree, and the node
+ * is in a fragment), the first whose last segment is the hint's; failing that, the first
+ * in walk order (sorted keys, items in order). The walk is iterative and visits each node
+ * once.
  */
 export function pointerInDocument(root: Node, target: SourceSpan, hint?: string): string | undefined {
   const id = target.origin.id;
+  const tail = (p: string): string => p.slice(p.lastIndexOf("/") + 1);
   let first: string | undefined;
+  let sameKey: string | undefined;
   const stack: { readonly node: Node; readonly pointer: string }[] = [{ node: root, pointer: "" }];
   for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
     const { node, pointer } = item;
@@ -121,6 +125,7 @@ export function pointerInDocument(root: Node, target: SourceSpan, hint?: string)
     if (own && node.span.start === target.start && node.span.end === target.end) {
       if (pointer === hint) return pointer;
       first ??= pointer;
+      if (hint !== undefined && tail(pointer) === tail(hint)) sameKey ??= pointer;
     }
     // A child of a node of another document restarts at its own root, so only a node of this document extends the pointer.
     const children: { readonly node: Node; readonly pointer: string }[] = [];
@@ -134,5 +139,5 @@ export function pointerInDocument(root: Node, target: SourceSpan, hint?: string)
       if (child !== undefined) stack.push(child);
     }
   }
-  return first;
+  return sameKey ?? first;
 }
