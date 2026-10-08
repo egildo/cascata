@@ -95,7 +95,7 @@
  * answers as an ordinary chain, exactly like a scalar.
  */
 
-import { escapePointerSegment, pointerFromPath, resolvePointer } from "../model/pointer.js";
+import { escapePointerSegment, pointerFromPath, pointerInDocument, resolvePointer } from "../model/pointer.js";
 import type { Mapping, Node } from "../model/node.js";
 import type { DocumentIdentity } from "../model/identity.js";
 import type { SourceSpan } from "../model/span.js";
@@ -362,9 +362,20 @@ export function createProvenanceBuilder(): ProvenanceBuilder {
  * would become observable rather than silent.
  */
 export type WhyResult =
-  | { readonly kind: "chain"; readonly entries: readonly ProvenanceEntry[] }
-  | { readonly kind: "synthesized"; readonly contributors: readonly ProvenanceEntry[] }
+  | { readonly kind: "chain"; readonly entries: readonly WhyEntry[] }
+  | { readonly kind: "synthesized"; readonly contributors: readonly WhyEntry[] }
   | { readonly kind: "unknown-pointer" };
+
+/**
+ * An entry as `why()` answers it (v1.11 FR-001): the stored entry, plus `pointer` — the
+ * RFC 6901 pointer of the entry's value **inside its own document** (`span.origin`), found
+ * in that document's own tree by the entry's span. For a config layer it is usually the
+ * merged pointer; for a value grafted from a delegated fragment it is the fragment's own
+ * (`/L1/elevation`, not `/levels/L1/elevation`); for a schema's `provide` it is where the
+ * provided value sits in the schema document (`/keys/defaults/provide/height`). Attached at
+ * answer time, like `delegatedFrom`: the stored record never carries it.
+ */
+export type WhyEntry = ProvenanceEntry & { readonly pointer: string };
 
 /** Build `parentPointer`'s child pointer for `key` without re-parsing `parentPointer` — the inverse of `resolvePointer`'s own per-segment walk, needed here because `why()` walks the merged **tree**, not a path array, once it starts computing `synthesized` contributors. */
 function childPointer(parentPointer: string, key: string): string {
@@ -381,20 +392,20 @@ function childPointer(parentPointer: string, key: string): string {
  * identity here), in the order each layer is first encountered walking
  * the container's own canonically-ordered keys.
  */
-function synthesizedContributors(record: ProvenanceRecord, containerPointer: string, container: Mapping): readonly ProvenanceEntry[] {
-  const byLayer = new Map<Layer, ProvenanceEntry>();
+function synthesizedContributors(record: ProvenanceRecord, containerPointer: string, container: Mapping): readonly (readonly [ProvenanceEntry, string])[] {
+  const byLayer = new Map<Layer, readonly [ProvenanceEntry, string]>();
   for (const [key, child] of container.entries) {
     const pointer = childPointer(containerPointer, key);
     const chain = record.get(pointer);
     if (chain !== undefined && chain.length > 0) {
       const winner = chain[0];
       if (winner !== undefined && !byLayer.has(winner.layer)) {
-        byLayer.set(winner.layer, winner);
+        byLayer.set(winner.layer, [winner, pointer]);
       }
     } else if (child.type === "mapping") {
       for (const contributor of synthesizedContributors(record, pointer, child)) {
-        if (!byLayer.has(contributor.layer)) {
-          byLayer.set(contributor.layer, contributor);
+        if (!byLayer.has(contributor[0].layer)) {
+          byLayer.set(contributor[0].layer, contributor);
         }
       }
     }
@@ -430,6 +441,16 @@ function withBreadcrumb(configuration: MergedConfiguration, entry: ProvenanceEnt
   return breadcrumb === undefined ? entry : { ...entry, delegatedFrom: breadcrumb };
 }
 
+/**
+ * v1.11 FR-001: `entry`'s value's pointer inside its own document, from that document's own
+ * tree. `mergedPointer` is only the tie-break between nodes that share a span (aliases, merge
+ * keys); the fallback to it, for an entry whose span the layer's tree does not hold, is
+ * defensive — the fold records spans of the nodes of `layer.tree`, so it is not reachable.
+ */
+function withPointer(entry: ProvenanceEntry, mergedPointer: string): WhyEntry {
+  return { ...entry, pointer: pointerInDocument(entry.layer.tree, entry.span, mergedPointer) ?? mergedPointer };
+}
+
 export function why(configuration: MergedConfiguration, pointer: string): WhyResult {
   const node = resolvePointer(configuration.tree, pointer);
   if (node === undefined) {
@@ -437,10 +458,10 @@ export function why(configuration: MergedConfiguration, pointer: string): WhyRes
   }
   const chain = configuration.provenance.get(pointer);
   if (chain !== undefined) {
-    return { kind: "chain", entries: chain.map((entry) => withBreadcrumb(configuration, entry)) };
+    return { kind: "chain", entries: chain.map((entry) => withPointer(withBreadcrumb(configuration, entry), pointer)) };
   }
   if (node.type === "mapping") {
-    const contributors = synthesizedContributors(configuration.provenance, pointer, node).map((entry) => withBreadcrumb(configuration, entry));
+    const contributors = synthesizedContributors(configuration.provenance, pointer, node).map(([entry, entryPointer]) => withPointer(withBreadcrumb(configuration, entry), entryPointer));
     return { kind: "synthesized", contributors };
   }
   // `pointer` resolves, but to a position this module's own recording

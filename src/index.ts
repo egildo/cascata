@@ -72,7 +72,7 @@ export type { Recording, RecordedFailure, RecordedFailureKind, RecordedResponse,
  * type changed; only its reachability.
  */
 export type { Host, HostReadResult } from "./resolve/host.js";
-export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord, WhyResult } from "./merge/provenance.js";
+export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord, WhyEntry, WhyResult } from "./merge/provenance.js";
 
 // Writing a value back (v1.10, SPEC.md Article IX): `locate` and `setValue`.
 export { locate, setValue } from "./adapters/edit.js";
