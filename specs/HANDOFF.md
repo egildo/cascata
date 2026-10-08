@@ -110,7 +110,7 @@ reader as a second witness and restates FR-006 itself rather than importing the 
 - **Merge key diagnostics** for a list point at the whole list, not the one alias (`mergeSources` returns one span).
 - **JSON has no expansion budget and `locate` of a container** reports the model node type as `kind`
   (`mapping`/`sequence`), outside §4.1's scalar list.
-- **§15 (v1.10) still blames `yaml`'s composer for anchors;** the cause was `uniqueKeys`. Not mine to edit.
+- ~~§15 (v1.10) still blames `yaml`'s composer for anchors~~ — fixed by the coordinator in f98adc1: §15 names `uniqueKeys` as the third cost correction.
 - 020 will want: edit targets that live in a *merged* value (needs `why()` to report the pointer inside the
   supplying document, not only its span), and inserting/deleting (needs a format-preserving tree; `yaml`'s
   Document mode is the door §4.3 names). The writer's read-back and `Found` shape are the extension points.
