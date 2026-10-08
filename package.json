@@ -61,6 +61,7 @@
     "test:timing": "vitest run --config vitest.timing.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
     "dist-tag": "sh scripts/dist-tag.sh"
   },
   "dependencies": {
