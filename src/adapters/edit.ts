@@ -259,7 +259,6 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
   if (found.bareKey !== undefined) {
     // A key with no value (`? a`): the value needs the indicator the document lacks, on its own line (v1.12 FR-010).
     if (found.bareKey.indicator === undefined) return refuse("edit-bare-key-in-flow", "A key with no value inside a flow collection is not written; only a key that has a value, or a block mapping's `? key`, can take one");
-    if (found.sharedBy !== undefined) return refuse("edit-unsupported", "A key with no value inside a shared mapping is not written");
     spelled = found.bareKey.indicator + yamlPadding(bytes, found.start, text).trimStart();
   } else if (options.format === "yaml" && found.end === found.start) {
     spelled = yamlPadding(bytes, found.start, text);

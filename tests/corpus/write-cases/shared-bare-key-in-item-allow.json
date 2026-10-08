@@ -1,0 +1,19 @@
+{
+  "name": "write/shared-bare-key-in-item-allow",
+  "cites": "v1.12 FR-010",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "l: &l\n  - ? k\nm: *l\n",
+  "pointer": "/l/0/k",
+  "value": {
+    "number": 1
+  },
+  "sharedEdits": "allow",
+  "expect": {
+    "edit": {
+      "start": 13,
+      "end": 13,
+      "bytes": "\n    : 1"
+    }
+  }
+}

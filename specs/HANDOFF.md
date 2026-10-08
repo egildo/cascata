@@ -96,11 +96,10 @@ the writers under the case's own policy.
 
 - **Explicit tags under a `%TAG` handle**, or on an earlier line than the value, cannot be dropped: refused.
 - **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-read-back` (no known input
-  reaches it), `edit-unsupported` for a bare key in a shared mapping, `edit-no-writer` (no format is read without a
+  reaches it), `edit-no-writer` (no format is read without a
   writer), `edit-tag-elsewhere` for a `%TAG` tag.
 - **Settled, not defects (v1.12.1):** JSON has no expansion budget because it has no aliases; `locate`'s `kind`
   is a scalar's kind or a container's type (`mapping`/`sequence`), as the type and reference say, and renaming it needs v2.0.
-- **A bare key inside a shared mapping** is refused under `"warn"`/`"allow"` (invented in 022, not specified).
 - Inserting and deleting entries are still unbuilt (§4.3's format-preserving tree).
 - **Parked (v1.12.1): parse once, ask many.** Every `locate`/`setValue` parses the whole document, so checking N
   values of one document costs N parses. The cure is a writer that opens bytes once and answers many pointers;

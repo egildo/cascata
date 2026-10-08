@@ -1,0 +1,19 @@
+{
+  "name": "write/shared-bare-key-merge-allow",
+  "cites": "v1.12 FR-010",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &b\n  ? k\nw:\n  <<: *b\n",
+  "pointer": "/w/k",
+  "value": {
+    "number": 1
+  },
+  "sharedEdits": "allow",
+  "expect": {
+    "edit": {
+      "start": 14,
+      "end": 14,
+      "bytes": "\n  : 1"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "write/shared-bare-key-refuse",
+  "cites": "v1.12 FR-010",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &b\n  ? k\nw: *b\n",
+  "pointer": "/w/k",
+  "value": {
+    "number": 1
+  },
+  "sharedEdits": "refuse",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-shared",
+      "start": 18,
+      "end": 20
+    }
+  }
+}

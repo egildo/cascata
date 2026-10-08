@@ -1393,7 +1393,7 @@ the text (a single-quoted scalar doubles an embedded `'`); where it cannot, doub
 JSON: RFC 8259 §7, non-ASCII written as itself. A string with an unpaired surrogate has no UTF-8 spelling.
 
 **Every edit is read back** before it is returned. One that does not come back as the value set is refused as
-`edit-read-back` (`edit-unsupported` until v1.12.1), not guessed. (Until v1.12 an explicit `!!str` tag over a number was the example; since
+`edit-read-back`, not guessed. (Until v1.12 an explicit `!!str` tag over a number was the example; since
 v1.12 a tag that cannot hold the value is dropped instead — see "v1.12" below.)
 
 ### v1.10 diagnostic codes
@@ -1409,7 +1409,6 @@ All `level: "error"`, positioned at the span named — except `edit-target-share
 | `edit-bare-key-in-flow` | a key with no value inside a flow collection (`{a}`, `{? a}`; v1.12) | the value |
 | `edit-tag-elsewhere` | an explicit tag that cannot hold the value set and is not on the value's own line (v1.12) | the value |
 | `edit-read-back` | a scalar that would not read back as the value set (the safety net; no known input reaches it) | the value |
-| `edit-unsupported` | a key with no value inside a shared mapping, under `sharedEdits` `"warn"`/`"allow"` (v1.12). Until v1.12.1 this one code also named each of the five above, told apart only by message | the value |
 | `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
 
 Inserting and deleting are not here (§19).
@@ -1448,7 +1447,7 @@ All `level: "error"` — except `edit-target-shared` under `sharedEdits: "warn"`
 | Code | When | Positioned at |
 |---|---|---|
 | `edit-target-absent` | no value at the pointer in the merged configuration | the nearest existing ancestor |
-| `edit-container` | the value is a mapping or a sequence (a container, merged or not); `edit-unsupported` until v1.12.1 | the value |
+| `edit-container` | the value is a mapping or a sequence (a container, merged or not) | the value |
 | `edit-no-writer` | the value's document is in a format with no writer (none is read without one today) | the value |
 | `edit-target-shared` | the value's document holds more than one node at its position — an anchor and its aliases, or a merge key's copies — or (v1.12) the document is read at more than one place (delegated to twice, or both a layer and a fragment); writing it would change every place that shares it (under the default `"refuse"` the writer refuses the same alias copies). `related` names each other place: another copy, or another graft's delegating value. Under `sharedEdits: "warn"` (v1.12) the target is answered and this code comes with it at `level: "info"`; under `"allow"` nothing is said | the value |
 | `edit-target-inherited` | the winning value was supplied by a schema's `provide`; the message names the schema's location and says the edit would change a default every document under it shares | the provided value, in the schema document |

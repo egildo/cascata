@@ -300,9 +300,6 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  *   under `sharedEdits: "refuse"` (the default); under `"warn"` (v1.12) the
  *   edit is answered with this code at `level: "info"`, positioned at the
  *   value, `related` naming every other place the write changes.
- * - `edit-unsupported` — a key with no value inside a shared mapping under
- *   `"warn"`/`"allow"`; positioned at the value. Until v1.12.1 it also named
- *   each refusal below, which callers could tell apart only by message.
  * - `edit-container` — a mapping or a sequence: setting a container is an
  *   insertion, not written yet (also from `editTarget`).
  * - `edit-block-scalar` — a block scalar (`|`, `>`), whose style is not reproduced.
@@ -316,12 +313,13 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  *   no writer; no format is read without one today.
  *
  * All positioned at the value. The six codes are v1.12.1's split of
- * `edit-unsupported` (SPEC.md §15).
+ * `edit-unsupported`, which named all six and a seventh refusal (a key with
+ * no value inside a shared mapping) that v1.12.1 dropped (SPEC.md §15).
  * - `edit-unrepresentable` — the format cannot spell the value (JSON has no
  *   `NaN` or infinity; no format has a lone surrogate); positioned at the
  *   value it would have replaced.
  */
-export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unsupported", "edit-unrepresentable", "edit-container", "edit-block-scalar", "edit-bare-key-in-flow", "edit-tag-elsewhere", "edit-read-back", "edit-no-writer"] as const;
+export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unrepresentable", "edit-container", "edit-block-scalar", "edit-bare-key-in-flow", "edit-tag-elsewhere", "edit-read-back", "edit-no-writer"] as const;
 
 /**
  * Which document an edit belongs in (v1.11, `SPEC.md` Article IX, §19) — specs/020-edit-targets
