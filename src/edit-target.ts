@@ -13,6 +13,10 @@
  * reference, so the scalar at a merged pointer still holds the span of the document that wrote
  * it. That is why a single item of an accumulated list (FR-004) needs no counting: the item
  * knows its own document, and the document's own tree knows the item's index in it.
+ *
+ * **`ok` answers where, not whether** (v1.12.1). The writer alone decides whether the value is
+ * written: a block scalar, a key with no value in a flow collection, and a tag that cannot hold
+ * the new value off its line are refused there, from bytes and a value this function never sees.
  */
 
 import { formatForLocation } from "./adapters/registry.js";

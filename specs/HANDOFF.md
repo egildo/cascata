@@ -94,10 +94,6 @@ the writers under the case's own policy.
 
 ## Open edges (noticed, not fixed)
 
-- **`editTarget` still answers `ok: true` for a value the writer will refuse**: a block scalar; a bare key in a
-  flow collection; a value whose tag cannot hold the new value and is not on its line (that depends on the value,
-  which `editTarget` does not see). Shared values are no longer among them: alias copies and double grafts are
-  `edit-target-shared` under `"refuse"`, and answered on purpose under `"warn"`/`"allow"`.
 - **`locate` ignores `sharedEdits`**, so a writer's `locate` refuses an alias copy its `write` writes under `"allow"`.
 - **Pointer segments with a leading zero (`01`)** are accepted as sequence indices (`^\d+$` in `yaml/write.ts` and
   `resolvePointer`); RFC 6901 forbids them. (`+1` is rejected; the 020 handoff said otherwise.)
@@ -109,10 +105,13 @@ the writers under the case's own policy.
 - **Merge-key diagnostics** for a list point at the whole list, not the one alias.
 - **Untested though true**: `unknown-type-entry-keyword`; a malformed `seal:`; `edit-unsupported` from a
   read-back failure, a bare key in a shared mapping, `editTarget`'s no-writer format, a `%TAG` tag; a later
-  document's prefix mark; `editTarget` answering ok on a block scalar.
+  document's prefix mark.
 - **JSON has no expansion budget**, and `locate` of a container reports `mapping`/`sequence` as `kind`.
 - **A bare key inside a shared mapping** is refused under `"warn"`/`"allow"` (invented in 022, not specified).
 - Inserting and deleting entries are still unbuilt (§4.3's format-preserving tree).
+- **Parked (v1.12.1): parse once, ask many.** Every `locate`/`setValue` parses the whole document, so checking N
+  values of one document costs N parses. The cure is a writer that opens bytes once and answers many pointers;
+  wait for a consumer that needs it.
 
 ## The owner and the reviewer
 

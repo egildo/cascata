@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { editTarget, merge, resolve } from "../../src/index.js";
 import { RecordedTransport } from "../corpus/transport.js";
+import { yamlWriter } from "../../src/writers.js";
 import { InMemoryHost } from "./host-test-double.js";
 import { LEVELS, LEVELS_JSON, PROJECT_JSON, ROOT, build, cascade, files } from "./edit-target-fixture.js";
 
@@ -222,6 +223,25 @@ describe("v1.11 FR-003 — refused: shared (round 2: refuse rather than guess)",
     const lone = await build("/virtual/e.yaml", { "/virtual/e.yaml": "a: &x 1\nb: 2\n" });
     expect(editTarget(lone, "/a")).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: "/a", format: "yaml", diagnostics: [] });
   });
+});
+
+describe("v1.12.1 — editTarget answers where; only the writer answers whether", () => {
+  // Each refusal is visible only in the document's bytes, or depends on the value: editTarget sees neither, so it answers ok.
+  const rows = [
+    { name: "a block scalar", text: "note: |\n  hi\n", pointer: "/note", value: "x", reason: /block scalar/ },
+    { name: "a key with no value in a flow mapping", text: "m: {a}\n", pointer: "/m/a", value: "x", reason: /flow collection/ },
+    { name: "a tag off the value's line that cannot hold the value", text: "a: !!int\n  4\n", pointer: "/a", value: "x", reason: /explicit tag/ },
+  ];
+  for (const row of rows) {
+    it(`${row.name}: editTarget is ok, the writer refuses`, async () => {
+      const configuration = await build("/virtual/e.yaml", { "/virtual/e.yaml": row.text });
+      const target = editTarget(configuration, row.pointer);
+      expect(target).toEqual({ ok: true, location: "/virtual/e.yaml", pointer: row.pointer, format: "yaml", diagnostics: [] });
+      const written = yamlWriter().write(ENCODER.encode(row.text), row.pointer, row.value);
+      expect(written.ok).toBe(false);
+      if (!written.ok) expect(written.reason).toMatch(row.reason);
+    });
+  }
 });
 
 describe("v1.11 FR-002 — programmer error", () => {
