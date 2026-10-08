@@ -10,16 +10,16 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.10.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
+**v1.11.** All eight milestones of `SPEC.md` §14's roadmap shipped at v1.0, and the specification is
 frozen: a *correction* to `SPEC.md` is always permitted, an *addition* is permitted while no existing
 meaning changes, and **changing an existing meaning requires v2.0** (§15's freeze rule). v1.1 was the
-first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh, v1.8 the eighth, v1.9 the ninth, v1.10 the tenth. The first eight are
+first release under that freeze, v1.2 the second, v1.3 the third, v1.4 the fourth, v1.5 the fifth, v1.6 the sixth, v1.7 the seventh, v1.8 the eighth, v1.9 the ninth, v1.10 the tenth, v1.11 the eleventh. The first eight are
 additions — Article VIII's accumulated demand and type generator, then a second format adapter, then the
 launching schema, then a namespace the host can own, then a library that loads in a browser realm, then config
 documents the embedder names ranked after the entry, then a sandbox the caller may grant more than one root for, then a scalar under `append` taken as a list of one. v1.9 is corrections only: offsets count the stored
 bytes, a lone CR in YAML is the line break YAML 1.2.2 says it is, and a byte-order mark YAML does not admit
 is refused. v1.10 is both: an addition (writing a value back) and corrections that bound a
-document's cost by its size.
+document's cost by its size. v1.11 is an addition: which document an edit belongs in, and writers.
 Nothing a schema meant before any of those releases means anything else after it. Two of the first eight carry
 *corrections* beside their additions: v1.4's, that a `sandboxRoot` naming a filesystem root contains what is
 under it, and v1.7's two — that a location which does not exist is judged through its nearest existing

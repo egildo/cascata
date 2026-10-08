@@ -153,6 +153,14 @@ section of a report has been worth more than the diff.
 - Never amend, rebase, or force-push. Add commits.
 - Tick task checkboxes in `specs/NNN-*/tasks.md` as you complete them.
 - `pnpm typecheck` and `pnpm test` green before you stop. Never leave the tree dirty.
+- **Wall-clock tests live in `tests/timing/`** and run serially after the main suite (`pnpm test`
+  runs both; `pnpm test:main` and `pnpm test:timing` run one). A test that asserts on elapsed time or
+  a ratio of elapsed times goes there, never in `tests/unit/`; where the work can be counted (nodes
+  built, calls made), count it in the main suite instead. Never loosen a bound to stop a flake: a
+  timing failure in the serial project is a real failure. Check a run for `×`/`failed`, not only for
+  the count line.
+- **A retiring implementer writes `specs/HANDOFF.md`** — only what the specs, reports and this file
+  don't hold — and a fresh one reads it right after this file.
 - **Existing tests must stay green, and must not be weakened to accommodate new work.** If a test
   needs changing, say why in the report — a passing suite achieved by relaxing an assertion is worse
   than a failing one.
