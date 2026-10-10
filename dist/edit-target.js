@@ -1,0 +1,123 @@
+/**
+ * Which document an edit belongs in — SPEC.md Article IX (§19, v1.11); specs/020-edit-targets.
+ *
+ * `editTarget` takes a merged configuration and a pointer into it and answers the document, and
+ * the pointer inside that document, where the winning value is written — so a tool that edits its
+ * model never has to know the cascade. It reads no file; the caller hands the document's bytes and
+ * the answer's pointer to a writer (`./writers.ts`).
+ *
+ * Lives beside `index.ts` rather than under `src/merge/` because it needs the adapter registry
+ * for a document's format, which the format-blind stages may not import.
+ *
+ * **The winning value is the merged node itself.** The fold carries every node through by
+ * reference, so the scalar at a merged pointer still holds the span of the document that wrote
+ * it. That is why a single item of an accumulated list (FR-004) needs no counting: the item
+ * knows its own document, and the document's own tree knows the item's index in it.
+ *
+ * **`ok` answers where, not whether** (v1.12.1). The writer alone decides whether the value is
+ * written: a block scalar, a key with no value in a flow collection, and a tag that cannot hold
+ * the new value off its line are refused there, from bytes and a value this function never sees.
+ */
+import { formatForLocation } from "./adapters/registry.js";
+import { createDiagnostic } from "./diagnostics/diagnostic.js";
+import { originsInTree, pointerInDocument, pointersAt, resolvePointer } from "./model/pointer.js";
+function refuse(code, message, primary) {
+    return { ok: false, diagnostics: [createDiagnostic({ level: "error", code, message, primary })] };
+}
+function where(span) {
+    return `${span.origin.label}:${span.line}:${span.column}`;
+}
+/**
+ * Every other place a write to `node`'s bytes changes (v1.12 FR-006): the other nodes of its own
+ * document that share its span (an anchor and its aliases, a merge key's copies), and every other
+ * graft of its location — or a layer read from the same file. A fragment's origin id is unique per
+ * graft and its label is the location; a graft is named by the place that grafted it, the delegating
+ * key's value. Also answers every place the location is read, its own included, for the message.
+ */
+function otherPlaces(configuration, node, location, inDocument, chosen) {
+    const related = inDocument.filter((p) => p !== chosen).map((p) => ({ label: `the same value at '${p}' in ${location}`, span: node.span }));
+    const places = [];
+    const seen = new Set();
+    for (const layer of configuration.layers) {
+        for (const [id, label] of originsInTree(layer.tree)) {
+            if (seen.has(id))
+                continue;
+            seen.add(id);
+            const hops = configuration.delegationBreadcrumbs.get(id);
+            if ((hops !== undefined ? label : id) !== location)
+                continue;
+            const grafted = hops?.[hops.length - 1]?.span;
+            places.push(grafted !== undefined ? `delegated to at ${where(grafted)}` : "read as a layer");
+            if (id === node.span.origin.id)
+                continue;
+            for (const p of pointersAt(layer.tree, id, node.span.start, node.span.end)) {
+                const copy = hops === undefined ? resolvePointer(layer.tree, p) : undefined;
+                const span = grafted ?? copy?.span;
+                if (span !== undefined)
+                    related.push({ label: grafted !== undefined ? `the same value through the graft at ${where(grafted)}` : `the same value at '${p}' in ${location}, read again as another layer`, span });
+            }
+        }
+    }
+    return { related, places };
+}
+export function editTarget(configuration, pointer, options = {}) {
+    const sharedEdits = options.sharedEdits ?? "refuse";
+    if (sharedEdits !== "refuse" && sharedEdits !== "warn" && sharedEdits !== "allow") {
+        throw new Error(`editTarget(): sharedEdits must be "refuse", "warn" or "allow", got ${JSON.stringify(sharedEdits)}`);
+    }
+    const node = resolvePointer(configuration.tree, pointer);
+    if (node === undefined) {
+        // Positioned at the nearest ancestor that exists, as `locate` does; the root always does.
+        let ancestor = pointer;
+        let found = node;
+        while (found === undefined) {
+            ancestor = ancestor.slice(0, ancestor.lastIndexOf("/"));
+            found = resolvePointer(configuration.tree, ancestor);
+        }
+        return refuse("edit-target-absent", `There is no value at '${pointer}' in the merged configuration`, found.span);
+    }
+    if (node.type !== "scalar") {
+        return refuse("edit-container", `The value at '${pointer}' is a ${node.type}; setting a container is an insertion, which is not written yet, so only a scalar has an edit target`, node.span);
+    }
+    const origin = node.span.origin;
+    // A fragment's origin id is `<location> #graft=N`, unique per graft; its label is the location.
+    const location = configuration.delegationBreadcrumbs.has(origin.id) ? origin.label : origin.id;
+    for (let index = configuration.layers.length - 1; index >= 0; index--) {
+        const layer = configuration.layers[index];
+        // More than one node with this span means copies (an alias, a merge key).
+        const inDocument = layer === undefined ? [] : pointersAt(layer.tree, origin.id, node.span.start, node.span.end);
+        if (layer === undefined || inDocument.length === 0) {
+            continue;
+        }
+        if (layer.role === "schema") {
+            return refuse("edit-target-inherited", `The value at '${pointer}' is supplied by the 'provide' of the schema ${location}; editing it there would change a default every document under that schema shares`, node.span);
+        }
+        if (/^https:\/\//i.test(location)) {
+            return refuse("edit-target-remote", `The value at '${pointer}' is in ${location}, a document read over https; a remote document is never an edit target`, node.span);
+        }
+        const format = formatForLocation(location);
+        if (format !== "yaml" && format !== "json") {
+            // Every format Cascata reads has a writer (v1.12.1); a format that does not brings its own refusal with it.
+            throw new Error(`Internal error: editTarget(): ${location} was read, and its format has no writer`);
+        }
+        // Among copies the answer is a convention (v1.12 FR-007): the merged pointer's, else the same last segment, else the first.
+        const chosen = pointerInDocument(layer.tree, node.span, pointer) ?? inDocument[0] ?? "";
+        const { related, places } = otherPlaces(configuration, node, location, inDocument, chosen);
+        if (related.length === 0) {
+            return { ok: true, location, pointer: chosen, format, diagnostics: [] };
+        }
+        const why = inDocument.length > 1
+            ? `is one of several nodes of ${location} that share one position (an anchor and its aliases, or a merge key's copies)`
+            : `is in ${location}, which the configuration reads at ${places.length} places (${places.join("; ")})`;
+        if (sharedEdits === "refuse") {
+            // Writing one of several places that share these bytes would change the others. The writer refuses the alias copies too
+            // (`edit-target-shared`); refusing here is not a guess about which of them the caller meant.
+            return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "edit-target-shared", message: `The value at '${pointer}' ${why}; writing it would change every place that shares it`, primary: node.span, related })] };
+        }
+        const diagnostics = sharedEdits === "warn" ? [createDiagnostic({ level: "info", code: "edit-target-shared", message: `The value at '${pointer}' ${why}; the edit also changes every place named here`, primary: node.span, related })] : [];
+        return { ok: true, location, pointer: chosen, format, diagnostics };
+    }
+    // Every merged node came from some layer's tree, so this is a bug, not a document's fault (v1.12.1).
+    throw new Error(`Internal error: editTarget(): the value at '${pointer}' is in no layer of the configuration`);
+}
+//# sourceMappingURL=edit-target.js.map
