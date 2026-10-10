@@ -164,3 +164,17 @@ section of a report has been worth more than the diff.
 - **Existing tests must stay green, and must not be weakened to accommodate new work.** If a test
   needs changing, say why in the report — a passing suite achieved by relaxing an assertion is worse
   than a failing one.
+
+## Bump it up
+
+The release drill, confirmed by the owner at v1.12.1. "Bump it up" approves exactly this.
+
+1. Tree clean on `main`; `pnpm typecheck` and `pnpm test` green, or stop.
+2. Bump `version` in `package.json` and the `#vX.Y.Z-dist` install line in `README.md`. There is no
+   changelog file: `SPEC.md` §15 is the record. Commit as `vX.Y.Z: <the round's name>`.
+3. `git tag vX.Y.Z`, then `sh scripts/dist-tag.sh vX.Y.Z` for the `vX.Y.Z-dist` tag (built `dist/` on a
+   detached head, for git consumers).
+4. `git push origin main vX.Y.Z vX.Y.Z-dist`.
+5. `npm publish` (GitHub Packages, from `publishConfig`; `prepublishOnly` builds, so the tarball is never
+   empty). Verify: origin `main` equals local, both tags on origin, `npm view @egildo/cascata version`
+   answers the new version and `npm pack --dry-run` lists `dist/`.
