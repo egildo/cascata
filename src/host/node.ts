@@ -52,11 +52,11 @@
  * posture `createNetworkTransport` always held.
  */
 
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve as resolvePath, sep } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import type { Host, HostReadResult } from "../resolve/host.js";
+import type { Host, HostListEntry, HostListResult, HostReadResult } from "../resolve/host.js";
 import type { PathFacility } from "../paths.js";
 import type { RecordingOutcome, Transport } from "../resolve/transport.js";
 
@@ -107,6 +107,15 @@ export function createNodePathFacility(): PathFacility {
   };
 }
 
+function kindAfterLink(path: string): HostListEntry["kind"] {
+  try {
+    const target = statSync(path);
+    return target.isFile() ? "file" : target.isDirectory() ? "directory" : "other";
+  } catch {
+    return "other";
+  }
+}
+
 export function createNodeHost(options?: NodeHostOptions): Host {
   const cacheDir = options?.cacheDir;
 
@@ -131,6 +140,30 @@ export function createNodeHost(options?: NodeHostOptions): Host {
         return realpathSync.native(location);
       } catch {
         return undefined;
+      }
+    },
+
+    /**
+     * v1.14 FR-009/FR-010: `readdir` with file types, then `stat` for a link (which follows it). A link whose target is missing, or a
+     * loop of links, or any entry `stat` cannot answer, is `other` -- the host reports kinds and never judges (FR-009).
+     */
+    async list(location: string): Promise<HostListResult> {
+      try {
+        const entries: HostListEntry[] = [];
+        for (const entry of readdirSync(location, { withFileTypes: true })) {
+          if (entry.isFile()) {
+            entries.push({ name: entry.name, kind: "file" });
+          } else if (entry.isDirectory()) {
+            entries.push({ name: entry.name, kind: "directory" });
+          } else if (entry.isSymbolicLink()) {
+            entries.push({ name: entry.name, kind: kindAfterLink(join(location, entry.name)) });
+          } else {
+            entries.push({ name: entry.name, kind: "other" });
+          }
+        }
+        return { ok: true, entries };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : String(error) };
       }
     },
 

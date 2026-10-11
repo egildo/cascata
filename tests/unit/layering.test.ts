@@ -520,3 +520,37 @@ describe("issue #1 / Article VI: src/ evaluates in a realm that is not node — 
     }
   }
 });
+
+// --- v1.14 (024 FR-010): listing a directory is the host's act ---------------
+//
+// `Host.list` is how the library learns what a directory holds, and the Node host answers it with `readdir`. No other module
+// under `src/` may call `readdir` or `opendir` (nor their `Sync` forms), however it got hold of them: `node:fs` is already
+// closed to them by gate 7 above, and this closes the door a second time at the call, which is what a re-exported or injected
+// binding would walk through. Textual, with the limits gate 7's header spells out; comments are stripped first.
+
+const DIRECTORY_LISTING_CALL_PATTERN = /(?<![\w$])(?:readdir|opendir)(?:Sync)?\s*\(/;
+
+describe("v1.14 FR-010 / Article VI: only the Node host lists a directory -- no other module under src/ calls readdir or opendir", () => {
+  const policedFiles = listTsFiles(join(REPO_ROOT, "src")).filter((file) => file.slice(REPO_ROOT.length + 1) !== HOST_BOUNDARY_EXEMPTION);
+
+  it("the exemption itself calls readdir -- otherwise the sweep guards nothing", () => {
+    const exemptionPath = join(REPO_ROOT, ...HOST_BOUNDARY_EXEMPTION.split("/"));
+    expect(DIRECTORY_LISTING_CALL_PATTERN.test(stripComments(readFileSync(exemptionPath, "utf-8")))).toBe(true);
+  });
+
+  it("the pattern sees what it must: the call forms, and not the word in prose", () => {
+    for (const call of ["readdirSync(dir)", "fs.readdir(dir)", "await promises.readdir (dir)", "opendir(dir)", "x.opendirSync(dir)"]) {
+      expect(DIRECTORY_LISTING_CALL_PATTERN.test(call), call).toBe(true);
+    }
+    for (const prose of ["a readdir of the folder", "myreaddir(x)", "list(location)"]) {
+      expect(DIRECTORY_LISTING_CALL_PATTERN.test(prose), prose).toBe(false);
+    }
+  });
+
+  for (const file of policedFiles) {
+    const relativeFile = file.slice(REPO_ROOT.length + 1);
+    it(`${relativeFile} does not call readdir or opendir`, () => {
+      expect(DIRECTORY_LISTING_CALL_PATTERN.test(stripComments(readFileSync(file, "utf-8"))), `${relativeFile} lists a directory itself -- only ${HOST_BOUNDARY_EXEMPTION} may (v1.14 FR-010)`).toBe(false);
+    });
+  }
+});

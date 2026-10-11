@@ -21,6 +21,8 @@
  *   of the on-disk cache (FR-025); the caching *policy* (content
  *   addressing, freshness, RFC 9111's applicable subset) stays in
  *   `resolve/cache.ts`.
+ * - `list` — **optional, v1.14 FR-009** — the entries of a directory and what
+ *   each is. The same law: supply, never a verdict; only `expand()` asks.
  * - `locate` — **optional, v1.4 FR-001** — the location of a reference
  *   written in a URI scheme this host owns, or `undefined` for a scheme
  *   it does not. The same law as the three above: supply, never meaning.
@@ -42,6 +44,15 @@ import type { PathFacility } from "../paths.js";
 
 /** Bytes at a location, or a refusal naming why (FR-022a). Never throws for "the world said no" — a nonexistent file, a permission error, and the like are all `{ok: false, reason}`. */
 export type HostReadResult = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly reason: string };
+
+/** One entry of a directory: its name, and what it is **after following a symbolic link**. A link whose target is missing, a socket, a device: `other`. */
+export interface HostListEntry {
+  readonly name: string;
+  readonly kind: "file" | "directory" | "other";
+}
+
+/** The entries of a directory, in whatever order the host has them, or a refusal naming why. Never throws for "the world said no" (a missing directory, a permission error, a file where a directory was asked for). */
+export type HostListResult = { readonly ok: true; readonly entries: readonly HostListEntry[] } | { readonly ok: false; readonly reason: string };
 
 export interface Host {
   /** Bytes at a **local** location, or a refusal (FR-022a, FR-028). Never called for a remote (`https://`) location. */
@@ -101,4 +112,17 @@ export interface Host {
    * included) is unchanged.
    */
   readonly paths?: PathFacility;
+
+  /**
+   * **Optional (v1.14 FR-009, `SPEC.md` §16).** The entries of the directory at `location`: each one's name and its kind
+   * **after following a symbolic link** (`file`, `directory`, or `other` -- a link whose target is missing included), or
+   * `{ ok: false, reason }`. A host without it is the library exactly as it was before v1.14: only `expand()` asks, and
+   * refuses by name (`host-cannot-list`) without it.
+   *
+   * **Supply, never a verdict.** The host lists; it does not say whether an entry is inside the sandbox, whether it matches
+   * anything, or whether it ought to be skipped -- the library alone judges through `canonicalize`, as for every read. The
+   * order of the entries is the host's own and means nothing: `expand()` sorts what it returns by code point. Names are
+   * handed over as the host stores them; the library compares them exactly (no case or Unicode normalization).
+   */
+  list?(location: string): Promise<HostListResult>;
 }

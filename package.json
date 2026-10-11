@@ -47,6 +47,14 @@
     "./host/node.js": {
       "types": "./dist/host/node.d.ts",
       "import": "./dist/host/node.js"
+    },
+    "./host/memory": {
+      "types": "./dist/host/memory.d.ts",
+      "import": "./dist/host/memory.js"
+    },
+    "./host/memory.js": {
+      "types": "./dist/host/memory.d.ts",
+      "import": "./dist/host/memory.js"
     }
   },
   "main": "./dist/index.js",

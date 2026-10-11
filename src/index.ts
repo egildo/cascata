@@ -72,7 +72,7 @@ export type { Recording, RecordedFailure, RecordedFailureKind, RecordedResponse,
  * "declares 'Host' locally, but it is not exported". Nothing about either
  * type changed; only its reachability.
  */
-export type { Host, HostReadResult } from "./resolve/host.js";
+export type { Host, HostListEntry, HostListResult, HostReadResult } from "./resolve/host.js";
 export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord, WhyEntry, WhyResult } from "./merge/provenance.js";
 
 // Writing a value back (v1.10, SPEC.md Article IX): `locate` and `setValue`.
@@ -375,6 +375,10 @@ function requireHost(options: ResolveOptions): void {
   // one call site.
   if (host.locate !== undefined && typeof host.locate !== "function") {
     throw new Error("resolve() was given a 'host' whose 'locate' is not a function (v1.4 FR-001, SPEC.md Article VI) — omit the member entirely for a host that owns no namespace");
+  }
+  // v1.14 FR-009: `list` is optional the same way. Only `expand()` calls it; this is the same early, named programmer error.
+  if (host.list !== undefined && typeof host.list !== "function") {
+    throw new Error("resolve() was given a 'host' whose 'list' is not a function (v1.14 FR-009, SPEC.md Article VI) — omit the member entirely for a host that cannot list a directory");
   }
 }
 
