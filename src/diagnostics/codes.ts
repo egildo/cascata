@@ -331,6 +331,18 @@ export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unr
  */
 export const EDIT_TARGET_CODES = ["edit-target-inherited", "edit-target-remote"] as const;
 
+/**
+ * Graph identity (v1.13, `SPEC.md` Article VI, §15) -- specs/023-graph-identity FR-012.
+ *
+ * - `link-changes-reference` -- `level: "info"`, never a refusal. A document whose logical and physical paths
+ *   differ (a file behind a symbolic link, a remote document behind a redirect) wrote a relative reference that
+ *   its medium's own convention and the other rule resolve to **different documents**: from the logical path in a
+ *   file (as the shell's `cd` does), from the physical URL in a remote document (as a browser does). The one the
+ *   convention names was loaded; the notice, positioned at the reference, names both, and the referring
+ *   document's logical and physical paths. A link never changes a meaning silently.
+ */
+export const GRAPH_IDENTITY_CODES = ["link-changes-reference"] as const;
+
 /** Every stable diagnostic code, in the catalogue's declaration order. Each version only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
@@ -351,6 +363,7 @@ export const DIAGNOSTIC_CODES = [
   ...OVERRIDE_CODES,
   ...EDIT_CODES,
   ...EDIT_TARGET_CODES,
+  ...GRAPH_IDENTITY_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

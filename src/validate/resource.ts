@@ -37,6 +37,12 @@
  * how it resolves differs), even though the resolved `location` is
  * itself a URL string in this case.
  *
+ * **v1.13: where a relative value starts.** A file's starts from its logical path (`origin.id`), a remote
+ * document's from its physical URL (`origin.physical`, where its fetch ended after redirects), each
+ * medium's own convention (SPEC.md Article VI). The query holds no host, so it cannot raise
+ * `link-changes-reference` or tell whether the other rule names the same file; it carries the other
+ * answer as `otherLocation` for a caller that can.
+ *
  * **Why `span.origin.id` alone is sufficient, delegation included**
  * (FR-037): every span's `origin.id` is already the exact location
  * string of the document that produced that node — the entry document's
@@ -59,7 +65,20 @@ import { isValidPath, isValidUrl } from "./check.js";
 
 export type ResolvedResource =
   | { readonly kind: "url"; readonly location: string }
-  | { readonly kind: "path"; readonly location: string }
+  | {
+      readonly kind: "path";
+      readonly location: string;
+      /**
+       * v1.13 FR-010 to FR-012: present only when the declaring document is behind a link or a redirect
+       * (its origin carries a `physical` path) **and** the other rule would have resolved this value to a
+       * lexically different location. `location` follows each medium's own convention -- from the logical
+       * path in a file, from the physical URL in a remote document -- and this is the answer the other rule
+       * would have given. A query holds no host, so it cannot tell whether the two name one file (a link can
+       * make `/link/x` and `/real/x` the same); a caller with a host can canonicalize both. No diagnostic is
+       * raised here: `resource` produces none at any level (v0.7 FR-036 to FR-039).
+       */
+      readonly otherLocation?: string;
+    }
   | { readonly kind: "not-a-resource" }
   | { readonly kind: "unknown-pointer" };
 
@@ -97,9 +116,14 @@ export function resource(configuration: MergedConfiguration, pointer: string): R
   }
   if (isValidPath(node.value)) {
     const declaringDocument = node.span.origin.id;
+    const physical = node.span.origin.physical;
     const paths = configuration.paths ?? posixPaths;
-    const location = HTTPS_LOCATION_PATTERN.test(declaringDocument) ? new URL(node.value, declaringDocument).toString() : paths.resolve(paths.dirname(declaringDocument), node.value);
-    return { kind: "path", location };
+    // v1.13: a remote document's relative values start from the physical URL (where its fetch ended), a file's from its logical path.
+    const remote = HTTPS_LOCATION_PATTERN.test(declaringDocument);
+    const startingFrom = (base: string): string => (remote ? new URL(node.value, base).toString() : paths.resolve(paths.dirname(base), node.value));
+    const location = startingFrom(remote ? (physical ?? declaringDocument) : declaringDocument);
+    const otherLocation = physical === undefined ? undefined : startingFrom(remote ? declaringDocument : physical);
+    return otherLocation === undefined || otherLocation === location ? { kind: "path", location } : { kind: "path", location, otherLocation };
   }
   return { kind: "not-a-resource" };
 }

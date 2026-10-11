@@ -35,6 +35,7 @@
  */
 
 import { posixPaths, type PathFacility } from "../paths.js";
+import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import { createDocumentIdentity, type DocumentIdentity } from "./identity.js";
 import type { Reference } from "./reference.js";
 import type { Host } from "./host.js";
@@ -235,6 +236,75 @@ export function classifyLocatedDocument(location: string, paths: PathFacility): 
     return { kind: "https", url: normalizedUrl(location) };
   }
   return { kind: "local", location: paths.resolve(location) };
+}
+
+/** A document that writes references: its logical location, and where it really is (v1.13). */
+export interface Referrer {
+  readonly location: string;
+  readonly physical: string;
+}
+
+/**
+ * Where a relative reference starts (v1.13 FR-010, FR-011), and where the other rule would have started it.
+ * In a **file** it starts from the logical path (as the shell's default `cd` resolves `..`, Pike's *Getting
+ * Dot-Dot Right*), in a **remote** document from the physical URL (as a browser resolves against a response's
+ * final URL). `other` is the base the other rule would have used: `link-changes-reference` (FR-012) is
+ * raised where the two name different documents.
+ */
+export function referenceBases(referrer: Referrer): { readonly used: string; readonly other: string } {
+  return HTTPS_LOCATION_PATTERN.test(referrer.location) ? { used: referrer.physical, other: referrer.location } : { used: referrer.location, other: referrer.physical };
+}
+
+/** v1.13 FR-013: `'<logical>'`, and `(the file '<physical>')` after it where they differ. */
+export function namedDocument(location: string, physical: string): string {
+  return physical === location ? `'${location}'` : `'${location}' (the file '${physical}')`;
+}
+
+/**
+ * v1.13 FR-012: the `info` notice for a relative reference whose document is behind a link or a redirect and
+ * whose two readings — from the logical path and from the physical one — are **different documents**; or
+ * `undefined`. `loaded` is the document the reference loaded (by the rule `referenceBases` names), as
+ * `classifyReferenceLocation` answered it and, for a file, with its physical path. Only a document whose
+ * logical and physical paths differ pays for the second resolution, and for a file it costs one question to
+ * the host per distinct path (`PhysicalPaths` remembers).
+ *
+ * A file is judged by physical identity: the other answer is the same document when it is the same physical
+ * path, however it is spelled; one that does not exist counts as different (`PhysicalPaths.of` judges it
+ * through its nearest existing ancestor, so it can never equal a file that is there). A remote document's
+ * other answer is not fetched: two URLs are different documents here when they are different URLs, which can
+ * only be too many notices (a redirect that leads both to one file), never too few.
+ *
+ * The notice never refuses and is positioned at the reference. The host answers where a path ends, not which
+ * link it crossed, so the message names the two ends -- the referring document's logical and physical paths --
+ * rather than the link.
+ */
+export async function linkNotice(physical: PhysicalPaths, paths: PathFacility, candidate: Reference, referrer: Referrer, loaded: { readonly kind: "local"; readonly location: string; readonly physical: string } | { readonly kind: "https"; readonly url: string }): Promise<Diagnostic | undefined> {
+  if (referrer.physical === referrer.location) {
+    return undefined;
+  }
+  const other = classifyReferenceLocation(candidate, referenceBases(referrer).other, paths);
+  const from = namedDocument(referrer.location, referrer.physical);
+  if (loaded.kind === "local" && other.kind === "local") {
+    if (other.location === loaded.location) return undefined;
+    const otherPhysical = await physical.of(other.location);
+    if (otherPhysical === loaded.physical) return undefined;
+    return createDiagnostic({
+      level: "info",
+      code: "link-changes-reference",
+      message: `Reference '${candidate.text}' in ${from} names a different file depending on which path it starts from: from the path the document was reached by (the shell's rule, which Cascata follows) it loaded ${namedDocument(loaded.location, loaded.physical)}, and from where the document really is it would have loaded ${namedDocument(other.location, otherPhysical)}`,
+      primary: candidate.span,
+    });
+  }
+  if (loaded.kind === "https" && other.kind === "https") {
+    if (other.url === loaded.url) return undefined;
+    return createDiagnostic({
+      level: "info",
+      code: "link-changes-reference",
+      message: `Reference '${candidate.text}' in ${from} names a different document depending on which URL it starts from: from the URL the document was fetched from after redirects (the browser's rule, which Cascata follows) it loaded '${loaded.url}', and from the URL it was requested as it would have loaded '${other.url}'`,
+      primary: candidate.span,
+    });
+  }
+  return undefined;
 }
 
 /**
