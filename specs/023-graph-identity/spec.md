@@ -164,6 +164,10 @@ the code, none run):
   `Content-Type` is not consulted: the extension rule is the one files and the offline cache already
   use. **The change of behaviour**, named: a remote document whose URL has a query, which could not be
   read (`No adapter recognizes the format`), is read by its path's extension.
+  *Refined by the owner on the implementer's F1:* the extension is read from the **physical** URL, the
+  one after redirects, so `…/schemas/latest` redirecting to `…/v2.yaml` reads as YAML. The format
+  belongs to the document received, and identity is physical too. Offline, the cache's recorded final
+  URL answers it; a pre-v1.13 cache entry, which has none, uses its own URL (FR-015).
 
 ## Part F — Witnesses
 
