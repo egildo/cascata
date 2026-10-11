@@ -136,6 +136,31 @@ gains a case, in the first commit that adds one.
 - **FR-019** **World-blindness.** A configuration with `glob` values loads and validates with a host that
   has no `list`; only `expand()` refuses (`host-cannot-list`). Every stage before `expand()` is unchanged.
 
+## Part B′ — Revisions after the coordinator's review (the owner's rulings, 2026-10-12)
+
+- **FR-024** **Literal segments are paths; wildcard segments are matching** (on ambiguity 2). Every literal
+  segment of a pattern, wherever it sits — the literal prefix, a literal after a wildcard, the last
+  segment of a wildcard-free value — is found as a `path` is: by asking the host for that location
+  (`canonicalize`, then the kind), not by searching a listing for the exact name. So `café.md`, written
+  composed, finds a file stored decomposed on a disk that folds them, as opening `café.md` would. Only
+  `*`, `?` and `**` compare names, by code point, as `list` returns them (FR-015 now governs wildcard
+  segments only). A literal found this way is named by its written spelling (logical) with the stored
+  one as physical, v1.13's pair.
+- **FR-025** **The configuration remembers its roots** (on ambiguity 3). `resolve()` records the sandbox
+  roots it was given on the result, and `merge()` carries them onto `MergedConfiguration`. `expand()`'s
+  `sandboxRoot` becomes optional and defaults to them; given explicitly, it replaces them for that call.
+- **FR-026** **A missing directory matches nothing** (on ambiguity 10). Where the walk needs a directory
+  that does not exist — a literal prefix, or a literal after a wildcard — that branch matches nothing,
+  and a value whose every branch is missing has an empty list. `directory-unlistable` is only for a
+  directory that exists and that the host refuses to list.
+- **FR-027** **The limit counts work, not names** (the coordinator, on ambiguity 12: CLAUDE.md's "measure
+  the work, not the input"). Measured: a pattern of 60 `**` over 5,461 directories took 19 s and listed
+  each directory once, so the cap of names listed never fired. `limits.maxEntriesVisited` now counts
+  every (directory, pattern position) the walk enters plus every entry it examines there; past it,
+  `glob-limit-exceeded`. Redundant consecutive `**` segments are equivalent to one and may be collapsed,
+  but the count is the guard, so that `**/*/**/*/…` is bounded too. Witness by counting in the main suite
+  (60 `**` over that tree refused at the default, accepted with the limit raised), not by timing.
+
 ## Part C — Witnesses
 
 - **FR-020** **Grammar cases, written from FR-002 before the validator:** accepted — `*.md`,
