@@ -42,7 +42,10 @@ where the two milestones' code sits side by side, which is `src/index.ts` and `s
   (the last stages are downstream of every other, never upstream). `src/generate/` may import
   `validate/`, `merge/`, `model/` and `diagnostics/`, and imports no compiler: `typescript` is a
   devDependency and the emitter is a string printer, invoked in memory by the oracle under `tests/`
-  and nowhere else. See `tests/unit/layering.test.ts`. Never weaken any of it for convenience.
+  and nowhere else. `src/expand/` (v1.14) is the last stage of all: it may import `generate/accumulate`,
+  `validate/`, `resolve/location` and `merge/`'s types, never an adapter or `src/host/`, and nothing but the
+  package root may import it. Only `src/host/node.ts` may call `readdir`/`opendir`. See
+  `tests/unit/layering.test.ts`. Never weaken any of it for convenience.
 - **Positions are structural.** A node without a span must be unconstructible, not merely
   discouraged. Same for a `Reference`.
 
