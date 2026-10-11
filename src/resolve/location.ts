@@ -136,7 +136,9 @@ function expandTilde(reference: Reference, referringDocumentLocation: string, pa
 export type ReferenceLocationKind =
   | { readonly kind: "local"; readonly location: string }
   | { readonly kind: "https"; readonly url: string }
-  | { readonly kind: "unsupported-scheme"; readonly scheme: string };
+  | { readonly kind: "unsupported-scheme"; readonly scheme: string }
+  /** v1.13 FR-020: an `https://` URL that carries a fragment (`"#x"`; `""` for a bare `#`). Refused by the caller as `reference-fragment`; never fetched. */
+  | { readonly kind: "fragment"; readonly url: string; readonly fragment: string };
 
 /** An absolute-URL scheme prefix with a `//` authority, e.g. `https://`, `http://`, `file://`. Retained alongside `SCHEME_PREFIX_PATTERN` (below) for the `"https"` classification specifically, which needs the authority form. */
 const ABSOLUTE_URL_SCHEME_PATTERN = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//;
@@ -179,6 +181,22 @@ function normalizedUrl(text: string, base?: string): string {
   }
 }
 
+/** v1.13 FR-020: the fragment of a parseable URL (`"#x"`, or `""` for a bare `#`), or `undefined` when it has none — or does not parse, which is a different refusal. */
+function fragmentOf(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.href.includes("#") ? parsed.hash : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** An `https` location, or — if its URL carries a fragment — the `fragment` kind that refuses it (v1.13 FR-020). */
+function remoteLocation(url: string): ReferenceLocationKind {
+  const fragment = fragmentOf(url);
+  return fragment === undefined ? { kind: "https", url } : { kind: "fragment", url, fragment };
+}
+
 /**
  * Classify `reference`'s target before deciding how to read it (T043's
  * routing point in `src/index.ts`): a local filesystem path, an HTTPS
@@ -195,7 +213,7 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
   if (ABSOLUTE_URL_SCHEME_PATTERN.test(text)) {
     const scheme = (ABSOLUTE_URL_SCHEME_PATTERN.exec(text)?.[1] ?? "").toLowerCase();
     if (scheme === "https") {
-      return { kind: "https", url: normalizedUrl(text) };
+      return remoteLocation(normalizedUrl(text));
     }
     return { kind: "unsupported-scheme", scheme };
   }
@@ -208,7 +226,7 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
     return { kind: "unsupported-scheme", scheme: (schemePrefixMatch[1] ?? "").toLowerCase() };
   }
   if (HTTPS_LOCATION_PATTERN.test(referringDocumentLocation)) {
-    return { kind: "https", url: normalizedUrl(text, referringDocumentLocation) };
+    return remoteLocation(normalizedUrl(text, referringDocumentLocation));
   }
   return { kind: "local", location: paths.resolve(paths.dirname(referringDocumentLocation), text) };
 }
@@ -233,7 +251,7 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
  */
 export function classifyLocatedDocument(location: string, paths: PathFacility): ReferenceLocationKind {
   if (HTTPS_LOCATION_PATTERN.test(location)) {
-    return { kind: "https", url: normalizedUrl(location) };
+    return remoteLocation(normalizedUrl(location));
   }
   return { kind: "local", location: paths.resolve(location) };
 }

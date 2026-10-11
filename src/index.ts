@@ -455,6 +455,12 @@ function cycleDiagnostic(chain: readonly StackFrame[]): Diagnostic {
   return referenceDiagnostic("reference-cycle", closing.incoming, `Reference '${closing.incoming.text}' closes a cycle back to an already-visited document${tail}`, related);
 }
 
+/** v1.13 FR-020: the refusal of an `https://` reference whose URL carries a fragment, positioned at the reference. `what` names which kind of reference it was. */
+function fragmentRefusal(what: string, reference: Reference, target: { readonly fragment: string }): Diagnostic {
+  const named = target.fragment === "" ? "an empty fragment ('#')" : `the fragment '${target.fragment}'`;
+  return referenceDiagnostic("reference-fragment", reference, `${what} '${reference.text}' carries ${named}: a fragment names a place inside a document, never a different document, and Cascata gives it no meaning, so the reference is refused rather than guessed (v1.13 FR-020)`);
+}
+
 /**
  * contracts/diagnostics.md's `multiple-adoption`, now (SPEC.md §9,
  * amended) refused purely on **shape** — any sequence value for
@@ -583,6 +589,9 @@ async function readAtTarget(host: Host, target: ReferenceLocationKind, candidate
     // here defensively rather than asserted away.
     throw new Error(`Internal error: readAtTarget called with an unsupported-scheme target ('${target.scheme}:')`);
   }
+  if (target.kind === "fragment") {
+    throw new Error(`Internal error: readAtTarget called with a fragment target ('${target.url}')`);
+  }
   if (target.kind === "local") {
     const read = await readLocalDocument(host, target.location);
     if (!read.ok) {
@@ -660,6 +669,9 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrer
       ok: false,
       diagnostics: [referenceDiagnostic("unsupported-scheme", candidate, `Reference '${candidate.text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.2 FR-013)`)],
     };
+  }
+  if (target.kind === "fragment") {
+    return { ok: false, diagnostics: [fragmentRefusal("Reference", candidate, target)] };
   }
   // v1.4 FR-003: a located reference is not sandbox-checked. The sandbox
   // confines what a *document's own text* can reach; here the text named
@@ -933,6 +945,10 @@ async function readOverrides(host: Host, texts: readonly string[], entry: Referr
       diagnostics.push(referenceDiagnostic("unsupported-scheme", candidate, `Override '${candidate.text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.2 FR-013)`));
       continue;
     }
+    if (target.kind === "fragment") {
+      diagnostics.push(fragmentRefusal("Override", candidate, target));
+      continue;
+    }
     const read = await readAtTarget(host, target, candidate, remote);
     if (!read.ok) {
       diagnostics.push(read.diagnostic);
@@ -996,6 +1012,9 @@ async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain
 
   if (target.kind === "unsupported-scheme") {
     return { ok: false, diagnostics: [referenceDiagnostic("unsupported-scheme", reference, `Delegated reference '${text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.6, mirroring v0.2 FR-013)`)] };
+  }
+  if (target.kind === "fragment") {
+    return { ok: false, diagnostics: [fragmentRefusal("Delegated reference", reference, target)] };
   }
 
   let location: string;

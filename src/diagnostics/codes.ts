@@ -40,6 +40,12 @@ export const REFERENCE_RESOLUTION_CODES = [
   "chain-limit-exceeded",
   "unsupported-scheme",
   "sandbox-escape",
+  // v1.13 FR-020. An `https://` reference — absolute, relative to a remote document, or a `Host.locate` answer — whose URL carries a
+  // fragment (`a.yaml#x`, `#x`, even an empty `#`) is refused at the reference. A fragment names a place inside a document, never a
+  // different document (WHATWG; RFC 3986 §3.5), and Cascata gives it no meaning yet, so the text is refused rather than guessed and
+  // the door stays open. Not for a local path, where `#` is an ordinary filename character. A redirect `Location` with a fragment
+  // is not the author's text: the fragment is dropped from the physical URL, not refused.
+  "reference-fragment",
 ] as const;
 
 /** Fetching and integrity (v0.2, SPEC.md §6.1, §11) — contracts/diagnostics.md (002). */

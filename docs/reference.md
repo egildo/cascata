@@ -342,6 +342,7 @@ that failed** (v0.2 FR-023).
 | `chain-limit-exceeded` | A chain longer than `maxChainLength` |
 | `unsupported-scheme` | A reference whose scheme is not HTTPS, not a relative path, and not claimed by `Host.locate` (v1.4) — `http:`, `file:`, `data:` |
 | `sandbox-escape` | A **schema-authored** local reference resolving outside every granted sandbox root, including through a symlink. A reference to a file that merely does not *exist* is `document-unreachable`, not this (v1.7 FR-001/FR-002) |
+| `reference-fragment` | An `https://` reference — absolute, relative to a remote document, a delegated location, an override, or a `Host.locate` answer — whose URL carries a fragment (`a.yaml#x`, `#x`, even an empty `#`) (v1.13 FR-020). A fragment names a place inside a document, never a different document, and Cascata gives it no meaning, so the text is refused at the reference rather than guessed. Not for a local path, where `#` is an ordinary filename character; a redirect `Location` with a fragment is not refused, the fragment is dropped from the physical URL |
 | `pin-mismatch` | Fetched bytes whose hash differs from the stated `$pin` — names both expected and actual; the bytes never enter the graph |
 | `malformed-pin` | A `$pin` that is not a well-formed `sha256:<64 hex digits>` value |
 | `insecure-redirect` | A redirect hop leaving HTTPS — checked hop by hop, not just at the final destination |
@@ -1460,7 +1461,7 @@ convention says: from the logical path in a file (as the shell's `cd` resolves `
 document (as a browser resolves against a response's URL). Where the other rule would have named a different document,
 `link-changes-reference` (`info`, never a refusal) is reported at the reference, naming both documents and the
 referring document's two paths. `resource()` follows the same rule and, behind a link or redirect, carries the other
-answer as `otherLocation` (a query holds no host and raises no diagnostic). `editTarget`'s `ok` result carries
+answer as `otherLocation` (a query holds no host and raises no diagnostic): `location` follows the medium's own convention (a file from its logical path, a remote document from its physical URL) and `otherLocation` is what the other rule gives. `editTarget`'s `ok` result carries
 `physicalLocation` when it differs from `location`; a writer handed either path writes the same file.
 
 ### v1.13 diagnostic codes

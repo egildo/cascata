@@ -175,7 +175,11 @@ export async function fetchDocument(url: string, transport: Transport, limits: F
       }
       // Resolved against the current URL, per Location's own semantics
       // (RFC 9110 §10.2.2) — a relative Location is legal and common.
-      currentUrl = new URL(location, currentUrl).toString();
+      // v1.13 FR-020: a fragment is not part of a redirect's target as far as a request goes (Fetch never sends it), so it is dropped
+      // from the URL the document ends at -- its physical URL. A redirect is not the author's text, so it is not refused.
+      const next = new URL(location, currentUrl);
+      next.hash = "";
+      currentUrl = next.toString();
       continue;
     }
 
