@@ -22,8 +22,8 @@
  *
  * **Cost.** Each distinct directory is put to the host once per `expand()` call (the answers are kept), and a value's walk is
  * charged the names of every directory it first uses (FR-018's `maxEntriesVisited`). The work of matching is bounded by the
- * directories entered times the pattern's positions; a pattern with very many `**` segments over a very large tree is the
- * author's own cost to bear.
+ * directories entered times the pattern's positions (consecutive `**` segments are not collapsed: `**` / `**` is the same set as
+ * one, and a pattern with very many of them over a very large tree is the author's own cost to bear).
  *
  * Never throws for a document or the world -- every refusal is a diagnostic at the value (FR-018) and the other values still
  * expand; it throws only for programmer error (no host, no sandbox root).
@@ -203,17 +203,6 @@ function refusal(value: GlobValue, code: DiagnosticCode, message: string): Refus
   return new Refusal(createDiagnostic({ code, level: "error", message, primary: value.node.span, pointer: value.pointer }));
 }
 
-/** Consecutive `**` segments are one: zero or more of zero or more is zero or more. */
-function collapseDoubleStars(segments: readonly string[]): string[] {
-  const out: string[] = [];
-  for (const segment of segments) {
-    if (!(segment === "**" && out[out.length - 1] === "**")) {
-      out.push(segment);
-    }
-  }
-  return out;
-}
-
 async function listing(value: GlobValue, ctx: Context, dir: string, physicalDir: string, charged: Set<string>, counter: { visited: number }): Promise<readonly HostListEntry[]> {
   let answer = ctx.listings.get(physicalDir);
   if (answer === undefined) {
@@ -243,7 +232,7 @@ async function walk(value: GlobValue, ctx: Context): Promise<GlobMatch[]> {
   if (anchored.kind !== "glob") {
     return [];
   }
-  const rest = collapseDoubleStars(splitGlob(pattern).rest);
+  const rest = splitGlob(pattern).rest;
   const compiled = new Map<number, readonly number[]>();
   const separator = ctx.physical.separator;
   const join = (dir: string, name: string): string => (dir.endsWith(separator) ? `${dir}${name}` : `${dir}${separator}${name}`);

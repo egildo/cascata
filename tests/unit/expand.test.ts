@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { expand, load, merge, resolve, type Host } from "../../src/index.js";
+import { expand, load, merge, resolve, why, type Host } from "../../src/index.js";
 import { createMemoryHost } from "../../src/host/memory.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
 import { counted, expandPatterns, locations, quoted, SCHEMA_LIST, TREE, type World } from "./expand-helpers.js";
@@ -87,7 +87,11 @@ describe("v1.14 FR-012/FR-013 -- the walk: literal segments, * and ?, ** , and w
     expect(await matches("sub/./e.txt")).toEqual(under("sub/e.txt"));
   });
 
-  it("collapses nothing it should not: `**/**/*.md` is `**/*.md`", async () => {
+  it("a `.` segment after a wildcard is the directory itself: `*/./e.txt` is `*/e.txt`", async () => {
+    expect(await matches("*/./e.txt")).toEqual(under("sub/e.txt"));
+  });
+
+  it("consecutive double stars are one: `**/**/*.md` finds what `**/*.md` finds", async () => {
     expect(await matches("**/**/*.md")).toEqual(await matches("**/*.md"));
   });
 });
@@ -192,6 +196,15 @@ describe("v1.14 FR-016 -- one list whatever order the host lists in, sorted by c
     }
   });
 
+  it("a file reached first through a longer route loses to the smaller path found later: zzz.md (a link) is sub/a.md, which sorts before it", async () => {
+    // The walk enters /v/proj before /v/proj/sub, so zzz.md is found first; but "sub/a.md" < "zzz.md" ('s' < 'z'), and the match is named by the smaller.
+    const world: World = { files: { "/v/proj/sub/a.md": "" }, links: { "/v/proj/zzz.md": "/v/proj/sub/a.md" } };
+    const { result } = await expandPatterns(world, ["**/*.md"]);
+    const expansion = result.expansions[0];
+    expect(locations(expansion)).toEqual(under("sub/a.md"));
+    expect(expansion?.ok && expansion.matches[0]).not.toHaveProperty("physical");
+  });
+
   it("and a link that sorts after the real directory loses to it", async () => {
     const world: World = { files: { "/v/proj/real/x.md": "" }, links: { "/v/proj/zlink": "/v/proj/real" } };
     const { result } = await expandPatterns(world, ["**/*.md"]);
@@ -283,6 +296,18 @@ describe("v1.14 FR-017 -- confinement: every listed directory and every returned
       ["sandbox-escape", "/include/1"],
     ]);
     expect(lists).toEqual([]);
+  });
+
+  it("when two files lead out, the refusal names the same one whatever order the host lists in: the first by code point", async () => {
+    const world: World = { files: { "/outside/p.md": "", "/outside/q.md": "" }, links: { "/v/proj/z-out.md": "/outside/p.md", "/v/proj/a-out.md": "/outside/q.md" } };
+    for (const order of [(host: Host) => host, reversing]) {
+      const memory = createMemoryHost({ files: { ...world.files, "/v/proj/schema.yaml": SCHEMA_LIST, "/v/proj/config.yaml": `$schema: ./schema.yaml\ninclude:\n${quoted(["*.md"])}` }, links: world.links as Record<string, string> });
+      const loaded = await load("/v/proj/config.yaml", { host: memory, sandboxRoot: "/v" });
+      if (!loaded.ok) throw new Error("does not load");
+      const result = await expand(loaded.configuration, { host: order(memory), sandboxRoot: "/v" });
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]?.message).toContain(`'${P}a-out.md' (the file '/outside/q.md')`);
+    }
   });
 
   it("with the other root granted, the same link is inside: roots are a list, as for resolve()", async () => {
@@ -412,6 +437,17 @@ describe("v1.14 FR-012 -- which values are expanded: every value at a position w
     expect(locations(result.expansions[1])).toEqual(under("a.md", "b.md", "café.md", "日本.md"));
     expect(result.expansions[0]?.span.line).toBe(6);
     expect(result.expansions[1]?.span.line).toBe(3);
+    // FR-008: the cascade and why() are unchanged mechanisms. why() on the list names the layer and line each contribution
+    // came from -- the house's `provide` at line 6, the config's list at line 3 -- and every pattern's own span is in one of them.
+    const chain = why(loaded.configuration, "/include/0");
+    const named = chain.kind === "chain" ? chain.entries.map((entry) => [entry.span.origin.id, entry.span.line]) : [];
+    expect(named).toEqual([
+      ["/v/house/schema.yaml", 6],
+      ["/v/proj/config.yaml", 3],
+    ]);
+    for (const expansion of result.expansions) {
+      expect(named).toContainEqual([expansion.span.origin.id, expansion.span.line]);
+    }
   });
 
   it("a `path | glob` position: a value there is expanded as a pattern, a one-file pattern if it has no wildcard; a path that is no glob is left alone", async () => {
@@ -420,6 +456,23 @@ describe("v1.14 FR-012 -- which values are expanded: every value at a position w
     expect(result.expansions.map((e) => e.pointer)).toEqual(["/include/0", "/include/1"]); // `[x]` is a path, not a glob: untouched
     expect(locations(result.expansions[0])).toEqual(under("docs/readme.md"));
     expect(locations(result.expansions[1])).toEqual(under("docs/more.md", "docs/readme.md"));
+  });
+
+  it("a union whose glob alternative is not the first in canonical order (`bool | glob`) admits it", async () => {
+    const memory = createMemoryHost({ files: { ...TREE, "/v/proj/schema.yaml": "keys:\n  one:\n    demand: { type: 'bool | glob' }\n  flag:\n    demand: { type: 'bool | glob' }\n", "/v/proj/config.yaml": "$schema: ./schema.yaml\none: '*.md'\nflag: true\n" } });
+    const loaded = await load("/v/proj/config.yaml", { host: memory, sandboxRoot: "/v" });
+    if (!loaded.ok) throw new Error(loaded.diagnostics.map((d) => d.message).join("; "));
+    const result = await expand(loaded.configuration, { host: memory, sandboxRoot: "/v" });
+    expect(result.expansions.map((e) => e.pointer)).toEqual(["/one"]); // `flag` is a bool, not a string
+  });
+
+  it("a string at a glob[] position is not a pattern (a configuration that was never validated): glob[] admits the elements, not the list's own place", async () => {
+    const memory = createMemoryHost({ files: { ...TREE, "/v/proj/schema.yaml": "keys:\n  include:\n    demand: { type: 'glob[]' }\n", "/v/proj/config.yaml": "$schema: ./schema.yaml\ninclude: '*.md'\n" } });
+    const resolved = await resolve("/v/proj/config.yaml", { host: memory, sandboxRoot: "/v" });
+    if (!resolved.ok) throw new Error("does not resolve");
+    const merged = merge(resolved);
+    if (!merged.ok) throw new Error("does not merge");
+    expect((await expand(merged.configuration, { host: memory, sandboxRoot: "/v" })).expansions).toEqual([]);
   });
 
   it("a single glob (not a list)", async () => {

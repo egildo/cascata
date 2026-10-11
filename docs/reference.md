@@ -50,8 +50,9 @@ expands (and is then confined), which §5.3 had always shown and §15 had forbid
 | **v1.11** | **edit targets, and writers** — `editTarget` answers which document, and which pointer inside it, holds the value that won at a merged pointer (a schema's `provide` and a remote document are refused by name); `why()` entries carry that in-document `pointer`; `yamlWriter()` and `jsonWriter()` offer `locate`/`setValue` in the editing stage's shape from `@egildo/cascata/writers` (`SPEC.md` Article IX)  |
 | **v1.12** | **after the review** — `sharedEdits` (`refuse`, `warn`, `allow`) on `setValue`, `editTarget` and the writers, with a file delegated to at two places counted as shared; columns and in-document pointers computed once, restoring the bounded-cost claim for long lines and for asking about every value; an empty document located after its marks, a bare `? a` read as `a: null`, a tag dropped where it cannot hold the value written (`SPEC.md` Article IX, §15) |
 | **v1.13** | **graph identity** — every document has a logical path (the route taken) and a physical one (where it is: the host's `canonicalize`, or the URL after redirects), and identity is physical: a schema that adopts itself under another spelling, through a link or through a redirect is `reference-cycle`, as is a document with the bytes of one already on its chain; a relative reference starts from the logical path in a file and the physical URL in a remote document, and `link-changes-reference` (`info`) reports where the other rule would have named a different document; an `https://` reference is labelled in its WHATWG-normalized form (`SPEC.md` Article VI, §15) |
+| **v1.14** | **`glob`** — a built-in refinement of `string` again: a strict subset of the LSP `GlobPattern` (`*`, `**`, `?`), checked like a `path` and never confined; `globBase()` answers where a pattern is anchored; an optional `Host.list` and `@egildo/cascata/host/memory`; and `expand()`, a stage of its own that walks the patterns through the host, confined by physical path, deduplicated and sorted by code point (`SPEC.md` §7, Article VI, §15) |
 
-Full detail lives in `specs/001-…` through `specs/023-…`, each with its own `spec.md`, `plan.md`,
+Full detail lives in `specs/001-…` through `specs/024-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
 the same surface.
 
@@ -1568,6 +1569,135 @@ before.
 so one long line reads in time linear in its length; and the pointers of a tree are indexed once, on first use,
 so `why()` and `editTarget()` on every value of a configuration are linear in it.
 
+## v1.14 — `glob`
+
+`glob` returns as a built-in type (v1 dropped it; `SPEC.md` §15, "`glob` returns", answers by name what that entry asked for:
+expansion semantics, a sandbox story, a determinism story). It is a **pattern**, singular — multiplicity stays in the
+brackets, `glob[]` — and it refines `string` beside `url` and `path`, so `string ∩ glob` is `glob` and a house layer may
+narrow a type that accepts `path | glob` to `glob`. `resource` is unchanged and does not admit it.
+
+### The grammar
+
+A strict subset of the Language Server Protocol's `GlobPattern`. A pattern is segments separated by `/`:
+
+| Syntax | Means |
+|---|---|
+| `*` | any run of characters (possibly none) except `/` |
+| `?` | exactly one code point except `/` |
+| `**` | **only as a whole segment**: zero or more whole segments |
+| anything else | itself, by code point |
+
+Refused, each at its offset (in code points, from 0) and naming the character or rule: the empty pattern; `**` that is not a
+whole segment (`a**`, `**b`, `***`); `[`, `]`, `{`, `}` and `\`; a `!` as the first character; an empty segment (`a//b`) and a
+trailing `/`; and a `..` segment after the first segment that contains a wildcard (`*/../x`). A leading `/` (an absolute
+pattern) and leading `..` segments are allowed, as they are in a `path`. Because everything LSP gives another meaning is
+refused today, growing toward the full set later only turns a refusal into an acceptance. Validation is one pass over the
+code points and never backtracks (`checkGlobPattern(pattern, counter?)` in `src/validate/glob.ts` counts its steps for the
+witness).
+
+A value outside the grammar fails the type like any mismatch — `type-mismatch`, at the value, with a message that names it:
+
+```
+expected glob, got the pattern "[ab].md", which is not a glob: '[' is not part of the glob grammar (character classes are refused, …) at offset 0 — constraint from …
+```
+
+**Checking confines nothing**: no sandbox check, no host call, no existence check. A pattern that points anywhere
+(`../../*.md`, `/etc/*.conf`) loads, as a `path` does — a `path` is data about a file, a `glob` is data about a set of files
+(§8.1's razor). Confinement belongs to expansion. The value view carries the pattern string as written; the type generator
+emits `string` for `glob` and `readonly string[]` for `glob[]`.
+
+### `globBase(configuration, pointer)`
+
+A query beside `resource()`: no diagnostic, no host, nothing read.
+
+```ts
+type GlobBase =
+  | { kind: "glob"; pattern: string; literalPrefix: string; directory: string; otherDirectory?: string; span: SourceSpan }
+  | { kind: "not-a-glob" }        // not a string, or a string outside the grammar
+  | { kind: "unknown-pointer" };
+```
+
+`literalPrefix` is the segments before the first one containing a wildcard (all but the last when there is none), as
+written (`"content"`, `"../shared"`, `"/abs"`, `""`). `directory` is where the pattern is anchored: the **declaring
+document's** directory joined with the prefix, by `resource()`'s rule (a file's logical directory, a remote document's
+physical URL, ending in `/`); `otherDirectory` is the other rule's answer, present only when it differs.
+
+### `Host.list` and the memory host
+
+```ts
+interface Host {
+  list?(location: string): Promise<
+    | { ok: true; entries: { name: string; kind: "file" | "directory" | "other" }[] }
+    | { ok: false; reason: string }
+  >;
+}
+```
+
+Optional, and **supply, never a verdict**: the host lists a directory and says what each entry is **after following a
+symbolic link** (a link whose target is missing, and a loop of links, is `other`). Whether an entry is inside the sandbox is
+the library's question, judged through `canonicalize` as every read is. The order of the entries means nothing. A host
+without `list` is the library exactly as before. `createNodeHost()` implements it with `readdir` (file types) and `stat` for a
+link, in `src/host/node.ts` only; no other module under `src/` may call `readdir` or `opendir`.
+
+`@egildo/cascata/host/memory` ships `createMemoryHost({ files, links? })` — `read`, `canonicalize` (following `links`, a map
+from a location to its target, a file or a directory, in the path or at its end), POSIX `paths`, `list`, and **no cache**
+(nothing is kept). A directory exists when something is in it; there are no empty ones. It imports nothing platform-specific.
+
+### `expand(configuration, options)`
+
+A stage of its own, after `load()`/`validate()`; **`load()` never calls it**, and a configuration with `glob` values loads and
+validates with a host that has no `list`. It is the second stage that asks the host (after resolution).
+
+```ts
+import { expand } from "@egildo/cascata";
+
+const loaded = await load(entry, { host, sandboxRoot });
+if (loaded.ok) {
+  const { expansions, diagnostics } = await expand(loaded.configuration, { host, sandboxRoot, limits: { maxEntriesVisited: 500_000 } });
+  for (const e of expansions) {
+    if (e.ok) console.log(e.pointer, e.matches.map((m) => m.location)); // e.matches[i].physical when a link lies between
+  }
+}
+```
+
+`options.host` and `options.sandboxRoot` are required (a location or a list, as `resolve()` takes them); a
+`MergedConfiguration` does not record the roots it was resolved with, so none is inherited. The result lists, in the merged
+tree's order, **every string value at a position whose accumulated demand (Article VIII) admits `glob`** — alone, in a list, in
+a union (`path | glob`) or through a named type — as `{ ok: true, pointer, pattern, span, matches }` or `{ ok: false, …,
+diagnostics }`; `diagnostics` flattens the refusals. A value outside the grammar is not a pattern and is left alone. Other
+values are untouched. It throws only for programmer error (no host, no sandbox root), never for a document or the world.
+
+**The walk.** From `globBase().directory`, segment by segment: a literal segment is a direct child, found **in the listing**
+by its exact name; `*` and `?` match listed names; `**` descends through every directory, zero or more levels. Only files
+are returned, and only files; a pattern with no wildcard names one file and matches it if it is there. `*`, `?` and `**`
+never match a name whose first character is `.` and `**` never enters such a directory; a literal `.` does (`.github/*.yml`).
+Names are compared exactly, by code point, as the host lists them — no case folding, no Unicode normalization (so a composed
+`é` does not find a decomposed one on a disk that stores it so; `?` is one code point, two UTF-16 units above the BMP).
+
+**Confinement.** Checking a pattern confines nothing; expanding it confines everything it reads. Each directory is judged by
+its physical path (the host's `canonicalize`) against the sandbox **before** it is listed, and each returned file likewise. A
+literal prefix that climbs out, or a link that leads out, refuses that value with `sandbox-escape`, naming the logical path
+with the physical one beside it; other values still expand. A directory is entered once per physical path and pattern
+position, which ends a link cycle, and put to the host once per `expand()` call.
+
+**Determinism.** Each match is `{ location, physical?, span }`: `location` the route the walk took, `physical` the host's
+answer where it differs, `span` the pattern's own (so the layer and line that selected it). Two routes to one physical file are one
+match, named by the smaller logical path; the list is sorted by code point (not UTF-16), so the same files give the same list
+whatever order the host lists them in. An empty match is an empty list, never a diagnostic.
+
+### v1.14 diagnostic codes
+
+All `level: "error"`, positioned at the value, from `expand()` only.
+
+| Code | Means |
+|---|---|
+| `host-cannot-list` | the host has no `list` |
+| `directory-unlistable` | the host answered `ok: false` for a directory the walk needed (its reason is in the message; a literal prefix naming a directory that is not there is one) |
+| `glob-in-remote-document` | the declaring document was read over `https://`: HTTP has no directory listing, so a remote pattern is never expanded |
+| `glob-limit-exceeded` | the walk was given more names, by the directories it listed, than `limits.maxEntriesVisited` (default 100,000; per value) |
+
+A pattern that leads outside the sandbox is the existing `sandbox-escape`. A grammar mismatch is the existing `type-mismatch`.
+
 ## Scripts
 
 ```bash
@@ -1599,9 +1729,9 @@ under `tests/unit/` instead, driven directly against `resolve()` with an explici
 ## Dependency policy
 
 `yaml` (eemeli's) is the only runtime dependency. `picomatch` arrived in v0.4 to implement the `glob`
-built-in type and left again in v0.5 when `glob` itself was dropped (`SPEC.md` §15 — an unexpanded
-glob is a string nothing interprets; expansion needs a filesystem-reading story `glob` does not have
-until §14's Future list gives it one). The project constitution
+built-in type and left again in v0.5 when `glob` itself was dropped (`SPEC.md` §15). `glob` returned in
+v1.14 with a hand-written grammar and matcher (a strict subset of the LSP `GlobPattern`, `*`, `**` and `?` only), so
+`picomatch` did not come back. The project constitution
 (`.specify/memory/constitution.md`)'s dependency policy is a *ceiling* ("limited to..."), so it still
 names `picomatch` on its allow-list and needs no amendment for using fewer than it allows — see
 `CLAUDE.md`'s non-negotiables, corrected for the same reason a second time. Everything else is a dev
