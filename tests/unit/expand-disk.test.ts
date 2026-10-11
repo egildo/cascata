@@ -6,7 +6,7 @@
  * `realpathSync.native`, never from the library.
  */
 
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -74,17 +74,40 @@ describe("v1.14 FR-022 -- expand() on a real disk", () => {
     expect(result.diagnostics[0]?.message).toContain(join(root, "proj/out.md"));
   });
 
-  it("a name that is not UTF-8-clean on the page: a composed and a decomposed spelling in different directories each find only themselves", async () => {
-    const root = venue({ "proj/n1/café.md": "", "proj/n2/café.md": "" }, {}, ["n1/café.md", "n1/café.md", "n2/café.md", "n2/café.md"]);
+  it("a composed and a decomposed spelling (v1.14 FR-024): a literal is found as the disk finds a path, a wildcard compares the names as listed", async () => {
+    const root = venue({ "proj/n1/caf\u00e9.md": "", "proj/n2/cafe\u0301.md": "" }, {}, ["n1/caf\u00e9.md", "n1/cafe\u0301.md", "n2/cafe\u0301.md", "n2/caf\u00e9.md", "n1/*.md", "n2/?????.md", "n2/????.md"]);
+    // Does THIS disk fold the two spellings? APFS does (and keeps what was stored); ext4 does not; HFS+ stores everything decomposed.
+    const folds = existsSync(join(root, "proj/n1/cafe\u0301.md"));
     const result = await expandAt(root);
-    // The disk (APFS, ext4: stores names as given; HFS+ would normalize them to decomposed) lists what it stores; matching is exact.
-    expect(result.expansions.map((e) => e.ok && e.matches.length)).toEqual([1, 0, 1, 0]);
+    const counts = result.expansions.map((e) => e.ok && e.matches.length);
+    expect(counts).toEqual([1, folds ? 1 : 0, 1, folds ? 1 : 0, 1, 1, 0]);
+    // A literal is named as written, with the disk's stored spelling beside it as physical.
+    const cross = result.expansions[1];
+    if (folds && cross?.ok) {
+      expect(cross.matches[0]?.location).toBe(join(root, "proj/n1/cafe\u0301.md"));
+      expect(cross.matches[0]?.physical).toBe(realpathSync.native(join(root, "proj/n1/cafe\u0301.md")));
+    }
+    // A wildcard names the file as the listing gives it: the stored spelling, whatever the disk would have accepted.
+    const wildcard = result.expansions[4];
+    expect(wildcard?.ok && wildcard.matches.map((m) => m.location)).toEqual([join(root, "proj/n1", readdirSync(join(root, "proj/n1"))[0] ?? "")]);
   });
 
-  it("an unlistable directory is a diagnostic naming the system's reason, not a throw", async () => {
-    const root = venue({ "proj/a.md": "" }, {}, ["nodir/*.md"]);
+  it("a directory that is not there matches nothing (FR-026): an empty list, no diagnostic", async () => {
+    const root = venue({ "proj/a.md": "" }, {}, ["nodir/*.md", "*/nodir/x.md"]);
     const result = await expandAt(root);
-    expect(result.diagnostics.map((d) => d.code)).toEqual(["directory-unlistable"]);
-    expect(result.diagnostics[0]?.message).toContain("ENOENT");
+    expect(result.diagnostics).toEqual([]);
+    expect(result.expansions.map((e) => e.ok && e.matches)).toEqual([[], []]);
+  });
+
+  it.skipIf(process.getuid?.() === 0)("a directory that is there and refused is directory-unlistable, with the system's reason", async () => {
+    const root = venue({ "proj/locked/x.md": "" }, {}, ["locked/*.md"]);
+    chmodSync(join(root, "proj/locked"), 0o000);
+    try {
+      const result = await expandAt(root);
+      expect(result.diagnostics.map((d) => d.code)).toEqual(["directory-unlistable"]);
+      expect(result.diagnostics[0]?.message).toContain("EACCES");
+    } finally {
+      chmodSync(join(root, "proj/locked"), 0o755);
+    }
   });
 });

@@ -206,6 +206,12 @@ export interface MergedConfiguration {
    */
   readonly paths?: PathFacility;
   /**
+   * **v1.14 additive field** (FR-025): the sandbox roots the resolution was given, absolute, in the order granted. Carried so that
+   * `expand()` confines what it lists to the roots the configuration was loaded under unless the caller says otherwise. Absent
+   * on a configuration built from a `merge()` input that carried none (a hand-assembled one).
+   */
+  readonly sandboxRoots?: readonly string[];
+  /**
    * **v0.7 additive field** — the whole-stack `final` resolution
    * (`src/merge/final.ts`'s `resolveFinal`, SPEC.md §6.3), keyed by RFC
    * 6901 pointer path (top-level or nested). `src/validate/check.ts`

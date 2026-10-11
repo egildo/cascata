@@ -355,10 +355,11 @@ describe("v1.14 FR-018 -- refusals are data, positioned at the value, one reason
     expect(locations(result.expansions[1])).toEqual(under("a.md", "b.md", "café.md", "日本.md"));
   });
 
-  it("directory-unlistable: a literal prefix naming a directory that is not there", async () => {
-    const { result } = await expandPatterns(world, ["nodir/x.md"]);
-    expect(result.diagnostics.map((d) => d.code)).toEqual(["directory-unlistable"]);
-    expect(result.diagnostics[0]?.message).toContain("'/v/proj/nodir'");
+  it("v1.14 FR-026 (inverts the first build): a literal prefix naming a directory that is not there matches nothing -- an empty list, no diagnostic", async () => {
+    const { result, lists } = await expandPatterns(world, ["nodir/x.md", "nodir/**/*.md", "nodir/*.md"]);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.expansions.map((e) => e.ok && e.matches)).toEqual([[], [], []]);
+    expect(lists).toEqual([]); // nothing to ask a host about a directory that is not there
   });
 
   it("glob-in-remote-document: a pattern a remote document wrote is never expanded, and the host is never asked", async () => {
@@ -381,23 +382,24 @@ describe("v1.14 FR-018 -- refusals are data, positioned at the value, one reason
     expect(lists).toEqual(["/v/proj"]); // only the local pattern's directory
   });
 
-  it("glob-limit-exceeded: more entries than limits.maxEntriesVisited -- exactly at the cap is fine, one over is not", async () => {
+  it("glob-limit-exceeded counts WORK (v1.14 FR-027): each (directory, position) entered plus each entry examined there -- exactly at the cap is fine, one over is not", async () => {
     // /v/proj holds x/, schema.yaml, config.yaml (3 names) and /v/proj/x holds 1.md 2.md 3.md (3 names).
     const small: World = { files: { "/v/proj/x/1.md": "", "/v/proj/x/2.md": "", "/v/proj/x/3.md": "" } };
-    const atCap = await expandPatterns(small, ["x/*.md"], { limits: { maxEntriesVisited: 3 } });
+    // `x/*.md`: one state, (x, `*.md`): 1 entered + 3 examined = 4.
+    const atCap = await expandPatterns(small, ["x/*.md"], { limits: { maxEntriesVisited: 4 } });
     expect(locations(atCap.result.expansions[0])).toEqual(under("x/1.md", "x/2.md", "x/3.md"));
-    const over = await expandPatterns(small, ["x/*.md"], { limits: { maxEntriesVisited: 2 } });
+    const over = await expandPatterns(small, ["x/*.md"], { limits: { maxEntriesVisited: 3 } });
     expect(over.result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
     expect(over.result.diagnostics[0]).toMatchObject({ pointer: "/include/0", primary: { line: 3, column: 5 } });
-    expect(over.result.diagnostics[0]?.message).toContain("2");
-    // `**/*.md` lists both directories: 3 + 3 = 6 names.
-    expect(locations((await expandPatterns(small, ["**/*.md"], { limits: { maxEntriesVisited: 6 } })).result.expansions[0])).toHaveLength(3);
-    expect((await expandPatterns(small, ["**/*.md"], { limits: { maxEntriesVisited: 5 } })).result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
+    expect(over.result.diagnostics[0]?.message).toContain("3");
+    // `**/*.md`: four states -- (root, `**`), (root, `*.md`), (x, `**`), (x, `*.md`) -- each 1 + 3 examined = 16.
+    expect(locations((await expandPatterns(small, ["**/*.md"], { limits: { maxEntriesVisited: 16 } })).result.expansions[0])).toHaveLength(3);
+    expect((await expandPatterns(small, ["**/*.md"], { limits: { maxEntriesVisited: 15 } })).result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
   });
 
   it("the cap is per value: one value over it does not starve the next", async () => {
     const small: World = { files: { "/v/proj/x/1.md": "", "/v/proj/x/2.md": "", "/v/proj/x/3.md": "" } };
-    const { result } = await expandPatterns(small, ["**/*.md", "x/*.md"], { limits: { maxEntriesVisited: 3 } });
+    const { result } = await expandPatterns(small, ["**/*.md", "x/*.md"], { limits: { maxEntriesVisited: 4 } });
     expect(result.expansions.map((e) => e.ok)).toEqual([false, true]);
   });
 
@@ -406,12 +408,13 @@ describe("v1.14 FR-018 -- refusals are data, positioned at the value, one reason
     expect(DEFAULT_MAX_ENTRIES_VISITED).toBe(100_000);
   });
 
-  it("expand() throws for programmer error only: no host, a host that cannot canonicalize, no sandbox root", async () => {
+  it("expand() throws for programmer error only: no host, a host that cannot canonicalize, an explicit sandbox root that is empty", async () => {
     const { configuration } = await expandPatterns(world, ["*.md"]);
     await expect(expand(configuration, { sandboxRoot: "/v" } as never)).rejects.toThrow(/requires 'host'/);
     await expect(expand(configuration, { host: {} as never, sandboxRoot: "/v" })).rejects.toThrow(/requires 'host'/);
-    await expect(expand(configuration, { host: createMemoryHost() } as never)).rejects.toThrow(/requires 'sandboxRoot'/);
+    // v1.14 FR-025: with no sandboxRoot given, the configuration's own recorded roots are the default; an explicit empty one is still an error.
     await expect(expand(configuration, { host: createMemoryHost(), sandboxRoot: [] })).rejects.toThrow(/requires 'sandboxRoot'/);
+    await expect(expand(configuration, { host: createMemoryHost(), sandboxRoot: [""] })).rejects.toThrow(/requires 'sandboxRoot'/);
   });
 });
 

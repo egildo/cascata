@@ -597,7 +597,7 @@ export type FoldOutcome =
  * at each layer for itself, via `advanceStrategies`, rather than being
  * handed one flat map.
  */
-export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]> = new Map(), paths?: PathFacility): FoldOutcome {
+export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBreadcrumbs: ReadonlyMap<string, readonly DelegationHop[]> = new Map(), paths?: PathFacility, sandboxRoots?: readonly string[]): FoldOutcome {
   const layers = deriveLayers(graph);
   const { diagnostics: strategyDiagnostics } = resolveStrategies(layers);
   // v0.7: final resolution runs alongside cascade's own whole-stack pass,
@@ -634,5 +634,5 @@ export function foldConfiguration(graph: Graph, pedigree: Pedigree, delegationBr
   // semantics — omitted entirely when there is none, rather than
   // defaulting to POSIX here, so that `MergedConfiguration.paths`
   // distinguishes "no resolution stamped one" from "POSIX was chosen".
-  return { ok: true, diagnostics: notices, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs, finalState, ...(paths !== undefined ? { paths } : {}) } };
+  return { ok: true, diagnostics: notices, configuration: { tree: freeze(tree), provenance, pedigree, layers, delegationBreadcrumbs, finalState, ...(paths !== undefined ? { paths } : {}), ...(sandboxRoots !== undefined ? { sandboxRoots } : {}) } };
 }

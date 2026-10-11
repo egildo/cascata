@@ -337,6 +337,8 @@ export type ResolveResult =
        * `delegationBreadcrumbs` is.
        */
       readonly paths: PathFacility;
+      /** v1.14 FR-025: the sandbox roots this resolution was given, absolute and in the order granted. `merge()` carries them onto the configuration, where `expand()` reads them as its default. */
+      readonly sandboxRoots: readonly string[];
       /** v0.7 FR-002: `info`-level lints found during resolution (e.g. §8.1's delegate-leaf-shape lint). Never `error`-level — an `error` anywhere makes the whole call `ok: false` instead. Possibly empty. */
       readonly diagnostics: readonly Diagnostic[];
     }
@@ -1300,7 +1302,7 @@ async function finalizeWithDelegation(host: Host, physical: PhysicalPaths, notic
     // performs none of its own. The grants are still *collected*, so an
     // unrecognized `delegate:` value is still refused above; nothing is
     // grafted.
-    return { ok: true, graph, pedigree, delegationBreadcrumbs: new Map(), paths, diagnostics: [...notices, ...grantInfos] };
+    return { ok: true, graph, pedigree, delegationBreadcrumbs: new Map(), paths, sandboxRoots, diagnostics: [...notices, ...grantInfos] };
   }
 
   const state: DelegationState = {
@@ -1335,7 +1337,7 @@ async function finalizeWithDelegation(host: Host, physical: PhysicalPaths, notic
 
   const graftedEntry: GraphDocument = { ...graph.entry, tree: walked.node };
   const graftedGraph: Graph = buildGraph(graftedEntry, graph.documents.slice(1), graftedOverrides);
-  return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs, paths, diagnostics: [...notices, ...state.notices, ...grantInfos] };
+  return { ok: true, graph: graftedGraph, pedigree, delegationBreadcrumbs: state.breadcrumbs, paths, sandboxRoots, diagnostics: [...notices, ...state.notices, ...grantInfos] };
 }
 
 /**
@@ -1499,6 +1501,9 @@ export interface MergeInput {
    * through in full gets the host's own facility threaded automatically.
    */
   readonly paths?: PathFacility;
+
+  /** v1.14 FR-025 additive field, on the same terms: the roots the resolution was given, stamped onto the configuration. Omitted -> the configuration records none. */
+  readonly sandboxRoots?: readonly string[];
 }
 
 /**
@@ -1534,7 +1539,7 @@ export type MergeResult = { readonly ok: true; readonly configuration: MergedCon
  * a real gap, closed in T061.
  */
 export function merge(resolved: MergeInput): MergeResult {
-  return foldConfiguration(resolved.graph, resolved.pedigree, resolved.delegationBreadcrumbs, resolved.paths);
+  return foldConfiguration(resolved.graph, resolved.pedigree, resolved.delegationBreadcrumbs, resolved.paths, resolved.sandboxRoots);
 }
 
 // --- why() — User Story 3 (v0.3, tasks.md T049) --------------------------

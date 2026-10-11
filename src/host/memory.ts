@@ -49,9 +49,22 @@ export function createMemoryHost(options: MemoryHostOptions = {}): Host {
     links.set(key, posixPaths.resolve(posixPaths.dirname(key), target));
   }
   const directories = new Set<string>(["/"]);
+  /** directory -> the names directly in it (a file, a link, or the next directory down): built once, so a listing costs its own size. */
+  const children = new Map<string, Set<string>>();
   for (const key of [...files.keys(), ...links.keys()]) {
-    for (let parent = posixPaths.dirname(key); !directories.has(parent); parent = posixPaths.dirname(parent)) {
+    let child = key;
+    for (let parent = posixPaths.dirname(key); ; parent = posixPaths.dirname(parent)) {
+      let names = children.get(parent);
+      if (names === undefined) {
+        names = new Set();
+        children.set(parent, names);
+      }
+      names.add(child.slice(parent === "/" ? 1 : parent.length + 1));
       directories.add(parent);
+      if (parent === "/") {
+        break;
+      }
+      child = parent;
     }
   }
 
@@ -104,13 +117,8 @@ export function createMemoryHost(options: MemoryHostOptions = {}): Host {
       if (!directories.has(target)) {
         return { ok: false, reason: `MemoryHost: '${location}' is not a directory` };
       }
+      const names = children.get(target) ?? new Set<string>();
       const prefix = target === "/" ? "/" : `${target}/`;
-      const names = new Set<string>();
-      for (const key of [...files.keys(), ...links.keys()]) {
-        if (key.startsWith(prefix)) {
-          names.add(key.slice(prefix.length).split("/")[0] ?? "");
-        }
-      }
       return { ok: true, entries: [...names].map((name) => ({ name, kind: kindOf(`${prefix}${name}`) })) };
     },
 

@@ -511,6 +511,14 @@ export class PhysicalPaths {
     return answer;
   }
 
+  /**
+   * What the host says `path` is, or `undefined` where there is nothing there (no ancestor fallback: that is `of`'s). Asked once,
+   * like every question. This is how `expand()` tells a directory that is missing from one that is there and refuses (v1.14 FR-026).
+   */
+  async exact(path: string): Promise<string | undefined> {
+    return this.canonicalize(this.paths.resolve(path));
+  }
+
   /** The physical path of `path`. */
   async of(path: string): Promise<string> {
     const paths = this.paths;

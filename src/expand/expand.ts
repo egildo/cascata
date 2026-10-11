@@ -45,7 +45,11 @@ import { globValues, type GlobValue } from "./positions.js";
 export const DEFAULT_MAX_ENTRIES_VISITED = 100_000;
 
 export interface ExpandLimits {
-  /** Names a value's walk may take from `list` answers (every name of every directory it uses, once) before `glob-limit-exceeded`. */
+  /**
+   * The work one value's walk may do before `glob-limit-exceeded` (v1.14 FR-027): each (directory, pattern position) it enters
+   * counts one, each entry it examines there one more, and each kind lookup one. Work, not names: a pattern of many `**` over a
+   * tree whose every directory is listed once is still many times the tree.
+   */
   readonly maxEntriesVisited: number;
 }
 
@@ -53,11 +57,12 @@ export interface ExpandOptions {
   /** Required: the host that lists directories (and canonicalizes). No default and none inferred. */
   readonly host: Host;
   /**
-   * Required: the roots the walk is confined to, a location or a list of them, exactly as `resolve()` takes them. A
-   * `MergedConfiguration` does not record the roots it was resolved with, so there is no default (v1.14 report, Ambiguities):
-   * "granted, never ambient".
+   * The roots the walk is confined to, a location or a list of them, exactly as `resolve()` takes them. **Optional (v1.14
+   * FR-025):** `resolve()` records the roots it was given and `merge()` carries them onto `MergedConfiguration.sandboxRoots`,
+   * and they are the default; given here, these replace them for this call. A configuration that records none (a hand-built
+   * `merge()` input) and no option is a programmer error.
    */
-  readonly sandboxRoot: string | readonly string[];
+  readonly sandboxRoot?: string | readonly string[];
   readonly limits?: Partial<ExpandLimits>;
 }
 
@@ -104,8 +109,12 @@ interface Context {
   readonly physical: PhysicalPaths;
   readonly roots: readonly string[];
   readonly limit: number;
+  readonly separator: string;
+  readonly dirname: (path: string) => string;
   /** One answer per physical directory for the whole call (`list` is put to the host once). */
   readonly listings: Map<string, HostListResult>;
+  /** The kind of each name in a listing, by physical directory, built on first use. */
+  readonly kinds: Map<string, Map<string, HostListEntry["kind"]>>;
 }
 
 /** A directory the walk has yet to enter, ordered by its route. */
@@ -115,8 +124,25 @@ interface Step {
   readonly seg: number;
 }
 
+/**
+ * `compareByCodePoint` without building two arrays per call -- the frontier compares keys a great many times. UTF-16 order and
+ * code point order agree unless one of the first differing units is a surrogate (CLAUDE.md's trap), and that case is handed to
+ * `compareByCodePoint` itself; `tests/unit/expand-revision.test.ts` checks the two agree.
+ */
+export function compareRoutes(a: string, b: string): number {
+  const shared = Math.min(a.length, b.length);
+  for (let index = 0; index < shared; index += 1) {
+    const unitA = a.charCodeAt(index);
+    const unitB = b.charCodeAt(index);
+    if (unitA !== unitB) {
+      return (unitA >= 0xd800 && unitA <= 0xdfff) || (unitB >= 0xd800 && unitB <= 0xdfff) ? compareByCodePoint(a, b) : unitA - unitB;
+    }
+  }
+  return a.length - b.length;
+}
+
 function compareSteps(a: Step, b: Step): number {
-  return compareByCodePoint(a.key, b.key) || a.seg - b.seg;
+  return compareRoutes(a.key, b.key) || a.seg - b.seg;
 }
 
 /** A binary min-heap of steps. */
@@ -189,9 +215,11 @@ function requireOptions(options: ExpandOptions): void {
     throw new Error("expand() was given a 'host' whose 'list' is not a function (v1.14 FR-009) -- omit the member entirely for a host that cannot list a directory");
   }
   const granted: unknown = options.sandboxRoot;
-  const members = typeof granted === "string" ? [granted] : granted;
-  if (!Array.isArray(members) || members.length === 0 || members.some((root) => typeof root !== "string" || root.length === 0)) {
-    throw new Error("expand() requires 'sandboxRoot' (v1.14 FR-012) -- a non-empty location, or a non-empty list of them, every member a non-empty string, exactly as resolve() takes it; a configuration does not record the roots it was resolved with, and none is inferred");
+  if (granted !== undefined) {
+    const members = typeof granted === "string" ? [granted] : granted;
+    if (!Array.isArray(members) || members.length === 0 || members.some((root) => typeof root !== "string" || root.length === 0)) {
+      throw new Error("expand() requires 'sandboxRoot' to be a non-empty location, or a non-empty list of them, every member a non-empty string, exactly as resolve() takes it (v1.14 FR-012, FR-025)");
+    }
   }
   const cap = options.limits?.maxEntriesVisited;
   if (cap !== undefined && (!Number.isInteger(cap) || cap < 0)) {
@@ -203,28 +231,6 @@ function refusal(value: GlobValue, code: DiagnosticCode, message: string): Refus
   return new Refusal(createDiagnostic({ code, level: "error", message, primary: value.node.span, pointer: value.pointer }));
 }
 
-async function listing(value: GlobValue, ctx: Context, dir: string, physicalDir: string, charged: Set<string>, counter: { visited: number }): Promise<readonly HostListEntry[]> {
-  let answer = ctx.listings.get(physicalDir);
-  if (answer === undefined) {
-    if (ctx.host.list === undefined) {
-      throw refusal(value, "host-cannot-list", `cannot expand the glob '${value.node.value}': the host has no 'list', so it cannot list a directory (loading and validating never needed one)`);
-    }
-    answer = await ctx.host.list(dir);
-    ctx.listings.set(physicalDir, answer);
-  }
-  if (!answer.ok) {
-    throw refusal(value, "directory-unlistable", `cannot expand the glob '${value.node.value}': the host could not list the directory ${namedDocument(dir, physicalDir)}: ${answer.reason}`);
-  }
-  if (!charged.has(physicalDir)) {
-    charged.add(physicalDir);
-    counter.visited += answer.entries.length;
-    if (counter.visited > ctx.limit) {
-      throw refusal(value, "glob-limit-exceeded", `expanding the glob '${value.node.value}' visited more than ${ctx.limit} directory entries (limits.maxEntriesVisited); raise it in expand()'s options if the tree is really that large`);
-    }
-  }
-  return answer.entries;
-}
-
 async function walk(value: GlobValue, ctx: Context): Promise<GlobMatch[]> {
   const pattern = value.node.value;
   const span = value.node.span;
@@ -234,25 +240,96 @@ async function walk(value: GlobValue, ctx: Context): Promise<GlobMatch[]> {
   }
   const rest = splitGlob(pattern).rest;
   const compiled = new Map<number, readonly number[]>();
-  const separator = ctx.physical.separator;
+  const separator = ctx.separator;
   const join = (dir: string, name: string): string => (dir.endsWith(separator) ? `${dir}${name}` : `${dir}${separator}${name}`);
   const stepFor = (dir: string, seg: number): Step => ({ dir, key: dir.endsWith(separator) ? dir : `${dir}${separator}`, seg });
+
+  const work = { units: 0 };
+  /** FR-027: the limit counts work. */
+  const spend = (units: number): void => {
+    work.units += units;
+    if (work.units > ctx.limit) {
+      throw refusal(value, "glob-limit-exceeded", `expanding the glob '${pattern}' did more than ${ctx.limit} units of work (each directory entered at each pattern position, and each entry examined there; limits.maxEntriesVisited); raise it in expand()'s options if the tree and the pattern are really that large`);
+    }
+  };
 
   const escape = (location: string, physical: string): Refusal =>
     refusal(value, "sandbox-escape", `expanding the glob '${pattern}' reached ${namedDocument(location, physical)}, which is outside the sandbox (${ctx.roots.map((root) => `'${root}'`).join(", ")}); a pattern is confined as a reference is, through the physical path`);
 
-  const frontier = new Frontier();
-  const visited = new Set<string>();
-  const charged = new Set<string>();
-  const counter = { visited: 0 };
-  const found = new Map<string, string>();
-
-  async function candidate(dir: string, name: string): Promise<void> {
-    const location = join(dir, name);
+  /** The physical path of `location`, refusing the value if it is outside the sandbox. */
+  async function confined(location: string): Promise<string> {
     const physical = await ctx.physical.of(location);
     if (!(await isWithinSandbox(ctx.physical, location, ctx.roots))) {
       throw escape(location, physical);
     }
+    return physical;
+  }
+
+  /** The host's answer for a directory, asked once per call. */
+  async function rawListing(dir: string, physicalDir: string): Promise<HostListResult> {
+    let answer = ctx.listings.get(physicalDir);
+    if (answer === undefined) {
+      if (ctx.host.list === undefined) {
+        throw refusal(value, "host-cannot-list", `cannot expand the glob '${pattern}': the host has no 'list', so it cannot list a directory (loading and validating never needed one)`);
+      }
+      answer = await ctx.host.list(dir);
+      ctx.listings.set(physicalDir, answer);
+    }
+    return answer;
+  }
+
+  function unlistable(dir: string, physicalDir: string, reason: string): Refusal {
+    return refusal(value, "directory-unlistable", `cannot expand the glob '${pattern}': the host could not list the directory ${namedDocument(dir, physicalDir)}: ${reason}`);
+  }
+
+  /**
+   * What the stored path `physicalPath` is, by asking its stored parent (FR-024: "the kind"). A sandbox root is a directory
+   * (its parent is outside the sandbox and is not asked). `undefined` where the parent has no such name.
+   */
+  async function kindOf(physicalPath: string): Promise<HostListEntry["kind"] | undefined> {
+    for (const root of ctx.roots) {
+      if ((await ctx.physical.of(root)) === physicalPath) {
+        return "directory";
+      }
+    }
+    const parent = ctx.dirname(physicalPath);
+    if (parent === physicalPath) {
+      return "directory";
+    }
+    if (!(await isWithinSandbox(ctx.physical, parent, ctx.roots))) {
+      return "other";
+    }
+    const answer = await rawListing(parent, parent);
+    if (!answer.ok) {
+      throw unlistable(parent, parent, answer.reason);
+    }
+    spend(1);
+    let index = ctx.kinds.get(parent);
+    if (index === undefined) {
+      index = new Map(answer.entries.map((entry) => [entry.name, entry.kind]));
+      ctx.kinds.set(parent, index);
+    }
+    return index.get(physicalPath.slice(parent.endsWith(separator) ? parent.length : parent.length + separator.length));
+  }
+
+  /** The entries of a directory that exists; `undefined` if it is not a directory at all (a file where one was wanted). Refused by the host: directory-unlistable. */
+  async function listed(dir: string, physicalDir: string): Promise<readonly HostListEntry[] | undefined> {
+    const answer = await rawListing(dir, physicalDir);
+    if (answer.ok) {
+      return answer.entries;
+    }
+    const kind = await kindOf(physicalDir);
+    if (kind !== undefined && kind !== "directory") {
+      return undefined;
+    }
+    throw unlistable(dir, physicalDir, answer.reason);
+  }
+
+  const frontier = new Frontier();
+  const visited = new Set<string>();
+  const found = new Map<string, string>();
+
+  function record(location: string, physical: string): void {
     const existing = found.get(physical);
     if (existing === undefined || compareByCodePoint(location, existing) < 0) {
       found.set(physical, location);
@@ -270,52 +347,76 @@ async function walk(value: GlobValue, ctx: Context): Promise<GlobMatch[]> {
       continue;
     }
     const dir = current.dir;
-    const physicalDir = await ctx.physical.of(dir);
-    if (!(await isWithinSandbox(ctx.physical, dir, ctx.roots))) {
-      throw escape(dir, physicalDir);
-    }
+    // Confinement first (a missing directory outside the sandbox is an escape, not an empty list), then whether it is there at all.
+    const physicalDir = await confined(dir);
     const state = `${physicalDir}\u0000${seg}`;
     if (visited.has(state)) {
       continue;
     }
     visited.add(state);
-    const entries = [...(await listing(value, ctx, dir, physicalDir, charged, counter))].sort((a, b) => compareByCodePoint(a.name, b.name));
+    if ((await ctx.physical.exact(dir)) === undefined) {
+      continue; // FR-026: a directory that is not there matches nothing
+    }
+    spend(1);
     const last = seg === rest.length - 1;
+
+    if (segment !== "**" && !isWildcardSegment(segment)) {
+      // FR-024: a literal is found as a path is -- asked of the host by its written spelling, and named by it.
+      const child = join(dir, segment);
+      if (!last) {
+        frontier.push(stepFor(child, seg + 1));
+        continue;
+      }
+      const stored = await ctx.physical.exact(child);
+      if (stored === undefined) {
+        continue;
+      }
+      await confined(child);
+      if ((await kindOf(stored)) === "file") {
+        record(child, stored);
+      }
+      continue;
+    }
+
+    const entries = await listed(dir, physicalDir);
+    if (entries === undefined) {
+      continue;
+    }
+    spend(entries.length);
+    const sorted = [...entries].sort((a, b) => compareByCodePoint(a.name, b.name));
+
+    async function candidate(name: string): Promise<void> {
+      const location = join(dir, name);
+      record(location, await confined(location));
+    }
 
     if (segment === "**") {
       if (!last) {
         frontier.push(stepFor(dir, seg + 1));
       }
-      for (const entry of entries) {
+      for (const entry of sorted) {
         if (entry.name.startsWith(".")) {
           continue;
         }
         if (entry.kind === "directory") {
           frontier.push(stepFor(join(dir, entry.name), seg));
         } else if (entry.kind === "file" && last) {
-          await candidate(dir, entry.name);
+          await candidate(entry.name);
         }
       }
     } else {
-      let matches: (name: string) => boolean;
-      if (isWildcardSegment(segment)) {
-        let cp = compiled.get(seg);
-        if (cp === undefined) {
-          cp = compileGlobSegment(segment);
-          compiled.set(seg, cp);
-        }
-        const codePoints = cp;
-        matches = (name) => matchesGlobSegment(codePoints, name);
-      } else {
-        matches = (name) => name === segment;
+      let cp = compiled.get(seg);
+      if (cp === undefined) {
+        cp = compileGlobSegment(segment);
+        compiled.set(seg, cp);
       }
-      for (const entry of entries) {
-        if (!matches(entry.name)) {
+      for (const entry of sorted) {
+        if (!matchesGlobSegment(cp, entry.name)) {
           continue;
         }
         if (last) {
           if (entry.kind === "file") {
-            await candidate(dir, entry.name);
+            await candidate(entry.name);
           }
         } else if (entry.kind === "directory") {
           frontier.push(stepFor(join(dir, entry.name), seg + 1));
@@ -356,13 +457,26 @@ async function expandOne(value: GlobValue, ctx: Context): Promise<ExpandedGlob> 
 export async function expand(configuration: MergedConfiguration, options: ExpandOptions): Promise<ExpandResult> {
   requireOptions(options);
   const host = options.host;
+  const paths = host.paths ?? posixPaths;
+  const granted = options.sandboxRoot;
+  let roots: readonly string[];
+  if (granted !== undefined) {
+    roots = toAbsoluteSandboxRoots(granted, paths);
+  } else if (configuration.sandboxRoots !== undefined && configuration.sandboxRoots.length > 0) {
+    roots = configuration.sandboxRoots;
+  } else {
+    throw new Error("expand() requires 'sandboxRoot' (v1.14 FR-025): this configuration records none (it was not made by resolve() and merge()) and none was given; there is no default and none is inferred");
+  }
   const ctx: Context = {
     configuration,
     host,
     physical: new PhysicalPaths(host),
-    roots: toAbsoluteSandboxRoots(options.sandboxRoot, host.paths ?? posixPaths),
+    roots,
     limit: options.limits?.maxEntriesVisited ?? DEFAULT_MAX_ENTRIES_VISITED,
+    separator: paths.separator,
+    dirname: paths.dirname,
     listings: new Map(),
+    kinds: new Map(),
   };
   const expansions: ExpandedGlob[] = [];
   for (const value of globValues(configuration)) {
