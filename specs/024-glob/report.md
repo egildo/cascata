@@ -12,7 +12,9 @@ not edited. Ships as v1.14 by the spec; **`package.json`'s `version` is untouche
 | `ed98305` | Part B -- `Host.list`, the Node implementation, the memory host, the shared list suite, the `readdir`/`opendir` sweep (FR-009 to FR-011, FR-021) |
 | `e203f82` | Part C -- `expand()`, `src/expand/`, the four codes, the layering rules for the new stage (FR-012 to FR-019, FR-022) |
 | `a77827c` | Witnesses the sabotage found missing, plus `docs/reference.md` for v1.14 (FR-023) |
-| (this one) | `specs/024-glob/report.md` and `specs/HANDOFF.md` |
+| `f820102` | `specs/024-glob/report.md` and `specs/HANDOFF.md` |
+| `a97b04a` | Revision: FR-024 to FR-027 (code and cases) |
+| (the next) | Revision: sabotage witnesses, `docs/reference.md`, this section, `HANDOFF.md` |
 
 The probe gate (FR-021) was run on the real disk before Part B was written (a scratch script under the session scratchpad; not
 committed). Its answers are below and `host-list.test.ts` / `expand-disk.test.ts` pin them.
@@ -222,14 +224,14 @@ Every place the spec or `SPEC.md` was silent, contradictory or wrong, and every 
    did not ask for. The cost is that "named by the smaller logical path" is operational ("among the routes the walk takes"),
    not a property of all routes. A test (`a`, `a-b`) pins the case where the naive order is wrong; S25 and S23 prove the
    comparison and the keep-smaller rule are load-bearing.
-2. **FR-013 ("a literal segment is a direct child") vs FR-015 (exact matching against names as listed) vs SPEC.md §7.**
+2. **RESOLVED by the owner (FR-024; see "Revision after the coordinator's review").** *As first reported:* FR-013 ("a literal segment is a direct child") vs FR-015 (exact matching against names as listed) vs SPEC.md §7.**
    I read a literal segment *after the literal prefix* as "found in the listing by its exact name", so the result does not
    depend on how the disk resolves names. The literal **prefix** is not matched at all: it is joined into the anchored
    directory (FR-007) and the OS or host resolves it. So on APFS `café/x.md` (composed) lists a directory stored decomposed
    (the OS is tolerant) while `*/café.md` and the wildcard-free `café.md` do not find a decomposed-stored file. The probe
    shows this is real. SPEC.md §7 says names are compared "by code point as the host lists them"; that is true of every
    segment but the prefix. Not fixed: a stricter reading would list every ancestor of the prefix.
-3. **FR-012: "if the configuration already records the roots it was resolved with, those are the default -- report which."
+3. **RESOLVED by the owner (FR-025; see the Revision).** *As first reported:* FR-012: "if the configuration already records the roots it was resolved with, those are the default -- report which."
    It does not.** `MergedConfiguration` has no field for them; `resolve()` throws them away. I did not add one (it would have
    touched `ResolveResult`, `MergeInput`, `fold` and every `toEqual` on an ok result). `sandboxRoot` is required on `expand()`
    and a missing or empty one throws, in `resolve()`'s own words. SPEC.md's Article VI says `expand()` "takes a loaded
@@ -271,7 +273,7 @@ Every place the spec or `SPEC.md` was silent, contradictory or wrong, and every 
    strings) carried it, but a union (`path | glob`) or a named type's `accept` list produces the generic "expected path | glob,
    got a string scalar" because that path has no per-alternative attribution (v0.5 research.md). Reporting "no new code, precise
    message" is true for `type: glob` and `type: glob[]`, directly or through a named type, and false for a union.
-10. **Missing directories are refusals.** FR-018: `directory-unlistable` is "the host answered `ok: false` for a directory the
+10. **RESOLVED by the owner (FR-026; see the Revision).** *As first reported:* Missing directories are refusals. FR-018: `directory-unlistable` is "the host answered `ok: false` for a directory the
     walk needed". A literal prefix naming a directory that does not exist (`content/**/*.md` with no `content`) is therefore
     `directory-unlistable`, not an empty list, although the spec also says an empty match is an empty list. The two
     statements do not meet; I took the first literally. The cost: an optional directory is a refusal the author cannot
@@ -280,7 +282,7 @@ Every place the spec or `SPEC.md` was silent, contradictory or wrong, and every 
     `list` (the answer would not change with a better host); the host check comes second. A value's first refusal in route
     order wins; the files of a directory are tried in code-point order of name, so which of two escaping files is named does
     not depend on the host (tested).
-12. **The cap.** "The cap counts entries listed, every name a `list` answer returns" (spec): a value's walk is
+12. **RESOLVED by the coordinator (FR-027; see the Revision).** *As first reported:* The cap. "The cap counts entries listed, every name a `list` answer returns" (spec): a value's walk is
     charged for a listing the first time *it* uses it. The host answer is cached for the whole `expand()` call, so a second
     value that uses the same directory is charged for it too (the cap is per value, tested); the test is `visited > limit`,
     so exactly the cap is fine. `limits` is validated (non-negative integer, else a programmer-error throw). The cap does **not** bound
@@ -317,3 +319,125 @@ Every place the spec or `SPEC.md` was silent, contradictory or wrong, and every 
 22. **Things I noticed and did not touch.** `README.md`'s status paragraph and the older `specs/*/contracts/` are the v1.13
     leftovers HANDOFF already pins. `docs/reference.md`'s opening paragraphs still say "v1.12.1" and stop at v1.11 in their
     prose (the table is current); I added only the v1.14 row, the section and the dependency-policy sentence.
+
+## Revision after the coordinator's review (FR-024 to FR-027, 2026-10-12)
+
+The owner ruled on ambiguities 2, 3 and 10 and the coordinator on 12; they are `spec.md` Part B' and `SPEC.md` §7/§15. Cases first:
+I wrote `expand-revision.test.ts` and the changes to `expand.test.ts` / `expand-helpers.ts` before the code and watched **14 tests
+red** on the first run (once the code was in, two tests in `expand-disk.test.ts`, which the rulings invert, and the sixty-`**` case, which needed the
+faster frontier, were red; see "Changes"), then wrote the code. The earlier "I did not watch it red" caveat does not apply to this round.
+
+### What changed, per FR
+
+- **FR-024, literals are paths.** In `src/expand/expand.ts` a literal state asks the host: `PhysicalPaths.exact(child)` (new: the
+  host's raw `canonicalize` answer, `undefined` where nothing is there, with no ancestor fallback) and, for a **last** literal,
+  `kindOf(stored)`. A non-last literal just pushes its child directory; the prefix was already resolved by the host and now gets
+  the same existence test as any directory. Wildcard states list and compare names exactly, as before. A literal match is named by
+  its written spelling (`join(dir, literal)`) with the stored path as `physical`. There is **no `stat` verb on `Host`**, so "the
+  kind" is read from the *stored parent's* listing (below, Ambiguities R1).
+- **FR-025, roots.** `ResolveResult.sandboxRoots` (absolute, in order), `MergeInput.sandboxRoots?`,
+  `MergedConfiguration.sandboxRoots?` (stamped by `foldConfiguration`, like `paths`); `ExpandOptions.sandboxRoot` optional,
+  explicit replaces; a configuration with none recorded and no option throws the old "requires 'sandboxRoot'" error.
+- **FR-026, missing is empty.** A directory whose `exact` answer is `undefined` matches nothing (after the sandbox has judged it:
+  a missing directory outside the sandbox is still `sandbox-escape`). `directory-unlistable` is thrown only when a directory that
+  exists is refused; a failed listing of an existing path is first asked what it is (`kindOf`), and a file where a directory was
+  wanted matches nothing.
+- **FR-027, work.** `limits.maxEntriesVisited` is `work.units`: +1 for each (directory, position) entered, +1 per entry examined in
+  a wildcard or `**` state, +1 per kind lookup; `> limit` refuses. A literal state costs its one unit and no listing. Consecutive
+  `**` are not collapsed (the count is the guard). The coordinator's case (6 deep, fan-out 4, 5,461 directories, `t/` + `**/` x 60
+  + `*.md`) now **refuses at the default in about 0.4 s**; raised to exactly the work it is **999,302 units (61 x (5,461 + 10,921),
+  derived by hand and asserted) and takes about 3.9 s, 5,461 `list` calls, 5,461 matches** -- the 19 s of the first build was mostly
+  the memory host scanning every file for each listing (it now keeps a directory -> names index) and `compareByCodePoint`
+  allocating in the frontier (`compareRoutes`, exported from `expand.ts` for its test, falls back to it only across the
+  surrogate range).
+
+### Sabotage of the revision (20 mutants, all red on the first run; same driver, entries in `/tmp/cascata-024/entries3.py`)
+
+| # | Rule broken | FR | Red | Where (tests) |
+|---|---|---|---|---|
+| R01 | FR-024 the last literal must be stored as written (exact-name behaviour) | FR-024 | 7 | expand-disk (1), expand-revision (6) |
+| R02 | FR-024 a prefix written in another spelling is treated as missing | FR-024 | 1 | expand-revision (1) |
+| R03 | FR-024 wildcard matching compares names normalized | FR-024 | 3 | expand-disk (1), expand-revision (1), expand (1) |
+| R04 | FR-024 the last literal is not confined | FR-024/FR-017 | 1 | expand-revision (1) |
+| R05 | FR-024 the kind of a last literal is not asked (a directory matches) | FR-024 | 4 | expand-revision (3), expand (1) |
+| R06 | FR-025 resolve() records no roots | FR-025 | 3 | expand-revision (3) |
+| R07 | FR-025 merge() does not carry them | FR-025 | 3 | expand-revision (3) |
+| R08 | FR-025 an explicit sandboxRoot does not replace them | FR-025 | 3 | expand-revision (1), expand (2) |
+| R09 | FR-025 with neither given nor recorded, no error | FR-025 | 1 | expand-revision (1) |
+| R10 | FR-026 a missing directory is not skipped | FR-026 | 3 | expand-disk (1), expand-revision (1), expand (1) |
+| R11 | FR-026 a missing literal after a wildcard is not skipped | FR-026 | 8 | expand-revision (3), expand (5) |
+| R12 | FR-026 a file where a directory was wanted is unlistable | FR-026 | 2 | expand-revision (2) |
+| R13 | FR-026 a root the host refuses is not a directory | FR-026 | 1 | expand-revision (1) |
+| R14 | FR-026 confinement is judged after existence | FR-026 | 4 | expand-revision (1), expand (3) |
+| R15 | FR-027 entering a state costs nothing | FR-027 | 4 | expand-revision (3), expand (1) |
+| R16 | FR-027 entries examined cost nothing | FR-027 | 4 | expand-revision (2), expand (2) |
+| R17 | FR-027 a kind lookup costs nothing | FR-027 | 1 | expand-revision (1) |
+| R18 | FR-027 the limit is exact (> becomes >=) | FR-027 | 4 | expand-revision (2), expand (2) |
+| R19 | FR-027 the count is names listed, once per directory (the first build) | FR-027 | 5 | expand-revision (4), expand (1) |
+| R20 | FR-027 route comparison ignores the surrogate range | FR-027 | 1 | expand-revision (1) |
+
+R13 was written because I asked of my own code which branch no case reached: the sandbox-root shortcut in `kindOf` has the same
+outcome as the sibling rule *except* for a root the host refuses to list, so I added that case (`expand-revision`: a root that is
+unlistable is `directory-unlistable`, and its parent outside the sandbox is never asked) before running the mutant.
+
+### Tests
+
+| | Main suite | Timing suite |
+|---|---|---|
+| After the first round (`f820102`) | 121 files / 3,650 | 8 / 14 |
+| After the revision | 122 files / **3,677** | 8 / 14 (unchanged) |
+
++1 file (`expand-revision` 26 tests), `expand-disk` 4 -> 5. `pnpm typecheck` and `pnpm test` green; the one slow case (the
+raised-limit run, ~4 s) has a 60 s timeout of its own and is the only test of this round that runs seconds.
+
+### Changes to existing tests this round (each inverted by a ruling, none relaxed)
+
+1. `expand.test.ts`, "directory-unlistable: a literal prefix naming a directory that is not there": **inverted** (FR-026). It is
+   now an empty list, no diagnostic, and no `list` call at all.
+2. `expand.test.ts`, the cap tests: the unit of the cap changed from names to work (FR-027). `x/*.md` is 4 units (was 3 names),
+   `**/*.md` is 16 (was 6), re-derived by hand in the test; the "per value" test uses 4. The default-cap test is unchanged.
+3. `expand.test.ts`, "expand() throws for programmer error": the "no `sandboxRoot` throws" line is **removed** (FR-025: the
+   configuration's roots are the default); `[]` and `[""]` still throw, and a configuration with no recorded roots has its own
+   test in `expand-revision.test.ts`.
+4. `expand-disk.test.ts`: the composed/decomposed test and the `ENOENT` test were replaced (FR-024, FR-026). The first asserted
+   that each spelling finds only itself, which on APFS is no longer true of a literal; it now asks the disk whether it folds and
+   asserts both outcomes. The second asserted a refusal for a missing directory; the refusal is tested with a real `chmod 000`
+   directory (skipped as root).
+5. `expand-helpers.ts`: `expandPatterns` takes a `wrap`; `folding()` and `fanTree()` added. `src/host/memory.ts`'s `list` is
+   indexed (no change of answer; `host-list` / `host-memory` unchanged and green).
+
+No other existing test needed to change: adding `sandboxRoots` to `ResolveResult` broke no `toEqual`.
+
+### New ambiguities (this round, unsoftened)
+
+R1. **"The kind" has no host verb.** The ruling says "ask the host for that location (canonicalize, then the kind)". `Host` has
+   `canonicalize` and `list`, no `stat`. I read the kind from `list(parent of the stored path)`, found by the stored basename;
+   cached with the other listings and charged one unit. So a last literal costs a listing of its parent (not of nothing), and a
+   host can refuse that listing while allowing the literal to be opened: then the value is `directory-unlistable` at the
+   parent. A `Host.kind`/`stat` verb would be cleaner and is the owner's to add; I did not.
+R2. **`canonicalize` returning `undefined` means "not there", whatever the reason.** Node's `realpath` also fails for an
+   unreadable *ancestor* (EACCES on traversal), so a branch behind a directory the process cannot traverse is silently empty,
+   not unlistable; only a directory whose own entries are refused (readable path, unreadable contents) is
+   `directory-unlistable`. FR-026's "exists and the host refuses" is exactly as good as `canonicalize`'s `undefined`.
+R3. **The prefix keeps one unit and one existence test.** The literal prefix is a single anchored directory (`globBase`), so ten
+   prefix segments cost one unit, not ten, and its spelling is the host's problem as a path is (FR-024). `..` in a prefix is
+   still resolved lexically (v1.13), not by the host.
+R4. **A file used as a directory is told apart only when a listing fails.** Before listing, a non-last literal is assumed to be a
+   directory; when its `list` fails, `kindOf` is asked and a non-directory matches nothing. A host whose `list` of a *file*
+   answers `ok: true` with no entries (not the two shipped ones) would be walked as an empty directory, which is also nothing.
+R5. **`ResolveResult.sandboxRoots` is a required field of a public type**, so a consumer that builds a `ResolveResult` by hand
+   (rather than passing `resolve()`'s through) must add it; `MergeInput.sandboxRoots` is optional, so `merge()` calls are
+   unaffected. An empty recorded list counts as none. `generateTypes()`'s resolution records them too (harmless).
+R6. **Work units, exactly:** +1 per state entered (also for a literal state), +`entries.length` per wildcard or `**` state, +1 per
+   kind lookup. Host questions that are memoized (`canonicalize`, `exact`) cost nothing, and neither does the heap, so a
+   pattern of many literals is cheap in units and not free in time. The default stays 100,000 (a number the owner may want
+   changed now that it means something else); the option keeps the name `maxEntriesVisited`, which now misdescribes it.
+R7. **The raised-limit acceptance on the coordinator's tree runs in the main suite (~4 s).** It is the case the ruling asked
+   for; the small-tree pair (40 directories, 1,309 units, +/- 1) is the fast boundary witness. Under heavy load the 60 s
+   timeout, not the work, is what protects it.
+R8. **`compareRoutes` is a second implementation of code point order** (fast path plus a fallback). It is tested against
+   `compareByCodePoint` on a table that includes the surrogate range and BMP characters above it; the model's own function is
+   still the one used for sorting matches and entries.
+R9. **Items 2, 3, 10 and 12 above are resolved by the rulings;** item 16 (list receives the first route's logical location),
+   item 17 and item 20(b) need a word: (b) is now true -- every segment that compares names does so exactly as listed, literal
+   segments are asked as paths, and SPEC.md §7 was updated by the coordinator to say so.

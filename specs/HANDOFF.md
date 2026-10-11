@@ -14,14 +14,16 @@ Earlier handoffs (017 to 023) are folded in where they still hold.
 `glob` / `glob[]` alternative (a union gets the generic sentence). `globBase()` (`validate/globbase.ts`) shares
 `locateFromDocument` with `resource()` (`validate/resource.ts`): a change to where a relative value starts is one change.
 
-**The stage.** `src/expand/` is downstream of everything and imported only by `src/index.ts` (`layering.test.ts` sweeps it,
+**The stage (revised after the review: FR-024 to FR-027).** *Literal segments are paths:* a literal state asks `PhysicalPaths.exact(child)` (the host's raw `canonicalize`, `undefined` = not there) and, for a last literal, `kindOf(stored)` -- the kind read from the *stored parent's* listing, because `Host` has no `stat`. Only `*`, `?`, `**` list and compare names. A missing directory is an empty branch; `directory-unlistable` only for one that exists and is refused (`listed()` asks what a failed listing is). `MergedConfiguration.sandboxRoots` (from `ResolveResult.sandboxRoots` via `merge()`) is `expand()`'s default roots.
+
+**The stage, as first built.** `src/expand/` is downstream of everything and imported only by `src/index.ts` (`layering.test.ts` sweeps it,
 and forbids it from importing `src/host/`). `positions.ts` finds the values: it walks the merged tree beside
 `accumulate(schemaLayers).tree`, as *frames* (a position's alternatives plus its structure; a named type is another frame
 for the same value; a sequence lowers every alternative by one array level and adds `items`; a mapping takes the named key's
 position, else `values`). `expand.ts` walks one value: a **best-first search over routes** (a binary heap keyed by the logical
 directory path with a trailing separator, then the pattern position), each state (physical directory, position) entered once, each
-physical directory *asked of the host* once per `expand()` call (`ctx.listings`), each value charged for the listings it uses
-(`maxEntriesVisited`). Sort entries by code point before using them, and compare directories as `path + "/"`:
+physical directory *asked of the host* once per `expand()` call (`ctx.listings`), each value charged **work** (v1.14 revision,
+FR-027): +1 per state entered, +1 per entry examined, +1 per kind lookup (`maxEntriesVisited`; the name is now a misnomer). Sort entries by code point before using them, and compare directories as `path + "/"`:
 both are load-bearing (sabotage S25, S55) and neither is obvious. Matches are deduplicated by physical path keeping the smaller
 logical path, then sorted by `compareByCodePoint`. Errors inside the walk are `Refusal` exceptions caught per value; only
 `requireOptions` throws out of `expand()`.
@@ -40,12 +42,13 @@ touched (it records calls; 26 test files import it).
 
 ## What 024's report calls out that you will trip on
 
-- **Spec text that contradicts itself** (report, Ambiguities 1, 2, 3, 10): the visited-set vs "smaller logical path"; exact
-  matching vs the OS-resolved literal prefix; no recorded sandbox roots; a missing directory being a refusal.
+- **Spec text that contradicted itself** (report, Ambiguities 1; 2, 3, 10 and 12 were ruled in the revision): the visited-set vs
+  "smaller logical path" is still resolved by the best-first search over routes.
 - **`CLAUDE.md` does not mention `src/expand/`** in its layering paragraph, and still says the non-negotiable `yaml`-only line in
   words that predate v1.14's `glob` (it is still true: the grammar and matcher are hand-written, `picomatch` did not return).
-- **The cap bounds listings, not matching work.** A pattern of thousands of `**` over a big tree is slow and not refused
-  (report, 12).
+- **The limit counts work** (FR-027), so thousands of `**` are refused; its name `maxEntriesVisited` and default 100,000 predate
+  that. Consecutive `**` are deliberately not collapsed. The memory host indexes its directories (a listing costs its size) -- before
+  that, 5,461 listings scanned every file and the coordinator's case took 19 s.
 
 ## Graph identity (023): where it lives and what a change must keep
 
@@ -227,12 +230,11 @@ the writers under the case's own policy.
 - **Parked (v1.12.1): parse once, ask many.** Every `locate`/`setValue` parses the whole document, so checking N
   values of one document costs N parses. The cure is a writer that opens bytes once and answers many pointers;
   wait for a consumer that needs it.
-- **024, as built:** the cap bounds names listed, not matching work (report 12); `accumulate()` is recomputed on every `expand()`
-  call (cheap, and a place to cache if a consumer expands often); `expand()` takes `sandboxRoot` again because a
-  `MergedConfiguration` does not record it (a `roots` field on the configuration, stamped by `resolve()` like `paths`, would
-  make the option a default); a missing literal-prefix directory is `directory-unlistable`; `describeActual`'s precise message
-  does not reach a `path | glob` union; the literal prefix is resolved by the OS, not matched (report 2). Not built:
-  `{a,b}` and `[ab]` (they are *refused by name* so adding them only accepts more); expansion in a remote document.
+- **024, as built (after the revision):** `accumulate()` is recomputed on every `expand()` call (cheap, and a place to cache if a
+  consumer expands often); a `Host.kind`/`stat` verb would replace the parent-listing lookup (report R1); `canonicalize` returning
+  `undefined` for an untraversable ancestor reads as "missing" (R2); `ResolveResult.sandboxRoots` is a required field of a public
+  type (R5); `describeActual`'s precise message does not reach a `path | glob` union. Not built: `{a,b}` and `[ab]` (refused by
+  name, so adding them only accepts more); expansion in a remote document.
 
 ## The owner and the reviewer
 

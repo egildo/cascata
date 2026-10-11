@@ -1660,25 +1660,37 @@ if (loaded.ok) {
 }
 ```
 
-`options.host` and `options.sandboxRoot` are required (a location or a list, as `resolve()` takes them); a
-`MergedConfiguration` does not record the roots it was resolved with, so none is inherited. The result lists, in the merged
+`options.host` is required. `options.sandboxRoot` is optional (a location or a list, as `resolve()` takes them): `resolve()` records
+the roots it was given (`ResolveResult.sandboxRoots`, absolute, in order), `merge()` carries them onto
+`MergedConfiguration.sandboxRoots`, and they are the default; an explicit `sandboxRoot` replaces them for that call. A
+configuration that records none (a hand-built `merge()` input) and no option is a programmer error. The result lists, in the merged
 tree's order, **every string value at a position whose accumulated demand (Article VIII) admits `glob`** — alone, in a list, in
 a union (`path | glob`) or through a named type — as `{ ok: true, pointer, pattern, span, matches }` or `{ ok: false, …,
 diagnostics }`; `diagnostics` flattens the refusals. A value outside the grammar is not a pattern and is left alone. Other
 values are untouched. It throws only for programmer error (no host, no sandbox root), never for a document or the world.
 
-**The walk.** From `globBase().directory`, segment by segment: a literal segment is a direct child, found **in the listing**
-by its exact name; `*` and `?` match listed names; `**` descends through every directory, zero or more levels. Only files
-are returned, and only files; a pattern with no wildcard names one file and matches it if it is there. `*`, `?` and `**`
+**The walk.** From `globBase().directory`, segment by segment. **A literal segment is a path** (the prefix, a literal after a
+wildcard, the last segment of a wildcard-free value alike): the host is asked for its location (`canonicalize`) and, for a last
+literal, what its stored parent says it is, as opening the file would ask. So `café.md` written composed finds a file a disk
+that folds Unicode normalization stores decomposed, named as written with the stored name as `physical`. **A wildcard segment
+is matching:** `*` and `?` compare listed names exactly, by code point as `list` returns them (no case folding, no
+normalization; `?` is one code point, two UTF-16 units above the BMP); `**` descends through every directory, zero or more
+levels. Only files are returned; a pattern with no wildcard names one file and matches it if it is there. `*`, `?` and `**`
 never match a name whose first character is `.` and `**` never enters such a directory; a literal `.` does (`.github/*.yml`).
-Names are compared exactly, by code point, as the host lists them — no case folding, no Unicode normalization (so a composed
-`é` does not find a decomposed one on a disk that stores it so; `?` is one code point, two UTF-16 units above the BMP).
+**A directory that is not there matches nothing** (a prefix, or a literal after a wildcard): that branch is empty and a value
+whose every branch is missing has an empty list; `directory-unlistable` is for a directory that exists and that the host
+refuses. A file where a directory was wanted matches nothing.
 
 **Confinement.** Checking a pattern confines nothing; expanding it confines everything it reads. Each directory is judged by
 its physical path (the host's `canonicalize`) against the sandbox **before** it is listed, and each returned file likewise. A
 literal prefix that climbs out, or a link that leads out, refuses that value with `sandbox-escape`, naming the logical path
 with the physical one beside it; other values still expand. A directory is entered once per physical path and pattern
 position, which ends a link cycle, and put to the host once per `expand()` call.
+
+**The limit counts work** (`limits.maxEntriesVisited`, default 100,000, per value): each (directory, pattern position) the walk
+enters counts one, each entry it examines there one more, and each kind lookup one. A pattern of sixty `**` over 5,461
+directories lists each directory once and is still sixty times the tree; counting the work refuses it at the default. Raise the
+limit in `options.limits` for a tree and a pattern that are really that large.
 
 **Determinism.** Each match is `{ location, physical?, span }`: `location` the route the walk took, `physical` the host's
 answer where it differs, `span` the pattern's own (so the layer and line that selected it). Two routes to one physical file are one
@@ -1692,9 +1704,9 @@ All `level: "error"`, positioned at the value, from `expand()` only.
 | Code | Means |
 |---|---|
 | `host-cannot-list` | the host has no `list` |
-| `directory-unlistable` | the host answered `ok: false` for a directory the walk needed (its reason is in the message; a literal prefix naming a directory that is not there is one) |
+| `directory-unlistable` | the host answered `ok: false` for a directory that exists and that the walk needed (its reason is in the message). A directory that is not there is not this: it matches nothing |
 | `glob-in-remote-document` | the declaring document was read over `https://`: HTTP has no directory listing, so a remote pattern is never expanded |
-| `glob-limit-exceeded` | the walk was given more names, by the directories it listed, than `limits.maxEntriesVisited` (default 100,000; per value) |
+| `glob-limit-exceeded` | the walk did more work than `limits.maxEntriesVisited` allows (default 100,000; per value): directories entered at each pattern position, plus entries examined there |
 
 A pattern that leads outside the sandbox is the existing `sandbox-escape`. A grammar mismatch is the existing `type-mismatch`.
 

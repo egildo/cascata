@@ -123,6 +123,16 @@ describe("v1.14 FR-026 -- a missing directory matches nothing; unlistable is onl
     expect(result.expansions[1]).toMatchObject({ ok: true, matches: [] });
   });
 
+  it("a sandbox root that the host refuses to list is unlistable, not 'not a directory': a root is a directory, and its parent (outside the sandbox) is never asked", async () => {
+    const memory = createMemoryHost({ files: { ...TREE, "/v/proj/schema.yaml": SCHEMA_LIST, "/v/proj/config.yaml": `$schema: ./schema.yaml\ninclude:\n${quoted(["*.md"])}` } });
+    const { host, lists } = counted(memory, { "/v/proj": "permission denied (a test)" });
+    const loaded = await load("/v/proj/config.yaml", { host: memory, sandboxRoot: "/v/proj" });
+    if (!loaded.ok) throw new Error("does not load");
+    const result = await expand(loaded.configuration, { host });
+    expect(result.diagnostics.map((d) => d.code)).toEqual(["directory-unlistable"]);
+    expect(lists).toEqual(["/v/proj"]);
+  });
+
   it("a missing directory outside the sandbox is still a sandbox-escape, not an empty list: confinement is judged first", async () => {
     const { result } = await expandPatterns(world, ["../../nowhere/*.md"]);
     expect(result.diagnostics.map((d) => d.code)).toEqual(["sandbox-escape"]);
@@ -203,6 +213,17 @@ describe("v1.14 FR-027 -- the limit counts work, not names", () => {
     // Refused near 100,000 units of work, so at most that many directories were put to the host.
     expect(lists.length).toBeLessThan(100_000);
   });
+
+  it("and accepted, with the same 5,461 matches and 5,461 directories put to the host, when the limit is raised to exactly the work: 61 positions x (5,461 directories + 10,921 entries) = 999,302", async () => {
+    // 1,365 directories above the leaves hold four subdirectories and an f.md (5 entries); the 4,096 leaves hold an f.md (1).
+    const files = fanTree("/v/proj/t", 6, 4);
+    const pattern = `t/${"**/".repeat(60)}*.md`;
+    expect(61 * (5_461 + 1_365 * 5 + 4_096)).toBe(999_302);
+    const { result, lists } = await expandPatterns({ files }, [pattern], { limits: { maxEntriesVisited: 999_302 } });
+    expect(result.diagnostics).toEqual([]);
+    expect(locations(result.expansions[0])).toHaveLength(5_461);
+    expect(lists).toHaveLength(5_461);
+  }, 60_000);
 
   it("and `**/*/` repeated is bounded the same way", async () => {
     const files = fanTree("/v/proj/t", 6, 4);
