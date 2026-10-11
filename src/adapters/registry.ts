@@ -61,8 +61,26 @@ export function adapterForFormat(format: string): FormatAdapter | undefined {
 }
 
 /**
- * Which format a local document at `location` should be read as, by file
- * extension. `undefined` for anything not recognized — the orchestrator
+ * The text whose end names the format (v1.13 FR-021). A local location is read as it always was, whole. An
+ * `https://` location is a URL, and its extension is the extension of its WHATWG `pathname`, so a query
+ * (`a.yaml?v=2`) no longer hides it and a query that merely contains `.json` no longer claims it. `Content-Type`
+ * is not consulted: the extension rule is the one files and the offline cache already use. Text the URL
+ * Standard cannot parse is read whole (it is refused elsewhere).
+ */
+function extensionSource(location: string): string {
+  if (!/^https:\/\//i.test(location)) {
+    return location;
+  }
+  try {
+    return new URL(location).pathname;
+  } catch {
+    return location;
+  }
+}
+
+/**
+ * Which format a document at `location` should be read as, by file
+ * extension (a URL's path's, for an `https://` location: FR-021 above). `undefined` for anything not recognized — the orchestrator
  * turns that into a diagnostic, never a silent guess.
  *
  * `.yaml`/`.yml` (v0.2) and `.json` (v1.2). TOML is still unwritten
@@ -79,7 +97,7 @@ export function adapterForFormat(format: string): FormatAdapter | undefined {
  * library decides what they mean (SPEC.md §16).
  */
 export function formatForLocation(location: string): string | undefined {
-  const lower = location.toLowerCase();
+  const lower = extensionSource(location).toLowerCase();
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) {
     return "yaml";
   }

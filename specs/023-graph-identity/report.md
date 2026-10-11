@@ -372,10 +372,39 @@ R3. **FR-020 applies to URLs that parse.** `https://[::1#x` does not parse and i
 R4. **`SPEC.md` Article VI says `resource()` "answers the logical path as `location`".** For a **remote** declaring document the code
     answers the physical-URL resolution as `location` (the medium's convention, FR-011) and the logical-URL one as
     `otherLocation`; the sentence is true only of files. `docs/reference.md` says it the code's way. For the owner to reconcile.
-R5. **A remote URL with a query string is unreadable** (found by a control of mine): the format is taken from the extension of the
+R5. **[Resolved by the owner's ruling, FR-021; see "FR-021" below.] A remote URL with a query string is unreadable** (found by a control of mine): the format is taken from the extension of the
     URL *text*, so `https://x/a.yaml?q=1` is "No adapter recognizes the format". Pre-existing; not changed.
 R6. **A transport can no longer see a fragment**: every request URL is fragment-less (the author's text is refused first, a
     redirect's is dropped), so recorded fixtures for URLs with fragments cannot exist.
 R7. **The cycle message lost its "same bytes" tail** with the rule; a cycle through a second spelling or a link still names both.
 R8. **The first delivery's FR-006 sabotage row and Ambiguity 2 text** are kept above as history, marked; the current rule's
     sabotage is in the table here.
+
+### FR-021: a remote document's format comes from its URL's path
+
+`formatForLocation` reads the extension of the WHATWG `pathname` for an `https://` location (text that does not parse is read
+whole); a local location is read whole, as before. `Content-Type` is not consulted. Callers checked: `parseAtLocation`
+(the entry, the adoption chain, overrides and the launching schema all go through it), `performGraft` (delegation),
+`editTarget` (its `https://` refusal comes first, so a value from `…/o.yaml?v=2` is `edit-target-remote`, pinned by a
+case), and `writers.ts`'s `claims` (see F3). Cases first, red (6 of 8; the two local cases are the "as today" controls and were
+green throughout): `a.yaml?v=2` as YAML; `b.json?v=2` as JSON (valid JSON reads; `x: 1`, which only YAML accepts, is refused
+by the JSON reader, which proves which reader ran); a query containing `.json` on a `.yaml` path as YAML; a path with no
+extension and a `.yaml` in the query is still unreadable; the launching schema, an override and a delegated remote fragment;
+`editTarget`'s remote refusal; a local `c.yaml?x`, in memory and on the real disk (skipped where the file system cannot
+name a `?`), still "No adapter recognizes the format".
+
+Sabotage, once: the `pathname` read replaced by the whole text, 6 red (every remote case above).
+
+Counts: main suite **114 files / 3287 tests** (was 113 / 3279; +8 in `graph-identity-format.test.ts`); timing 8 / 14.
+
+New ambiguities:
+
+F1. **The format is read from the logical (requested) URL**, not the physical one. A `…/latest?x` that redirects to `…/v2.yaml`
+    is unreadable by this rule; the final URL is not consulted for the extension. Using the physical URL would have made the
+    format depend on the answer of a fetch, which the offline cache then has to reproduce (it does record the final URL, so
+    it could). The spec says the URL's path, and the logical URL is the one in hand before the fetch.
+F2. **Percent-encoding and case**: the `pathname` is percent-encoded and the extension is lower-cased, so `A.YAML?x` is YAML and
+    `a%2Eyaml` is not (`%2E` stays encoded in a pathname).
+F3. **`writers.ts`'s `claims(location)`** goes through the same function, so a writer now claims `https://x/a.yaml?v=2`. A remote
+    document is never an edit target (`editTarget` refuses it first), and a caller asking a writer about a remote location
+    with a query was told "no" before and is told "yes" now. Not changed.
