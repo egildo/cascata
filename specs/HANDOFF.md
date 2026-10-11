@@ -1,8 +1,51 @@
-# Handoff — what the specs and reports do not say
+# Handoff -- what the specs and reports do not say
 
-Rewritten at the end of milestone 023 (v1.13, "graph identity") for whoever takes 024. Assumes you have read
-`CLAUDE.md` and nothing else. Per-milestone detail is in `specs/NNN-*/report.md`; this is only what is not there,
-or is where nobody would look. Earlier handoffs (017 to 022) are folded in where they still hold.
+Rewritten at the end of milestone 024 (v1.14, `glob`) for whoever takes 025. Assumes you have read `CLAUDE.md` and nothing
+else. Per-milestone detail is in `specs/NNN-*/report.md`; this is only what is not there, or is where nobody would look.
+Earlier handoffs (017 to 023) are folded in where they still hold.
+
+## `glob` (024): where it lives and what a change must keep
+
+**The type.** `src/validate/glob.ts` is the whole grammar: `checkGlobPattern(pattern, counter?)` (one pass over code points;
+`counter.steps` is the linearity witness, so a test counts work instead of timing it), `splitGlob` (literal prefix and the rest),
+`isWildcardSegment`, `compileGlobSegment` / `matchesGlobSegment` (the name matcher, including the leading-dot rule). `glob` is in
+`BUILTIN_TYPE_NAMES` (`typeexpr.ts`), `matchesBuiltinLeaf` (`check.ts`), `REFINES` (`generate/accumulate.ts`) and the emit table
+(`generate/emit.ts`). The precise `type-mismatch` message is `describeActual` in `check.ts` and only reaches a single
+`glob` / `glob[]` alternative (a union gets the generic sentence). `globBase()` (`validate/globbase.ts`) shares
+`locateFromDocument` with `resource()` (`validate/resource.ts`): a change to where a relative value starts is one change.
+
+**The stage.** `src/expand/` is downstream of everything and imported only by `src/index.ts` (`layering.test.ts` sweeps it,
+and forbids it from importing `src/host/`). `positions.ts` finds the values: it walks the merged tree beside
+`accumulate(schemaLayers).tree`, as *frames* (a position's alternatives plus its structure; a named type is another frame
+for the same value; a sequence lowers every alternative by one array level and adds `items`; a mapping takes the named key's
+position, else `values`). `expand.ts` walks one value: a **best-first search over routes** (a binary heap keyed by the logical
+directory path with a trailing separator, then the pattern position), each state (physical directory, position) entered once, each
+physical directory *asked of the host* once per `expand()` call (`ctx.listings`), each value charged for the listings it uses
+(`maxEntriesVisited`). Sort entries by code point before using them, and compare directories as `path + "/"`:
+both are load-bearing (sabotage S25, S55) and neither is obvious. Matches are deduplicated by physical path keeping the smaller
+logical path, then sorted by `compareByCodePoint`. Errors inside the walk are `Refusal` exceptions caught per value; only
+`requireOptions` throws out of `expand()`.
+
+**The hosts.** `Host.list?` (`resolve/host.ts`). The Node implementation is `readdirSync(withFileTypes)` + `statSync` for a
+link (`host/node.ts`; the only file allowed to call `readdir`/`opendir`). `host/memory.ts` is the shipped in-memory host
+(`createMemoryHost({files, links?})`): no empty directories, links resolved by hop (forty), no cache, imports nothing
+platform-specific so the realm sweep polices it. `tests/unit/host-test-double.ts`'s `InMemoryHost` is a different thing and was not
+touched (it records calls; 26 test files import it).
+
+**Testing it.** `tests/unit/expand-helpers.ts` (`expandPatterns(world, patterns, options)` builds a memory-host world under
+`/v/proj`, loads it, expands, and returns the `list` calls; `TREE` is the shared tree whose expected lists are derived by hand in
+`expand.test.ts`); `reversing(host)` in `expand.test.ts` flips every listing, which is how host-order independence is witnessed.
+`host-list.test.ts` is one suite run against the Node host (a temporary directory) and the memory host. The real-disk walk is
+`expand-disk.test.ts`; expectations there come from `realpathSync.native`, not from the library (the temp dir is behind `/var`).
+
+## What 024's report calls out that you will trip on
+
+- **Spec text that contradicts itself** (report, Ambiguities 1, 2, 3, 10): the visited-set vs "smaller logical path"; exact
+  matching vs the OS-resolved literal prefix; no recorded sandbox roots; a missing directory being a refusal.
+- **`CLAUDE.md` does not mention `src/expand/`** in its layering paragraph, and still says the non-negotiable `yaml`-only line in
+  words that predate v1.14's `glob` (it is still true: the grammar and matcher are hand-written, `picomatch` did not return).
+- **The cap bounds listings, not matching work.** A pattern of thousands of `**` over a big tree is slow and not refused
+  (report, 12).
 
 ## Graph identity (023): where it lives and what a change must keep
 
@@ -113,6 +156,19 @@ the writers under the case's own policy.
 - **`yaml`'s `{a}` and `? a` are the same shape** (a pair with a null value). A change for one changes both.
 - **`toEqual` on an `ok` result breaks when a field is added** — 022 had to add `diagnostics: []` to 17 existing rows.
   Prefer `toMatchObject` only where a field is genuinely not under test.
+- **Shell `grep` here is a function that prints nothing for a file it thinks is binary** (`src/generate/accumulate.ts` among
+  them). Use `/usr/bin/grep -a`. A grep that "finds nothing" in `accumulate.ts` found nothing because it did not look.
+- **`*/` inside a block comment ends the comment.** A doc comment that writes a glob like `*/..` is a syntax error that
+  esbuild reports as `Unexpected "."`; write it in words.
+- **In a YAML flow mapping `glob[]` must be quoted** (`{ type: 'glob[]' }`), as `resource[]` always had to be. In block style it
+  is fine.
+- **`afterEach` cleanup runs before a test you built its fixture for at `describe` time.** Build a scene inside the `it`.
+- **The oracle's counts are pinned** (`generate-oracle.test.ts`: descriptors, positives, negatives, how many fail to typecheck,
+  and the `INEXPRESSIBLE` table). A new validate-corpus case moves all of them; update with a reason, and a refusal that is a
+  `string` refinement (a pattern, a URL) needs an `INEXPRESSIBLE` entry.
+- **A synchronous spin in a mutated host blocks vitest's own timeout.** The memory host's link loop guard is such a loop; the
+  sabotage driver kills the process group (`start_new_session`, `killpg`) after 60 s, as a leaked `npx vitest` otherwise burns
+  a core until you notice.
 
 ## Fragile or slow tests
 
@@ -142,6 +198,15 @@ the writers under the case's own policy.
   the controls pass on the old code, as they should.
 - Sabotage every claim, including ones you expect to stay green; three stayed green and one of them exposed a
   real defect (the vacuous copies read-back).
+- **Sabotage driver for 024.** `/tmp/cascata-024/sab.py` (a JSON list of `{name, rule, edits:[{file, old, new}], tests?}`; backs up
+  every file touched, appends `/* SABOTAGE */`, runs the named vitest files with `--reporter=json`, prints the failing tests,
+  restores byte-for-byte and asserts no marker survives), `entries.py` / `entries2.py` (55 mutants) are worth recreating (the
+  session's `/tmp` will not outlast it). **Three mutants survived the first batch and each was a missing case, not a missing
+  mutant**: the keep-the-smaller-path rule (a link `zzz.md` to `sub/a.md` is found first), `glob[]` admitted at the wrong array
+  depth, and a union whose `glob` alternative is not first in canonical order. Every one of them was a branch that looked
+  covered by a neighbour.
+- Running the new test files against the previous milestone's source (a `git worktree` of the old commit, `node_modules`
+  symlinked, the tests copied in) showed 8 of 8 files red; the corpus cases that load are the controls.
 
 ## Open edges (noticed, not fixed)
 
@@ -162,6 +227,12 @@ the writers under the case's own policy.
 - **Parked (v1.12.1): parse once, ask many.** Every `locate`/`setValue` parses the whole document, so checking N
   values of one document costs N parses. The cure is a writer that opens bytes once and answers many pointers;
   wait for a consumer that needs it.
+- **024, as built:** the cap bounds names listed, not matching work (report 12); `accumulate()` is recomputed on every `expand()`
+  call (cheap, and a place to cache if a consumer expands often); `expand()` takes `sandboxRoot` again because a
+  `MergedConfiguration` does not record it (a `roots` field on the configuration, stamped by `resolve()` like `paths`, would
+  make the option a default); a missing literal-prefix directory is `directory-unlistable`; `describeActual`'s precise message
+  does not reach a `path | glob` union; the literal prefix is resolved by the OS, not matched (report 2). Not built:
+  `{a,b}` and `[ab]` (they are *refused by name* so adding them only accepts more); expansion in a remote document.
 
 ## The owner and the reviewer
 
