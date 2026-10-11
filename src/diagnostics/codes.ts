@@ -349,6 +349,19 @@ export const EDIT_TARGET_CODES = ["edit-target-inherited", "edit-target-remote"]
  */
 export const GRAPH_IDENTITY_CODES = ["link-changes-reference"] as const;
 
+/**
+ * Expanding a `glob` (v1.14, `SPEC.md` Article VI and §7) -- specs/024-glob FR-018. All `level: "error"`, all from `expand()`
+ * and none from `load()`, positioned at the value whose expansion they refuse; the other values still expand. A pattern that
+ * leads outside the sandbox is the existing `sandbox-escape`, not a code of its own.
+ *
+ * - `host-cannot-list` -- the host has no `list`. Loading and validating never needed one (FR-019).
+ * - `directory-unlistable` -- the host answered `ok: false` for a directory the walk needed; its reason is in the message.
+ * - `glob-in-remote-document` -- the declaring document was read over `https://`: HTTP has no directory listing, so a remote
+ *   pattern is never expanded.
+ * - `glob-limit-exceeded` -- the walk visited more entries than `limits.maxEntriesVisited` (default 100,000).
+ */
+export const GLOB_EXPANSION_CODES = ["host-cannot-list", "directory-unlistable", "glob-in-remote-document", "glob-limit-exceeded"] as const;
+
 /** Every stable diagnostic code, in the catalogue's declaration order. Each version only appends. */
 export const DIAGNOSTIC_CODES = [
   ...PORTABILITY_FLOOR_CODES,
@@ -370,6 +383,7 @@ export const DIAGNOSTIC_CODES = [
   ...EDIT_CODES,
   ...EDIT_TARGET_CODES,
   ...GRAPH_IDENTITY_CODES,
+  ...GLOB_EXPANSION_CODES,
 ] as const;
 
 /** A stable, machine-readable diagnostic code. */

@@ -163,3 +163,56 @@ export function splitGlob(pattern: string): GlobParts {
   const cut = firstWildcard === -1 ? segments.length - 1 : firstWildcard;
   return { absolute, literal: segments.slice(0, cut), rest: segments.slice(cut) };
 }
+
+/** Whether one segment of an accepted pattern contains a wildcard (`*` or `?`) -- the others are literals. */
+export function isWildcardSegment(segment: string): boolean {
+  return segment.includes("*") || segment.includes("?");
+}
+
+/** The code points of a segment, split once so that matching it against many names does not split it again. */
+export function compileGlobSegment(segment: string): readonly number[] {
+  return Array.from(segment, (character) => character.codePointAt(0) ?? 0);
+}
+
+const STAR = 0x2a;
+const QUESTION = 0x3f;
+const DOT = 0x2e;
+
+/**
+ * Whether `name` matches one compiled wildcard segment (v1.14 FR-002, FR-014, FR-015): `*` any run of code points (possibly
+ * empty), `?` exactly one, every other code point itself, **compared exactly** -- no case or Unicode normalization. A name
+ * whose first code point is `.` is matched only by a segment whose first code point is a literal `.`: a wildcard never
+ * matches a leading dot. The greedy two-pointer walk backtracks only to the last `*`, so it is O(segment x name) and never
+ * exponential.
+ */
+export function matchesGlobSegment(segment: readonly number[], name: string): boolean {
+  const codePoints = Array.from(name, (character) => character.codePointAt(0) ?? 0);
+  if (codePoints[0] === DOT && (segment[0] === STAR || segment[0] === QUESTION)) {
+    return false;
+  }
+  let patternIndex = 0;
+  let nameIndex = 0;
+  let starIndex = -1;
+  let resume = 0;
+  while (nameIndex < codePoints.length) {
+    const patternCode = segment[patternIndex];
+    if (patternCode === STAR) {
+      starIndex = patternIndex;
+      resume = nameIndex;
+      patternIndex += 1;
+    } else if (patternCode !== undefined && (patternCode === QUESTION || patternCode === codePoints[nameIndex])) {
+      patternIndex += 1;
+      nameIndex += 1;
+    } else if (starIndex !== -1) {
+      patternIndex = starIndex + 1;
+      resume += 1;
+      nameIndex = resume;
+    } else {
+      return false;
+    }
+  }
+  while (segment[patternIndex] === STAR) {
+    patternIndex += 1;
+  }
+  return patternIndex === segment.length;
+}

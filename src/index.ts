@@ -1573,6 +1573,11 @@ export type { GlobBase } from "./validate/globbase.js";
  */
 export const globBase = globBaseImpl;
 
+// --- expand() -- v1.14 (SPEC.md §7 and Article VI, specs/024-glob) ---------
+
+export { expand, DEFAULT_MAX_ENTRIES_VISITED } from "./expand/expand.js";
+export type { ExpandLimits, ExpandOptions, ExpandResult, ExpandedGlob, GlobMatch } from "./expand/expand.js";
+
 // --- project() — User Story 3/4 (v1.0, SPEC.md Article VII (§17)) --------
 
 export type { ConfigValue, ProjectionResult } from "./project/value.js";

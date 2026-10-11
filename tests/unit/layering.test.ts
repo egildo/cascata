@@ -71,7 +71,8 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // `project/` at v1.0). The accumulated demand is computed from schema
 // layers alone and the emitter is a string printer: neither has any
 // business knowing what format a layer arrived in, nor where it came from.
-const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge", "src/validate", "src/project", "src/generate"];
+// **v1.14 (024)**: `src/expand/` joins, as every stage has, from its first file.
+const NO_ADAPTER_IMPORT_DIRS = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge", "src/validate", "src/project", "src/generate", "src/expand"];
 
 // Matches the module specifier of any `import ... from "spec"` or
 // `export ... from "spec"` statement, static or type-only.
@@ -551,6 +552,53 @@ describe("v1.14 FR-010 / Article VI: only the Node host lists a directory -- no 
     const relativeFile = file.slice(REPO_ROOT.length + 1);
     it(`${relativeFile} does not call readdir or opendir`, () => {
       expect(DIRECTORY_LISTING_CALL_PATTERN.test(stripComments(readFileSync(file, "utf-8"))), `${relativeFile} lists a directory itself -- only ${HOST_BOUNDARY_EXEMPTION} may (v1.14 FR-010)`).toBe(false);
+    });
+  }
+});
+
+// --- v1.14 (024): expand() is downstream of everything, and asks only the Host interface ---------------
+//
+// `src/expand/` reads the accumulated demand (`src/generate/`), the grammar and base query (`src/validate/`), the sandbox and
+// physical-path machinery (`src/resolve/`) and the merged tree; it is the last stage after resolution that asks the host. So:
+//
+//  - no other stage may import it (a stage consuming a later stage's output is Principle IV's whole subject; only the package
+//    root, `src/index.ts`, wires it in), and
+//  - it may not import a shipped host (`src/host/`): it takes the `Host` interface from `src/resolve/host.ts` and nothing that
+//    performs I/O, so the same code walks a Node disk, a memory host or an embedder's own.
+//
+// (It imports `src/resolve/`, unlike `graph/`, `merge/`, `validate/`, `project/` and `generate/`, which may not: sandbox and
+// physical identity live there, and the new stage is exactly the one that needs them again.)
+
+const CROSSES_EXPAND_BOUNDARY = crossesBoundary("expand");
+const CROSSES_HOST_BOUNDARY = crossesBoundary("host");
+
+describe("Principle IV: no stage but the package root imports src/expand/ -- it is downstream of every other", () => {
+  const upstream = ["src/model", "src/diagnostics", "src/resolve", "src/graph", "src/merge", "src/validate", "src/project", "src/generate", "src/adapters", "src/host"];
+  const files = upstream.flatMap((relativeDir) => listTsFiles(join(REPO_ROOT, ...relativeDir.split("/"))));
+
+  it("polices more than a handful of files -- a sweep over nothing passes vacuously", () => {
+    expect(files.length).toBeGreaterThan(40);
+  });
+
+  for (const file of files) {
+    const relativeFile = file.slice(REPO_ROOT.length + 1);
+    it(`${relativeFile} does not import from src/expand`, () => {
+      expect(importSpecifiersOf(file).filter((specifier) => CROSSES_EXPAND_BOUNDARY.test(specifier))).toEqual([]);
+    });
+  }
+});
+
+describe("Article VI: src/expand/ imports no shipped host -- it asks the Host interface only", () => {
+  const files = listTsFiles(join(REPO_ROOT, "src", "expand"));
+
+  it("src/expand has files", () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  for (const file of files) {
+    const relativeFile = file.slice(REPO_ROOT.length + 1);
+    it(`${relativeFile} does not import from src/host`, () => {
+      expect(importSpecifiersOf(file).filter((specifier) => CROSSES_HOST_BOUNDARY.test(specifier))).toEqual([]);
     });
   }
 });
