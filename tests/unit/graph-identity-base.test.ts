@@ -143,6 +143,20 @@ describe("v1.13 FR-011: remote, from the physical URL", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("a redirect that stays in the same directory leaves both rules naming one URL: no notice; and an absolute reference is no relative one", async () => {
+    const transport = new RecordedTransport([
+      redirect("https://example.test/v1/a.yaml", "https://example.test/v1/a-new.yaml"),
+      ok("https://example.test/v1/a-new.yaml", "$adopts: ./base.yaml\n"),
+      ok("https://example.test/v1/base.yaml", "$adopts: https://example.test/root.yaml\n"),
+      ok("https://example.test/root.yaml", "x: 1\n"),
+    ]);
+    const result = await resolveAt(vhost({ "/v/e.yaml": "$schema: https://example.test/v1/a.yaml\n" }), "/v/e.yaml", { transport });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.pedigree.map((p) => p.identity.location)).toEqual(["https://example.test/root.yaml", "https://example.test/v1/base.yaml", "https://example.test/v1/a.yaml"]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("a remote fragment's own delegation starts from its physical URL too", async () => {
     const grants = "keys:\n  network:\n    demand:\n      type: mapping\n      keys:\n        network:\n          demand:\n            type: mapping\n          delegate: allow\n    delegate: allow\n";
     const files = { "/v/e.yaml": "$schema: ./s.yaml\nnetwork: https://example.test/f.yaml\n", "/v/s.yaml": grants };
