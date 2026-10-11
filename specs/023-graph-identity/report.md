@@ -43,9 +43,10 @@ at load 12 to 16. I did not loosen any bound. See Ambiguities (the one "load" it
 - **FR-005** — `GraphBuilder.beginVisit(location, incoming, physical = location)`; the active path, `resolvedByPhysical`
   and the cycle chain (each frame now carries `location` and `physical`) are physical. `resolvedByLocation` is kept beside it
   (see Ambiguities: remote).
-- **FR-006** — `GraphBuilder.contentCycle(canonical)` (new): a hash match against a document that is a frame of the active
-  stack (entry included) is `reference-cycle`; against a finished document it is the unchanged dedup. The stale
-  "should still recurse" doc is rewritten. `registerContent`'s return type is unchanged (existing tests pin it).
+- **FR-006 (as first built, then revised; see "Revision after the coordinator's review")** — first `contentCycle` (a hash
+  match on the active chain is a cycle). **Now:** no content dedup at all; `registerContent`, `contentCycle` and
+  `canonicalByHash` are gone, the stale "should still recurse" doc is replaced, the hash stays for `$pin` and
+  `DocumentIdentity.hash`.
 - **FR-007** — `DelegationCycleTracker.enter(location, physical = location)` compares physical paths; `frames()` added.
   Grafts are still never deduplicated (a control pins two side-by-side grafts of one file).
 - **FR-008** — `editTarget`'s `otherPlaces` compares physical paths (new `physicalsInTree` in `src/model/pointer.ts`,
@@ -102,8 +103,9 @@ The same tests are in `graph-identity-disk.test.ts` ("FR-017 (probe gate)"). The
 
 In-memory host: entry `/v/e.yaml` = `$schema: ./s.yaml`, `/v/s.yaml` = `$adopts: ./copy.yaml`, `/v/copy.yaml` = the entry's
 bytes. On `c102494`: `Internal error: pedigree document at '/v/e.yaml' has no 'via' reference`, thrown from
-`buildPedigree` out of `resolve()`. Fixed in `afda94c`; the case is `graph-identity-cycles.test.ts` "3b" and, on the real disk,
-"3b" in `graph-identity-disk.test.ts`.
+`buildPedigree` out of `resolve()`. Fixed in `afda94c` by refusing it as a cycle, and **removed at its root in `b9ca014`**
+(no hash dedup, so nothing hands the entry back): the case is now an ordinary document (`graph-identity-cycles.test.ts`
+"3b" and, on the real disk, "3b" in `graph-identity-disk.test.ts`).
 
 ## Red before green
 
@@ -157,8 +159,9 @@ Notes on the table:
   batch until the same-directory-redirect test was added.
 - FR-016's "duplicate" outcome is reachable only at the `GraphBuilder` unit level; a chain cannot reach it end to end.
 - The FR-005 case 1 reds appear in the disk file too because APFS folds case here; on a case-sensitive disk those two skip.
-- Where an FR-005 case would also be caught by FR-006's hash net, the case asserts `host.reads` does not contain the second
-  spelling, which only the path rule can satisfy (the sabotage of FR-005 alone is red for that reason).
+- FR-005's cases assert `host.reads` does not contain the second spelling: the refusal comes before the read, which only
+  the path rule can do. (The FR-006 row above is the first version's sabotage, `contentCycle` disabled; see the revision
+  section for the sabotage of the rule as revised.)
 
 ## Ambiguities
 
@@ -167,14 +170,14 @@ softened.
 
 ### Where the spec's claims did not survive measurement
 
-1. **"A fragment that delegates to itself under another spelling ... today it re-grafts until `depth-limit-exceeded`" is false
+1. **[Resolved by ruling: `SPEC.md` §15 corrected in `ac8e550`.] "A fragment that delegates to itself under another spelling ... today it re-grafts until `depth-limit-exceeded`" is false
    on v1.12.** The grant tree is finite and bounds how far a graft is followed, so there is no unbounded re-grafting. Measured by
    sabotaging FR-007: the variant spelling (4a) was read and grafted once more, and a self-linked directory (4b) was grafted twice;
    **both resolved `ok`**, silently, with the file in the result twice. The spec's own sentence "(today it ...)" came from a
    survey that "none run". What FR-007 fixes is that they are now `reference-cycle` at the first hop. The `depth-limit-exceeded`
    branch is not reached by either. The test titles say what the old code did; `SPEC.md` §15's entry says "ran to
    `depth-limit-exceeded`": **that parenthesis in §15 is wrong** and should be corrected by the owner.
-2. **FR-006's reason is not generally true**: "a byte-identical copy of an ancestor adopts what that ancestor adopts, so the chain
+2. **[Resolved by the owner's ruling: FR-006 revised, identity is the physical path alone, no content dedup; implemented in `b9ca014`. The text below is what I reported.] FR-006's reason is not generally true**: "a byte-identical copy of an ancestor adopts what that ancestor adopts, so the chain
    could never end". Relative references in the copy resolve from the copy's location, so `/v/sub/s1.yaml` with the bytes of
    `/v/s1.yaml` may adopt a *different* file and the chain might end. I implemented the rule as written (cycle), which refuses a
    chain that might have terminated. The case that crashed (a copy of the **entry**) is a cycle for a different reason: the entry
@@ -188,7 +191,7 @@ softened.
 
 ### Spec/`SPEC.md` text the code disagrees with
 
-4. **`resource` values get no notice** (the spec's "include it, and report"). `resource()` is a synchronous, host-free, "produces
+4. **[Settled as built by the owner: `resource()` keeps `otherLocation`; `SPEC.md` Article VI says so (`9408018`). `docs/reference.md` was checked against that sentence and carries the same, with the remote nuance of new ambiguity R4.] `resource` values get no notice** (the spec's "include it, and report"). `resource()` is a synchronous, host-free, "produces
    no diagnostic at any level" query (v0.7 FR-036 to FR-039). It cannot canonicalize, so it cannot tell whether
    `/link/x` and `/real/x` are one file, and a lexical comparison would fire on the commonest case (a linked directory).
    I did two things: remote values resolve from the physical URL (`origin.physical`), and the `path` result gains an optional
@@ -206,7 +209,7 @@ softened.
    and `: 'B' has exactly the bytes of 'A', which is already on this chain, so the chain could never end` for FR-006. The
    delegation cycle message keeps its bare, unquoted paths and appends ` (the file P)`. Unlinked cycles read exactly as before
    (a control per message).
-7. **FR-014 is not literally "Paths, queries and percent-encodings are not otherwise touched"**: `new URL(text).href` (measured
+7. **[The fragment half is resolved by FR-020 (a `reference-fragment` refusal); the unparseable-text message by the revision. The rest stands.] FR-014 is not literally "Paths, queries and percent-encodings are not otherwise touched"**: `new URL(text).href` (measured
    on Node 25) percent-encodes spaces and non-ASCII in path and query (`a b.yaml` -> `a%20b.yaml`, `α` -> `%CE%B1`), maps IDNA hosts
    to punycode, resolves `.`/`..`. It keeps: the **fragment** (`a.yaml#x` and `a.yaml` are two labels, two cache keys, two
    documents here though one resource), **userinfo** (a credential in a label and a cache key; pre-existing), a trailing-dot host
@@ -280,3 +283,99 @@ softened.
 - `SPEC.md` §3/§15's "a link never changes a meaning silently" does not hold for `resource()` (item 4).
 - `SPEC.md` §15 (v1.11.1 entry) still says "the graph's own identity and cycle detection remain lexical ... parked as issue #8";
   true as history, closed by v1.13; no edit needed unless the owner wants a back-pointer.
+
+
+## Revision after the coordinator's review
+
+Three rulings arrived after the report above was first delivered. Commits: `b9ca014` (FR-006 revised),
+`ac214c9` (unparseable URL text), and the FR-020 commit (`reference-fragment`, with `docs/reference.md`).
+
+**Counts.** Main suite: before 106 files / 3191 tests (start of milestone); first delivery 112 / 3269; **now 113 files / 3279**.
+Timing suite 8 / 14, green (one run at load 64, which it survived).
+
+### 1. FR-006 revised: identity is the physical path alone
+
+Cases first, red against the code of the first delivery (the legal chain was refused as `reference-cycle`, "has exactly the
+bytes of"; the entry copy likewise). Then `registerContent`, `contentCycle`, `StackFrame.document` and `canonicalByHash` were
+removed from `GraphBuilder`; `walkAdoptsChain` and `resolveEntry` no longer have a canonical-versus-built distinction;
+`cycleDiagnostic` lost its `byContent` tail; `finishVisit(location, document)` memoizes the document itself. The hash is
+untouched for `$pin` and `DocumentIdentity.hash`.
+
+New or changed cases (all in `graph-identity-cycles.test.ts` unless stated):
+
+- the coordinator's chain, `e -> x/a -> x/b -> y/a -> y/b` with `x/a` and `y/a` byte-identical: resolves, five documents with the
+  entry (discovery order `e, x/a, x/b, y/a, y/b`; pedigree root-to-leaf `y/b, y/a, x/b, x/a`), equal hashes, two documents; also on the
+  real disk (`graph-identity-disk.test.ts` "3b");
+- 3b, a byte-identical copy of the entry at another path adopted by a schema: an ordinary document, no throw, no cycle;
+- 3a, the entry adopted back under another spelling: **unchanged**, still `reference-cycle` (physical identity), pinned again;
+- a `GraphBuilder` unit case: two locations, one hash, two documents, each memoized as itself.
+
+**Assertions that changed, and why** (nothing was deleted; each now pins the opposite by the owner's ruling):
+
+| Where | Was | Now |
+|---|---|---|
+| `graph-identity-cycles.test.ts` "3b" | `reference-cycle` with a "same bytes" message and a `related` span | resolves; documents `e, s, copy`; pedigree `copy, s`; same hash, different physical |
+| same file, "a byte-identical copy of a schema ancestor is a cycle too" | `reference-cycle` at `s2.yaml` | replaced by the coordinator's chain (the old fixture was in fact `document-unreachable` once the rule is gone: `/v/sub/s2.yaml` does not exist, which was my fixture's own flaw) |
+| same file, "controls: identical bytes off the active chain still converge" | `registerContent` returned the earlier document; `contentCycle` undefined | two documents, each memoized as itself |
+| same file, "once a document is finished, another spelling is a duplicate" | used `registerContent` | uses `finishVisit(location, doc)` (same assertion) |
+| `graph-identity-disk.test.ts` "3b" | `reference-cycle` | resolves, plus the chain |
+| `graph-content-dedup.test.ts`, test 1 "two different locations with identical content-hash converge to the same GraphDocument object" | `canonicalB` is `canonicalA`, not `docB` | stay two `GraphDocument`s; each memoized as itself (`beginVisit` answers `duplicate` with `docB` / `docA` respectively) |
+| same file, tests 2 and 3 | `registerContent(...)` then `finishVisit(canonical)` | `finishVisit(doc)` directly; the same `duplicate` / not-deduped assertions; the header comment records the revision |
+| `graph-remote-dedup.test.ts` | the protocol helper called `registerContent` | calls `finishVisit(url, document)`; the assertion (second visit is a `duplicate`, one request) is unchanged |
+| comments only: `cycle-detection.test.ts`, `host-in-memory.test.ts` | described content dedup as a second safety net / the dedup mechanism | a bracketed v1.13 note each that it is gone |
+
+### 2. Unparseable URL text
+
+Cases first (message contains `'//[x' is not a valid URL` and not `scheme ''`; likewise for `https://[::1`), red. No existing
+code names "a reference that is not a location" (`codes.ts` has `malformed-pin`, `malformed-document`, demand-vocabulary
+codes), so it stays `unsupported-scheme` with a message that names the text: `Reference '<text>' is not a valid URL, so it
+cannot be fetched — only HTTPS and local paths are supported`. The empty-scheme wording is gone.
+
+### 3. The queued rulings
+
+- **Ambiguity 4**: settled as built; `docs/reference.md` already said `otherLocation` and now says what `location` follows.
+- **FR-020, `reference-fragment`** (new error code, in `REFERENCE_RESOLUTION_CODES` with its doc, and in `docs/reference.md`'s
+  table). `classifyReferenceLocation` and `classifyLocatedDocument` return a new `fragment` kind for an `https` URL whose
+  normalized form contains a `#` (so `#x`, `a.yaml#x`, a bare `#`); the three places that follow references (the adoption
+  chain, overrides, delegation) refuse it at the reference before any request. Local paths are untouched. A redirect
+  `Location`'s fragment is dropped (`URL#hash = ""`) from the URL the fetch ends at. Cases first (red, 8 of 9): absolute, empty
+  `#`, relative `./b.yaml#y` and quoted `"#x"` in a remote document, a `Host.locate` answer, an override, a delegated remote
+  reference and a remote fragment's own delegation, `a#b.yaml` and `#c.yaml` as local files that still load, and a redirect to
+  `b.yaml#z` whose recording exists only without the fragment.
+
+### Sabotage of the revision
+
+| Rule broken | Result |
+|---|---|
+| Content dedup re-added in `walkAdoptsChain` (a hash map per resolve, entry included) | 3 red: the coordinator's chain (unit), "3b" entry copy (unit), "3b" on the real disk |
+| Same, entry not included | 2 red (the chain, unit and disk): so the entry-copy case is what catches the entry half |
+| The "not a valid URL" message reverted (`failure.scheme === ""` made false) | 2 red: the relative `//[x` case and the absolute `https://[::1` case |
+| FR-020: fragments not detected (`remoteLocation` always `https`) | 6 red: absolute, empty, relative, `Host.locate`, override, delegation |
+| FR-020: an empty fragment not detected (`hash === ""` read as none) | 1 red: "an empty fragment is still a fragment" |
+| FR-020: delegation not refused | 1 red |
+| FR-020: override not refused | 1 red |
+| FR-020: redirect fragment not dropped (`next.hash = ""` removed) | 1 red: the redirect case |
+| FR-020: local paths treated as fragments | 1 red: `a#b.yaml` |
+
+`grep -rn SABOTAGE src tests` is empty.
+
+### New ambiguities (after the review)
+
+R1. **FR-020 is checked before the remote-delegation permission.** A delegated `https://...#x` is `reference-fragment` even when
+    `allowRemoteDelegation` is off (the text is refused before anyone asks whether remote is allowed). The reverse order was also
+    defensible.
+R2. **FR-020 and a `Host.locate` answer**: the host's answer is refused at the reference that asked (the `$schema`/`$adopts`
+    text, e.g. `beltype:doc`), and the message quotes that text, not the host's URL, which the author never wrote. The fragment
+    shown is the host's.
+R3. **FR-020 applies to URLs that parse.** `https://[::1#x` does not parse and is "not a valid URL", not a fragment refusal.
+    Fragment detection is "the normalized `href` contains a `#`", which also catches a bare `#` that `URL#hash` reports as empty.
+R4. **`SPEC.md` Article VI says `resource()` "answers the logical path as `location`".** For a **remote** declaring document the code
+    answers the physical-URL resolution as `location` (the medium's convention, FR-011) and the logical-URL one as
+    `otherLocation`; the sentence is true only of files. `docs/reference.md` says it the code's way. For the owner to reconcile.
+R5. **A remote URL with a query string is unreadable** (found by a control of mine): the format is taken from the extension of the
+    URL *text*, so `https://x/a.yaml?q=1` is "No adapter recognizes the format". Pre-existing; not changed.
+R6. **A transport can no longer see a fragment**: every request URL is fragment-less (the author's text is refused first, a
+    redirect's is dropped), so recorded fixtures for URLs with fragments cannot exist.
+R7. **The cycle message lost its "same bytes" tail** with the rule; a cycle through a second spelling or a link still names both.
+R8. **The first delivery's FR-006 sabotage row and Ambiguity 2 text** are kept above as history, marked; the current rule's
+    sabotage is in the table here.

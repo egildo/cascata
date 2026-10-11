@@ -16,9 +16,11 @@ memoizes every question, ancestors included, which is what `graph-identity-paths
 (`isWithinSandbox`/`isSandboxEscape`/`isDelegationSandboxEscape`) takes it, not the host. A new caller that asks the host
 directly breaks the count and lets the sandbox and the graph disagree about where a path is.
 
-**`GraphBuilder` (`src/graph/build.ts`)**: `beginVisit(location, incoming, physical = location)`, then `registerContent`
-(return type pinned by old tests), then `contentCycle(canonical)` (a hash match on the active path is a cycle, FR-006),
-`finishVisit`. A **remote** visit starts under its URL and settles with `learnPhysical(location, finalUrl)` after the
+**`GraphBuilder` (`src/graph/build.ts`)**: `beginVisit(location, incoming, physical = location)`, then the recursion,
+then `finishVisit(location, document)`. **There is no content-hash dedup** (FR-006, revised by the owner): identity is the
+physical path alone and two documents with identical bytes are two documents; do not reintroduce `registerContent` or a hash
+map (it dropped a real document on a legal chain, and handed `buildPedigree` the entry). The hash is for `$pin` and
+`DocumentIdentity.hash` only. A **remote** visit starts under its URL and settles with `learnPhysical(location, finalUrl)` after the
 fetch. The cycle test is `physical OR logical location` on purpose (a remote physical URL is unknown until fetched).
 `DelegationCycleTracker.enter(location, physical)` is the same idea for fragments; grafts are never deduplicated.
 
@@ -27,15 +29,17 @@ resolves a reference must take a `Referrer {location, physical}` and, if relativ
 collected in a per-call `notices` array, returned first in `ok:true`'s `diagnostics`; dropped on `ok:false` like every info).
 `resource()` cannot raise it (no host); it carries `otherLocation` instead.
 
-**Remote**: `classifyReferenceLocation` normalizes with `new URL(..).href`; `fetchDocument`'s `finalUrl` flows through
+**Remote**: `classifyReferenceLocation` normalizes with `new URL(..).href`; an `https` URL with a fragment is the `fragment` location
+kind and is refused as `reference-fragment` at all three sites that follow references (chain, overrides, delegation; FR-020), a
+redirect `Location`'s fragment is dropped (`fetch.ts`), a local `#` is a filename character; `fetchDocument`'s `finalUrl` flows through
 `resolveRemoteDocument` and is stored in the cache meta (`StoredMeta.finalUrl`; absent in a v1.12 entry, which answers its own
-URL). `.href` keeps a fragment, userinfo and a trailing-dot host (report, Ambiguities 7): not folded.
+URL). `.href` keeps userinfo and a trailing-dot host (report, Ambiguities 7): not folded.
 
 **Testing it.** `tests/unit/graph-identity-helpers.ts`: `vhost(files, canonical, canonicalizeIsIdentity)` and `resolveAt`. In
 the in-memory host `files` is keyed by the **logical** path (that is what `read` is given) and `canonical` answers the
 physical one; to model a link that a map cannot (a directory linked to itself) subclass `InMemoryHost` and override `read` and
-`canonicalize` (see case "4b" in `graph-identity-cycles.test.ts`). A case that a content-hash net would also catch must assert
-`host.reads` to discriminate the path rule. Real-disk tests make their venue under `os.tmpdir()` **without** canonicalizing it
+`canonicalize` (see case "4b" in `graph-identity-cycles.test.ts`). A cycle case should assert
+`host.reads` so it discriminates the path rule (the refusal comes before the read). Real-disk tests make their venue under `os.tmpdir()` **without** canonicalizing it
 (on macOS `/var` is a link, so FR-013's naming fires on purpose); take expectations from `realpathSync.native`, not the library.
 The corpus runner does not assert an `ok:true` result's diagnostics, so `link-changes-reference` cases are unit tests.
 
