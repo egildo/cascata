@@ -25,15 +25,17 @@ import { createDiagnostic, type Diagnostic, type RelatedSpan } from "./diagnosti
 import type { DiagnosticCode } from "./diagnostics/codes.js";
 import type { MergedConfiguration } from "./merge/provenance.js";
 import type { Node } from "./model/node.js";
-import { originsInTree, pointerInDocument, pointersAt, resolvePointer } from "./model/pointer.js";
+import { originsInTree, physicalsInTree, pointerInDocument, pointersAt, resolvePointer } from "./model/pointer.js";
 import type { SourceSpan } from "./model/span.js";
 
 /** The document and in-document pointer where the value at a merged pointer is written, or why there is none. */
 export type EditTargetResult =
   | {
       readonly ok: true;
-      /** The document's location (`origin.id`; for a delegated fragment, the fragment's own location). */
+      /** The document's location (`origin.id`; for a delegated fragment, the fragment's own location) — the logical one, the route taken to it. */
       readonly location: string;
+      /** v1.13 FR-013: where the file really is, present only when it differs from `location`. A writer handed either path writes the same file. */
+      readonly physicalLocation?: string;
       /** The value's RFC 6901 pointer inside that document. */
       readonly pointer: string;
       readonly format: EditFormat;
@@ -62,16 +64,18 @@ function where(span: SourceSpan): string {
  * graft and its label is the location; a graft is named by the place that grafted it, the delegating
  * key's value. Also answers every place the location is read, its own included, for the message.
  */
-function otherPlaces(configuration: MergedConfiguration, node: Node, location: string, inDocument: readonly string[], chosen: string): { readonly related: RelatedSpan[]; readonly places: string[] } {
+function otherPlaces(configuration: MergedConfiguration, node: Node, location: string, physical: string, inDocument: readonly string[], chosen: string): { readonly related: RelatedSpan[]; readonly places: string[] } {
   const related: RelatedSpan[] = inDocument.filter((p) => p !== chosen).map((p) => ({ label: `the same value at '${p}' in ${location}`, span: node.span }));
   const places: string[] = [];
   const seen = new Set<string>();
   for (const layer of configuration.layers) {
-    for (const [id, label] of originsInTree(layer.tree)) {
+    const physicals = physicalsInTree(layer.tree);
+    for (const [id] of originsInTree(layer.tree)) {
       if (seen.has(id)) continue;
       seen.add(id);
       const hops = configuration.delegationBreadcrumbs.get(id);
-      if ((hops !== undefined ? label : id) !== location) continue;
+      // v1.13 FR-008: the same file is the same physical path, whatever spelling reached it.
+      if (physicals.get(id) !== physical) continue;
       const grafted = hops?.[hops.length - 1]?.span;
       places.push(grafted !== undefined ? `delegated to at ${where(grafted)}` : "read as a layer");
       if (id === node.span.origin.id) continue;
@@ -108,6 +112,9 @@ export function editTarget(configuration: MergedConfiguration, pointer: string, 
   const origin = node.span.origin;
   // A fragment's origin id is `<location> #graft=N`, unique per graft; its label is the location.
   const location = configuration.delegationBreadcrumbs.has(origin.id) ? origin.label : origin.id;
+  // v1.13 FR-013: the location stays the route taken; where the file really is travels beside it when it differs.
+  const physical = origin.physical ?? origin.label;
+  const physicalAnswer = physical === location ? {} : { physicalLocation: physical };
   for (let index = configuration.layers.length - 1; index >= 0; index--) {
     const layer = configuration.layers[index];
     // More than one node with this span means copies (an alias, a merge key).
@@ -128,9 +135,9 @@ export function editTarget(configuration: MergedConfiguration, pointer: string, 
     }
     // Among copies the answer is a convention (v1.12 FR-007): the merged pointer's, else the same last segment, else the first.
     const chosen = pointerInDocument(layer.tree, node.span, pointer) ?? inDocument[0] ?? "";
-    const { related, places } = otherPlaces(configuration, node, location, inDocument, chosen);
+    const { related, places } = otherPlaces(configuration, node, location, physical, inDocument, chosen);
     if (related.length === 0) {
-      return { ok: true, location, pointer: chosen, format, diagnostics: [] };
+      return { ok: true, location, ...physicalAnswer, pointer: chosen, format, diagnostics: [] };
     }
     const why =
       inDocument.length > 1
@@ -142,7 +149,7 @@ export function editTarget(configuration: MergedConfiguration, pointer: string, 
       return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "edit-target-shared", message: `The value at '${pointer}' ${why}; writing it would change every place that shares it`, primary: node.span, related })] };
     }
     const diagnostics = sharedEdits === "warn" ? [createDiagnostic({ level: "info", code: "edit-target-shared", message: `The value at '${pointer}' ${why}; the edit also changes every place named here`, primary: node.span, related })] : [];
-    return { ok: true, location, pointer: chosen, format, diagnostics };
+    return { ok: true, location, ...physicalAnswer, pointer: chosen, format, diagnostics };
   }
   // Every merged node came from some layer's tree, so this is a bug, not a document's fault (v1.12.1).
   throw new Error(`Internal error: editTarget(): the value at '${pointer}' is in no layer of the configuration`);

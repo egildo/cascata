@@ -35,7 +35,7 @@ import { DocumentCache } from "./resolve/cache.js";
 import { resolveFetchLimits, resolveRemoteDocument, type FetchLimits, type RemoteDocumentFailure } from "./resolve/fetch.js";
 import type { Transport } from "./resolve/transport.js";
 import type { Host } from "./resolve/host.js";
-import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, resolveAllBranches, type BranchOutcome, type Graph, type GraphDocument, type GraphReference } from "./graph/build.js";
+import { buildGraph, DEFAULT_MAX_CHAIN_LENGTH, GraphBuilder, resolveAllBranches, type BranchOutcome, type Graph, type GraphDocument, type GraphReference, type StackFrame } from "./graph/build.js";
 import { buildPedigree, type Pedigree } from "./graph/pedigree.js";
 import { checkPinningDemand } from "./graph/authority.js";
 import { foldConfiguration } from "./merge/fold.js";
@@ -434,16 +434,32 @@ function parseAtLocation(bytes: Uint8Array, location: string, physical: string):
  * pure self-reference, and for a longer cycle (a → b → a), exactly the
  * other edges within it (a's own outgoing edge to b), in chain order.
  */
-function cycleDiagnostic(chain: readonly { readonly location: string; readonly incoming?: GraphReference }[]): Diagnostic {
+function cycleDiagnostic(chain: readonly StackFrame[], byContent: boolean): Diagnostic {
+  const first = chain[0];
   const closing = chain[chain.length - 1];
-  if (closing?.incoming === undefined) {
+  if (first === undefined || closing?.incoming === undefined) {
     throw new Error("Internal error: a cycle's closing frame has no incoming reference");
   }
   const related = chain
     .slice(1, -1)
     .map((frame, index) => (frame.incoming === undefined ? undefined : { label: `cycle position ${index + 1}`, span: frame.incoming.span }))
     .filter((entry): entry is { label: string; span: ReturnType<typeof createSourceSpan> } => entry !== undefined);
-  return referenceDiagnostic("reference-cycle", closing.incoming, `Reference '${closing.incoming.text}' closes a cycle back to an already-visited document`, related);
+  // v1.13 FR-013: a document is named as the route taken to it, and where it really is beside that when they differ. A cycle that
+  // closed through a second spelling names both; one that closed on identical bytes says so, since its two documents are two files.
+  let tail = "";
+  if (byContent) {
+    tail = `: '${closing.location}' has exactly the bytes of '${first.location}', which is already on this chain, so the chain could never end`;
+  } else if (first.location !== closing.location) {
+    tail = `: ${namedDocument(first.location, first.physical)} is reached again as ${namedDocument(closing.location, closing.physical)}`;
+  } else if (closing.physical !== closing.location) {
+    tail = `: ${namedDocument(closing.location, closing.physical)}`;
+  }
+  return referenceDiagnostic("reference-cycle", closing.incoming, `Reference '${closing.incoming.text}' closes a cycle back to an already-visited document${tail}`, related);
+}
+
+/** v1.13 FR-013: `'<logical>'`, and `(the file '<physical>')` after it where they differ. */
+function namedDocument(location: string, physical: string): string {
+  return physical === location ? `'${location}'` : `'${location}' (the file '${physical}')`;
 }
 
 /**
@@ -664,7 +680,7 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrin
         referenceDiagnostic(
           "sandbox-escape",
           candidate,
-          `Schema-authored reference '${candidate.text}' resolves to '${await physical.of(target.location)}', outside every granted sandbox root (${namedRoots(sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (v0.2 FR-021)`,
+          `Schema-authored reference '${candidate.text}' resolves to ${namedDocument(target.location, await physical.of(target.location))}, outside every granted sandbox root (${namedRoots(sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (v0.2 FR-021)`,
         ),
       ],
     };
@@ -673,10 +689,10 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrin
   // v1.13 FR-002: where the document really is. A file's was asked once, above if the sandbox looked, and is
   // remembered; a remote document's is known only after its fetch (FR-015), so until then it is the URL.
   const targetPhysical = target.kind === "local" ? await physical.of(target.location) : target.url;
-  const decision = builder.beginVisit(location, candidate);
+  const decision = builder.beginVisit(location, candidate, targetPhysical);
 
   if (decision.kind === "cycle") {
-    return { ok: false, diagnostics: [cycleDiagnostic(decision.chain)] };
+    return { ok: false, diagnostics: [cycleDiagnostic(decision.chain, false)] };
   }
   if (decision.kind === "duplicate") {
     // Already fully resolved (and its own $adopts chain already walked)
@@ -730,6 +746,11 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrin
   const canonical = builder.registerContent(location, document);
 
   if (canonical !== document) {
+    // v1.13 FR-006: identical bytes to a document on the active chain (the entry included) is a cycle, not a dedup.
+    const contentCycle = builder.contentCycle(canonical);
+    if (contentCycle !== undefined) {
+      return { ok: false, diagnostics: [cycleDiagnostic(contentCycle, true)] };
+    }
     // Content-hash dedup (research D5): this location's bytes were
     // already seen (and its own $adopts chain already fully walked)
     // under a different location earlier in this traversal — nothing to
@@ -791,25 +812,35 @@ export const MAX_DELEGATION_DEPTH = 64;
  * document that would complete it can never be produced.
  */
 export class DelegationCycleTracker {
-  private readonly stack: string[] = [];
+  private readonly stack: { readonly location: string; readonly physical: string }[] = [];
   private readonly maxDepth: number;
   constructor(maxDepth: number) {
     this.maxDepth = maxDepth;
   }
-  enter(location: string): "ok" | "cycle" | "depth-limit-exceeded" {
-    if (this.stack.includes(location)) {
+  /**
+   * `physical` is where the fragment really is (v1.13 FR-007), and it is what a cycle is judged by: a
+   * fragment that delegates to itself under another spelling, or through a link, is the same fragment. It
+   * defaults to `location`, which is every caller written before v1.13. Grafts are still never
+   * deduplicated: only the *active* path is compared, so two grafts of one file side by side are two grafts.
+   */
+  enter(location: string, physical: string = location): "ok" | "cycle" | "depth-limit-exceeded" {
+    if (this.stack.some((frame) => frame.physical === physical)) {
       return "cycle";
     }
     if (this.stack.length >= this.maxDepth) {
       return "depth-limit-exceeded";
     }
-    this.stack.push(location);
+    this.stack.push({ location, physical });
     return "ok";
   }
   exit(): void {
     this.stack.pop();
   }
   chain(): readonly string[] {
+    return this.stack.map((frame) => frame.location);
+  }
+  /** The active path with each fragment's physical path beside its logical one (v1.13 FR-013). */
+  frames(): readonly { readonly location: string; readonly physical: string }[] {
     return [...this.stack];
   }
 }
@@ -1006,12 +1037,13 @@ async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain
           referenceDiagnostic(
             "sandbox-escape",
             reference,
-            `Delegated reference '${text}' resolves to '${locationPhysical}', outside every granted sandbox root (${namedRoots(state.sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (SPEC.md §8.4, v0.6 FR-022)`,
+            `Delegated reference '${text}' resolves to ${namedDocument(location, locationPhysical)}, outside every granted sandbox root (${namedRoots(state.sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (SPEC.md §8.4, v0.6 FR-022)`,
           ),
         ],
       };
     }
-    const cached = state.byteCache.get(location);
+    // v1.13 FR-008: the bytes of a file are remembered by where the file is, not by how it was reached.
+    const cached = state.byteCache.get(locationPhysical);
     if (cached !== undefined) {
       bytes = cached;
     } else {
@@ -1020,18 +1052,18 @@ async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain
         return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `Cannot read '${location}' (delegated as '${text}'): ${read.reason}`, primary: valueNode.span })] };
       }
       bytes = read.bytes;
-      state.byteCache.set(location, bytes);
+      state.byteCache.set(locationPhysical, bytes);
     }
   }
 
-  const entry = state.tracker.enter(location);
+  const entry = state.tracker.enter(location, locationPhysical);
   if (entry === "cycle") {
     return {
       ok: false,
       diagnostics: [
         createDiagnostic({ level: "error",
           code: "reference-cycle",
-          message: `Delegation cycle: '${text}' reaches a fragment already being resolved (${[...state.tracker.chain(), location].join(" -> ")}) — refused rather than followed (SPEC.md §8.3, v0.6 FR-015)`,
+          message: `Delegation cycle: '${text}' reaches a fragment already being resolved (${[...state.tracker.frames(), { location, physical: locationPhysical }].map((frame) => namedDocument(frame.location, frame.physical)).join(" -> ")}) — refused rather than followed (SPEC.md §8.3, v0.6 FR-015)`,
           primary: valueNode.span,
         }),
       ],
@@ -1290,7 +1322,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
   const entryPhysical = await physical.of(entryLocation);
   const entryOrigin = createOrigin(entryLocation, entryLocation, entryPhysical);
 
-  const entryVisit = builder.beginVisit(entryLocation, undefined);
+  const entryVisit = builder.beginVisit(entryLocation, undefined, entryPhysical);
   if (entryVisit.kind !== "new") {
     throw new Error("Internal error: the entry document's first visit was not 'new'");
   }

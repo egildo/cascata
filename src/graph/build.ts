@@ -22,10 +22,18 @@
  * **The trap this file exists to avoid (CLAUDE.md, T030)**: cycle
  * detection that waits for a document's bytes/hash to exist never fires,
  * because the cycle is exactly what prevents those bytes from ever
- * arriving. `GraphBuilder.beginVisit` therefore operates on `location`
- * strings alone (research D5) — it never sees a byte, a hash, or a
- * parsed tree. The orchestrator calls it *before* attempting to read
- * anything at that location.
+ * arriving. `GraphBuilder.beginVisit` therefore operates on paths alone
+ * (research D5) — it never sees a byte, a hash, or a parsed tree. The
+ * orchestrator calls it *before* attempting to read anything at that
+ * location.
+ *
+ * **Identity is physical (v1.13 FR-005, `SPEC.md` Article VI).** A
+ * document is known by two paths: its *logical* location (the route
+ * taken, which names it in every message) and its *physical* one (where it
+ * really is). `beginVisit` is handed both and tells documents apart by
+ * the physical, so a file reached under two spellings, through a link, or
+ * (for a remote document) through a redirect is one document, and a
+ * schema that adopts itself by any route is a cycle.
  *
  * **`$adopts` multiplicity no longer lives here.** An earlier version of
  * this file resolved every `$adopts` sequence-item's location and
@@ -100,8 +108,11 @@ export interface Graph {
 }
 
 /** One frame of the active resolution path — what `GraphBuilder` needs to name every reference in a cycle, in chain order (contracts/diagnostics.md's `reference-cycle`). */
-interface StackFrame {
+export interface StackFrame {
+  /** The logical location: the route taken to the document, which every message names. */
   readonly location: string;
+  /** Where the document really is (v1.13 FR-005); equal to `location` when nothing differs. This is what identifies it. */
+  readonly physical: string;
   /** The reference that discovered this location. Absent only for the entry document, which cannot itself be part of a cycle (nothing points back at an unreached root). */
   readonly incoming?: GraphReference;
 }
@@ -146,9 +157,13 @@ export const DEFAULT_MAX_CHAIN_LENGTH = 32;
  * duration of reading its own bytes.
  */
 export class GraphBuilder {
+  /** Fully resolved documents by physical path (v1.13 FR-005). */
+  private readonly resolvedByPhysical = new Map<string, GraphDocument>();
+  /** The same by logical location: what answers a *remote* reference before its fetch has said where the document ended up (FR-016). */
   private readonly resolvedByLocation = new Map<string, GraphDocument>();
   private readonly canonicalByHash = new Map<string, GraphDocument>();
-  private readonly stack: StackFrame[] = [];
+  /** The active path. A frame's `physical` is set once, except for a remote document's, which `learnPhysical` settles after its fetch; its `document` is set by `registerContent` (FR-006). */
+  private readonly stack: { readonly location: string; physical: string; readonly incoming: GraphReference | undefined; document?: GraphDocument }[] = [];
   private readonly maxChainLength: number;
 
   /** `maxChainLength` (v0.2 FR-010) defaults to `DEFAULT_MAX_CHAIN_LENGTH`, matching contracts/resolve-api.md's documented default of 32. */
@@ -160,10 +175,13 @@ export class GraphBuilder {
    * Decide what to do about `location` before any byte of it has been
    * read (T030). Four outcomes:
    *
-   * - `"cycle"` — `location` is already on the active path: refuse,
+   * - `"cycle"` — the document is already on the active path: refuse,
    *   naming every reference from where the cycle starts back to the one
-   *   that just closed it, in chain order.
-   * - `"duplicate"` — `location` was already fully resolved (including
+   *   that just closed it, in chain order. "The same document" is the
+   *   same **physical** path (v1.13 FR-005); the same logical location
+   *   is the same document too, which only matters for a remote
+   *   reference whose physical URL is not yet known (FR-016).
+   * - `"duplicate"` — the document was already fully resolved (including
    *   its own descendants) earlier in this same traversal (FR-009):
    *   reuse that `GraphDocument`, read nothing, recurse into nothing.
    * - `"chain-limit-exceeded"` — `location` would be the
@@ -179,19 +197,19 @@ export class GraphBuilder {
    *   then call `finishVisit` (or `abandonVisit` if the read/parse
    *   itself failed).
    */
-  beginVisit(location: string, incoming: GraphReference | undefined): VisitDecision {
-    const cycleStart = this.stack.findIndex((frame) => frame.location === location);
+  beginVisit(location: string, incoming: GraphReference | undefined, physical: string = location): VisitDecision {
+    const cycleStart = this.stack.findIndex((frame) => frame.physical === physical || frame.location === location);
     if (cycleStart !== -1) {
-      return { kind: "cycle", chain: [...this.stack.slice(cycleStart), { location, incoming }] };
+      return { kind: "cycle", chain: [...this.stack.slice(cycleStart).map(snapshot), { location, physical, incoming }] };
     }
-    const existing = this.resolvedByLocation.get(location);
+    const existing = this.resolvedByPhysical.get(physical) ?? this.resolvedByLocation.get(location);
     if (existing !== undefined) {
       return { kind: "duplicate", document: existing };
     }
     if (this.stack.length - 1 >= this.maxChainLength) {
       return { kind: "chain-limit-exceeded" };
     }
-    this.stack.push({ location, incoming });
+    this.stack.push({ location, physical, incoming });
     return { kind: "new" };
   }
 
@@ -207,18 +225,38 @@ export class GraphBuilder {
    * one just built, unless another location already produced
    * byte-identical content, in which case the earlier one wins
    * (content-hash dedup, research D5 — "two locations serving identical
-   * bytes converge to one graph node"). When a different document is
-   * canonical, the caller should still recurse into `document`'s own
-   * references before calling `finishVisit` for *this* location — a
-   * hash match does not exempt an already-active location from cycle
-   * detection.
+   * bytes converge to one graph node").
+   *
+   * **v1.13 FR-006, and the stale doc this replaces.** This file used to
+   * say the caller "should still recurse" into `document` after a hash
+   * match; `walkAdoptsChain` never did (it returns the canonical document
+   * and closes the visit), and the doc was wrong. What the caller must do
+   * instead is ask `contentCycle(canonical)`: a hash match against a
+   * document that is **on the active path** — the entry included — is a
+   * cycle, not a dedup (a byte-identical copy of an ancestor adopts what
+   * that ancestor adopts, so the chain could never end), and returning
+   * that document as a node of the graph handed `buildPedigree` the
+   * entry, which has no `via`. A match against a document that is
+   * finished and off the path is dedup, unchanged.
    */
   registerContent(location: string, document: GraphDocument): GraphDocument {
     const top = this.stack[this.stack.length - 1];
     if (top === undefined || top.location !== location) {
       throw new Error(`Internal error: registerContent(${location}) does not match the active visit (${top?.location ?? "<empty stack>"})`);
     }
+    top.document = document;
     return this.canonicalByHash.get(document.identity.hash) ?? (this.canonicalByHash.set(document.identity.hash, document), document);
+  }
+
+  /**
+   * v1.13 FR-006: if `canonical` (what `registerContent` just returned) is the document of a frame on the
+   * active path **other than the current visit's**, the chain from that frame to the current visit — the
+   * same shape a `"cycle"` decision carries, the current visit being the closing frame. `undefined` when it
+   * is not, which is every ordinary case: the visit's own new document, or a finished one.
+   */
+  contentCycle(canonical: GraphDocument): readonly StackFrame[] | undefined {
+    const index = this.stack.findIndex((frame) => frame.document === canonical);
+    return index === -1 || index === this.stack.length - 1 ? undefined : this.stack.slice(index).map(snapshot);
   }
 
   /**
@@ -234,6 +272,7 @@ export class GraphBuilder {
       throw new Error(`Internal error: finishVisit(${location}) does not match the active visit (${top?.location ?? "<empty stack>"})`);
     }
     this.stack.pop();
+    this.resolvedByPhysical.set(top.physical, canonical);
     this.resolvedByLocation.set(location, canonical);
   }
 
@@ -245,6 +284,10 @@ export class GraphBuilder {
     }
     this.stack.pop();
   }
+}
+
+function snapshot(frame: { readonly location: string; readonly physical: string; readonly incoming: GraphReference | undefined }): StackFrame {
+  return { location: frame.location, physical: frame.physical, ...(frame.incoming === undefined ? {} : { incoming: frame.incoming }) };
 }
 
 /** Assemble the final `Graph` from the entry document and every other document discovered, in discovery order (leaf-to-root along the chain). Pure — no IO, no cycle/dedup logic of its own (that is `GraphBuilder`'s job, already applied by the time the orchestrator calls this). */

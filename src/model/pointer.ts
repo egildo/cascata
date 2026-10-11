@@ -109,6 +109,8 @@ export function resolvePointer(root: Node, pointer: string): Node | undefined {
 interface PointerIndex {
   /** origin id -> origin label (for a delegated fragment, the label is its location). */
   readonly labels: ReadonlyMap<string, string>;
+  /** origin id -> where that document really is (v1.13 FR-004): the origin's `physical`, else its label. */
+  readonly physicals: ReadonlyMap<string, string>;
   /** origin id -> `start:end` -> pointers in walk order. */
   readonly bySpan: ReadonlyMap<string, ReadonlyMap<string, readonly string[]>>;
 }
@@ -129,12 +131,14 @@ export function pointerIndexBuilds(): number {
 function buildPointerIndex(root: Node): PointerIndex {
   indexBuilds += 1;
   const labels = new Map<string, string>();
+  const physicals = new Map<string, string>();
   const bySpan = new Map<string, Map<string, string[]>>();
   const stack: { readonly node: Node; readonly pointer: string }[] = [{ node: root, pointer: "" }];
   for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
     const { node, pointer } = item;
     const id = node.span.origin.id;
     labels.set(id, node.span.origin.label);
+    physicals.set(id, node.span.origin.physical ?? node.span.origin.label);
     let spans = bySpan.get(id);
     if (spans === undefined) {
       spans = new Map();
@@ -158,7 +162,7 @@ function buildPointerIndex(root: Node): PointerIndex {
       }
     }
   }
-  return { labels, bySpan };
+  return { labels, physicals, bySpan };
 }
 
 function indexOf(root: Node): PointerIndex {
@@ -201,6 +205,15 @@ export function pointersAt(root: Node, originId: string, start: number, end: num
  */
 export function originsInTree(root: Node): ReadonlyMap<string, string> {
   return indexOf(root).labels;
+}
+
+/**
+ * Every origin of a node in `root` with where its document really is (v1.13 FR-008): `origin.physical`,
+ * or the label where nothing differs. Two origins with one physical path are one file, whatever they were
+ * called. Read from the same index as `originsInTree`.
+ */
+export function physicalsInTree(root: Node): ReadonlyMap<string, string> {
+  return indexOf(root).physicals;
 }
 
 /**
