@@ -1,0 +1,10 @@
+{
+  "name": "G001: a well-formed pattern satisfies type: glob",
+  "cites": "v1.14 FR-001",
+  "fixtureDir": "validate-glob/accepted",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true
+  }
+}

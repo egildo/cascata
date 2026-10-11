@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+include:
+  - "../../../outside/*.md"
+  - /etc/*.conf

@@ -57,7 +57,7 @@ import { compareByCodePoint } from "../model/node.js";
 import { extend } from "../extend.js";
 
 /** FR-011's closed set of type names this milestone resolves. */
-export const BUILTIN_TYPE_NAMES = ["string", "int", "float", "bool", "null", "mapping", "sequence", "url", "path"] as const;
+export const BUILTIN_TYPE_NAMES = ["string", "int", "float", "bool", "null", "mapping", "sequence", "url", "path", "glob"] as const;
 
 export type BuiltinTypeName = (typeof BUILTIN_TYPE_NAMES)[number];
 

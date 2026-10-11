@@ -61,6 +61,7 @@
 import type { MergedConfiguration } from "../merge/provenance.js";
 import { posixPaths } from "../paths.js";
 import { resolvePointer } from "../model/pointer.js";
+import type { Origin } from "../model/span.js";
 import { isValidPath, isValidUrl } from "./check.js";
 
 export type ResolvedResource =
@@ -84,6 +85,26 @@ export type ResolvedResource =
 
 /** Whether `location` (already resolved — a declaring document's own `span.origin.id`) is itself an `https://` location — the identical predicate `src/resolve/location.ts` uses to decide whether a *reference* resolves against a remote base; reused here for the identical reason, applied to `resource` values. */
 const HTTPS_LOCATION_PATTERN = /^https:\/\//i;
+
+/**
+ * Where a relative `value`, written in the document `origin` names, points -- by each medium's own convention (v1.13), and
+ * the answer the other rule would have given where it differs. Shared by `resource()` and `globBase()`: a `path` and a
+ * `glob`'s prefix start from the declaring document the same way. `asDirectory` is for a prefix: a remote answer then
+ * ends in `/`, so that it is a directory URL (a local answer never has a trailing separator).
+ */
+export function locateFromDocument(configuration: MergedConfiguration, origin: Origin, value: string, asDirectory: boolean): { readonly location: string; readonly otherLocation?: string } {
+  const declaringDocument = origin.id;
+  const physical = origin.physical;
+  const paths = configuration.paths ?? posixPaths;
+  const remote = HTTPS_LOCATION_PATTERN.test(declaringDocument);
+  const text = value === "" ? "." : value;
+  const remoteText = asDirectory && text !== "." ? `${text.replace(/\/+$/, "")}/` : text;
+  const startingFrom = (base: string): string => (remote ? new URL(remoteText, base).toString() : paths.resolve(paths.dirname(base), text));
+  // v1.13: a remote document's relative values start from the physical URL (where its fetch ended), a file's from its logical path.
+  const location = startingFrom(remote ? (physical ?? declaringDocument) : declaringDocument);
+  const otherLocation = physical === undefined ? undefined : startingFrom(remote ? declaringDocument : physical);
+  return otherLocation === undefined || otherLocation === location ? { location } : { location, otherLocation };
+}
 
 /**
  * Resolve the value at `pointer` in `configuration.tree` as a `resource`
@@ -115,15 +136,8 @@ export function resource(configuration: MergedConfiguration, pointer: string): R
     return { kind: "url", location: node.value };
   }
   if (isValidPath(node.value)) {
-    const declaringDocument = node.span.origin.id;
-    const physical = node.span.origin.physical;
-    const paths = configuration.paths ?? posixPaths;
-    // v1.13: a remote document's relative values start from the physical URL (where its fetch ended), a file's from its logical path.
-    const remote = HTTPS_LOCATION_PATTERN.test(declaringDocument);
-    const startingFrom = (base: string): string => (remote ? new URL(node.value, base).toString() : paths.resolve(paths.dirname(base), node.value));
-    const location = startingFrom(remote ? (physical ?? declaringDocument) : declaringDocument);
-    const otherLocation = physical === undefined ? undefined : startingFrom(remote ? declaringDocument : physical);
-    return otherLocation === undefined || otherLocation === location ? { kind: "path", location } : { kind: "path", location, otherLocation };
+    const where = locateFromDocument(configuration, node.span.origin, node.value, false);
+    return { kind: "path", ...where };
   }
   return { kind: "not-a-resource" };
 }

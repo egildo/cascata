@@ -1,0 +1,26 @@
+{
+  "name": "G005: a non-string scalar is a type mismatch for glob, as for any string refinement",
+  "cites": "v1.14 FR-001",
+  "fixtureDir": "validate-glob/non-string",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 2,
+        "column": 10,
+        "pointer": "/include",
+        "demand": {
+          "pointer": "/keys/include/demand/type",
+          "document": "schema.yaml",
+          "line": 4,
+          "column": 13
+        },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+$schema: ./schema.yaml
+include:
+  - "*.md"
+  - "a**"

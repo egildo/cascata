@@ -1,0 +1,26 @@
+{
+  "name": "G003: glob[]: the second pattern ('**' inside a segment) is refused at its own element",
+  "cites": "v1.14 FR-004",
+  "fixtureDir": "validate-glob/list-element",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "type-mismatch",
+        "document": "config.yaml",
+        "line": 4,
+        "column": 5,
+        "pointer": "/include/1",
+        "demand": {
+          "pointer": "/keys/include/demand/type",
+          "document": "schema.yaml",
+          "line": 4,
+          "column": 13
+        },
+        "pedigreePosition": 0
+      }
+    ]
+  }
+}

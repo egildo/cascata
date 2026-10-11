@@ -1,0 +1,4 @@
+keys:
+  include:
+    demand:
+      type: glob[]

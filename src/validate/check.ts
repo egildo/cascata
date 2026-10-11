@@ -36,6 +36,7 @@
 import type { Node } from "../model/node.js";
 import type { DelegationHop } from "../model/reference.js";
 import { pointerFromPath, resolvePointer } from "../model/pointer.js";
+import { checkGlobPattern } from "./glob.js";
 import type { Layer, MergedConfiguration } from "../merge/provenance.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import { readDemandVocabulary, readNestedKeysMapping, recursiveVocabularyProblems, vocabularyProblemsForLayer, localNameOf, MAX_DEMAND_DEPTH, type DemandKeyword, type RawDemand } from "./vocabulary.js";
@@ -126,7 +127,7 @@ function siteAt(base: ViolationSite, declaring: DeclaringContext, declaringSpan:
 }
 
 function mismatchSite(value: Node, expectedDescription: string, declaring: DeclaringContext, declaringSpan: Node["span"]): RawSite {
-  return { pointerSuffix: [], node: value, reason: { kind: "type-mismatch", expectedDescription, actualDescription: describeActual(value) }, declaring, declaringSpan };
+  return { pointerSuffix: [], node: value, reason: { kind: "type-mismatch", expectedDescription, actualDescription: describeActual(value, expectedDescription) }, declaring, declaringSpan };
 }
 
 // --- Type-expression matching, with named-type resolution (v0.5) ----------
@@ -139,7 +140,18 @@ function describeExpression(expr: TypeExpression): string {
   return expr.alternatives.map(describeAlternative).join(" | ");
 }
 
-function describeActual(node: Node): string {
+/**
+ * What the value was, for a `type-mismatch`. A string refused by the `glob` type says **why** (v1.14 FR-004): the pattern, the
+ * refused character or rule, and its offset -- the existing diagnostic with a precise message, no new code. Only when the one
+ * expected alternative is exactly `glob`; a union or a named type's `accept` gets the generic sentence, as every other builtin does.
+ */
+function describeActual(node: Node, expectedDescription?: string): string {
+  if (expectedDescription === "glob" && node.type === "scalar" && node.kind === "string") {
+    const verdict = checkGlobPattern(node.value);
+    if (!verdict.ok) {
+      return `the pattern ${JSON.stringify(node.value)}, which is not a glob: ${verdict.message}`;
+    }
+  }
   return node.type === "scalar" ? `a ${node.kind} scalar` : `a ${node.type}`;
 }
 
@@ -178,6 +190,8 @@ function matchesBuiltinLeaf(node: Node, name: string): boolean {
       return node.type === "scalar" && node.kind === "string" && isValidUrl(node.value);
     case "path":
       return node.type === "scalar" && node.kind === "string" && isValidPath(node.value);
+    case "glob":
+      return node.type === "scalar" && node.kind === "string" && checkGlobPattern(node.value).ok;
     default:
       return false;
   }

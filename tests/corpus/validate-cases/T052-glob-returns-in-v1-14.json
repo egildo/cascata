@@ -1,0 +1,10 @@
+{
+  "name": "T052: 'glob' is a built-in type again (v1.14, SPEC.md \u00a715 \"glob returns\"). v1 dropped it, and this case once asserted unknown-type-name for it; the same schema and the same value now load -- the reversal is the point, and is named in \u00a715 as a change of behaviour",
+  "cites": "v1.14 FR-001",
+  "fixtureDir": "validate-types/glob-returned",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true
+  }
+}

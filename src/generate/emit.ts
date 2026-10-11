@@ -266,6 +266,7 @@ function emitAlternative(alternative: AccumulatedType, position: AccumulatedPosi
       case "string":
       case "url":
       case "path":
+      case "glob":
         core = "string";
         break;
       case "bool":

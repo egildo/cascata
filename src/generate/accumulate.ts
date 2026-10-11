@@ -277,7 +277,7 @@ function resolveOne(alternative: Alternative, scopeRank: number, ctx: Ctx): Reso
 }
 
 /**
- * §7's refinement relation among the built-ins: **`url` and `path` are
+ * §7's refinement relation among the built-ins: **`url`, `path` and (v1.14) `glob` are
  * built-in refinements of `string`.** The article says so in as many words,
  * and the validator agrees — `matchesBuiltinLeaf` accepts a `url` value as
  * a string that also parses as a URL.
@@ -293,6 +293,7 @@ function resolveOne(alternative: Alternative, scopeRank: number, ctx: Ctx): Reso
 const REFINES: ReadonlyMap<BuiltinTypeName, BuiltinTypeName> = new Map([
   ["url", "string"],
   ["path", "string"],
+  ["glob", "string"],
 ]);
 
 /** The narrower of two built-ins, or `undefined` where no value can be both. */

@@ -106,7 +106,7 @@ const TYPE_SHAPED: ReadonlySet<string> = new Set(["type-mismatch", "required-vio
  *
  * The contract's row 5 says every case refused *solely* for
  * `type-mismatch`, `required-violated`, `seal-violation` or `enum-violated`
- * must fail to typecheck. Seven of the corpus's twenty-two do not, in three
+ * must fail to typecheck. Seven of the corpus's twenty-two did not, in three (v1.14 adds two more, G002 and G003, in the `url`/`path` family)
  * families — and the contract's own §4 already names the first of them.
  * Row 5 is therefore too strong and needs the same carve-out §4 gives
  * ranges, lengths and patterns; reported as a correction owed to it, to
@@ -123,6 +123,11 @@ const INEXPRESSIBLE: ReadonlyMap<string, string> = new Map([
   ],
   ["T029", "An `accept` selector narrowing between `url` and `path`, both of which emit `string` — contract §4, and the spec's own Assumption that `accept` narrowing is mostly invisible in TypeScript."],
   ["T039", "The same `accept`/`url`/`path` limit, reached through a qualified name."],
+  [
+    "G002",
+    "v1.14: `glob` emits `string` (SPEC.md §18), the same limit as `url` and `path`: the refusal is a pattern outside the grammar, and no TypeScript type distinguishes a string that is a glob from one that is not.",
+  ],
+  ["G003", "The same `glob` limit, through a `glob[]` element (`readonly string[]`)."],
   ["T049", "The same `accept`/`url`/`path` limit: `accept: [url]` and `accept: [url, path]` have one emission between them."],
   ["T051", "The same `accept`/`url`/`path` limit, from the widening side."],
   [
@@ -223,22 +228,22 @@ describe("contract §1 rows 1–6 / SC-005 — every corpus case, through the co
     return judgements;
   }
 
-  it("finds the whole corpus — 104 descriptors, the number a runner that silently skipped would miss", () => {
-    expect(cases).toHaveLength(104);
+  it("finds the whole corpus — 109 descriptors, the number a runner that silently skipped would miss", () => {
+    expect(cases).toHaveLength(109);
   });
 
-  it("row 4 — every `ok: true` case inhabits its generated type, and there are 38 of them", async () => {
+  it("row 4 — every `ok: true` case inhabits its generated type, and there are 41 of them", async () => {
     const judged = await judgeAll();
     const positives = judged.filter((entry) => entry.verdict === "positive");
-    expect(positives).toHaveLength(38);
+    expect(positives).toHaveLength(41);
     const failures = positives.filter((entry) => (entry.problems ?? []).length > 0);
     expect(failures.map((entry) => `${entry.name}: ${renderProblems(entry.problems ?? [])}`), "a configuration validation ACCEPTS must inhabit the type generated from its schema chain — SPEC.md §18's soundness law").toEqual([]);
   }, 300_000);
 
-  it("row 5 — every case refused SOLELY for a type-shaped reason fails to typecheck, and there are 22 of them", async () => {
+  it("row 5 — every case refused SOLELY for a type-shaped reason fails to typecheck, and there are 25 of them", async () => {
     const judged = await judgeAll();
     const negatives = judged.filter((entry) => entry.verdict === "negative");
-    expect(negatives).toHaveLength(22);
+    expect(negatives).toHaveLength(25);
     const accepted = negatives.filter((entry) => (entry.problems ?? []).length === 0).map((entry) => entry.name);
     const expected = negatives.filter((entry) => nameOfLimit(entry.name) !== undefined).map((entry) => entry.name);
     // **The set that typechecks is pinned exactly, not merely bounded.** An
@@ -246,7 +251,7 @@ describe("contract §1 rows 1–6 / SC-005 — every corpus case, through the co
     // this red; one of these seven starting to fail would mean the limit was
     // closed and turns it red too. Neither is silently absorbed.
     expect(accepted.sort(), "the type-shaped refusals a TypeScript type cannot express — see INEXPRESSIBLE below").toEqual(expected.sort());
-    expect(negatives.length - accepted.length).toBe(15);
+    expect(negatives.length - accepted.length).toBe(16);
   }, 300_000);
 
   it("row 5, the other half — every inexpressible case is one of three named families, and every family cites its own limit", async () => {
@@ -274,8 +279,8 @@ describe("contract §1 rows 1–6 / SC-005 — every corpus case, through the co
     }
     // Every descriptor lands in exactly one bucket, so nothing can be lost
     // between them — the property a "skip" would quietly break.
-    expect(judged).toHaveLength(104);
-    expect(judged.filter((entry) => entry.verdict === "positive").length + judged.filter((entry) => entry.verdict === "negative").length + listed.length).toBe(104);
+    expect(judged).toHaveLength(109);
+    expect(judged.filter((entry) => entry.verdict === "positive").length + judged.filter((entry) => entry.verdict === "negative").length + listed.length).toBe(109);
   }, 300_000);
 
   it("row 6 — and the corpus contains NO mixed refusal at HEAD: every refusal is wholly type-shaped or not at all", () => {

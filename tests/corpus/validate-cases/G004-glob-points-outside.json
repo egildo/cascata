@@ -1,0 +1,10 @@
+{
+  "name": "G004: checking confines nothing: patterns that climb out of the sandbox, or are absolute, load",
+  "cites": "v1.14 FR-005",
+  "fixtureDir": "validate-glob/points-outside",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": true
+  }
+}

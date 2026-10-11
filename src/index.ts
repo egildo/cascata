@@ -43,6 +43,7 @@ import { why as whyImpl } from "./merge/provenance.js";
 import type { Layer, MergedConfiguration } from "./merge/provenance.js";
 import { checkConfiguration, schemaVocabularyProblems } from "./validate/check.js";
 import { resource as resourceImpl, type ResolvedResource } from "./validate/resource.js";
+import { globBase as globBaseImpl } from "./validate/globbase.js";
 import { project as projectImpl } from "./project/value.js";
 import type { DelegationHop } from "./model/reference.js";
 import { createMapping } from "./model/node.js";
@@ -1556,6 +1557,17 @@ export type { ResolvedResource } from "./validate/resource.js";
  * check: it produces no diagnostic and cannot fail a `load()` call.
  */
 export const resource = resourceImpl;
+
+// --- globBase() -- v1.14 (SPEC.md §7, specs/024-glob FR-007) --------------
+
+export type { GlobBase } from "./validate/globbase.js";
+
+/**
+ * Where the `glob` value at `pointer` is anchored: its pattern, its literal prefix, the directory the pattern starts from (the
+ * declaring document's directory joined with the prefix, by `resource()`'s medium rule) and the value's span. A query, not a
+ * check: no diagnostic, no host, nothing read or confined. `expand()` starts its walk at `directory`.
+ */
+export const globBase = globBaseImpl;
 
 // --- project() — User Story 3/4 (v1.0, SPEC.md Article VII (§17)) --------
 
