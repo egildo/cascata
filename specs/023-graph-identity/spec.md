@@ -158,6 +158,13 @@ the code, none run):
   change of behaviour**, named: such a reference, which loaded (its fragment silently ignored by the
   fetch), is refused.
 
+- **FR-021** **A remote document's format comes from its URL's path** *(the owner's ruling, 2026-10-11, on
+  the implementer's R5)*. `formatForLocation` reads the extension of the WHATWG `pathname` of an
+  `https://` location, so a query (`a.yaml?v=2`) no longer hides it; a local location is read as today.
+  `Content-Type` is not consulted: the extension rule is the one files and the offline cache already
+  use. **The change of behaviour**, named: a remote document whose URL has a query, which could not be
+  read (`No adapter recognizes the format`), is read by its path's extension.
+
 ## Part F — Witnesses
 
 - **FR-017** **Probe gate before Part A is trusted** (constitution Principle V). Against `createNodeHost`'s
