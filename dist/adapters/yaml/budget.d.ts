@@ -1,0 +1,19 @@
+/**
+ * W, the number of model nodes a YAML document writes — the base of the
+ * expansion budget (SPEC.md §4.2, §11, §15; specs/019-bounded-cost FR-003).
+ *
+ * A *model node* is what §4.1 builds: a scalar, a mapping, a sequence. The
+ * root is one. A mapping's keys are not nodes; its values are. An alias is
+ * written as **one** node (its expansion is what the budget is about), and a
+ * merge key's value is counted like any other value: `<<: *a` is one alias,
+ * `<<: [*a, *b]` a sequence and two aliases, `<<: {x: 1}` a mapping and a
+ * scalar. (Counting a merge value as one node whatever it holds would let a
+ * large inline merge mapping, which expands nothing, exceed its own budget.)
+ * An empty document is the null scalar the model invents: one.
+ *
+ * The count is iterative for the reason `anchors.ts` is: the AST is as deep
+ * as the parser managed to make it, and the depth cap is applied later.
+ */
+import type { Document } from "yaml";
+export declare function countWritten(doc: Document): number;
+//# sourceMappingURL=budget.d.ts.map
