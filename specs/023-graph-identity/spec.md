@@ -74,11 +74,21 @@ the code, none run):
 - **FR-005** **The adoption graph keys by physical path.** `GraphBuilder`'s cycle stack and
   `resolvedByLocation` compare physical paths. A schema that adopts itself under another spelling, or
   through a link, is `reference-cycle`, positioned as any cycle is (at the closing reference).
-- **FR-006** **Content identity on the active chain is a cycle, not a dedup.** When content-hash dedup
-  would return a document that is on the current stack (the entry included), the reference is
-  `reference-cycle`. Hash dedup against a document off the stack is unchanged. This fixes the latent
-  crash, which no longer depends on spelling: a byte-identical copy of an ancestor adopts what that
-  ancestor adopts, so the chain could never end. Correct the stale "should still recurse" doc.
+- **FR-006** **Identity is the physical path alone; contents are not identity** *(revised by the owner,
+  2026-10-11, after the coordinator's probe)*. The adoption graph no longer deduplicates by content hash:
+  two different physical documents with identical bytes are two documents. The hash is still computed,
+  for `$pin` verification and for `DocumentIdentity.hash`. The first version of this requirement made
+  "same bytes as a document on the active chain" a cycle, on the reasoning that such a copy adopts what
+  its original adopts; that is false, because each copy resolves its relative references from its own
+  location. The probe that showed it: `x/a.yaml` → `x/b.yaml` → `y/a.yaml` → `y/b.yaml`, with `x/a` and
+  `y/a` byte-identical (`$adopts: ./b.yaml`), is a legal chain that ends, and was refused (before v1.13
+  it was silently corrupted: hash dedup returned `x/a` and `y/b.yaml` was dropped). A chain is a single
+  line, so a document can only recur by a cycle, which physical identity already catches; content dedup
+  has no job left. It was also the cause of the latent crash (hash dedup handing back the entry, which
+  has no `via`), which this removes at its root rather than by a guard. Remove `contentCycle` and the
+  `canonicalByHash` dedup path (and its stale "should still recurse" doc); keep FR-018 item 3's cases,
+  re-expected: the entry adopted back under another spelling is `reference-cycle` (physical identity),
+  and a byte-identical copy of an ancestor at another location resolves as the ordinary document it is.
 - **FR-007** **Delegated fragments too.** `DelegationCycleTracker` compares physical paths, so a
   fragment that delegates to itself under another spelling is `reference-cycle` (today it re-grafts
   until `depth-limit-exceeded`). Grafts are still never deduplicated: two grafts of one physical file
