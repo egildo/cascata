@@ -56,6 +56,20 @@ describe("v1.13 FR-014: the logical URL is normalized by the WHATWG URL Standard
   });
 });
 
+describe("v1.13 FR-014: text the URL Standard cannot parse is left as written, so the refusal that follows is the one that always followed", () => {
+  it("an absolute https:// reference that is not a URL is unsupported-scheme from the fetch, as before", async () => {
+    const d = failureOf(await resolveAt(vhost({ "/v/e.yaml": "$schema: https://[::1\n" }), "/v/e.yaml", { transport: new RecordedTransport([]) }));
+    expect(d.map((x) => x.code)).toEqual(["unsupported-scheme"]);
+  });
+
+  it("a relative reference in a remote document that is not a URL is a refusal, not a thrown TypeError (the old code threw)", async () => {
+    const transport = new RecordedTransport([ok("https://example.test/a.yaml", "$adopts: //[x\n")]);
+    const d = failureOf(await resolveAt(vhost({ "/v/e.yaml": "$schema: https://example.test/a.yaml\n" }), "/v/e.yaml", { transport }));
+    expect(d.map((x) => x.code)).toEqual(["unsupported-scheme"]);
+    expect(d[0]?.primary).toMatchObject({ origin: { id: "https://example.test/a.yaml" } });
+  });
+});
+
 describe("v1.13 FR-015: the physical URL is the URL after redirects", () => {
   it("a document behind a redirect has the requested URL as its logical one and the final URL as its physical one", async () => {
     const host = vhost({ "/v/e.yaml": "$schema: https://example.test/a.yaml\n" });
