@@ -164,6 +164,21 @@ const SCHEME_PREFIX_PATTERN = /^([a-zA-Z][a-zA-Z0-9+.-]+):/;
 const HTTPS_LOCATION_PATTERN = /^https:\/\//i;
 
 /**
+ * The logical form of a remote location (v1.13 FR-014): `new URL(text).href`, the WHATWG URL Standard's
+ * own normalization — lowercase scheme and host, the default port dropped, `.` and `..` segments
+ * resolved, IDNA. Paths, queries and percent-encodings are not otherwise touched (URL paths are
+ * case-sensitive). Text the Standard cannot parse stays as written, so the refusal that follows
+ * (`unsupported-scheme`, from the fetch) is the one that always followed.
+ */
+function normalizedUrl(text: string, base?: string): string {
+  try {
+    return new URL(text, base).href;
+  } catch {
+    return text;
+  }
+}
+
+/**
  * Classify `reference`'s target before deciding how to read it (T043's
  * routing point in `src/index.ts`): a local filesystem path, an HTTPS
  * URL to fetch, or a scheme FR-013 refuses outright. Tilde-expands first
@@ -179,7 +194,7 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
   if (ABSOLUTE_URL_SCHEME_PATTERN.test(text)) {
     const scheme = (ABSOLUTE_URL_SCHEME_PATTERN.exec(text)?.[1] ?? "").toLowerCase();
     if (scheme === "https") {
-      return { kind: "https", url: text };
+      return { kind: "https", url: normalizedUrl(text) };
     }
     return { kind: "unsupported-scheme", scheme };
   }
@@ -192,7 +207,7 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
     return { kind: "unsupported-scheme", scheme: (schemePrefixMatch[1] ?? "").toLowerCase() };
   }
   if (HTTPS_LOCATION_PATTERN.test(referringDocumentLocation)) {
-    return { kind: "https", url: new URL(text, referringDocumentLocation).toString() };
+    return { kind: "https", url: normalizedUrl(text, referringDocumentLocation) };
   }
   return { kind: "local", location: paths.resolve(paths.dirname(referringDocumentLocation), text) };
 }
@@ -217,7 +232,7 @@ export function classifyReferenceLocation(reference: Reference, referringDocumen
  */
 export function classifyLocatedDocument(location: string, paths: PathFacility): ReferenceLocationKind {
   if (HTTPS_LOCATION_PATTERN.test(location)) {
-    return { kind: "https", url: location };
+    return { kind: "https", url: normalizedUrl(location) };
   }
   return { kind: "local", location: paths.resolve(location) };
 }

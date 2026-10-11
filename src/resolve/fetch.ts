@@ -209,13 +209,14 @@ export type RemoteDocumentFailure =
   | { readonly kind: "malformed-pin" };
 
 export type RemoteDocumentOutcome =
-  | { readonly ok: true; readonly bytes: Uint8Array; readonly hash: string; readonly verified: boolean }
+  /** `finalUrl` (v1.13 FR-015) is the physical URL: where the fetch ended after redirects, or — for a cache hit — where the fetch that stored it ended. */
+  | { readonly ok: true; readonly bytes: Uint8Array; readonly hash: string; readonly verified: boolean; readonly finalUrl: string }
   | { readonly ok: false; readonly failure: RemoteDocumentFailure };
 
-function verifyAgainstPin(bytes: Uint8Array, pin: string | undefined): RemoteDocumentOutcome {
+function verifyAgainstPin(bytes: Uint8Array, pin: string | undefined, finalUrl: string): RemoteDocumentOutcome {
   const hash = hashBytes(bytes);
   if (pin === undefined) {
-    return { ok: true, bytes, hash, verified: false };
+    return { ok: true, bytes, hash, verified: false, finalUrl };
   }
   const verification = verifyPin(pin, { hash });
   if (!verification.ok) {
@@ -227,7 +228,7 @@ function verifyAgainstPin(bytes: Uint8Array, pin: string | undefined): RemoteDoc
     // are. There is no path from here back into the graph.
     return { ok: false, failure: { kind: "pin-mismatch", expected: verification.expected, actual: verification.actual } };
   }
-  return { ok: true, bytes, hash, verified: true };
+  return { ok: true, bytes, hash, verified: true, finalUrl };
 }
 
 /**
@@ -251,7 +252,7 @@ export async function resolveRemoteDocument(url: string, pin: string | undefined
   const now = Date.now();
 
   if (cached !== undefined && context.cache.isFresh(cached.freshness, now)) {
-    return verifyAgainstPin(cached.bytes, pin);
+    return verifyAgainstPin(cached.bytes, pin, cached.finalUrl);
   }
 
   const fetched = await fetchDocument(url, context.transport, context.limits);
@@ -260,7 +261,7 @@ export async function resolveRemoteDocument(url: string, pin: string | undefined
     if (fetched.failure.kind === "unreachable") {
       if (cached !== undefined) {
         // FR-018: a stale-but-cached document still resolves offline.
-        return verifyAgainstPin(cached.bytes, pin);
+        return verifyAgainstPin(cached.bytes, pin, cached.finalUrl);
       }
       return { ok: false, failure: { kind: "not-cached" } };
     }
@@ -276,12 +277,12 @@ export async function resolveRemoteDocument(url: string, pin: string | undefined
     if (cached === undefined) {
       return { ok: false, failure: { kind: "not-cached" } };
     }
-    await context.cache.write(url, cached.bytes, fetched.headers, now);
-    return verifyAgainstPin(cached.bytes, pin);
+    await context.cache.write(url, cached.bytes, fetched.headers, now, fetched.finalUrl);
+    return verifyAgainstPin(cached.bytes, pin, fetched.finalUrl);
   }
 
-  await context.cache.write(url, fetched.bytes, fetched.headers, now);
-  return verifyAgainstPin(fetched.bytes, pin);
+  await context.cache.write(url, fetched.bytes, fetched.headers, now, fetched.finalUrl);
+  return verifyAgainstPin(fetched.bytes, pin, fetched.finalUrl);
 }
 
 // --- Production transport ---

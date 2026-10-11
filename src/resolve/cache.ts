@@ -59,11 +59,15 @@ export interface CacheEntry {
   readonly url: string;
   readonly bytes: Uint8Array;
   readonly hash: string;
+  /** Where the fetch that stored this entry ended (v1.13 FR-015): the document's physical URL. An entry stored before v1.13 recorded none and answers its own URL, so no refetch is forced to learn it. */
+  readonly finalUrl: string;
   readonly freshness: CacheFreshness;
 }
 
 interface StoredMeta {
   readonly hash: string;
+  /** v1.13 FR-015. Absent in an entry written by v1.12 or earlier. */
+  readonly finalUrl?: string;
   readonly freshness: CacheFreshness;
 }
 
@@ -143,7 +147,7 @@ export class DocumentCache {
     if (blobBytes === undefined) {
       return undefined;
     }
-    return { url, bytes: blobBytes, hash: meta.hash, freshness: meta.freshness };
+    return { url, bytes: blobBytes, hash: meta.hash, finalUrl: typeof meta.finalUrl === "string" && meta.finalUrl.length > 0 ? meta.finalUrl : url, freshness: meta.freshness };
   }
 
   /**
@@ -155,8 +159,11 @@ export class DocumentCache {
    * persisted at all — nothing is written under either key, and a
    * previously-cached entry for the same URL (if any) is left as-is
    * rather than being overwritten with an unstorable response.
+   *
+   * `finalUrl` (v1.13 FR-015) is where the fetch ended after redirects — the document's physical URL —
+   * and is stored with the entry so that an offline or fresh hit answers it without a request.
    */
-  async write(url: string, bytes: Uint8Array, headers: Readonly<Record<string, string>>, fetchedAt: number): Promise<void> {
+  async write(url: string, bytes: Uint8Array, headers: Readonly<Record<string, string>>, fetchedAt: number, finalUrl: string = url): Promise<void> {
     const cacheControl = parseCacheControl(getHeader(headers, "cache-control"));
     if (cacheControl.noStore) {
       return;
@@ -177,7 +184,7 @@ export class DocumentCache {
       ...(lastModified !== undefined ? { lastModified } : {}),
       noCache: cacheControl.noCache,
     };
-    const meta: StoredMeta = { hash, freshness };
+    const meta: StoredMeta = { hash, finalUrl, freshness };
     await this.host.cacheWrite(this.metaKey(url), new TextEncoder().encode(JSON.stringify(meta)));
   }
 

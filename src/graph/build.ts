@@ -214,6 +214,40 @@ export class GraphBuilder {
   }
 
   /**
+   * v1.13 FR-016: a **remote** visit's physical URL — where the fetch ended after redirects — is known only
+   * after the fetch, so `beginVisit` started it under its logical URL. This settles it and judges it as
+   * `beginVisit` judges a local document:
+   *
+   * - `"cycle"` — another document on the active path is at that URL: a schema that adopts itself through a
+   *   redirect. The chain is the same shape a `"cycle"` from `beginVisit` carries, the current visit last.
+   * - `"duplicate"` — a document already fully resolved is at that URL. The current visit is **closed** (its
+   *   frame is popped) and `location` is remembered, so asking for it again is a pre-fetch duplicate.
+   * - `"new"` — nothing else is there; the visit goes on under its physical URL.
+   */
+  learnPhysical(location: string, physical: string): VisitDecision {
+    const top = this.stack[this.stack.length - 1];
+    if (top === undefined || top.location !== location) {
+      throw new Error(`Internal error: learnPhysical(${location}) does not match the active visit (${top?.location ?? "<empty stack>"})`);
+    }
+    if (physical === top.physical) {
+      return { kind: "new" };
+    }
+    const cycleStart = this.stack.findIndex((frame, index) => index < this.stack.length - 1 && frame.physical === physical);
+    if (cycleStart !== -1) {
+      top.physical = physical;
+      return { kind: "cycle", chain: this.stack.slice(cycleStart).map(snapshot) };
+    }
+    const existing = this.resolvedByPhysical.get(physical);
+    if (existing !== undefined) {
+      this.stack.pop();
+      this.resolvedByLocation.set(location, existing);
+      return { kind: "duplicate", document: existing };
+    }
+    top.physical = physical;
+    return { kind: "new" };
+  }
+
+  /**
    * Record a successfully read-and-parsed document for the visit
    * `beginVisit` started at `location`. Does **not** pop the active
    * stack — `location` remains "active" (so a self-reference or a

@@ -509,7 +509,9 @@ function multipleAdoptionDiagnostic(extraction: { readonly sequenceSpan: ReturnT
 type ChainWalkResult = { readonly ok: true; readonly documentsLeafToRoot: GraphDocument[] } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /** Bytes plus verification status, whatever their source (local read or remote fetch+cache+pin) — the one shape `walkAdoptsChain` needs past this point, so its parse/dedup/recurse logic below does not care which. */
-type ReadOutcomeUnified = { readonly ok: true; readonly bytes: Uint8Array; readonly verified: boolean } | { readonly ok: false; readonly diagnostic: Diagnostic };
+type ReadOutcomeUnified =
+  /** `physical` is set for a remote document only (v1.13 FR-015): the URL its fetch ended at. A local document's is the host's canonical answer, which the caller already holds. */
+  { readonly ok: true; readonly bytes: Uint8Array; readonly verified: boolean; readonly physical?: string } | { readonly ok: false; readonly diagnostic: Diagnostic };
 
 /**
  * contracts/diagnostics.md's fetching-and-integrity codes (T045, T048),
@@ -607,7 +609,7 @@ async function readAtTarget(host: Host, target: ReferenceLocationKind, candidate
   if (!fetched.ok) {
     return { ok: false, diagnostic: remoteFailureDiagnostic(fetched.failure, candidate) };
   }
-  return { ok: true, bytes: fetched.bytes, verified: fetched.verified };
+  return { ok: true, bytes: fetched.bytes, verified: fetched.verified, physical: fetched.finalUrl };
 }
 
 /**
@@ -620,12 +622,12 @@ async function readAtTarget(host: Host, target: ReferenceLocationKind, candidate
  * chain's root, in discovery (leaf-to-root) order — `graph/build.ts` and
  * `graph/pedigree.ts`'s shared contract for that order.
  *
- * The builder's `location` key is the lexically-resolved local path or
- * the (already-redirect-resolved-to-nothing-yet) URL string, uniformly —
- * `GraphBuilder` only ever sees an opaque string (research D5), so
- * location-based pre-fetch dedup (v0.2 FR-019, T045) falls out of the
- * exact same mechanism v0.2 FR-009 already uses for local files, applied
- * to a URL. See the milestone report for why no fixture in this
+ * The builder is handed two paths per document (v1.13 FR-001, FR-002): the
+ * logical location (the lexically-resolved local path, or the normalized
+ * URL) and the physical one (the host's canonical answer, or — once the
+ * fetch has said — the URL after redirects), and identifies the document
+ * by the physical. Pre-fetch dedup by location (v0.2 FR-019, T045) still
+ * works for a URL, since its physical path is not yet known. See the milestone report for why no fixture in this
  * milestone's `$schema`/`$adopts` vocabulary can exercise two references
  * converging on one *remote* identity end-to-end (the same structural
  * finding recorded for T021's local case) — the mechanism is tested
@@ -717,7 +719,20 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrin
     return { ok: false, diagnostics: [read.diagnostic] };
   }
 
-  const parsed = parseAtLocation(read.bytes, location, targetPhysical);
+  // v1.13 FR-015, FR-016: a remote document's physical URL is where its fetch ended, known only now; it is judged as a
+  // local one was judged before the read -- a cycle if another document on the chain is there, a duplicate if one is finished.
+  const documentPhysical = read.physical ?? targetPhysical;
+  if (documentPhysical !== targetPhysical) {
+    const learned = builder.learnPhysical(location, documentPhysical);
+    if (learned.kind === "cycle") {
+      return { ok: false, diagnostics: [cycleDiagnostic(learned.chain, false)] };
+    }
+    if (learned.kind === "duplicate") {
+      return { ok: true, documentsLeafToRoot: [learned.document] };
+    }
+  }
+
+  const parsed = parseAtLocation(read.bytes, location, documentPhysical);
   if (!parsed.ok) {
     builder.abandonVisit(location);
     // FR-024: a failure inside a document reached through a reference is
@@ -736,7 +751,7 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrin
     };
   }
 
-  const identity = createDocumentIdentity(location, read.bytes, targetPhysical);
+  const identity = createDocumentIdentity(location, read.bytes, documentPhysical);
   const document: GraphDocument = { identity, tree: freeze(parsed.tree), via: candidate, verified: read.verified };
   // `location` stays on the active stack past this point (T030's fix —
   // see graph/build.ts's module doc): a self-reference in this exact
@@ -855,7 +870,8 @@ interface DelegationState {
   readonly host: Host;
   readonly physical: PhysicalPaths;
   readonly tracker: DelegationCycleTracker;
-  readonly byteCache: Map<string, Uint8Array>;
+  /** Fragment bytes already read, with where the document really is (v1.13 FR-008): a local file by its physical path, a remote one by the URL requested and by the URL its fetch ended at. */
+  readonly byteCache: Map<string, { readonly bytes: Uint8Array; readonly physical: string }>;
   readonly sandboxRoots: readonly string[];
   readonly remote: RemoteContext | undefined;
   readonly allowRemoteDelegation: boolean;
@@ -939,7 +955,7 @@ async function readOverrides(host: Host, texts: readonly string[], entryLocation
       continue;
     }
     const location = target.kind === "local" ? target.location : target.url;
-    const locationPhysical = target.kind === "local" ? await physical.of(location) : location;
+    const locationPhysical = read.physical ?? (target.kind === "local" ? await physical.of(location) : location);
     const parsed = parseAtLocation(read.bytes, location, locationPhysical);
     if (!parsed.ok) {
       extend(diagnostics, parsed.diagnostics);
@@ -1012,10 +1028,10 @@ async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain
       };
     }
     location = target.url;
-    locationPhysical = location;
     const cached = state.byteCache.get(location);
     if (cached !== undefined) {
-      bytes = cached;
+      bytes = cached.bytes;
+      locationPhysical = cached.physical;
     } else {
       if (state.remote === undefined) {
         throw new Error("resolve() requires 'transport' to fetch a remote delegation target — the same 'granted, never ambient' posture as 'sandboxRoot'");
@@ -1025,7 +1041,9 @@ async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain
         return { ok: false, diagnostics: [remoteFailureDiagnostic(fetched.failure, reference)] };
       }
       bytes = fetched.bytes;
-      state.byteCache.set(location, bytes);
+      locationPhysical = fetched.finalUrl;
+      state.byteCache.set(location, { bytes, physical: locationPhysical });
+      state.byteCache.set(locationPhysical, { bytes, physical: locationPhysical });
     }
   } else {
     location = target.location;
@@ -1045,14 +1063,14 @@ async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain
     // v1.13 FR-008: the bytes of a file are remembered by where the file is, not by how it was reached.
     const cached = state.byteCache.get(locationPhysical);
     if (cached !== undefined) {
-      bytes = cached;
+      bytes = cached.bytes;
     } else {
       const read = await readLocalDocument(state.host, location);
       if (!read.ok) {
         return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `Cannot read '${location}' (delegated as '${text}'): ${read.reason}`, primary: valueNode.span })] };
       }
       bytes = read.bytes;
-      state.byteCache.set(locationPhysical, bytes);
+      state.byteCache.set(locationPhysical, { bytes, physical: locationPhysical });
     }
   }
 
