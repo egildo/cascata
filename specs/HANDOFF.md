@@ -145,11 +145,14 @@ the writers under the case's own policy.
 
 ## Open edges (noticed, not fixed)
 
-- **023:** `resource()` has no `link-changes-reference` (it carries `otherLocation`); the remote notice compares URL strings and
-  can over-report where two URLs redirect to one file; `GraphBuilder.learnPhysical`'s "duplicate" outcome is reachable only
-  in a unit test (a chain is linear); `package.json` is still 1.12.1; `docs/reference.md` was updated but `README.md` and the
-  older `specs/*/contracts/` still show a two-field `DocumentIdentity`; the `SPEC.md` items flagged in the 023 report
-  (§15's "ran to `depth-limit-exceeded`" is wrong; §7/§8.4 are silent on logical versus physical) are the owner's.
+- **Leftovers after v1.13.0 (pinned by the owner, 2026-10-11, for later):**
+  - Close issue #8 on GitHub with a comment pointing to v1.13.0 (fixed there; still open).
+  - `README.md`'s status paragraph still says "v1.12.1"; the release drill in `CLAUDE.md` bumps only its install line.
+    Fix the sentence and add it to the drill.
+  - `README.md` and the older `specs/*/contracts/` still show a two-field `DocumentIdentity` (no `physical`).
+- **023, as built:** `resource()` carries `otherLocation` instead of a notice (ruled); the remote notice compares URL
+  strings and can over-report where two URLs redirect to one file; `GraphBuilder.learnPhysical`'s "duplicate" outcome
+  is reachable only in a unit test (a chain is linear).
 
 - **Unreachable safety net:** `edit-read-back` (an edit that would not read back), kept as a refusal so a writer
   bug reaches a live editor as a refusal rather than a crash; no known input reaches it.
