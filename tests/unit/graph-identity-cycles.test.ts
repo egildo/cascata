@@ -134,7 +134,7 @@ describe("v1.13 FR-006: content identity on the active chain is a cycle, not a d
 describe("v1.13 FR-007: delegated fragments too", () => {
   const GRANTS = "keys:\n  network:\n    demand:\n      type: mapping\n      keys:\n        network:\n          demand:\n            type: mapping\n          delegate: allow\n    delegate: allow\n";
 
-  it("4a. a fragment that delegates to itself under another spelling is reference-cycle at its first hop, and the variant is never read", async () => {
+  it("4a. a fragment that delegates to itself under another spelling is reference-cycle at its first hop, and the variant is never read (before v1.13 the variant was read and grafted)", async () => {
     // a.yaml: `network: ./A.yaml`, the value ./A.yaml at bytes 9..17. The host says /v/A.yaml is /v/a.yaml.
     const host = vhost({ "/v/e.yaml": "$schema: ./s.yaml\nnetwork: ./a.yaml\n", "/v/s.yaml": GRANTS, "/v/a.yaml": "network: ./A.yaml\n", "/v/A.yaml": "network: ./A.yaml\n" }, { "/v/A.yaml": "/v/a.yaml" });
     const d = only(failureOf(await resolveAt(host, "/v/e.yaml")));
@@ -143,8 +143,10 @@ describe("v1.13 FR-007: delegated fragments too", () => {
     expect(host.reads).not.toContain("/v/A.yaml");
   });
 
-  it("4b. through a directory that links to itself: reference-cycle on the first hop, where lexical spellings never repeat and the depth limit used to answer", async () => {
+  it("4b. through a directory that links to itself: reference-cycle on the first hop, where every lexical spelling is new (before v1.13 this resolved, the file grafted twice and silently)", async () => {
     // /v/d/L is a link to /v/d: `./L/f.yaml` from /v/d/f.yaml is /v/d/L/f.yaml, from there /v/d/L/L/f.yaml, and so on forever.
+    // (The grant tree below is two levels deep, which bounds how far a graft is followed; the spec expected the depth limit to answer
+    // here, and measured on v1.12 it does not: the second graft is the last, nothing is refused, and f.yaml is in the result twice.)
     class SelfLinkedHost extends InMemoryHost {
       private static flatten(path: string): string {
         return path.replace(/\/L(?=\/)/g, "");
