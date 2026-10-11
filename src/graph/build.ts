@@ -46,12 +46,11 @@
  * T032) needing no location resolution at all, so it moved there. A
  * genuine diamond — one node reached by two distinct edges — cannot
  * arise from `$schema`/`$adopts` in v1 at all (SPEC.md §6.1: adoption is
- * single-parent, so the pedigree is a chain); `registerContent`'s
- * content-hash dedup above remains exactly as written because it is
- * real machinery for delegation and future multi-adoption (research D5,
- * corrected), just not something this milestone's `$schema`/`$adopts`
- * chain alone can exercise end-to-end — see `tests/unit/
- * graph-content-dedup.test.ts` and the milestone report.
+ * single-parent, so the pedigree is a chain). Content-hash dedup, which
+ * this file once carried (research D5) for a diamond that cannot arise,
+ * was removed in v1.13 (FR-006, revised): identity is the physical path
+ * alone, and two documents with identical bytes are two documents — see
+ * `tests/unit/graph-content-dedup.test.ts` and `specs/023-graph-identity`.
  */
 
 import type { Node } from "../model/node.js";
@@ -131,19 +130,18 @@ export const DEFAULT_MAX_CHAIN_LENGTH = 32;
  * IO handle, and no adapter — it only ever sees `location` strings (for
  * cycle detection and pre-fetch dedup, research D5) and, once a document
  * has actually been read and parsed elsewhere, the resulting
- * `GraphDocument` (for post-read content-hash dedup, same decision).
+ * `GraphDocument` (to memoize it).
  *
  * The orchestrator (`src/index.ts`) drives every state transition:
- * `beginVisit` before touching the filesystem, then `registerContent`
- * once the document has been read and parsed — **while `location` stays
- * on the active path** — then, only after recursing into that document's
- * *own* further references has itself returned, `finishVisit` to pop it
- * off. `abandonVisit` closes out a visit that failed before a document
- * could even be built.
+ * `beginVisit` before touching the filesystem, then — **while `location`
+ * stays on the active path** — the recursion into that document's *own*
+ * further references, and only after it returns, `finishVisit` to pop
+ * it off. `abandonVisit` closes out a visit that failed before a
+ * document could even be built.
  *
- * **Why `registerContent` and `finishVisit` are two separate calls, not
- * one (a defect this implementation actually hit and is recorded here
- * rather than silently fixed)**: an earlier version of this class popped
+ * **Why the visit is closed only after the recursion, not as soon as the
+ * bytes are read (a defect this implementation actually hit and is
+ * recorded here rather than silently fixed)**: an earlier version of this class popped
  * `location` off the active stack as soon as its own bytes were read and
  * parsed, before the orchestrator recursed into *that document's own*
  * `$adopts`. That is exactly the T030 trap in a different costume: a
@@ -161,9 +159,8 @@ export class GraphBuilder {
   private readonly resolvedByPhysical = new Map<string, GraphDocument>();
   /** The same by logical location: what answers a *remote* reference before its fetch has said where the document ended up (FR-016). */
   private readonly resolvedByLocation = new Map<string, GraphDocument>();
-  private readonly canonicalByHash = new Map<string, GraphDocument>();
-  /** The active path. A frame's `physical` is set once, except for a remote document's, which `learnPhysical` settles after its fetch; its `document` is set by `registerContent` (FR-006). */
-  private readonly stack: { readonly location: string; physical: string; readonly incoming: GraphReference | undefined; document?: GraphDocument }[] = [];
+  /** The active path. A frame's `physical` is set once, except for a remote document's, which `learnPhysical` settles after its fetch. */
+  private readonly stack: { readonly location: string; physical: string; readonly incoming: GraphReference | undefined }[] = [];
   private readonly maxChainLength: number;
 
   /** `maxChainLength` (v0.2 FR-010) defaults to `DEFAULT_MAX_CHAIN_LENGTH`, matching contracts/resolve-api.md's documented default of 32. */
@@ -193,8 +190,7 @@ export class GraphBuilder {
    *   matching data-model.md's "Pedigree" ("the ordered chain of schema
    *   identities... `$adopts` takes exactly one parent").
    * - `"new"` — genuinely unseen: the caller should read and parse it,
-   *   call `registerContent`, recurse into its own references, and only
-   *   then call `finishVisit` (or `abandonVisit` if the read/parse
+   *   recurse into its own references, and only then call `finishVisit` (or `abandonVisit` if the read/parse
    *   itself failed).
    */
   beginVisit(location: string, incoming: GraphReference | undefined, physical: string = location): VisitDecision {
@@ -248,66 +244,30 @@ export class GraphBuilder {
   }
 
   /**
-   * Record a successfully read-and-parsed document for the visit
-   * `beginVisit` started at `location`. Does **not** pop the active
-   * stack — `location` remains "active" (so a self-reference or a
-   * further cycle through its own descendants is still caught) until
-   * `finishVisit` is called, after the caller has finished recursing
-   * into whatever this document itself references.
-   *
-   * Returns the **canonical** `GraphDocument` to use from here on: the
-   * one just built, unless another location already produced
-   * byte-identical content, in which case the earlier one wins
-   * (content-hash dedup, research D5 — "two locations serving identical
-   * bytes converge to one graph node").
-   *
-   * **v1.13 FR-006, and the stale doc this replaces.** This file used to
-   * say the caller "should still recurse" into `document` after a hash
-   * match; `walkAdoptsChain` never did (it returns the canonical document
-   * and closes the visit), and the doc was wrong. What the caller must do
-   * instead is ask `contentCycle(canonical)`: a hash match against a
-   * document that is **on the active path** — the entry included — is a
-   * cycle, not a dedup (a byte-identical copy of an ancestor adopts what
-   * that ancestor adopts, so the chain could never end), and returning
-   * that document as a node of the graph handed `buildPedigree` the
-   * entry, which has no `via`. A match against a document that is
-   * finished and off the path is dedup, unchanged.
-   */
-  registerContent(location: string, document: GraphDocument): GraphDocument {
-    const top = this.stack[this.stack.length - 1];
-    if (top === undefined || top.location !== location) {
-      throw new Error(`Internal error: registerContent(${location}) does not match the active visit (${top?.location ?? "<empty stack>"})`);
-    }
-    top.document = document;
-    return this.canonicalByHash.get(document.identity.hash) ?? (this.canonicalByHash.set(document.identity.hash, document), document);
-  }
-
-  /**
-   * v1.13 FR-006: if `canonical` (what `registerContent` just returned) is the document of a frame on the
-   * active path **other than the current visit's**, the chain from that frame to the current visit — the
-   * same shape a `"cycle"` decision carries, the current visit being the closing frame. `undefined` when it
-   * is not, which is every ordinary case: the visit's own new document, or a finished one.
-   */
-  contentCycle(canonical: GraphDocument): readonly StackFrame[] | undefined {
-    const index = this.stack.findIndex((frame) => frame.document === canonical);
-    return index === -1 || index === this.stack.length - 1 ? undefined : this.stack.slice(index).map(snapshot);
-  }
-
-  /**
    * Close out the visit `beginVisit` started at `location`, after
-   * `registerContent` and after every reference this document itself
-   * makes has finished being resolved (successfully or not). Pops the
-   * active stack and memoizes `canonical` so a later reference to the
-   * same `location` is answered as `"duplicate"` rather than re-walked.
+   * the document has been read and parsed, and after every reference it
+   * itself makes has finished being resolved (successfully or not). Pops
+   * the active stack and memoizes `document` so a later reference to the
+   * same document is answered as `"duplicate"` rather than re-walked.
+   *
+   * **No content dedup (v1.13 FR-006, revised).** Identity is the
+   * physical path alone; two documents with identical bytes are two
+   * documents. Until v1.13 a content-hash match returned the earlier
+   * document (`registerContent`), which on a legal chain whose copies
+   * resolve their relative references from different places dropped a
+   * real document, and when the earlier one was the entry (no `via`)
+   * crashed `buildPedigree`. A chain is a single line, so a document can
+   * only recur by a cycle, which the physical path already catches. The
+   * hash stays on `DocumentIdentity` for `$pin`.
    */
-  finishVisit(location: string, canonical: GraphDocument): void {
+  finishVisit(location: string, document: GraphDocument): void {
     const top = this.stack[this.stack.length - 1];
     if (top === undefined || top.location !== location) {
       throw new Error(`Internal error: finishVisit(${location}) does not match the active visit (${top?.location ?? "<empty stack>"})`);
     }
     this.stack.pop();
-    this.resolvedByPhysical.set(top.physical, canonical);
-    this.resolvedByLocation.set(location, canonical);
+    this.resolvedByPhysical.set(top.physical, document);
+    this.resolvedByLocation.set(location, document);
   }
 
   /** Close out a visit that failed before a document could be built (e.g. the file could not be read) — pops the active path without memoizing anything at `location`, so it is not mistaken for a resolved duplicate later. */

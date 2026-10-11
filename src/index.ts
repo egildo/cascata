@@ -434,7 +434,7 @@ function parseAtLocation(bytes: Uint8Array, location: string, physical: string):
  * pure self-reference, and for a longer cycle (a → b → a), exactly the
  * other edges within it (a's own outgoing edge to b), in chain order.
  */
-function cycleDiagnostic(chain: readonly StackFrame[], byContent: boolean): Diagnostic {
+function cycleDiagnostic(chain: readonly StackFrame[]): Diagnostic {
   const first = chain[0];
   const closing = chain[chain.length - 1];
   if (first === undefined || closing?.incoming === undefined) {
@@ -445,11 +445,9 @@ function cycleDiagnostic(chain: readonly StackFrame[], byContent: boolean): Diag
     .map((frame, index) => (frame.incoming === undefined ? undefined : { label: `cycle position ${index + 1}`, span: frame.incoming.span }))
     .filter((entry): entry is { label: string; span: ReturnType<typeof createSourceSpan> } => entry !== undefined);
   // v1.13 FR-013: a document is named as the route taken to it, and where it really is beside that when they differ. A cycle that
-  // closed through a second spelling names both; one that closed on identical bytes says so, since its two documents are two files.
+  // closed through a second spelling names both.
   let tail = "";
-  if (byContent) {
-    tail = `: '${closing.location}' has exactly the bytes of '${first.location}', which is already on this chain, so the chain could never end`;
-  } else if (first.location !== closing.location) {
+  if (first.location !== closing.location) {
     tail = `: ${namedDocument(first.location, first.physical)} is reached again as ${namedDocument(closing.location, closing.physical)}`;
   } else if (closing.physical !== closing.location) {
     tail = `: ${namedDocument(closing.location, closing.physical)}`;
@@ -696,7 +694,7 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrer
   const decision = builder.beginVisit(location, candidate, targetPhysical);
 
   if (decision.kind === "cycle") {
-    return { ok: false, diagnostics: [cycleDiagnostic(decision.chain, false)] };
+    return { ok: false, diagnostics: [cycleDiagnostic(decision.chain)] };
   }
   if (decision.kind === "duplicate") {
     // Already fully resolved (and its own $adopts chain already walked)
@@ -727,7 +725,7 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrer
   if (documentPhysical !== targetPhysical) {
     const learned = builder.learnPhysical(location, documentPhysical);
     if (learned.kind === "cycle") {
-      return { ok: false, diagnostics: [cycleDiagnostic(learned.chain, false)] };
+      return { ok: false, diagnostics: [cycleDiagnostic(learned.chain)] };
     }
     if (learned.kind === "duplicate") {
       return { ok: true, documentsLeafToRoot: [learned.document] };
@@ -760,31 +758,15 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrer
   // document's own $adopts must still be seen as a cycle, not a
   // duplicate, which requires `location` to still be "active" while its
   // own $adopts is walked below.
-  const canonical = builder.registerContent(location, document);
-
-  if (canonical !== document) {
-    // v1.13 FR-006: identical bytes to a document on the active chain (the entry included) is a cycle, not a dedup.
-    const contentCycle = builder.contentCycle(canonical);
-    if (contentCycle !== undefined) {
-      return { ok: false, diagnostics: [cycleDiagnostic(contentCycle, true)] };
-    }
-    // Content-hash dedup (research D5): this location's bytes were
-    // already seen (and its own $adopts chain already fully walked)
-    // under a different location earlier in this traversal — nothing to
-    // recurse into, but this location's own stack frame must still close.
-    builder.finishVisit(location, canonical);
-    return { ok: true, documentsLeafToRoot: [canonical] };
-  }
-
-  const adoptsExtraction: ExtractedReference = extractAdoptsReference(canonical.tree);
+  const adoptsExtraction: ExtractedReference = extractAdoptsReference(document.tree);
 
   if (adoptsExtraction.kind === "sequence") {
     builder.abandonVisit(location);
     return { ok: false, diagnostics: [multipleAdoptionDiagnostic(adoptsExtraction)] };
   }
   if (adoptsExtraction.kind === "none") {
-    builder.finishVisit(location, canonical);
-    return { ok: true, documentsLeafToRoot: [canonical] };
+    builder.finishVisit(location, document);
+    return { ok: true, documentsLeafToRoot: [document] };
   }
 
   const parentResult = await walkAdoptsChain(ctx, adoptsExtraction.reference, { location, physical: documentPhysical });
@@ -794,8 +776,8 @@ async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referrer
     // be discarded) stack rather than explicitly closed out.
     return parentResult;
   }
-  builder.finishVisit(location, canonical);
-  return { ok: true, documentsLeafToRoot: [canonical, ...parentResult.documentsLeafToRoot] };
+  builder.finishVisit(location, document);
+  return { ok: true, documentsLeafToRoot: [document, ...parentResult.documentsLeafToRoot] };
 }
 
 /**
@@ -1384,9 +1366,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
   // termination fix `walkAdoptsChain` needed applies here too: a schema
   // deep in the chain naming the entry document's own path back must
   // still be caught as a cycle.
-  const canonicalEntry = builder.registerContent(entryLocation, entryDocument);
-
-  const schemaExtraction: ExtractedReference = entryReference(canonicalEntry.tree);
+  const schemaExtraction: ExtractedReference = entryReference(entryDocument.tree);
   if (schemaExtraction.kind === "sequence") {
     // Not yet on the "aborting the whole call" path below — nothing has
     // recursed yet, so closing out the entry's own visit costs nothing
@@ -1422,7 +1402,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
     }
     chainDocumentsLeafToRoot = chainResult.documentsLeafToRoot;
   }
-  builder.finishVisit(entryLocation, canonicalEntry);
+  builder.finishVisit(entryLocation, entryDocument);
 
   // v1.6 FR-001: the overrides, after the chain — so a diagnostic about
   // one is never reported ahead of a chain that would have failed anyway,
@@ -1432,7 +1412,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
     return { ok: false, diagnostics: overridesRead.diagnostics };
   }
 
-  const graph = buildGraph(canonicalEntry, chainDocumentsLeafToRoot, overridesRead.documents);
+  const graph = buildGraph(entryDocument, chainDocumentsLeafToRoot, overridesRead.documents);
   return finalizeWithDelegation(host, physical, notices, graph, sandboxRoots, remote, options.allowRemoteDelegation ?? false, graftDelegation);
 }
 

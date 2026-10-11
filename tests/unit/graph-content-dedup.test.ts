@@ -1,4 +1,10 @@
 /**
+ * **Revised in v1.13 (FR-006, by the owner's ruling).** The dedup this file was written to pin, the second
+ * stage by content hash, is gone: identity is the physical path alone, and two documents with identical
+ * bytes are two documents (a legal chain can pass through byte-identical files that resolve their relative
+ * references from different places). The assertions below that said the opposite now say this; what stayed
+ * is the location-keyed `"duplicate"`. The history that follows is as it was written.
+ *
  * Direct unit test of `GraphBuilder`'s two-stage dedup (research D5:
  * "deduplicate by location before fetching... deduplicate by content
  * hash after") — exercised against the class itself, not through
@@ -39,26 +45,26 @@ function fakeDocument(location: string, hash: string): GraphDocument {
   return { identity: { location, physical: location, hash }, tree: createNullScalar(span), verified: false };
 }
 
-describe("GraphBuilder content-hash dedup (research D5, second stage)", () => {
-  it("two different locations with identical content-hash converge to the same GraphDocument object", () => {
+describe("GraphBuilder: no content-hash dedup (v1.13 FR-006, revised -- this file pinned the opposite until then)", () => {
+  it("two different locations with identical content-hash stay two GraphDocuments: identity is the physical path, not the bytes", () => {
     const builder = new GraphBuilder();
     const sameHash = "a".repeat(64);
 
-    const visitA = builder.beginVisit("/a/schema.yaml", undefined);
-    expect(visitA.kind).toBe("new");
+    expect(builder.beginVisit("/a/schema.yaml", undefined).kind).toBe("new");
     const docA = fakeDocument("/a/schema.yaml", sameHash);
-    const canonicalA = builder.registerContent("/a/schema.yaml", docA);
-    expect(canonicalA).toBe(docA); // first time this hash is seen: itself is canonical
-    builder.finishVisit("/a/schema.yaml", canonicalA);
+    builder.finishVisit("/a/schema.yaml", docA);
 
-    const visitB = builder.beginVisit("/b/schema.yaml", undefined);
-    expect(visitB.kind).toBe("new"); // never visited by *location* before
+    expect(builder.beginVisit("/b/schema.yaml", undefined).kind).toBe("new"); // never visited by *physical path* before
     const docB = fakeDocument("/b/schema.yaml", sameHash); // byte-identical content, different location
-    const canonicalB = builder.registerContent("/b/schema.yaml", docB);
-    builder.finishVisit("/b/schema.yaml", canonicalB);
+    builder.finishVisit("/b/schema.yaml", docB);
 
-    expect(canonicalB).not.toBe(docB); // NOT the object just built...
-    expect(canonicalB).toBe(canonicalA); // ...it's the earlier, byte-identical one — one graph node, not two.
+    // Each is memoized as itself: asking again for either answers that document, never the other.
+    const again = builder.beginVisit("/b/schema.yaml", undefined);
+    expect(again.kind).toBe("duplicate");
+    if (again.kind === "duplicate") expect(again.document).toBe(docB);
+    const first = builder.beginVisit("/a/schema.yaml", undefined);
+    expect(first.kind).toBe("duplicate");
+    if (first.kind === "duplicate") expect(first.document).toBe(docA);
   });
 
   it("a location already fully resolved is answered as 'duplicate' without registering anything new", () => {
@@ -67,29 +73,27 @@ describe("GraphBuilder content-hash dedup (research D5, second stage)", () => {
 
     const first = builder.beginVisit("/x/schema.yaml", undefined);
     expect(first.kind).toBe("new");
-    const canonical = builder.registerContent("/x/schema.yaml", doc);
-    builder.finishVisit("/x/schema.yaml", canonical);
+    builder.finishVisit("/x/schema.yaml", doc);
 
     const second = builder.beginVisit("/x/schema.yaml", undefined);
     expect(second.kind).toBe("duplicate");
     if (second.kind !== "duplicate") throw new Error("unreachable");
-    expect(second.document).toBe(canonical); // reused, not re-read/re-registered
+    expect(second.document).toBe(doc); // reused, not re-read
   });
 
-  it("two distinct locations with genuinely different content are not deduped", () => {
+  it("two distinct locations with genuinely different content are two documents", () => {
     const builder = new GraphBuilder();
 
     builder.beginVisit("/p/schema.yaml", undefined);
     const docP = fakeDocument("/p/schema.yaml", "c".repeat(64));
-    const canonicalP = builder.registerContent("/p/schema.yaml", docP);
-    builder.finishVisit("/p/schema.yaml", canonicalP);
+    builder.finishVisit("/p/schema.yaml", docP);
 
     builder.beginVisit("/q/schema.yaml", undefined);
     const docQ = fakeDocument("/q/schema.yaml", "d".repeat(64)); // different hash
-    const canonicalQ = builder.registerContent("/q/schema.yaml", docQ);
-    builder.finishVisit("/q/schema.yaml", canonicalQ);
+    builder.finishVisit("/q/schema.yaml", docQ);
 
-    expect(canonicalQ).toBe(docQ);
-    expect(canonicalQ).not.toBe(canonicalP);
+    const q = builder.beginVisit("/q/schema.yaml", undefined);
+    expect(q.kind === "duplicate" && q.document === docQ).toBe(true);
+    expect(docQ).not.toBe(docP);
   });
 });

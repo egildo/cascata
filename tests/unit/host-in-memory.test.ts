@@ -135,7 +135,9 @@ describe("v0.7 FR-026 — the sandbox verdict genuinely uses the host's own cano
 // (`isWithinSandbox`). Two lexically-different locations the host reports
 // as canonically identical (a hardlink) therefore dedupe automatically and
 // correctly through the *existing*, host-independent content-hash
-// mechanism the moment their bytes agree — already covered end to end by
+// mechanism the moment their bytes agree [v1.13: stale. That mechanism is
+// gone (FR-006 revised) and identity is now the host's canonical answer,
+// so a hardlink or case-variant is one document by physical path] — already covered end to end by
 // `tests/unit/graph-content-dedup.test.ts` for the local case, which this
 // milestone's host refactor does not touch. No new test is added here for
 // that reason: one asserting host.canonicalize()-driven dedup would be

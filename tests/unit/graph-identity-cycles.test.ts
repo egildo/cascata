@@ -6,8 +6,11 @@
  * 1-based column of byte 9 is 10. A value of n bytes after `$adopts: ` is 9..9+n.
  *
  * Most cases assert `host.reads`: a cycle through another spelling is refused BEFORE the second spelling is
- * read, which is what separates the physical key (FR-005) from the content-hash net under it (FR-006) --
- * a document read twice and found identical would be the hash's catch, not the path's.
+ * read. That is what the physical key (FR-005) does and a comparison after reading could not.
+ *
+ * FR-006 was revised by the owner after the first version of this file: identity is the physical path alone
+ * and there is no content-hash dedup, so the cases that expected "same bytes on the chain" to be a cycle now
+ * expect an ordinary document (see the describe for FR-006).
  */
 import { describe, expect, it } from "vitest";
 import { editTarget, merge, resolve, type Diagnostic } from "../../src/index.js";
@@ -87,7 +90,7 @@ describe("v1.13 FR-005: the adoption graph keys by physical path", () => {
     const builder = new GraphBuilder();
     expect(builder.beginVisit("/v/a.yaml", undefined, "/v/a.yaml").kind).toBe("new");
     const doc = fake("/v/a.yaml", "c");
-    builder.finishVisit("/v/a.yaml", builder.registerContent("/v/a.yaml", doc));
+    builder.finishVisit("/v/a.yaml", doc);
     const again = builder.beginVisit("/v/A.yaml", undefined, "/v/a.yaml");
     expect(again.kind).toBe("duplicate");
     if (again.kind === "duplicate") expect(again.document).toBe(doc);
@@ -96,38 +99,53 @@ describe("v1.13 FR-005: the adoption graph keys by physical path", () => {
   });
 });
 
-describe("v1.13 FR-006: content identity on the active chain is a cycle, not a dedup", () => {
-  it("3b. a byte-identical copy of the entry adopted by a schema on the chain: reference-cycle, not an internal error (the crash, reproduced first)", async () => {
-    // e.yaml and copy.yaml are the same eighteen bytes. s.yaml adopts copy.yaml, which hashes as the entry.
+describe("v1.13 FR-006 (revised by the owner): identity is the physical path alone; contents are not identity", () => {
+  it("3b. a byte-identical copy of the entry at another path, adopted by a schema, is an ordinary document: no throw, no cycle (this threw before v1.13)", async () => {
+    // e.yaml and copy.yaml are the same eighteen bytes at two paths. s.yaml adopts copy.yaml. The copy is a schema here, read for
+    // `$adopts`, which it does not write: the chain ends. (Revised: the first version of FR-006 refused this as a cycle.)
     const host = vhost({ "/v/e.yaml": "$schema: ./s.yaml\n", "/v/s.yaml": "$adopts: ./copy.yaml\n", "/v/copy.yaml": "$schema: ./s.yaml\n" });
-    const d = only(failureOf(await resolveAt(host, "/v/e.yaml")));
-    expect(d.code).toBe("reference-cycle");
-    expect(d.primary).toMatchObject({ origin: { id: "/v/s.yaml" }, start: 9, end: 20, line: 1, column: 10 });
-    expect(d.related.map((r) => [r.label, r.span.origin.id, r.span.start, r.span.end])).toEqual([["cycle position 1", "/v/e.yaml", 9, 17]]);
-    expect(d.message).toContain("/v/copy.yaml");
-    expect(d.message).toContain("/v/e.yaml");
+    const result = await resolveAt(host, "/v/e.yaml");
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.graph.documents.map((d) => d.identity.location)).toEqual(["/v/e.yaml", "/v/s.yaml", "/v/copy.yaml"]);
+    expect(result.pedigree.map((p) => p.identity.location)).toEqual(["/v/copy.yaml", "/v/s.yaml"]);
+    // Same bytes, two documents.
+    expect(result.graph.documents[2]?.identity.hash).toBe(result.graph.documents[0]?.identity.hash);
+    expect(result.graph.documents[2]?.identity.physical).not.toBe(result.graph.documents[0]?.identity.physical);
   });
 
-  it("a byte-identical copy of a schema ancestor is a cycle too", async () => {
-    // s1 adopts s2 adopts s3; s3 is a copy of s1's bytes ("$adopts: ./s2.yaml" would mean s2 again, so s1 is made path-neutral).
-    const host = vhost({ "/v/e.yaml": "$schema: ./s1.yaml\n", "/v/s1.yaml": "$adopts: ./s2.yaml\n", "/v/s2.yaml": "$adopts: ./sub/s1.yaml\n", "/v/sub/s1.yaml": "$adopts: ./s2.yaml\n" });
-    const d = only(failureOf(await resolveAt(host, "/v/e.yaml")));
-    expect(d.code).toBe("reference-cycle");
-    expect(d.primary).toMatchObject({ origin: { id: "/v/s2.yaml" } });
+  it("the coordinator's probe: x/a and y/a are byte-identical, and x/a -> x/b -> y/a -> y/b is a legal chain that ends", async () => {
+    // x/a.yaml and y/a.yaml are both `$adopts: ./b.yaml`; each resolves it from its own directory. Before v1.13 hash dedup handed back x/a
+    // for y/a and y/b was dropped; the first version of FR-006 refused it as a cycle. It is neither.
+    const host = vhost({
+      "/v/e.yaml": "$schema: ./x/a.yaml\n",
+      "/v/x/a.yaml": "$adopts: ./b.yaml\n",
+      "/v/x/b.yaml": "$adopts: ../y/a.yaml\n",
+      "/v/y/a.yaml": "$adopts: ./b.yaml\n",
+      "/v/y/b.yaml": "keys: {}\n",
+    });
+    const result = await resolveAt(host, "/v/e.yaml");
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.graph.documents.map((d) => d.identity.location)).toEqual(["/v/e.yaml", "/v/x/a.yaml", "/v/x/b.yaml", "/v/y/a.yaml", "/v/y/b.yaml"]);
+    expect(result.pedigree.map((p) => p.identity.location)).toEqual(["/v/y/b.yaml", "/v/y/a.yaml", "/v/x/b.yaml", "/v/x/a.yaml"]);
+    expect(result.graph.documents[1]?.identity.hash).toBe(result.graph.documents[3]?.identity.hash);
   });
 
-  it("controls: identical bytes off the active chain still converge (the dedup is unchanged), as graph-content-dedup.test.ts pins", async () => {
-    // Direct: finished documents are not on the stack, so registerContent hands back the earlier one and contentCycle says nothing.
+  it("the entry adopted back under another spelling is still a cycle: that is physical identity (3a above)", async () => {
+    const host = vhost({ "/v/e.yaml": "$schema: ./s.yaml\n", "/v/s.yaml": "$adopts: ./E.yaml\n", "/v/E.yaml": "$schema: ./s.yaml\n" }, { "/v/E.yaml": "/v/e.yaml" });
+    expect(only(failureOf(await resolveAt(host, "/v/e.yaml"))).code).toBe("reference-cycle");
+  });
+
+  it("GraphBuilder, directly: two documents with identical bytes at two physical paths are two documents, each memoized as itself", () => {
     const builder = new GraphBuilder();
     expect(builder.beginVisit("/v/x.yaml", undefined).kind).toBe("new");
     const x = fake("/v/x.yaml", "a");
-    const canonicalX = builder.registerContent("/v/x.yaml", x);
-    expect(builder.contentCycle(canonicalX)).toBeUndefined();
-    builder.finishVisit("/v/x.yaml", canonicalX);
+    builder.finishVisit("/v/x.yaml", x);
     expect(builder.beginVisit("/v/y.yaml", undefined).kind).toBe("new");
-    const canonicalY = builder.registerContent("/v/y.yaml", fake("/v/y.yaml", "a"));
-    expect(canonicalY).toBe(x);
-    expect(builder.contentCycle(canonicalY)).toBeUndefined();
+    const y = fake("/v/y.yaml", "a");
+    builder.finishVisit("/v/y.yaml", y);
+    const again = builder.beginVisit("/v/y.yaml", undefined);
+    expect(again.kind).toBe("duplicate");
+    if (again.kind === "duplicate") expect(again.document).toBe(y);
   });
 });
 

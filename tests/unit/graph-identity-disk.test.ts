@@ -155,13 +155,20 @@ describe("v1.13 FR-018 on the real disk: identity is physical", () => {
     expect(d.primary).toMatchObject({ origin: { id: at("c3a/s.yaml") }, start: 9, end: 21 });
   });
 
-  it("3b. a byte-identical copy of the entry on the chain is reference-cycle, not an internal error", async () => {
+  it("3b. a byte-identical copy of the entry at another path is an ordinary document (revised FR-006); so is the legal chain x/a -> x/b -> y/a -> y/b with x/a and y/a identical", async () => {
     put("c3b/e.yaml", "$schema: ./s.yaml\n");
     put("c3b/s.yaml", "$adopts: ./copy.yaml\n");
     put("c3b/copy.yaml", "$schema: ./s.yaml\n");
-    const d = await refusal("c3b/e.yaml");
-    expect(d.code).toBe("reference-cycle");
-    expect(d.primary).toMatchObject({ origin: { id: at("c3b/s.yaml") }, start: 9, end: 20 });
+    const copy = await resolveOn("c3b/e.yaml");
+    expect(copy.ok).toBe(true);
+    put("c3c/e.yaml", "$schema: ./x/a.yaml\n");
+    put("c3c/x/a.yaml", "$adopts: ./b.yaml\n");
+    put("c3c/x/b.yaml", "$adopts: ../y/a.yaml\n");
+    put("c3c/y/a.yaml", "$adopts: ./b.yaml\n");
+    put("c3c/y/b.yaml", "keys: {}\n");
+    const chain = await resolveOn("c3c/e.yaml");
+    if (!chain.ok) throw new Error(JSON.stringify(chain.diagnostics));
+    expect(chain.graph.documents.map((d) => d.identity.location)).toEqual(["e.yaml", "x/a.yaml", "x/b.yaml", "y/a.yaml", "y/b.yaml"].map((f) => at(`c3c/${f}`)));
   });
 
   it("4. a fragment that delegates to itself through a link is reference-cycle at its first hop", async () => {

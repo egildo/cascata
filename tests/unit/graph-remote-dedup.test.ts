@@ -20,7 +20,7 @@
  *
  * What *is* real and tested here is the mechanism FR-019 depends on:
  * `walkAdoptsChain` (src/index.ts) routes a remote location through
- * `GraphBuilder.beginVisit`/`registerContent`/`finishVisit` — the exact
+ * `GraphBuilder.beginVisit`/`finishVisit` (`registerContent` went in v1.13, FR-006 revised) — the exact
  * same location-keyed protocol FR-009's local dedup already uses
  * (research D5: "no diamond can arise from `$adopts` in v1... this
  * machinery is for delegation and future multi-adoption"). This file
@@ -51,7 +51,7 @@ function fakeReference(documentLabel: string): Reference {
   return createReference({ text: URL, span, kind: "adopts", authority: "schema-authored" });
 }
 
-/** Reproduces exactly the protocol `src/index.ts`'s `walkAdoptsChain` uses for a `"new"` remote visit: beginVisit -> fetch -> registerContent -> finishVisit. A `"duplicate"` decision short-circuits before ever calling `resolveRemoteDocument` — which is the property under test. */
+/** Reproduces exactly the protocol `src/index.ts`'s `walkAdoptsChain` uses for a `"new"` remote visit: beginVisit -> fetch -> finishVisit. A `"duplicate"` decision short-circuits before ever calling `resolveRemoteDocument` — which is the property under test. */
 async function visitOnce(url: string, reference: Reference, builder: GraphBuilder, remote: RemoteResolveContext): Promise<{ readonly wasDuplicate: boolean; readonly document: GraphDocument }> {
   const decision = builder.beginVisit(url, reference);
   if (decision.kind === "duplicate") {
@@ -69,9 +69,8 @@ async function visitOnce(url: string, reference: Reference, builder: GraphBuilde
   const origin = createOrigin(url, url);
   const span = createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: 0 });
   const document: GraphDocument = { identity, tree: createNullScalar(span), via: reference, verified: fetched.verified };
-  const canonical = builder.registerContent(url, document);
-  builder.finishVisit(url, canonical);
-  return { wasDuplicate: false, document: canonical };
+  builder.finishVisit(url, document);
+  return { wasDuplicate: false, document };
 }
 
 describe("T039: one remote identity referenced twice is fetched once (v0.2 FR-019)", () => {

@@ -1,4 +1,8 @@
 /**
+ * [v1.13 note: the "second, independent safety net" this comment describes -- content-hash dedup -- was removed
+ * (FR-006 revised): without the cycle check, a cycle now runs to `chain-limit-exceeded`, not to a silent `ok`.
+ * The cycle check itself is judged by the physical path.]
+ *
  * Termination proof for T029 — "cycle detection runs on location, before
  * bytes exist" (CLAUDE.md's named trap for this slice; v0.2 FR-008).
  *
