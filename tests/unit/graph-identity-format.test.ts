@@ -12,10 +12,13 @@ import { describe, expect, it } from "vitest";
 import { editTarget, merge, resolve } from "../../src/index.js";
 import { createNodeHost } from "../../src/host/node.js";
 import { RecordedTransport, type Recording } from "../corpus/transport.js";
+import { hashBytes } from "../../src/resolve/identity.js";
 import { failureOf, resolveAt, vhost } from "./graph-identity-helpers.js";
 
 const ENCODER = new TextEncoder();
 const ok = (url: string, text: string): Recording => ({ url, method: "GET", outcome: { kind: "response", response: { status: 200, headers: {}, body: ENCODER.encode(text) } } });
+const redirect = (from: string, to: string): Recording => ({ url: from, method: "GET", outcome: { kind: "response", response: { status: 302, headers: { location: to }, body: new Uint8Array() } } });
+const offline = (url: string): Recording => ({ url, method: "GET", outcome: { kind: "failure", failure: { kind: "connection-refused" } } });
 const GRANTS = "keys:\n  network:\n    demand:\n      type: mapping\n    delegate: allow\n";
 
 describe("v1.13 FR-021: a query no longer hides the extension", () => {
@@ -70,6 +73,61 @@ describe("v1.13 FR-021: a query no longer hides the extension", () => {
     const answer = editTarget(merged.configuration, "/k");
     expect(answer.ok).toBe(false);
     if (!answer.ok) expect(answer.diagnostics[0]?.code).toBe("edit-target-remote");
+  });
+});
+
+describe("v1.13 FR-021 (refined): the extension is read from the physical URL, after redirects", () => {
+  const entry = { "/v/e.yaml": "$schema: https://example.test/schemas/latest\n" };
+
+  it("a redirect from an extensionless URL to .yaml reads as YAML", async () => {
+    const transport = new RecordedTransport([redirect("https://example.test/schemas/latest", "https://cdn.test/v2.yaml"), ok("https://cdn.test/v2.yaml", "x: 1\n")]);
+    const result = await resolveAt(vhost(entry), "/v/e.yaml", { transport });
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.graph.documents[1]?.identity).toMatchObject({ location: "https://example.test/schemas/latest", physical: "https://cdn.test/v2.yaml" });
+  });
+
+  it("a redirect to .json reads as JSON: JSON text parses and YAML-only text is refused by the JSON reader", async () => {
+    const good = new RecordedTransport([redirect("https://example.test/schemas/latest", "https://cdn.test/v2.json"), ok("https://cdn.test/v2.json", '{"x": 1}\n')]);
+    expect((await resolveAt(vhost(entry), "/v/e.yaml", { transport: good })).ok).toBe(true);
+    const bad = new RecordedTransport([redirect("https://example.test/schemas/latest", "https://cdn.test/v2.json"), ok("https://cdn.test/v2.json", "x: 1\n")]);
+    const d = failureOf(await resolveAt(vhost(entry), "/v/e.yaml", { transport: bad }));
+    expect(d[0]?.message).toContain("is not readable as a document");
+    expect(d[0]?.related.map((r) => r.label).join(" ")).not.toContain("No adapter recognizes");
+  });
+
+  it("offline, the cache's recorded final URL gives the same format", async () => {
+    const host = vhost(entry);
+    const first = await resolveAt(host, "/v/e.yaml", { transport: new RecordedTransport([redirect("https://example.test/schemas/latest", "https://cdn.test/v2.yaml"), ok("https://cdn.test/v2.yaml", "x: 1\n")]) });
+    expect(first.ok).toBe(true);
+    const second = await resolveAt(host, "/v/e.yaml", { transport: new RecordedTransport([offline("https://example.test/schemas/latest")]) });
+    expect(second.ok).toBe(true);
+  });
+
+  it("a cache entry stored before v1.13 has no final URL and is read by its own URL's extension", async () => {
+    const url = "https://example.test/a.yaml?v=2";
+    const bytes = ENCODER.encode("x: 1\n");
+    const host = vhost({ "/v/e.yaml": `$schema: ${url}\n` });
+    await host.cacheWrite(`blob/${hashBytes(bytes)}`, bytes);
+    await host.cacheWrite(`meta/${hashBytes(ENCODER.encode(url))}`, ENCODER.encode(JSON.stringify({ hash: hashBytes(bytes), freshness: { fetchedAt: 0, immutable: true, noCache: false } })));
+    expect((await resolveAt(host, "/v/e.yaml", { transport: new RecordedTransport([]) })).ok).toBe(true);
+  });
+
+  it("the mirror consequence: a redirect from a.yaml to an extensionless URL is now unreadable", async () => {
+    const transport = new RecordedTransport([redirect("https://example.test/a.yaml", "https://cdn.test/blob/a"), ok("https://cdn.test/blob/a", "x: 1\n")]);
+    const d = failureOf(await resolveAt(vhost({ "/v/e.yaml": "$schema: https://example.test/a.yaml\n" }), "/v/e.yaml", { transport }));
+    expect(d[0]?.related.map((r) => r.label).join(" ")).toContain("No adapter recognizes the format of 'https://cdn.test/blob/a'");
+  });
+
+  it("an un-redirected a.yaml?v=2 still reads", async () => {
+    const transport = new RecordedTransport([ok("https://example.test/a.yaml?v=2", "x: 1\n")]);
+    expect((await resolveAt(vhost({ "/v/e.yaml": "$schema: https://example.test/a.yaml?v=2\n" }), "/v/e.yaml", { transport })).ok).toBe(true);
+  });
+
+  it("a delegated remote fragment and an override follow the same rule", async () => {
+    const delegated = await resolveAt(vhost({ "/v/e.yaml": "$schema: ./s.yaml\nnetwork: https://example.test/frag\n", "/v/s.yaml": GRANTS }), "/v/e.yaml", { transport: new RecordedTransport([redirect("https://example.test/frag", "https://cdn.test/frag.yaml"), ok("https://cdn.test/frag.yaml", "host: a\n")]), allowRemoteDelegation: true });
+    if (!delegated.ok) throw new Error(JSON.stringify(delegated.diagnostics));
+    const override = await resolve("/v/e.yaml", { host: vhost({ "/v/e.yaml": "x: 1\n" }), sandboxRoot: "/v", transport: new RecordedTransport([redirect("https://example.test/o", "https://cdn.test/o.yaml"), ok("https://cdn.test/o.yaml", "k: 2\n")]), overrides: ["https://example.test/o"] });
+    expect(override.ok).toBe(true);
   });
 });
 

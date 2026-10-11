@@ -397,12 +397,23 @@ function phantomSpan(origin: Origin): ReturnType<typeof createSourceSpan> {
  * existed the whole time; nothing consulted it, so registering an adapter
  * changed nothing a caller could reach.
  */
+/**
+ * The location whose extension names a document's format (v1.13 FR-021). A file's is its logical location, as always. A
+ * **remote** document's is its physical URL -- where the fetch ended after redirects -- so `…/schemas/latest` redirecting to
+ * `…/v2.yaml` is YAML, and (the mirror consequence) `a.yaml` redirecting to `…/blob/a` is not readable. Offline it is the final
+ * URL the cache recorded; a cache entry from before v1.13 answers its own URL.
+ */
+function formatSource(location: string, physical: string): string {
+  return /^https:\/\//i.test(location) ? physical : location;
+}
+
 function parseAtLocation(bytes: Uint8Array, location: string, physical: string): AdapterParseOutcome {
   const origin = createOrigin(location, location, physical);
-  const format = formatForLocation(location);
+  const source = formatSource(location, physical);
+  const format = formatForLocation(source);
   const adapter = format === undefined ? undefined : adapterForFormat(format);
   if (adapter === undefined) {
-    return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
+    return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${source}'`, primary: phantomSpan(origin) })] };
   }
   return adapter.parseBytes(bytes, origin);
 }
@@ -1118,12 +1129,13 @@ async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain
   // specs/011-json-adapter research P-7) — a delegated fragment may be in
   // a different format than the document that grafts it, which is what
   // §3's format-blindness has promised since before there were two.
-  const format = formatForLocation(location);
+  const formatText = formatSource(location, locationPhysical);
+  const format = formatForLocation(formatText);
   const fragmentAdapter = format === undefined ? undefined : adapterForFormat(format);
   const reparsed: AdapterParseOutcome =
     fragmentAdapter !== undefined
       ? fragmentAdapter.parseBytes(bytes, origin)
-      : { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${location}'`, primary: phantomSpan(origin) })] };
+      : { ok: false, diagnostics: [createDiagnostic({ level: "error", code: "document-unreachable", message: `No adapter recognizes the format of '${formatText}'`, primary: phantomSpan(origin) })] };
   if (!reparsed.ok) {
     state.tracker.exit();
     return {

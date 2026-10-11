@@ -1241,10 +1241,11 @@ selects this one. A cascade may mix formats freely — a `.json` document may `$
 a delegated fragment may be in a different format than the document that grafts it — which is what
 §3's format-blindness has promised since before there were two formats to be blind about.
 
-**The extension of an `https://` location is the extension of its URL's path** (v1.13 FR-021): `https://x/a.yaml?v=2` is
-YAML and `https://x/a?f=b.json` has no recognised format, because the WHATWG `pathname` is what is read, not the end of the
-text. A local location is read whole, as always (a file literally named `c.yaml?x` has no extension). `Content-Type` is not
-consulted.
+**The extension of an `https://` document is the extension of its physical URL's path** (v1.13 FR-021): the URL after
+redirects, and its WHATWG `pathname`, not the end of the text. `https://x/a.yaml?v=2` is YAML; `https://x/a?f=b.json` has no
+recognised format; `…/schemas/latest` redirecting to `…/v2.yaml` is YAML, and `a.yaml` redirecting to `…/blob/a` is not
+readable. Offline it is the final URL the cache recorded (an entry from before v1.13 answers its own URL). A local location is
+read whole, as always (a file literally named `c.yaml?x` has no extension). `Content-Type` is not consulted.
 
 ```typescript
 import { load } from "@egildo/cascata";

@@ -399,7 +399,7 @@ Counts: main suite **114 files / 3287 tests** (was 113 / 3279; +8 in `graph-iden
 
 New ambiguities:
 
-F1. **The format is read from the logical (requested) URL**, not the physical one. A `…/latest?x` that redirects to `…/v2.yaml`
+F1. **[Resolved by the owner's refinement of FR-021: the physical URL; see "FR-021 refined" below. What I reported:] The format is read from the logical (requested) URL**, not the physical one. A `…/latest?x` that redirects to `…/v2.yaml`
     is unreadable by this rule; the final URL is not consulted for the extension. Using the physical URL would have made the
     format depend on the answer of a fetch, which the offline cache then has to reproduce (it does record the final URL, so
     it could). The spec says the URL's path, and the logical URL is the one in hand before the fetch.
@@ -408,3 +408,36 @@ F2. **Percent-encoding and case**: the `pathname` is percent-encoded and the ext
 F3. **`writers.ts`'s `claims(location)`** goes through the same function, so a writer now claims `https://x/a.yaml?v=2`. A remote
     document is never an edit target (`editTarget` refuses it first), and a caller asking a writer about a remote location
     with a query was told "no" before and is told "yes" now. Not changed.
+
+### FR-021 refined: the extension is read from the physical URL
+
+`parseAtLocation` and `performGraft` take the format from `formatSource(location, physical)`: for an `https://` document the
+physical URL (where the fetch ended), for a file its logical location as before. The "No adapter recognizes the format of ..."
+message names the text that was judged. Offline the physical URL is the cache's recorded final URL, and a pre-v1.13 entry
+answers its own URL (both pinned). Overrides, the launching schema and the adoption chain go through `parseAtLocation`; the
+delegated fragment through `performGraft`; `editTarget` still refuses a remote document before it asks for a format.
+
+Cases first, red (5 of the 7 new; the pre-v1.13 entry and the un-redirected `a.yaml?v=2` were green already, as controls):
+a redirect from an extensionless URL to `.yaml` reads as YAML; to `.json` reads as JSON (valid JSON parses, `x: 1` is refused by
+the JSON reader); the same offline from the cache; a delegated fragment and an override that redirect to `.yaml`; the mirror
+consequence below; a pre-v1.13 cache entry; an un-redirected `a.yaml?v=2`.
+
+**The mirror consequence, named:** a document requested as `https://x/a.yaml` that redirects to an extensionless URL
+(`https://cdn.test/blob/a`) used to be read as YAML and is now unreadable (`No adapter recognizes the format of
+'https://cdn.test/blob/a'`). A redirect to a download or blob URL is the realistic case; the owner's ruling accepts it.
+
+Sabotage, once: `formatSource` returning the logical location, 5 red (YAML redirect, JSON redirect, offline, the mirror
+consequence, the delegation-and-override case).
+
+Counts: main suite **114 files / 3294 tests** (was 3287; +7 in `graph-identity-format.test.ts`); timing 8 / 14.
+
+New ambiguities:
+
+G1. **The format source depends on a fetch having happened**, so a document that fails to fetch has no format question; fine. But
+    the pin and the cache are unaffected: bytes are the same, only the reader chosen differs.
+G2. **A file keeps its logical location as the format source**, not its physical path: `c.yaml` that is a symbolic link to
+    `blob` is YAML, and `blob.yaml` linked as `c` is not. FR-021 says local is "as today"; this is the same asymmetry between
+    files and URLs that the rest of the milestone has (files start from the logical path, URLs from the physical), but here
+    the file side is logical for the format while the URL side is physical.
+G3. **`formatForLocation` itself still reads a URL's path**, so a caller giving it a URL directly (the writers' `claims`, F3) is
+    judged by that URL, not a redirect target it knows nothing about.
