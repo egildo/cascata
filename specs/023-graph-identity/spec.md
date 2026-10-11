@@ -146,6 +146,18 @@ the code, none run):
 - **FR-016** **Remote cycles and duplicates by physical URL**, as Part B for files: a schema that adopts
   itself through a redirect is `reference-cycle`.
 
+- **FR-020** **A fragment in a reference's URL is refused** *(the owner's ruling, 2026-10-11, on the
+  implementer's ambiguity 7)*. An `https://` reference — absolute, or relative to a remote document —
+  whose URL carries a fragment (`a.yaml#x`, `#x`, even an empty `#`) is refused with a new error code,
+  **`reference-fragment`**, at the reference: a fragment names a place inside a document, never a
+  different document (WHATWG, RFC 3986 §3.5; JSON Schema's `$ref` uses it so), and Cascata gives it no
+  meaning yet, so the text is refused rather than guessed and the door stays open. It applies to every
+  remote reference the graph and delegation follow, `Host.locate` answers included, and not to local
+  paths, where `#` is an ordinary filename character. A redirect whose `Location` carries a fragment is
+  not the author's text: the fragment is dropped from the physical URL, as Fetch never sends it. **The
+  change of behaviour**, named: such a reference, which loaded (its fragment silently ignored by the
+  fetch), is refused.
+
 ## Part F — Witnesses
 
 - **FR-017** **Probe gate before Part A is trusted** (constitution Principle V). Against `createNodeHost`'s
