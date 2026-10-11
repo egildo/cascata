@@ -23,7 +23,7 @@ for the same value; a sequence lowers every alternative by one array level and a
 position, else `values`). `expand.ts` walks one value: a **best-first search over routes** (a binary heap keyed by the logical
 directory path with a trailing separator, then the pattern position), each state (physical directory, position) entered once, each
 physical directory *asked of the host* once per `expand()` call (`ctx.listings`), each value charged **work** (v1.14 revision,
-FR-027): +1 per state entered, +1 per entry examined, +1 per kind lookup (`maxEntriesVisited`; the name is now a misnomer). Sort entries by code point before using them, and compare directories as `path + "/"`:
+FR-027): +1 per state entered, +1 per entry examined, +1 per kind lookup (`maxSteps`; the name is now a misnomer). Sort entries by code point before using them, and compare directories as `path + "/"`:
 both are load-bearing (sabotage S25, S55) and neither is obvious. Matches are deduplicated by physical path keeping the smaller
 logical path, then sorted by `compareByCodePoint`. Errors inside the walk are `Refusal` exceptions caught per value; only
 `requireOptions` throws out of `expand()`.
@@ -46,7 +46,7 @@ touched (it records calls; 26 test files import it).
   "smaller logical path" is still resolved by the best-first search over routes.
 - **`CLAUDE.md` does not mention `src/expand/`** in its layering paragraph, and still says the non-negotiable `yaml`-only line in
   words that predate v1.14's `glob` (it is still true: the grammar and matcher are hand-written, `picomatch` did not return).
-- **The limit counts work** (FR-027), so thousands of `**` are refused; its name `maxEntriesVisited` and default 100,000 predate
+- **The limit counts work** (FR-027), so thousands of `**` are refused; its name `maxSteps` and default 100,000 predate
   that. Consecutive `**` are deliberately not collapsed. The memory host indexes its directories (a listing costs its size) -- before
   that, 5,461 listings scanned every file and the coordinator's case took 19 s.
 

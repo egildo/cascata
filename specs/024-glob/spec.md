@@ -160,6 +160,8 @@ gains a case, in the first commit that adds one.
   `glob-limit-exceeded`. Redundant consecutive `**` segments are equivalent to one and may be collapsed,
   but the count is the guard, so that `**/*/**/*/…` is bounded too. Witness by counting in the main suite
   (60 `**` over that tree refused at the default, accepted with the limit raised), not by timing.
+  *Renamed by the owner, 2026-10-12:* the option is `limits.maxSteps` (default 100,000), since it counts
+  walk steps, no longer entries visited.
 
 ## Part C — Witnesses
 

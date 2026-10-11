@@ -1653,7 +1653,7 @@ import { expand } from "@egildo/cascata";
 
 const loaded = await load(entry, { host, sandboxRoot });
 if (loaded.ok) {
-  const { expansions, diagnostics } = await expand(loaded.configuration, { host, sandboxRoot, limits: { maxEntriesVisited: 500_000 } });
+  const { expansions, diagnostics } = await expand(loaded.configuration, { host, sandboxRoot, limits: { maxSteps: 500_000 } });
   for (const e of expansions) {
     if (e.ok) console.log(e.pointer, e.matches.map((m) => m.location)); // e.matches[i].physical when a link lies between
   }
@@ -1687,7 +1687,7 @@ literal prefix that climbs out, or a link that leads out, refuses that value wit
 with the physical one beside it; other values still expand. A directory is entered once per physical path and pattern
 position, which ends a link cycle, and put to the host once per `expand()` call.
 
-**The limit counts work** (`limits.maxEntriesVisited`, default 100,000, per value): each (directory, pattern position) the walk
+**The limit counts work** (`limits.maxSteps`, default 100,000, per value): each (directory, pattern position) the walk
 enters counts one, each entry it examines there one more, and each kind lookup one. A pattern of sixty `**` over 5,461
 directories lists each directory once and is still sixty times the tree; counting the work refuses it at the default. Raise the
 limit in `options.limits` for a tree and a pattern that are really that large.
@@ -1706,7 +1706,7 @@ All `level: "error"`, positioned at the value, from `expand()` only.
 | `host-cannot-list` | the host has no `list` |
 | `directory-unlistable` | the host answered `ok: false` for a directory that exists and that the walk needed (its reason is in the message). A directory that is not there is not this: it matches nothing |
 | `glob-in-remote-document` | the declaring document was read over `https://`: HTTP has no directory listing, so a remote pattern is never expanded |
-| `glob-limit-exceeded` | the walk did more work than `limits.maxEntriesVisited` allows (default 100,000; per value): directories entered at each pattern position, plus entries examined there |
+| `glob-limit-exceeded` | the walk did more work than `limits.maxSteps` allows (default 100,000; per value): directories entered at each pattern position, plus entries examined there |
 
 A pattern that leads outside the sandbox is the existing `sandbox-escape`. A grammar mismatch is the existing `type-mismatch`.
 

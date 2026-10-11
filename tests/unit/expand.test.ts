@@ -386,26 +386,26 @@ describe("v1.14 FR-018 -- refusals are data, positioned at the value, one reason
     // /v/proj holds x/, schema.yaml, config.yaml (3 names) and /v/proj/x holds 1.md 2.md 3.md (3 names).
     const small: World = { files: { "/v/proj/x/1.md": "", "/v/proj/x/2.md": "", "/v/proj/x/3.md": "" } };
     // `x/*.md`: one state, (x, `*.md`): 1 entered + 3 examined = 4.
-    const atCap = await expandPatterns(small, ["x/*.md"], { limits: { maxEntriesVisited: 4 } });
+    const atCap = await expandPatterns(small, ["x/*.md"], { limits: { maxSteps: 4 } });
     expect(locations(atCap.result.expansions[0])).toEqual(under("x/1.md", "x/2.md", "x/3.md"));
-    const over = await expandPatterns(small, ["x/*.md"], { limits: { maxEntriesVisited: 3 } });
+    const over = await expandPatterns(small, ["x/*.md"], { limits: { maxSteps: 3 } });
     expect(over.result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
     expect(over.result.diagnostics[0]).toMatchObject({ pointer: "/include/0", primary: { line: 3, column: 5 } });
     expect(over.result.diagnostics[0]?.message).toContain("3");
     // `**/*.md`: four states -- (root, `**`), (root, `*.md`), (x, `**`), (x, `*.md`) -- each 1 + 3 examined = 16.
-    expect(locations((await expandPatterns(small, ["**/*.md"], { limits: { maxEntriesVisited: 16 } })).result.expansions[0])).toHaveLength(3);
-    expect((await expandPatterns(small, ["**/*.md"], { limits: { maxEntriesVisited: 15 } })).result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
+    expect(locations((await expandPatterns(small, ["**/*.md"], { limits: { maxSteps: 16 } })).result.expansions[0])).toHaveLength(3);
+    expect((await expandPatterns(small, ["**/*.md"], { limits: { maxSteps: 15 } })).result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
   });
 
   it("the cap is per value: one value over it does not starve the next", async () => {
     const small: World = { files: { "/v/proj/x/1.md": "", "/v/proj/x/2.md": "", "/v/proj/x/3.md": "" } };
-    const { result } = await expandPatterns(small, ["**/*.md", "x/*.md"], { limits: { maxEntriesVisited: 4 } });
+    const { result } = await expandPatterns(small, ["**/*.md", "x/*.md"], { limits: { maxSteps: 4 } });
     expect(result.expansions.map((e) => e.ok)).toEqual([false, true]);
   });
 
   it("the default cap is 100,000 entries", async () => {
-    const { DEFAULT_MAX_ENTRIES_VISITED } = await import("../../src/expand/expand.js");
-    expect(DEFAULT_MAX_ENTRIES_VISITED).toBe(100_000);
+    const { DEFAULT_MAX_STEPS } = await import("../../src/expand/expand.js");
+    expect(DEFAULT_MAX_STEPS).toBe(100_000);
   });
 
   it("expand() throws for programmer error only: no host, a host that cannot canonicalize, an explicit sandbox root that is empty", async () => {

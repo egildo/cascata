@@ -358,7 +358,7 @@ export const GRAPH_IDENTITY_CODES = ["link-changes-reference"] as const;
  * - `directory-unlistable` -- the host answered `ok: false` for a directory the walk needed; its reason is in the message.
  * - `glob-in-remote-document` -- the declaring document was read over `https://`: HTTP has no directory listing, so a remote
  *   pattern is never expanded.
- * - `glob-limit-exceeded` -- the walk visited more entries than `limits.maxEntriesVisited` (default 100,000).
+ * - `glob-limit-exceeded` -- the walk did more work than `limits.maxSteps` allows (default 100,000): one step per directory entered at each pattern position, per entry examined there, and per kind lookup (v1.14 FR-027).
  */
 export const GLOB_EXPANSION_CODES = ["host-cannot-list", "directory-unlistable", "glob-in-remote-document", "glob-limit-exceeded"] as const;
 

@@ -219,7 +219,7 @@ describe("v1.14 FR-027 -- the limit counts work, not names", () => {
     const files = fanTree("/v/proj/t", 6, 4);
     const pattern = `t/${"**/".repeat(60)}*.md`;
     expect(61 * (5_461 + 1_365 * 5 + 4_096)).toBe(999_302);
-    const { result, lists } = await expandPatterns({ files }, [pattern], { limits: { maxEntriesVisited: 999_302 } });
+    const { result, lists } = await expandPatterns({ files }, [pattern], { limits: { maxSteps: 999_302 } });
     expect(result.diagnostics).toEqual([]);
     expect(locations(result.expansions[0])).toHaveLength(5_461);
     expect(lists).toHaveLength(5_461);
@@ -239,20 +239,20 @@ describe("v1.14 FR-027 -- the limit counts work, not names", () => {
     const pattern = `t/${"**/".repeat(k)}*.md`;
     const exact = 119 * (k + 1);
     expect(exact).toBe(1_309);
-    const at = await expandPatterns({ files }, [pattern], { limits: { maxEntriesVisited: exact } });
+    const at = await expandPatterns({ files }, [pattern], { limits: { maxSteps: exact } });
     expect(at.result.diagnostics).toEqual([]);
     expect(locations(at.result.expansions[0])).toHaveLength(40);
-    const over = await expandPatterns({ files }, [pattern], { limits: { maxEntriesVisited: exact - 1 } });
+    const over = await expandPatterns({ files }, [pattern], { limits: { maxSteps: exact - 1 } });
     expect(over.result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
   });
 
   it("a literal costs one unit and no scan: ten directories in the prefix and a name are 2 -- the state entered (1) and the kind lookup (1)", async () => {
     const dirs = "a/b/c/d/e/f/g/h/i/j";
     const world: World = { files: { [`/v/proj/${dirs}/x.md`]: "" } };
-    const at = await expandPatterns(world, [`${dirs}/x.md`], { limits: { maxEntriesVisited: 2 } });
+    const at = await expandPatterns(world, [`${dirs}/x.md`], { limits: { maxSteps: 2 } });
     expect(locations(at.result.expansions[0])).toEqual([`${P}${dirs}/x.md`]);
     expect(at.lists).toEqual([`/v/proj/${dirs}`]);
-    expect((await expandPatterns(world, [`${dirs}/x.md`], { limits: { maxEntriesVisited: 1 } })).result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
+    expect((await expandPatterns(world, [`${dirs}/x.md`], { limits: { maxSteps: 1 } })).result.diagnostics.map((d) => d.code)).toEqual(["glob-limit-exceeded"]);
   });
 });
 

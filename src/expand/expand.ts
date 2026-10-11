@@ -20,13 +20,13 @@
  * the smaller logical path (FR-016); nothing depends on the order the host lists in. The matches are sorted by code point,
  * not UTF-16 (CLAUDE.md's trap), and deduplicated by physical path.
  *
- * **Cost.** Each distinct directory is put to the host once per `expand()` call (the answers are kept), and a value's walk is
- * charged the names of every directory it first uses (FR-018's `maxEntriesVisited`). The work of matching is bounded by the
- * directories entered times the pattern's positions (consecutive `**` segments are not collapsed: `**` / `**` is the same set as
- * one, and a pattern with very many of them over a very large tree is the author's own cost to bear).
+ * **Cost.** Each distinct directory is put to the host once per `expand()` call (the answers are kept). A value's walk is
+ * charged its work, not the names it lists (v1.14 FR-027): one step per (directory, pattern position) entered, plus one per
+ * entry examined there, plus one per kind lookup, against `limits.maxSteps`; past it, `glob-limit-exceeded`. So a pattern of
+ * many `**` over a large tree is refused, not slow (consecutive `**` are not collapsed; the count is the guard).
  *
  * Never throws for a document or the world -- every refusal is a diagnostic at the value (FR-018) and the other values still
- * expand; it throws only for programmer error (no host, no sandbox root).
+ * expand; it throws only for programmer error (no host; no sandbox root given and none recorded, FR-025).
  */
 
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
@@ -42,7 +42,7 @@ import { globBase } from "../validate/globbase.js";
 import { globValues, type GlobValue } from "./positions.js";
 
 /** FR-018: the walk of one value may visit this many directory entries before it is refused. */
-export const DEFAULT_MAX_ENTRIES_VISITED = 100_000;
+export const DEFAULT_MAX_STEPS = 100_000;
 
 export interface ExpandLimits {
   /**
@@ -50,7 +50,7 @@ export interface ExpandLimits {
    * counts one, each entry it examines there one more, and each kind lookup one. Work, not names: a pattern of many `**` over a
    * tree whose every directory is listed once is still many times the tree.
    */
-  readonly maxEntriesVisited: number;
+  readonly maxSteps: number;
 }
 
 export interface ExpandOptions {
@@ -221,9 +221,9 @@ function requireOptions(options: ExpandOptions): void {
       throw new Error("expand() requires 'sandboxRoot' to be a non-empty location, or a non-empty list of them, every member a non-empty string, exactly as resolve() takes it (v1.14 FR-012, FR-025)");
     }
   }
-  const cap = options.limits?.maxEntriesVisited;
+  const cap = options.limits?.maxSteps;
   if (cap !== undefined && (!Number.isInteger(cap) || cap < 0)) {
-    throw new Error("expand() was given a 'limits.maxEntriesVisited' that is not a non-negative integer (v1.14 FR-018)");
+    throw new Error("expand() was given a 'limits.maxSteps' that is not a non-negative integer (v1.14 FR-018)");
   }
 }
 
@@ -249,7 +249,7 @@ async function walk(value: GlobValue, ctx: Context): Promise<GlobMatch[]> {
   const spend = (units: number): void => {
     work.units += units;
     if (work.units > ctx.limit) {
-      throw refusal(value, "glob-limit-exceeded", `expanding the glob '${pattern}' did more than ${ctx.limit} units of work (each directory entered at each pattern position, and each entry examined there; limits.maxEntriesVisited); raise it in expand()'s options if the tree and the pattern are really that large`);
+      throw refusal(value, "glob-limit-exceeded", `expanding the glob '${pattern}' did more than ${ctx.limit} units of work (each directory entered at each pattern position, and each entry examined there; limits.maxSteps); raise it in expand()'s options if the tree and the pattern are really that large`);
     }
   };
 
@@ -472,7 +472,7 @@ export async function expand(configuration: MergedConfiguration, options: Expand
     host,
     physical: new PhysicalPaths(host),
     roots,
-    limit: options.limits?.maxEntriesVisited ?? DEFAULT_MAX_ENTRIES_VISITED,
+    limit: options.limits?.maxSteps ?? DEFAULT_MAX_STEPS,
     separator: paths.separator,
     dirname: paths.dirname,
     listings: new Map(),
