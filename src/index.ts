@@ -1087,7 +1087,7 @@ async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain
       diagnostics: [
         createDiagnostic({ level: "error",
           code: "reference-cycle",
-          message: `Delegation cycle: '${text}' reaches a fragment already being resolved (${[...state.tracker.frames(), { location, physical: locationPhysical }].map((frame) => namedDocument(frame.location, frame.physical)).join(" -> ")}) — refused rather than followed (SPEC.md §8.3, v0.6 FR-015)`,
+          message: `Delegation cycle: '${text}' reaches a fragment already being resolved (${[...state.tracker.frames(), { location, physical: locationPhysical }].map((frame) => (frame.physical === frame.location ? frame.location : `${frame.location} (the file ${frame.physical})`)).join(" -> ")}) — refused rather than followed (SPEC.md §8.3, v0.6 FR-015)`,
           primary: valueNode.span,
         }),
       ],

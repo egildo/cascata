@@ -1,0 +1,16 @@
+{
+  "name": "v1.13 case 2: a schema that $adopts itself through a symbolic link (alias.yaml -> schema.yaml) is refused as reference-cycle, naming the closing reference; before v1.13 the link was a second document and it resolved",
+  "cites": "v1.13 FR-005",
+  "fixtureDir": "fail-cycle/link",
+  "entry": "config.yaml",
+  "sandboxRoot": ".",
+  "expect": {
+    "ok": false,
+    "diagnostics": [
+      {
+        "code": "reference-cycle",
+        "primary": { "document": "schema.yaml", "line": 1, "column": 10, "start": 9, "end": 21 }
+      }
+    ]
+  }
+}
