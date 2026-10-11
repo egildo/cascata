@@ -49,8 +49,9 @@ expands (and is then confined), which §5.3 had always shown and §15 had forbid
 | **v1.10** | **writing a value back, and bounded cost** — `locate` and `setValue` rewrite one YAML or JSON value in place, in the file's own style, every other byte untouched (`SPEC.md` Article IX); aliases resolve in one pass, the parser's quadratic duplicate-key check is replaced by Cascata's own, and alias expansion has a budget (`expansion-limit-exceeded`), so a few hundred bytes of nested aliases are refused rather than expanded (§4.2, §11) |
 | **v1.11** | **edit targets, and writers** — `editTarget` answers which document, and which pointer inside it, holds the value that won at a merged pointer (a schema's `provide` and a remote document are refused by name); `why()` entries carry that in-document `pointer`; `yamlWriter()` and `jsonWriter()` offer `locate`/`setValue` in the editing stage's shape from `@egildo/cascata/writers` (`SPEC.md` Article IX)  |
 | **v1.12** | **after the review** — `sharedEdits` (`refuse`, `warn`, `allow`) on `setValue`, `editTarget` and the writers, with a file delegated to at two places counted as shared; columns and in-document pointers computed once, restoring the bounded-cost claim for long lines and for asking about every value; an empty document located after its marks, a bare `? a` read as `a: null`, a tag dropped where it cannot hold the value written (`SPEC.md` Article IX, §15) |
+| **v1.13** | **graph identity** — every document has a logical path (the route taken) and a physical one (where it is: the host's `canonicalize`, or the URL after redirects), and identity is physical: a schema that adopts itself under another spelling, through a link or through a redirect is `reference-cycle`, as is a document with the bytes of one already on its chain; a relative reference starts from the logical path in a file and the physical URL in a remote document, and `link-changes-reference` (`info`) reports where the other rule would have named a different document; an `https://` reference is labelled in its WHATWG-normalized form (`SPEC.md` Article VI, §15) |
 
-Full detail lives in `specs/001-…` through `specs/022-…`, each with its own `spec.md`, `plan.md`,
+Full detail lives in `specs/001-…` through `specs/023-…`, each with its own `spec.md`, `plan.md`,
 `research.md`, `data-model.md`, and `contracts/`. This file is the shorter, code-facing version of
 the same surface.
 
@@ -246,7 +247,8 @@ if (result.ok) {
   result.graph; // every document read, entry first, acyclic
   for (const entry of result.pedigree) {
     // root-to-leaf: core.yaml, then house.yaml
-    entry.identity.location; // absolute path or normalized URL
+    entry.identity.location; // the logical location: the route taken — an absolute path, or a normalized URL
+    entry.identity.physical; // v1.13: where the document really is — the host's canonical path, or the URL after redirects
     entry.identity.hash; // lowercase-hex SHA-256 over the exact bytes
     entry.via.span; // where the reference that adopted it was written
     entry.verified; // whether a $pin was present and matched (v0.2 FR-026)
@@ -311,7 +313,8 @@ interface Reference {
 }
 
 interface DocumentIdentity {
-  location: string; // absolute resolved location — a real path, or a normalized URL
+  location: string; // the logical location, the route taken (v1.13) — a real path with no link followed, or a normalized URL as written
+  physical: string; // v1.13: where the document really is — the host's canonical path, or the URL after redirects. Always present; equal to `location` when nothing differs. Identity is this one
   hash: string; // lowercase-hex SHA-256 over the exact bytes (SPEC.md §6.1)
 }
 
@@ -334,7 +337,7 @@ that failed** (v0.2 FR-023).
 | Code | Refuses |
 |---|---|
 | `document-unreachable` | A referenced document that does not exist or cannot be read. A remote fetch that times out or fails falls back to a stale cached copy, else it is `document-not-cached` |
-| `reference-cycle` | A reference closing a loop, naming every reference in the cycle, in chain order |
+| `reference-cycle` | A reference closing a loop, naming every reference in the cycle, in chain order. Since v1.13 the loop is judged physically: a document reached again under another spelling, through a symbolic link or through a redirect, or one whose bytes are exactly those of a document already on the chain, closes it, and the message names both spellings and the file |
 | `multiple-adoption` | A sequence value for `$adopts`/`$schema` — v1 adopts exactly one parent (`SPEC.md` §6.1, §9) |
 | `chain-limit-exceeded` | A chain longer than `maxChainLength` |
 | `unsupported-scheme` | A reference whose scheme is not HTTPS, not a relative path, and not claimed by `Host.locate` (v1.4) — `http:`, `file:`, `data:` |
@@ -1439,6 +1442,32 @@ is neither empty nor starts with `/` (and, since v1.12, a `sharedEdits` that is 
 
 An item of a list under `cascade: append` has its own document and its own index in it, whatever its place in the
 merged list. A pointer to the whole list is a container.
+
+### Graph identity (v1.13, `SPEC.md` Article VI)
+
+A document has two paths, and identity is the physical one. The **logical** path is the route taken: for a file, the
+lexical resolution of what was written from the referring document's logical path (no link followed, no case folded);
+for a URL, the text normalized by the WHATWG URL Standard (lowercase scheme and host, default port dropped). The
+**physical** path is where it really is: for a file, the host's `canonicalize` answer (for a path that does not exist,
+the answer for its nearest existing ancestor with the rest appended, the sandbox's own rule); for a URL, the URL
+after redirects. They travel as `DocumentIdentity.physical` (always present) and `Origin.physical` (present only when it
+differs, on every span of the document and on a delegated fragment's origin); `origin.id`, `origin.label` and every
+message stay logical, and the library's own messages append the physical path in parentheses where it differs.
+
+"Is this the same document?" is answered physically: cycles in the adoption graph and in delegation, deduplication,
+and `editTarget`'s count of the places that read one file. A relative reference starts where its medium's own
+convention says: from the logical path in a file (as the shell's `cd` resolves `..`), from the physical URL in a remote
+document (as a browser resolves against a response's URL). Where the other rule would have named a different document,
+`link-changes-reference` (`info`, never a refusal) is reported at the reference, naming both documents and the
+referring document's two paths. `resource()` follows the same rule and, behind a link or redirect, carries the other
+answer as `otherLocation` (a query holds no host and raises no diagnostic). `editTarget`'s `ok` result carries
+`physicalLocation` when it differs from `location`; a writer handed either path writes the same file.
+
+### v1.13 diagnostic codes
+
+| Code | Level | Means |
+|---|---|---|
+| `link-changes-reference` | `info` | A relative reference in a document behind a link (or a redirect) names a different document by the other rule; the one the medium's convention names was loaded. Positioned at the reference |
 
 ### v1.11 diagnostic codes
 
