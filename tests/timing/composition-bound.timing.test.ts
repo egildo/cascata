@@ -31,8 +31,8 @@ function m(entries: readonly (readonly [string, Node])[]): Node {
 }
 
 function configurationOf(schemaTree: Node, configTree: Node): MergedConfiguration {
-  const schemaLayer: Layer = { identity: { location: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
-  const configLayer: Layer = { identity: { location: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: configTree };
+  const schemaLayer: Layer = { identity: { location: "bound-schema", physical: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
+  const configLayer: Layer = { identity: { location: "bound-config", physical: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: configTree };
   const layers = [schemaLayer, configLayer];
   return { tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() };
 }

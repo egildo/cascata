@@ -43,9 +43,9 @@ export function hashBytes(bytes: Uint8Array): string {
   return sha256Hex(bytes);
 }
 
-/** Construct a Document Identity from a resolved location and the bytes found there. */
-export function createDocumentIdentity(location: string, bytes: Uint8Array): DocumentIdentity {
-  return { location, hash: hashBytes(bytes) };
+/** Construct a Document Identity from a resolved location and the bytes found there; `physical` (v1.13 FR-004) defaults to the location itself. */
+export function createDocumentIdentity(location: string, bytes: Uint8Array, physical: string = location): DocumentIdentity {
+  return { location, physical, hash: hashBytes(bytes) };
 }
 
 /**
@@ -78,7 +78,7 @@ export type PinVerification =
  * caller attaches this result's `reason` to the reference's own span when
  * building the diagnostic.
  */
-export function verifyPin(pin: string, identity: DocumentIdentity): PinVerification {
+export function verifyPin(pin: string, identity: Pick<DocumentIdentity, "hash">): PinVerification {
   const match = PIN_PATTERN.exec(pin);
   if (match === null) {
     return { ok: false, reason: "malformed" };

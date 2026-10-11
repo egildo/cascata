@@ -131,14 +131,14 @@ function schemaLayerFor(id: string, rank: number, key: string, cascade: "append"
   }
   const keysEntries: [string, Node][] = declarationEntries.length > 0 ? [[key, createMapping(declarationEntries, span(id, 950))]] : [];
   const tree = createMapping([["keys", createMapping(keysEntries, span(id, 980))]], span(id, 990));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
 }
 
 /** The config layer, optionally contributing a sequence for `key`. */
 function configLayerFor(id: string, rank: number, key: string, items: readonly string[] | undefined): Layer {
   const entries: [string, Node][] = items !== undefined ? [[key, sequenceOf(id, items)]] : [];
   const tree = createMapping(entries, span(id, 999));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "config", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "config", rank, tree };
 }
 
 function foldLayers(layers: readonly Layer[]): { readonly ok: true; readonly tree: Node } | { readonly ok: false; readonly diagnostics: ReturnType<typeof resolveStrategies>["diagnostics"] } {
@@ -293,13 +293,13 @@ describe("monotonicity (Principle II, SPEC.md §5.2) — Defaults (provide) row,
         if (value !== undefined) lastContributor = value;
         const keysEntries: [string, Node][] = contributes ? [["value", createMapping([["provide", createStringScalar(value as string, span(`s${trial}-${i}`, 1))]], span(`s${trial}-${i}`, 0))]] : [];
         const tree = createMapping([["keys", createMapping(keysEntries, span(`s${trial}-${i}`, 2))]], span(`s${trial}-${i}`, 3));
-        layers.push({ identity: { location: `s${trial}-${i}`, hash: "0".repeat(64) }, role: "schema", rank: i, tree });
+        layers.push({ identity: { location: `s${trial}-${i}`, physical: `s${trial}-${i}`, hash: "0".repeat(64) }, role: "schema", rank: i, tree });
       }
       const configContributes = rng() < 0.6;
       const configValue = configContributes ? `config-${trial}-value` : undefined;
       if (configValue !== undefined) lastContributor = configValue;
       const configEntries: [string, Node][] = configContributes ? [["value", createStringScalar(configValue as string, span(`c${trial}`, 1))]] : [];
-      layers.push({ identity: { location: `c${trial}`, hash: "0".repeat(64) }, role: "config", rank: schemaCount, tree: createMapping(configEntries, span(`c${trial}`, 0)) });
+      layers.push({ identity: { location: `c${trial}`, physical: `c${trial}`, hash: "0".repeat(64) }, role: "config", rank: schemaCount, tree: createMapping(configEntries, span(`c${trial}`, 0)) });
 
       const outcome = foldLayers(layers);
       expect(outcome.ok).toBe(true);

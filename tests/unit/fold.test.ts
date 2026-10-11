@@ -31,12 +31,12 @@ function span(id: string, start: number, end: number, line = 1, column = 1): Sou
 /** Build a schema Layer from a hand-written `keys:` mapping (already shaped as a Node tree). */
 function schemaLayer(id: string, rank: number, keysEntries: readonly (readonly [string, Node])[]): Layer {
   const tree = createMapping([["keys", createMapping(keysEntries, span(id, 0, 1))]], span(id, 0, 1));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
 }
 
 /** Build a config Layer directly from a Node (typically a mapping). */
 function configLayer(id: string, rank: number, tree: Node): Layer {
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "config", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "config", rank, tree };
 }
 
 /** A `keys.<name>: { provide: <value> }` entry, for building a schema's `keys:` mapping. */
@@ -350,7 +350,7 @@ describe("fold() — rule 4: cascade: append (T029-T032), hand-constructed", () 
 
 describe("deriveLayers() — ranking a Graph (T010, FR-005)", () => {
   function stubDocument(id: string, tree: Node): GraphDocument {
-    return { identity: { location: id, hash: "0".repeat(64) }, tree, verified: false };
+    return { identity: { location: id, physical: id, hash: "0".repeat(64) }, tree, verified: false };
   }
 
   it("ranks root schema lowest and config highest, with dense sequential ranks", () => {

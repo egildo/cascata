@@ -55,12 +55,12 @@ function span(id: string, at: number): SourceSpan {
 
 function schemaLayerWithDemand(id: string, rank: number, demand: Node): Layer {
   const tree = createMapping([["keys", createMapping([[KEY, createMapping([["demand", demand]], span(id, 900))]], span(id, 950))]], span(id, 990));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
 }
 
 function configLayerWithValue(id: string, rank: number, value: Node | undefined): Layer {
   const tree = createMapping(value !== undefined ? [[KEY, value]] : [], span(id, 999));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "config", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "config", rank, tree };
 }
 
 function configurationFrom(layers: readonly Layer[]): Parameters<typeof validate>[0] {
@@ -246,7 +246,7 @@ function valuesSchemaLayer(id: string, rank: number, kind: Kind | undefined): La
     inner.push(["values", createMapping([["type", createStringScalar(kind, span(id, 2))]], span(id, 3))]);
   }
   const tree = createMapping([["keys", createMapping([["m", createMapping([["demand", createMapping(inner, span(id, 5))]], span(id, 6))]], span(id, 7))]], span(id, 8));
-  return { identity: { location: id, hash: `${rank}`.repeat(64).slice(0, 64) }, role: "schema", rank, tree };
+  return { identity: { location: id, physical: id, hash: `${rank}`.repeat(64).slice(0, 64) }, role: "schema", rank, tree };
 }
 
 describe("v0.7 part 2 — §5.2's values row as a property (constitution gate 3)", () => {
@@ -272,7 +272,7 @@ describe("v0.7 part 2 — §5.2's values row as a property (constitution gate 3)
 
       const layers: Layer[] = declared.map((kind, index) => valuesSchemaLayer(`values-prop-schema-${index}`, index, kind));
       layers.push({
-        identity: { location: "values-prop-config", hash: "f".repeat(64) },
+        identity: { location: "values-prop-config", physical: "values-prop-config", hash: "f".repeat(64) },
         role: "config",
         rank: layers.length,
         tree: createMapping([["m", createMapping(entries, span("values-prop-config", 9))]], span("values-prop-config", 10)),

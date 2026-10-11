@@ -217,7 +217,7 @@ function verifyAgainstPin(bytes: Uint8Array, pin: string | undefined): RemoteDoc
   if (pin === undefined) {
     return { ok: true, bytes, hash, verified: false };
   }
-  const verification = verifyPin(pin, { location: "", hash });
+  const verification = verifyPin(pin, { hash });
   if (!verification.ok) {
     if (verification.reason === "malformed") {
       return { ok: false, failure: { kind: "malformed-pin" } };

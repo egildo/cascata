@@ -99,12 +99,12 @@ describe("monotonicity (SPEC.md §5.2) — Types (named) row, v0.5 FR-029", () =
           entries.push(["types", typesSection]);
         }
         const tree = createMapping(entries, span(id, 90));
-        layers.push({ identity: { location: id, hash: "0".repeat(64) }, role: "schema", rank, tree });
+        layers.push({ identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "schema", rank, tree });
       }
       // A config layer contributing nothing — typeUsageProblems' reachability
       // check is value-independent (fires from schema-authored demand
       // structure alone), so no config value is needed to exercise it.
-      layers.push({ identity: { location: `config-${trial}`, hash: "0".repeat(64) }, role: "config", rank: schemaCount, tree: createMapping([], span(`config-${trial}`, 0)) });
+      layers.push({ identity: { location: `config-${trial}`, physical: `config-${trial}`, hash: "0".repeat(64) }, role: "config", rank: schemaCount, tree: createMapping([], span(`config-${trial}`, 0)) });
 
       const result = validate(configurationFrom(layers));
       // Collision never arises here (the type name is declared by exactly
@@ -157,7 +157,7 @@ describe("monotonicity (SPEC.md §5.2) — Types (named) row, v0.5 FR-029", () =
           entries.push(["types", typesSection]);
         }
         const tree = createMapping(entries, span(id, 90));
-        layers.push({ identity: { location: id, hash: "0".repeat(64) }, role: "schema", rank, tree });
+        layers.push({ identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "schema", rank, tree });
       }
 
       // A single fixed int value for every usage key -- which usages are
@@ -168,7 +168,7 @@ describe("monotonicity (SPEC.md §5.2) — Types (named) row, v0.5 FR-029", () =
       for (let rank = 0; rank < schemaCount; rank += 1) {
         configEntries.push([`k${rank}`, createIntScalar(1n, span(configId, rank))]);
       }
-      layers.push({ identity: { location: configId, hash: "0".repeat(64) }, role: "config", rank: schemaCount, tree: createMapping(configEntries, span(configId, 900)) });
+      layers.push({ identity: { location: configId, physical: configId, hash: "0".repeat(64) }, role: "config", rank: schemaCount, tree: createMapping(configEntries, span(configId, 900)) });
 
       const result = validate(configurationFrom(layers));
       // Grouped by the *usage* key's own rank ("k{rank}"), not by

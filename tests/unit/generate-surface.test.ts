@@ -65,7 +65,7 @@ describe("FR-029 — `generate()` takes a tree and returns text, with no I/O and
     if (!parsed.ok) {
       throw new Error("fixture does not parse");
     }
-    const layer: Layer = { identity: { location: "s.yaml", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: parsed.tree };
+    const layer: Layer = { identity: { location: "s.yaml", physical: "s.yaml", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: parsed.tree };
     const result = generate(accumulate([layer]).tree);
     expect(typeof result.source).toBe("string");
     expect(result.diagnostics).toEqual([]);

@@ -324,7 +324,7 @@ function generatedFor(pair: GeneratedPair): string {
   if (!parsed.ok) {
     throw new Error(`${label}: the paired YAML does not parse: ${parsed.diagnostics.map((d) => d.message).join("; ")}`);
   }
-  const layer: Layer = { identity: { location: label, hash: "0".repeat(64) }, role: "schema", rank: 0, tree: parsed.tree };
+  const layer: Layer = { identity: { location: label, physical: label, hash: "0".repeat(64) }, role: "schema", rank: 0, tree: parsed.tree };
   return generate(accumulate([layer]).tree).source;
 }
 

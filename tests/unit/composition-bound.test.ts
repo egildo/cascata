@@ -75,8 +75,8 @@ function m(entries: readonly (readonly [string, Node])[]): Node {
 }
 
 function configurationOf(schemaTree: Node, configTree: Node): MergedConfiguration {
-  const schemaLayer: Layer = { identity: { location: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
-  const configLayer: Layer = { identity: { location: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: configTree };
+  const schemaLayer: Layer = { identity: { location: "bound-schema", physical: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
+  const configLayer: Layer = { identity: { location: "bound-config", physical: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: configTree };
   const layers = [schemaLayer, configLayer];
   return { tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() };
 }
@@ -339,9 +339,9 @@ describe("v1.0 FR-006 — the key distinguishes what must be distinguished, prov
     // *deduplicated* here would be changing the answer, which FR-005
     // forbids just as much as a cache that confuses two subtrees.
     const schemaTree = m([["types", m([["strType", m([["demand", m([["type", s("string")]])]])]])], ["keys", m([["root", m([["demand", m([["type", s("strType")]])]])]])]]);
-    const rootLayer: Layer = { identity: { location: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
-    const houseLayer: Layer = { identity: { location: "bound-house", hash: "2".repeat(64) }, role: "schema", rank: 1, tree: schemaTree };
-    const configLayer: Layer = { identity: { location: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 2, tree: createMapping([["root", createIntScalar(9n, span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
+    const rootLayer: Layer = { identity: { location: "bound-schema", physical: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
+    const houseLayer: Layer = { identity: { location: "bound-house", physical: "bound-house", hash: "2".repeat(64) }, role: "schema", rank: 1, tree: schemaTree };
+    const configLayer: Layer = { identity: { location: "bound-config", physical: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 2, tree: createMapping([["root", createIntScalar(9n, span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
     const layers = [rootLayer, houseLayer, configLayer];
     const configuration: MergedConfiguration = { tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() };
     const memoized = checkConfiguration(configuration, { memoize: true });
@@ -565,9 +565,9 @@ describe("v1.0 FR-004a — the identity does NOT over-collapse: two genuinely di
     // JSON Pointer into that document", so the pointer alone is not the
     // demand.
     const schemaTree = m([["types", m([["strType", m([["demand", m([["type", s("string")]])]])]])], ["keys", m([["root", m([["demand", m([["type", s("strType")]])]])]])]]);
-    const rootLayer: Layer = { identity: { location: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
-    const houseLayer: Layer = { identity: { location: "bound-house", hash: "2".repeat(64) }, role: "schema", rank: 1, tree: schemaTree };
-    const configLayer: Layer = { identity: { location: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 2, tree: createMapping([["root", createIntScalar(9n, span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
+    const rootLayer: Layer = { identity: { location: "bound-schema", physical: "bound-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
+    const houseLayer: Layer = { identity: { location: "bound-house", physical: "bound-house", hash: "2".repeat(64) }, role: "schema", rank: 1, tree: schemaTree };
+    const configLayer: Layer = { identity: { location: "bound-config", physical: "bound-config", hash: "1".repeat(64) }, role: "config", rank: 2, tree: createMapping([["root", createIntScalar(9n, span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
     const layers = [rootLayer, houseLayer, configLayer];
     const configuration: MergedConfiguration = { tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() };
     const result = validate(configuration);

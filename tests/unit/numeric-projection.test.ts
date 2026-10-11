@@ -64,8 +64,8 @@ function schemaFor(demand: Node, extraSections: readonly (readonly [string, Node
 }
 
 function configurationOf(schemaTrees: readonly Node[], configTree: Node): MergedConfiguration {
-  const layers: Layer[] = schemaTrees.map((tree, index) => ({ identity: { location: `numeric-schema-${index}`, hash: String(index).repeat(64) }, role: "schema" as const, rank: index, tree }));
-  layers.push({ identity: { location: "numeric-config", hash: "c".repeat(64) }, role: "config" as const, rank: schemaTrees.length, tree: configTree });
+  const layers: Layer[] = schemaTrees.map((tree, index) => ({ identity: { location: `numeric-schema-${index}`, physical: `numeric-schema-${index}`, hash: String(index).repeat(64) }, role: "schema" as const, rank: index, tree }));
+  layers.push({ identity: { location: "numeric-config", physical: "numeric-config", hash: "c".repeat(64) }, role: "config" as const, rank: schemaTrees.length, tree: configTree });
   return { tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() };
 }
 

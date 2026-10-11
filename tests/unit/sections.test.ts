@@ -52,13 +52,13 @@ function span(origin: ReturnType<typeof createOrigin>): SourceSpan {
 
 function configurationOf(schemaEntries: readonly (readonly [string, Node])[], configEntries: readonly (readonly [string, Node])[]): Parameters<typeof validate>[0] {
   const schemaLayer: Layer = {
-    identity: { location: "sections-schema", hash: "0".repeat(64) },
+    identity: { location: "sections-schema", physical: "sections-schema", hash: "0".repeat(64) },
     role: "schema",
     rank: 0,
     tree: createMapping(schemaEntries, span(ORIGIN_SCHEMA)),
   };
   const configLayer: Layer = {
-    identity: { location: "sections-config", hash: "1".repeat(64) },
+    identity: { location: "sections-config", physical: "sections-config", hash: "1".repeat(64) },
     role: "config",
     rank: 1,
     tree: createMapping(configEntries, span(ORIGIN_CONFIG)),

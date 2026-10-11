@@ -546,7 +546,7 @@ describe("contract §1 row 7 / SC-004 — the meta-schema inhabits the type gene
     if (!parsed.ok) {
       throw new Error(`the meta-schema does not parse: ${parsed.diagnostics.map((d) => d.message).join("; ")}`);
     }
-    const document: GraphDocument = { identity: { location: META_PATH, hash: "0".repeat(64) }, tree: parsed.tree, verified: false };
+    const document: GraphDocument = { identity: { location: META_PATH, physical: META_PATH, hash: "0".repeat(64) }, tree: parsed.tree, verified: false };
     return { graph: { entry: document, documents: [document, document] }, pedigree: [] };
   }
 

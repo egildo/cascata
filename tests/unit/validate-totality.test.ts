@@ -90,7 +90,7 @@ describe("Article VI — a legal document never makes validate()/load() throw", 
       name: "t",
       demand: new Map([["type", createStringScalar(union, span())]]),
       accept: undefined,
-      layer: { identity: { location: "totality-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: createMapping([], span()) },
+      layer: { identity: { location: "totality-schema", physical: "totality-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: createMapping([], span()) },
       layerRank: 0,
       pointer: "/types/t",
       span: span(),
@@ -113,7 +113,7 @@ describe("Article VI — a legal document never makes validate()/load() throw", 
       entries.push([`t${index}`, createMapping([["demand", createMapping([["type", createStringScalar("string", span())]], span())]], span())]);
     }
     const tree = createMapping([["types", createMapping(entries, span())]], span());
-    const layer: Layer = { identity: { location: "totality-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
+    const layer: Layer = { identity: { location: "totality-schema", physical: "totality-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
     const configuration = { tree: createMapping([], span()), provenance: new Map(), pedigree: [], layers: [layer], delegationBreadcrumbs: new Map(), finalState: new Map() } as unknown as MergedConfiguration;
     expect(() => allDeclarations(configuration)).not.toThrow();
     expect(allDeclarations(configuration)).toHaveLength(OVER_THE_SPREAD_LIMIT);

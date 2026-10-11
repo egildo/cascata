@@ -344,11 +344,11 @@ export function toAbsoluteSandboxRoots(sandboxRoot: string | readonly string[], 
  * The `/sandboxfoo` case is why the separator is there at all and is
  * unaffected: a root that does not end in one still gets one.
  */
-export async function isWithinSandbox(host: Host, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
-  const separator = (host.paths ?? posixPaths).separator;
-  const realLocation = await safeCanonicalize(host, location);
+export async function isWithinSandbox(physical: PhysicalPaths, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
+  const separator = physical.separator;
+  const realLocation = await physical.of(location);
   for (const sandboxRoot of sandboxRoots) {
-    const realSandboxRoot = await safeCanonicalize(host, sandboxRoot);
+    const realSandboxRoot = await physical.of(sandboxRoot);
     const containedPrefix = realSandboxRoot.endsWith(separator) ? realSandboxRoot : realSandboxRoot + separator;
     if (realLocation === realSandboxRoot || realLocation.startsWith(containedPrefix)) {
       return true;
@@ -358,64 +358,74 @@ export async function isWithinSandbox(host: Host, location: string, sandboxRoots
 }
 
 /**
- * The location a `sandbox-escape` diagnostic should name (v1.7 FR-009):
- * the reference as actually resolved — `~/`-expanded, `.`/`..` collapsed,
- * and canonicalized where FR-001 could — rather than the text the document
- * wrote. The consumer's own maintainer misread the old message, which
- * named an unexpanded `~/schemas/house.yaml` and the venue as the root,
- * as evidence that `~/` *had* expanded; naming the path actually judged is
- * the whole of the fix.
+ * The **physical path** of a local location (v1.13 FR-002, FR-003; `SPEC.md` Article VI): where the
+ * document really is, as the host's `canonicalize` answers it — and the one place in a resolution that
+ * asks the host. Built once per `resolve()` call, so a path is put to the host once however many
+ * questions (identity, the sandbox, a diagnostic's wording) are asked of it. The sandbox and the graph
+ * therefore read one answer and can never disagree about where a path is.
  *
- * Exported for `src/index.ts`'s two refusal messages and nothing else. It
- * is the same primitive `isWithinSandbox` judges with, so the message can
- * never disagree with the verdict, and it costs one extra host call on a
- * path that has already failed.
+ * `host.canonicalize(path)`, and — when the host cannot answer, i.e. when `path` does not exist — the
+ * canonical path of its **nearest existing ancestor** with the remaining segments appended (v1.7
+ * FR-001, now stated for the graph as well as the sandbox).
+ *
+ * The walk is lexical and upward: `dirname` until the host answers. The segments below that ancestor
+ * need no canonicalization of their own, which is the point — they do not exist, so none of them is a
+ * link, and there is nothing for a link to hide behind. They are taken as a **slice of the very string
+ * they came from** (`resolved.slice(current.length)`) rather than re-joined segment by segment, so a
+ * non-ASCII or oddly normalized name passes through untouched.
+ *
+ * Where no ancestor canonicalizes at all — a host that answers `canonicalize` for documents only, or
+ * one with no notion of canonicalization — the already-normalized lexical path stands, exactly as it
+ * did from v0.2 through v1.6. `paths.resolve` has already collapsed `.`/`..`, so the remainder never
+ * contains either and re-resolving it against the canonical ancestor cannot move it; the leading
+ * separator is stripped first because an absolute second argument to `resolve` would discard the
+ * ancestor entirely.
+ *
+ * See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is a sandbox verdict in neither
+ * direction, and for the bug v1.7 fixed in this very walk.
  */
-export async function canonicalizeForDiagnostic(host: Host, location: string): Promise<string> {
-  return safeCanonicalize(host, location);
-}
+export class PhysicalPaths {
+  private readonly host: Host;
+  private readonly paths: PathFacility;
+  /** Every question put to the host, answered once: a path, however many documents ask, however many ancestors are walked. */
+  private readonly asked = new Map<string, Promise<string | undefined>>();
 
-/**
- * `host.canonicalize(path)`, and — when the host cannot answer, i.e. when
- * `path` does not exist — the canonical path of its **nearest existing
- * ancestor** with the remaining segments appended (v1.7 FR-001).
- *
- * The walk is lexical and upward: `dirname` until the host answers. The
- * segments below that ancestor need no canonicalization of their own,
- * which is the point — they do not exist, so none of them is a link, and
- * there is nothing for a link to hide behind. They are taken as a **slice
- * of the very string they came from** (`resolved.slice(current.length)`)
- * rather than re-joined segment by segment, so a non-ASCII or oddly
- * normalized name passes through untouched.
- *
- * Where no ancestor canonicalizes at all — a host that answers
- * `canonicalize` for documents only, or one with no notion of
- * canonicalization — the already-normalized lexical path stands, exactly
- * as it did from v0.2 through v1.6. `paths.resolve` has already collapsed
- * `.`/`..`, so the remainder never contains either and re-resolving it
- * against the canonical ancestor cannot move it; the leading separator is
- * stripped first because an absolute second argument to `resolve` would
- * discard the ancestor entirely.
- *
- * See `isWithinSandbox`'s own doc for why "cannot be canonicalized" is a
- * sandbox verdict in neither direction, and for the bug this replaced.
- */
-async function safeCanonicalize(host: Host, path: string): Promise<string> {
-  const paths = host.paths ?? posixPaths;
-  const resolved = paths.resolve(path);
-  let current = resolved;
-  for (;;) {
-    const canonical = await host.canonicalize(current);
-    if (canonical !== undefined) {
-      const remainder = resolved.slice(current.length);
-      const relative = remainder.startsWith(paths.separator) ? remainder.slice(paths.separator.length) : remainder;
-      return relative.length === 0 ? canonical : paths.resolve(canonical, relative);
+  constructor(host: Host) {
+    this.host = host;
+    this.paths = host.paths ?? posixPaths;
+  }
+
+  get separator(): string {
+    return this.paths.separator;
+  }
+
+  private canonicalize(path: string): Promise<string | undefined> {
+    let answer = this.asked.get(path);
+    if (answer === undefined) {
+      answer = this.host.canonicalize(path);
+      this.asked.set(path, answer);
     }
-    const parent = paths.dirname(current);
-    if (parent === current) {
-      return resolved;
+    return answer;
+  }
+
+  /** The physical path of `path`. */
+  async of(path: string): Promise<string> {
+    const paths = this.paths;
+    const resolved = paths.resolve(path);
+    let current = resolved;
+    for (;;) {
+      const canonical = await this.canonicalize(current);
+      if (canonical !== undefined) {
+        const remainder = resolved.slice(current.length);
+        const relative = remainder.startsWith(paths.separator) ? remainder.slice(paths.separator.length) : remainder;
+        return relative.length === 0 ? canonical : paths.resolve(canonical, relative);
+      }
+      const parent = paths.dirname(current);
+      if (parent === current) {
+        return resolved;
+      }
+      current = parent;
     }
-    current = parent;
   }
 }
 
@@ -429,11 +439,11 @@ async function safeCanonicalize(host: Host, path: string): Promise<string> {
  * same invariant `Reference.authority` documents on itself (D6: a schema
  * cannot claim config authority to escape the sandbox).
  */
-export async function isSandboxEscape(host: Host, candidate: Reference, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
+export async function isSandboxEscape(physical: PhysicalPaths, candidate: Reference, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
   if (candidate.authority !== "schema-authored") {
     return false;
   }
-  return !(await isWithinSandbox(host, location, sandboxRoots));
+  return !(await isWithinSandbox(physical, location, sandboxRoots));
 }
 
 export type ReadOutcome = { readonly ok: true; readonly bytes: Uint8Array } | { readonly ok: false; readonly reason: string };
@@ -453,10 +463,10 @@ export async function readLocalDocument(host: Host, location: string): Promise<R
   return { ok: false, reason: result.reason };
 }
 
-/** Build a `ResolvedDocument` from a location already read into bytes. `location` is used as `DocumentIdentity.location` verbatim — see the report for why this is the lexically-resolved path (`resolveReferenceLocation`'s output) rather than a symlink-following real path: identity/dedup in this slice operates on the lexical location, and `fs.realpathSync` canonicalization is reserved for the sandbox-escape check (User Story 4). */
-export function createResolvedDocument(location: string, bytes: Uint8Array, via: Reference | undefined): ResolvedDocument {
+/** Build a `ResolvedDocument` from a location already read into bytes. `location` is used as `DocumentIdentity.location` verbatim — the lexically-resolved, logical path (`resolveReferenceLocation`'s output); `physical` (v1.13) is where the document really is, defaulting to the location. */
+export function createResolvedDocument(location: string, bytes: Uint8Array, via: Reference | undefined, physical: string = location): ResolvedDocument {
   return {
-    identity: createDocumentIdentity(location, bytes),
+    identity: createDocumentIdentity(location, bytes, physical),
     bytes,
     ...(via !== undefined ? { via } : {}),
     verified: false,

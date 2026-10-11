@@ -106,7 +106,7 @@ function recursiveSchemaLayer(): Layer {
     ],
     span(ORIGIN_SCHEMA),
   );
-  return { identity: { location: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
+  return { identity: { location: "term-schema", physical: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
 }
 
 /** An adversarially shaped finite value: mappings, sequences and leaves interleaved at random, up to `maxDepth` levels. */
@@ -135,7 +135,7 @@ function randomValue(rng: () => number, maxDepth: number): Node {
 
 function configurationFor(value: Node): Parameters<typeof validate>[0] {
   const configLayer: Layer = {
-    identity: { location: "term-config", hash: "1".repeat(64) },
+    identity: { location: "term-config", physical: "term-config", hash: "1".repeat(64) },
     role: "config",
     rank: 1,
     tree: createMapping([["root", value]], span(ORIGIN_CONFIG)),
@@ -211,7 +211,7 @@ describe("v0.7 part 2 FR-010 — checking a guarded recursive type terminates on
       ],
       span(ORIGIN_SCHEMA),
     );
-    const schemaLayer: Layer = { identity: { location: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
+    const schemaLayer: Layer = { identity: { location: "term-schema", physical: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
     // Depth 20 rather than v0.7's 12: past the point the unbounded walk
     // could reach at all (2^20), so this case now also *demonstrates* the
     // bound rather than merely tolerating the blow-up.
@@ -219,7 +219,7 @@ describe("v0.7 part 2 FR-010 — checking a guarded recursive type terminates on
     for (let level = 0; level < 20; level += 1) {
       value = createMapping([["child", value]], span(ORIGIN_CONFIG));
     }
-    const configLayer: Layer = { identity: { location: "term-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: createMapping([["root", value]], span(ORIGIN_CONFIG)) };
+    const configLayer: Layer = { identity: { location: "term-config", physical: "term-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: createMapping([["root", value]], span(ORIGIN_CONFIG)) };
     const layers = [schemaLayer, configLayer];
     const result = validate({ tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() });
     expect(result.ok).toBe(true);
@@ -238,8 +238,8 @@ describe("v0.7 part 2 FR-010 — checking a guarded recursive type terminates on
       ],
       span(ORIGIN_SCHEMA),
     );
-    const schemaLayer: Layer = { identity: { location: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
-    const configLayer: Layer = { identity: { location: "term-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: createMapping([["root", createStringScalar("x", span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
+    const schemaLayer: Layer = { identity: { location: "term-schema", physical: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree };
+    const configLayer: Layer = { identity: { location: "term-config", physical: "term-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: createMapping([["root", createStringScalar("x", span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
     const layers = [schemaLayer, configLayer];
     const result = validate({ tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() });
     expect(result.ok).toBe(false);
@@ -279,13 +279,13 @@ describe("totality — validate() returns a verdict for a document with very man
       ],
       span(ORIGIN_SCHEMA),
     );
-    const schemaLayer: Layer = { identity: { location: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
+    const schemaLayer: Layer = { identity: { location: "term-schema", physical: "term-schema", hash: "0".repeat(64) }, role: "schema", rank: 0, tree: schemaTree };
     const items: Node[] = [];
     const itemSpan = span(ORIGIN_CONFIG);
     for (let index = 0; index < ITEM_COUNT; index += 1) {
       items.push(createIntScalar(1n, itemSpan));
     }
-    const configLayer: Layer = { identity: { location: "term-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: createMapping([["root", createSequence(items, span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
+    const configLayer: Layer = { identity: { location: "term-config", physical: "term-config", hash: "1".repeat(64) }, role: "config", rank: 1, tree: createMapping([["root", createSequence(items, span(ORIGIN_CONFIG))]], span(ORIGIN_CONFIG)) };
     const layers = [schemaLayer, configLayer];
     const result = validate({ tree: fold(layers), provenance: new Map(), pedigree: [], layers, delegationBreadcrumbs: new Map(), finalState: new Map() });
     expect(result.ok).toBe(false);

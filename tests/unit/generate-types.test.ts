@@ -37,7 +37,7 @@ function schemaLayer(location: string, rank: number, text: string): Layer {
   if (!parsed.ok) {
     throw new Error(`fixture '${location}' does not parse: ${parsed.diagnostics.map((d) => d.message).join("; ")}`);
   }
-  return { identity: { location, hash: String(rank).repeat(64).slice(0, 64) }, role: "schema", rank, tree: parsed.tree };
+  return { identity: { location, physical: location, hash: String(rank).repeat(64).slice(0, 64) }, role: "schema", rank, tree: parsed.tree };
 }
 
 function layersOf(texts: readonly string[]): readonly Layer[] {

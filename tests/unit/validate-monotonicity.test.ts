@@ -92,13 +92,13 @@ const KEY = "value";
 function schemaLayerWithDemand(id: string, rank: number, demandEntries: readonly (readonly [string, Node])[]): Layer {
   const keysEntries: [string, Node][] = demandEntries.length > 0 ? [[KEY, createMapping([["demand", createMapping(demandEntries, span(id, 950))]], span(id, 960))]] : [];
   const tree = createMapping([["keys", createMapping(keysEntries, span(id, 980))]], span(id, 990));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
 }
 
 /** The config layer, contributing `value` for `KEY` (or nothing, if `value` is `undefined`). */
 function configLayerWithValue(id: string, rank: number, value: Node | undefined): Layer {
   const tree = createMapping(value !== undefined ? [[KEY, value]] : [], span(id, 999));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "config", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "config", rank, tree };
 }
 
 function configurationFrom(layers: readonly Layer[]): Parameters<typeof validate>[0] {

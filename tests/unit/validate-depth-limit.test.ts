@@ -86,12 +86,12 @@ function nestedSequenceValue(id: string, depth: number): Node {
 
 function schemaLayerWithDemand(id: string, rank: number, demand: Node): Layer {
   const tree = createMapping([["keys", createMapping([[KEY, createMapping([["demand", demand]], span(id, 900))]], span(id, 950))]], span(id, 990));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
 }
 
 function configLayerWithValue(id: string, rank: number, value: Node | undefined): Layer {
   const tree = createMapping(value !== undefined ? [[KEY, value]] : [], span(id, 999));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "config", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "config", rank, tree };
 }
 
 function configurationFrom(layers: readonly Layer[]): Parameters<typeof validate>[0] {

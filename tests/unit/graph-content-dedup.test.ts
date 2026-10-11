@@ -36,7 +36,7 @@ import { createOrigin, createSourceSpan } from "../../src/model/span.js";
 function fakeDocument(location: string, hash: string): GraphDocument {
   const origin = createOrigin(location, location);
   const span = createSourceSpan({ origin, start: 0, end: 0, line: 1, column: 1, documentLength: 0 });
-  return { identity: { location, hash }, tree: createNullScalar(span), verified: false };
+  return { identity: { location, physical: location, hash }, tree: createNullScalar(span), verified: false };
 }
 
 describe("GraphBuilder content-hash dedup (research D5, second stage)", () => {

@@ -46,7 +46,7 @@ function span(): SourceSpan {
 
 /** A configuration whose merged tree is exactly `tree` — the projection reads nothing else in this file's cases. */
 function configurationOf(tree: Node): MergedConfiguration {
-  const configLayer: Layer = { identity: { location: "value-view", hash: "1".repeat(64) }, role: "config", rank: 0, tree };
+  const configLayer: Layer = { identity: { location: "value-view", physical: "value-view", hash: "1".repeat(64) }, role: "config", rank: 0, tree };
   return { tree, provenance: new Map(), pedigree: [], layers: [configLayer], delegationBreadcrumbs: new Map(), finalState: new Map() };
 }
 

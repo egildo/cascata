@@ -20,8 +20,14 @@
  * collide on values the model holds unequal).
  */
 export interface DocumentIdentity {
-  /** The absolute resolved location — a real path, or a normalized URL. */
+  /** The absolute resolved location — the **logical** path (v1.13): the route taken, no link followed; or a normalized URL as written. */
   readonly location: string;
+  /**
+   * Where the document really is (v1.13 FR-004): the host's canonical path for a file, the URL after
+   * redirects for a remote document. Always present, and equal to `location` when nothing differs.
+   * **Identity is physical** (Article VI): two documents with one `physical` are one document.
+   */
+  readonly physical: string;
   /** Lowercase hex SHA-256 over the exact bytes; 64 characters. */
   readonly hash: string;
 }

@@ -28,7 +28,7 @@ import type { Node } from "../model/node.js";
 import type { SourceSpan } from "../model/span.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import { pointerFromPath } from "../model/pointer.js";
-import { isWithinSandbox } from "./location.js";
+import { isWithinSandbox, type PhysicalPaths } from "./location.js";
 import { parseTypeExpression } from "../validate/typeexpr.js";
 import type { Host } from "./host.js";
 
@@ -242,6 +242,6 @@ export function isAbsoluteDelegatedPath(text: string, paths: PathFacility): bool
  * scope. The reuse this function has always practised is what makes that
  * free: widening `isWithinSandbox` widened delegation with it.
  */
-export async function isDelegationSandboxEscape(host: Host, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
-  return !(await isWithinSandbox(host, location, sandboxRoots));
+export async function isDelegationSandboxEscape(physical: PhysicalPaths, location: string, sandboxRoots: readonly string[]): Promise<boolean> {
+  return !(await isWithinSandbox(physical, location, sandboxRoots));
 }

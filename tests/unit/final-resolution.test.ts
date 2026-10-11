@@ -59,11 +59,11 @@ function schemaLayerFor(id: string, rank: number, key: string, opts: { final?: b
   }
   const keysEntries: [string, Node][] = entries.length > 0 ? [[key, createMapping(entries, span(id, 40))]] : [];
   const tree = createMapping([["keys", createMapping(keysEntries, span(id, 50))]], span(id, 60));
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "schema", rank, tree };
 }
 
 function configLayerFor(id: string, rank: number): Layer {
-  return { identity: { location: id, hash: "0".repeat(64) }, role: "config", rank, tree: createMapping([], span(id, 0)) };
+  return { identity: { location: id, physical: id, hash: "0".repeat(64) }, role: "config", rank, tree: createMapping([], span(id, 0)) };
 }
 
 const KEY = "network";
@@ -110,7 +110,7 @@ describe("resolveFinal — final refuses every redeclaration shape, not only wid
   });
 
   it("a config declaring final has no effect (v0.7 FR-014)", () => {
-    const layers: Layer[] = [{ identity: { location: "c0", hash: "0".repeat(64) }, role: "config", rank: 0, tree: createMapping([["keys", createMapping([[KEY, createMapping([["final", createBoolScalar(true, span("c0", 1))]], span("c0", 2))]], span("c0", 3))]], span("c0", 4)) }];
+    const layers: Layer[] = [{ identity: { location: "c0", physical: "c0", hash: "0".repeat(64) }, role: "config", rank: 0, tree: createMapping([["keys", createMapping([[KEY, createMapping([["final", createBoolScalar(true, span("c0", 1))]], span("c0", 2))]], span("c0", 3))]], span("c0", 4)) }];
     const { state, diagnostics } = resolveFinal(layers);
     expect(diagnostics).toEqual([]);
     expect(state.size).toBe(0);

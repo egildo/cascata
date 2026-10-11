@@ -22,6 +22,13 @@ export interface Origin {
   readonly id: string;
   /** Human-readable name for diagnostics (a path, a URL, `<stdin>`). */
   readonly label: string;
+  /**
+   * Where the document really is (v1.13 FR-004, SPEC.md Article VI): the host's canonical path for a file,
+   * the URL after redirects for a remote document. Present **only when it differs from the document's
+   * logical location**, so every origin of an unlinked, unredirected document is what it was before v1.13.
+   * `id` and `label` stay logical.
+   */
+  readonly physical?: string;
 }
 
 /**
@@ -54,14 +61,17 @@ export interface SourceSpan {
  * building an Origin by hand), never a bad-document outcome, so it is
  * reported by exception rather than by diagnostic (contracts/parse-api.md).
  */
-export function createOrigin(id: string, label: string): Origin {
+export function createOrigin(id: string, label: string, physical?: string): Origin {
   if (id.length === 0) {
     throw new Error("Origin.id must be a non-empty string");
   }
   if (label.length === 0) {
     throw new Error("Origin.label must be a non-empty string");
   }
-  return { id, label };
+  if (physical !== undefined && physical.length === 0) {
+    throw new Error("Origin.physical must be a non-empty string when given");
+  }
+  return physical === undefined || physical === label ? { id, label } : { id, label, physical };
 }
 
 /**

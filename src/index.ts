@@ -28,7 +28,7 @@ import { freeze } from "./model/freeze.js";
 import { createOrigin, createSourceSpan, type Origin } from "./model/span.js";
 import { createReference, extractAdoptsReference, extractSchemaReference, referenceDiagnostic, type ExtractedReference, type Reference } from "./resolve/reference.js";
 import { accumulate as accumulateImpl, generate as generateImpl, type AccumulatedTree } from "./generate/index.js";
-import { canonicalizeForDiagnostic, classifyLocatedDocument, classifyReferenceLocation, isSandboxEscape, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoots, type ReferenceLocationKind } from "./resolve/location.js";
+import { classifyLocatedDocument, classifyReferenceLocation, isSandboxEscape, PhysicalPaths, readLocalDocument, toAbsoluteEntryLocation, toAbsoluteSandboxRoots, type ReferenceLocationKind } from "./resolve/location.js";
 import { createDocumentIdentity } from "./resolve/identity.js";
 import { posixPaths, type PathFacility } from "./paths.js";
 import { DocumentCache } from "./resolve/cache.js";
@@ -397,8 +397,8 @@ function phantomSpan(origin: Origin): ReturnType<typeof createSourceSpan> {
  * existed the whole time; nothing consulted it, so registering an adapter
  * changed nothing a caller could reach.
  */
-function parseAtLocation(bytes: Uint8Array, location: string): AdapterParseOutcome {
-  const origin = createOrigin(location, location);
+function parseAtLocation(bytes: Uint8Array, location: string, physical: string): AdapterParseOutcome {
+  const origin = createOrigin(location, location, physical);
   const format = formatForLocation(location);
   const adapter = format === undefined ? undefined : adapterForFormat(format);
   if (adapter === undefined) {
@@ -615,7 +615,17 @@ async function readAtTarget(host: Host, target: ReferenceLocationKind, candidate
  * finding recorded for T021's local case) — the mechanism is tested
  * directly instead, in `tests/unit/graph-remote-dedup.test.ts`.
  */
-async function walkAdoptsChain(host: Host, candidate: Reference, referringLocation: string, builder: GraphBuilder, remote: RemoteContext | undefined, sandboxRoots: readonly string[]): Promise<ChainWalkResult> {
+/** What one `resolve()` call's walk of the adoption chain shares: the host, the builder, the remote seam, the granted roots, and the physical paths asked of the host so far (v1.13 FR-003). */
+interface ChainContext {
+  readonly host: Host;
+  readonly builder: GraphBuilder;
+  readonly remote: RemoteContext | undefined;
+  readonly sandboxRoots: readonly string[];
+  readonly physical: PhysicalPaths;
+}
+
+async function walkAdoptsChain(ctx: ChainContext, candidate: Reference, referringLocation: string): Promise<ChainWalkResult> {
+  const { host, builder, remote, sandboxRoots, physical } = ctx;
   const paths = host.paths ?? posixPaths;
   const classified = classifyReferenceLocation(candidate, referringLocation, paths);
   // v1.4 FR-001: a scheme this library does not itself understand is
@@ -641,7 +651,7 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
   // already exempts. What the located document then writes for *itself*
   // is checked as usual — it is ordinary reference text in an ordinary
   // document, and this exemption does not travel down the chain.
-  if (!hostLocated && target.kind === "local" && (await isSandboxEscape(host, candidate, target.location, sandboxRoots))) {
+  if (!hostLocated && target.kind === "local" && (await isSandboxEscape(physical, candidate, target.location, sandboxRoots))) {
     // Refused *before any read is attempted* (v0.2 FR-021, research D6) —
     // judged on the resolved real path, following symlinks
     // (`isSandboxEscape`/`isWithinSandbox`, `src/resolve/location.ts`).
@@ -654,12 +664,15 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
         referenceDiagnostic(
           "sandbox-escape",
           candidate,
-          `Schema-authored reference '${candidate.text}' resolves to '${await canonicalizeForDiagnostic(host, target.location)}', outside every granted sandbox root (${namedRoots(sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (v0.2 FR-021)`,
+          `Schema-authored reference '${candidate.text}' resolves to '${await physical.of(target.location)}', outside every granted sandbox root (${namedRoots(sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (v0.2 FR-021)`,
         ),
       ],
     };
   }
   const location = target.kind === "local" ? target.location : target.url;
+  // v1.13 FR-002: where the document really is. A file's was asked once, above if the sandbox looked, and is
+  // remembered; a remote document's is known only after its fetch (FR-015), so until then it is the URL.
+  const targetPhysical = target.kind === "local" ? await physical.of(target.location) : target.url;
   const decision = builder.beginVisit(location, candidate);
 
   if (decision.kind === "cycle") {
@@ -688,7 +701,7 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
     return { ok: false, diagnostics: [read.diagnostic] };
   }
 
-  const parsed = parseAtLocation(read.bytes, location);
+  const parsed = parseAtLocation(read.bytes, location, targetPhysical);
   if (!parsed.ok) {
     builder.abandonVisit(location);
     // FR-024: a failure inside a document reached through a reference is
@@ -707,7 +720,7 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
     };
   }
 
-  const identity = createDocumentIdentity(location, read.bytes);
+  const identity = createDocumentIdentity(location, read.bytes, targetPhysical);
   const document: GraphDocument = { identity, tree: freeze(parsed.tree), via: candidate, verified: read.verified };
   // `location` stays on the active stack past this point (T030's fix —
   // see graph/build.ts's module doc): a self-reference in this exact
@@ -736,7 +749,7 @@ async function walkAdoptsChain(host: Host, candidate: Reference, referringLocati
     return { ok: true, documentsLeafToRoot: [canonical] };
   }
 
-  const parentResult = await walkAdoptsChain(host, adoptsExtraction.reference, location, builder, remote, sandboxRoots);
+  const parentResult = await walkAdoptsChain(ctx, adoptsExtraction.reference, location);
   if (!parentResult.ok) {
     // Aborting the whole resolve() call regardless — no further use of
     // `builder` follows, so `location`'s frame is left on the (about to
@@ -801,8 +814,15 @@ export class DelegationCycleTracker {
   }
 }
 
+/** A document that writes references: its logical location, and where it really is (v1.13). */
+interface Referrer {
+  readonly location: string;
+  readonly physical: string;
+}
+
 interface DelegationState {
   readonly host: Host;
+  readonly physical: PhysicalPaths;
   readonly tracker: DelegationCycleTracker;
   readonly byteCache: Map<string, Uint8Array>;
   readonly sandboxRoots: readonly string[];
@@ -869,7 +889,7 @@ type OverridesOutcome = { readonly ok: true; readonly documents: readonly GraphD
  * Every override is read even after one fails, so a command line with
  * two bad flags reports both rather than the first.
  */
-async function readOverrides(host: Host, texts: readonly string[], entryLocation: string, entryOrigin: Origin, remote: RemoteContext | undefined): Promise<OverridesOutcome> {
+async function readOverrides(host: Host, texts: readonly string[], entryLocation: string, entryOrigin: Origin, remote: RemoteContext | undefined, physical: PhysicalPaths): Promise<OverridesOutcome> {
   const paths = host.paths ?? posixPaths;
   const documents: GraphDocument[] = [];
   const diagnostics: Diagnostic[] = [];
@@ -888,7 +908,8 @@ async function readOverrides(host: Host, texts: readonly string[], entryLocation
       continue;
     }
     const location = target.kind === "local" ? target.location : target.url;
-    const parsed = parseAtLocation(read.bytes, location);
+    const locationPhysical = target.kind === "local" ? await physical.of(location) : location;
+    const parsed = parseAtLocation(read.bytes, location, locationPhysical);
     if (!parsed.ok) {
       extend(diagnostics, parsed.diagnostics);
       continue;
@@ -898,13 +919,13 @@ async function readOverrides(host: Host, texts: readonly string[], entryLocation
       extend(diagnostics, reserved);
       continue;
     }
-    documents.push({ identity: createDocumentIdentity(location, read.bytes), tree: freeze(parsed.tree), verified: read.verified });
+    documents.push({ identity: createDocumentIdentity(location, read.bytes, locationPhysical), tree: freeze(parsed.tree), verified: read.verified });
   }
   return diagnostics.length > 0 ? { ok: false, diagnostics } : { ok: true, documents };
 }
 
 type GraftOutcome =
-  | { readonly ok: true; readonly node: Node; readonly fragmentLocation: string; readonly breadcrumbChain: readonly DelegationHop[] }
+  | { readonly ok: true; readonly node: Node; readonly fragment: Referrer; readonly breadcrumbChain: readonly DelegationHop[] }
   | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] };
 
 /**
@@ -914,7 +935,7 @@ type GraftOutcome =
  * whether that document is the config itself or, for a recursive hop, a
  * fragment that itself delegated further.
  */
-async function performGraft(valueNode: Node, documentLocation: string, breadcrumbChain: readonly DelegationHop[], state: DelegationState): Promise<GraftOutcome> {
+async function performGraft(valueNode: Node, document: Referrer, breadcrumbChain: readonly DelegationHop[], state: DelegationState): Promise<GraftOutcome> {
   if (valueNode.type !== "scalar" || valueNode.kind !== "string") {
     throw new Error("Internal error: performGraft called on a non-string node");
   }
@@ -936,13 +957,14 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   // the delegating document (a config, or a fragment several hops
   // in — never a schema, which only ever grants the *permission*).
   const reference = createReference({ text, span: valueNode.span, kind: "delegate", authority: "config-authored" });
-  const target = classifyReferenceLocation(reference, documentLocation, paths);
+  const target = classifyReferenceLocation(reference, document.location, paths);
 
   if (target.kind === "unsupported-scheme") {
     return { ok: false, diagnostics: [referenceDiagnostic("unsupported-scheme", reference, `Delegated reference '${text}' uses scheme '${target.scheme}:' — only HTTPS and local paths are supported (v0.6, mirroring v0.2 FR-013)`)] };
   }
 
   let location: string;
+  let locationPhysical: string;
   let bytes: Uint8Array;
 
   if (target.kind === "https") {
@@ -959,6 +981,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
       };
     }
     location = target.url;
+    locationPhysical = location;
     const cached = state.byteCache.get(location);
     if (cached !== undefined) {
       bytes = cached;
@@ -975,14 +998,15 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
     }
   } else {
     location = target.location;
-    if (await isDelegationSandboxEscape(state.host, location, state.sandboxRoots)) {
+    locationPhysical = await state.physical.of(location);
+    if (await isDelegationSandboxEscape(state.physical, location, state.sandboxRoots)) {
       return {
         ok: false,
         diagnostics: [
           referenceDiagnostic(
             "sandbox-escape",
             reference,
-            `Delegated reference '${text}' resolves to '${await canonicalizeForDiagnostic(state.host, location)}', outside every granted sandbox root (${namedRoots(state.sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (SPEC.md §8.4, v0.6 FR-022)`,
+            `Delegated reference '${text}' resolves to '${locationPhysical}', outside every granted sandbox root (${namedRoots(state.sandboxRoots)}) — a caller grants roots through 'sandboxRoot' (SPEC.md §8.4, v0.6 FR-022)`,
           ),
         ],
       };
@@ -1028,7 +1052,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   // though the bytes were read/cached only once.
   state.graftCounter += 1;
   const graftId = `${location} #graft=${state.graftCounter}`;
-  const origin = createOrigin(graftId, location);
+  const origin = createOrigin(graftId, location, locationPhysical);
   // Looked up in the registry rather than compared to `"yaml"` (v1.2,
   // specs/011-json-adapter research P-7) — a delegated fragment may be in
   // a different format than the document that grafts it, which is what
@@ -1075,7 +1099,7 @@ async function performGraft(valueNode: Node, documentLocation: string, breadcrum
   // to itself would be read as a fresh "new" visit instead of a "cycle",
   // because the stack would already be empty by the time the
   // self-reference is checked.
-  return { ok: true, node: fragmentRoot, fragmentLocation: location, breadcrumbChain: newChain };
+  return { ok: true, node: fragmentRoot, fragment: { location, physical: locationPhysical }, breadcrumbChain: newChain };
 }
 
 type DelegationWalkOutcome = { readonly ok: true; readonly node: Node } | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] };
@@ -1090,7 +1114,7 @@ type DelegationWalkOutcome = { readonly ok: true; readonly node: Node } | { read
  * (v0.6 FR-027) — its first real, multi-branch caller since v0.2 wrote
  * it for exactly this milestone.
  */
-async function walkForDelegation(node: Node, grantNode: DelegationGrantNode, documentLocation: string, breadcrumbChain: readonly DelegationHop[], state: DelegationState): Promise<DelegationWalkOutcome> {
+async function walkForDelegation(node: Node, grantNode: DelegationGrantNode, document: Referrer, breadcrumbChain: readonly DelegationHop[], state: DelegationState): Promise<DelegationWalkOutcome> {
   if (node.type !== "mapping" || grantNode.keys.size === 0) {
     return { ok: true, node };
   }
@@ -1101,17 +1125,17 @@ async function walkForDelegation(node: Node, grantNode: DelegationGrantNode, doc
       return { ok: true, value: [key, childNode] };
     }
     if (childGrant.grant !== undefined && childNode.type === "scalar" && childNode.kind === "string") {
-      const grafted = await performGraft(childNode, documentLocation, breadcrumbChain, state);
+      const grafted = await performGraft(childNode, document, breadcrumbChain, state);
       if (!grafted.ok) {
         return { ok: false, failures: grafted.diagnostics };
       }
       // `performGraft`'s own success path deliberately leaves
-      // `grafted.fragmentLocation` on the tracker's active stack — it
+      // `grafted.fragment` on the tracker's active stack — it
       // must stay there for this recursion, so a self-reference inside
       // the fragment is still seen as a cycle. Popped here, once this
       // fragment's own further delegations have been fully resolved,
       // success or failure alike.
-      const inner = await walkForDelegation(grafted.node, childGrant, grafted.fragmentLocation, grafted.breadcrumbChain, state);
+      const inner = await walkForDelegation(grafted.node, childGrant, grafted.fragment, grafted.breadcrumbChain, state);
       state.tracker.exit();
       if (!inner.ok) {
         return { ok: false, failures: inner.diagnostics };
@@ -1119,7 +1143,7 @@ async function walkForDelegation(node: Node, grantNode: DelegationGrantNode, doc
       return { ok: true, value: [key, inner.node] };
     }
     if (childNode.type === "mapping" && childGrant.keys.size > 0) {
-      const inner = await walkForDelegation(childNode, childGrant, documentLocation, breadcrumbChain, state);
+      const inner = await walkForDelegation(childNode, childGrant, document, breadcrumbChain, state);
       if (!inner.ok) {
         return { ok: false, failures: inner.diagnostics };
       }
@@ -1170,7 +1194,7 @@ function collectAllDelegationGrants(schemaDocumentsRootToLeaf: readonly GraphDoc
  * each schema's own resolved `AuthoritySection`, which only exists once
  * this walk has run.
  */
-async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoots: readonly string[], remote: RemoteContext | undefined, allowRemoteDelegation: boolean, graftDelegation: boolean): Promise<ResolveResult> {
+async function finalizeWithDelegation(host: Host, physical: PhysicalPaths, graph: Graph, sandboxRoots: readonly string[], remote: RemoteContext | undefined, allowRemoteDelegation: boolean, graftDelegation: boolean): Promise<ResolveResult> {
   const paths = host.paths ?? posixPaths;
   const schemaDocumentsRootToLeaf = [...graph.documents.slice(1)].reverse();
 
@@ -1203,6 +1227,7 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoots: re
 
   const state: DelegationState = {
     host,
+    physical,
     tracker: new DelegationCycleTracker(MAX_DELEGATION_DEPTH),
     byteCache: new Map(),
     sandboxRoots,
@@ -1212,7 +1237,7 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoots: re
     graftCounter: 0,
   };
 
-  const walked = await walkForDelegation(graph.entry.tree, grantTree, graph.entry.identity.location, [], state);
+  const walked = await walkForDelegation(graph.entry.tree, grantTree, graph.entry.identity, [], state);
   if (!walked.ok) {
     return { ok: false, diagnostics: [...walked.diagnostics] };
   }
@@ -1222,7 +1247,7 @@ async function finalizeWithDelegation(host: Host, graph: Graph, sandboxRoots: re
   // pedigree governs, and §8's grant is a fact about the pedigree.
   const graftedOverrides: GraphDocument[] = [];
   for (const override of graph.overrides ?? []) {
-    const walkedOverride = await walkForDelegation(override.tree, grantTree, override.identity.location, [], state);
+    const walkedOverride = await walkForDelegation(override.tree, grantTree, override.identity, [], state);
     if (!walkedOverride.ok) {
       return { ok: false, diagnostics: [...walkedOverride.diagnostics] };
     }
@@ -1259,8 +1284,11 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
   const maxChainLength = options.maxChainLength ?? DEFAULT_MAX_CHAIN_LENGTH;
 
   const builder = new GraphBuilder(maxChainLength);
+  const physical = new PhysicalPaths(host);
+  const chain: ChainContext = { host, builder, remote, sandboxRoots, physical };
   const entryLocation = toAbsoluteEntryLocation(entryPath, paths);
-  const entryOrigin = createOrigin(entryLocation, entryLocation);
+  const entryPhysical = await physical.of(entryLocation);
+  const entryOrigin = createOrigin(entryLocation, entryLocation, entryPhysical);
 
   const entryVisit = builder.beginVisit(entryLocation, undefined);
   if (entryVisit.kind !== "new") {
@@ -1286,12 +1314,12 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
     };
   }
 
-  const entryParsed = parseAtLocation(entryRead.bytes, entryLocation);
+  const entryParsed = parseAtLocation(entryRead.bytes, entryLocation, entryPhysical);
   if (!entryParsed.ok) {
     return { ok: false, diagnostics: entryParsed.diagnostics };
   }
 
-  const entryIdentity = createDocumentIdentity(entryLocation, entryRead.bytes);
+  const entryIdentity = createDocumentIdentity(entryLocation, entryRead.bytes, entryPhysical);
   const entryDocument: GraphDocument = { identity: entryIdentity, tree: freeze(entryParsed.tree), verified: false };
   // `entryLocation` stays on the active stack for the *entire* schema
   // chain below (finishVisit only after it returns) — the same
@@ -1326,7 +1354,7 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
 
   let chainDocumentsLeafToRoot: readonly GraphDocument[] = [];
   if (candidate !== undefined) {
-    const chainResult = await walkAdoptsChain(host, candidate, entryLocation, builder, remote, sandboxRoots);
+    const chainResult = await walkAdoptsChain(chain, candidate, entryLocation);
     if (!chainResult.ok) {
       // Aborting the whole call — no further use of `builder` follows, so
       // `entryLocation`'s frame is left on the (about to be discarded)
@@ -1341,13 +1369,13 @@ async function resolveEntry(entryPath: string, options: ResolveOptions, entryRef
   // v1.6 FR-001: the overrides, after the chain — so a diagnostic about
   // one is never reported ahead of a chain that would have failed anyway,
   // and `host.reads` records the order the layers rank in.
-  const overridesRead = await readOverrides(host, overrides ?? [], entryLocation, entryOrigin, remote);
+  const overridesRead = await readOverrides(host, overrides ?? [], entryLocation, entryOrigin, remote, physical);
   if (!overridesRead.ok) {
     return { ok: false, diagnostics: overridesRead.diagnostics };
   }
 
   const graph = buildGraph(canonicalEntry, chainDocumentsLeafToRoot, overridesRead.documents);
-  return finalizeWithDelegation(host, graph, sandboxRoots, remote, options.allowRemoteDelegation ?? false, graftDelegation);
+  return finalizeWithDelegation(host, physical, graph, sandboxRoots, remote, options.allowRemoteDelegation ?? false, graftDelegation);
 }
 
 /**
