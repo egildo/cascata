@@ -517,9 +517,13 @@ type ReadOutcomeUnified =
 function remoteFailureDiagnostic(failure: RemoteDocumentFailure, candidate: Reference): Diagnostic {
   switch (failure.kind) {
     case "unsupported-scheme":
+      // An empty scheme is not a scheme: the fetch could not parse the text as a URL at all (v1.13 FR-014 leaves unparseable text as written).
       return createDiagnostic({ level: "error",
         code: "unsupported-scheme",
-        message: `Reference '${candidate.text}' redirected to an unsupported scheme '${failure.scheme}:' — only HTTPS is permitted (v0.2 FR-013)`,
+        message:
+          failure.scheme === ""
+            ? `Reference '${candidate.text}' is not a valid URL, so it cannot be fetched — only HTTPS and local paths are supported (v0.2 FR-013)`
+            : `Reference '${candidate.text}' redirected to an unsupported scheme '${failure.scheme}:' — only HTTPS is permitted (v0.2 FR-013)`,
         primary: candidate.span,
       });
     case "insecure-redirect":

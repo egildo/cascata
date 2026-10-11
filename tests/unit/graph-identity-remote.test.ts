@@ -60,6 +60,7 @@ describe("v1.13 FR-014: text the URL Standard cannot parse is left as written, s
   it("an absolute https:// reference that is not a URL is unsupported-scheme from the fetch, as before", async () => {
     const d = failureOf(await resolveAt(vhost({ "/v/e.yaml": "$schema: https://[::1\n" }), "/v/e.yaml", { transport: new RecordedTransport([]) }));
     expect(d.map((x) => x.code)).toEqual(["unsupported-scheme"]);
+    expect(d[0]?.message).toContain("'https://[::1' is not a valid URL");
   });
 
   it("a relative reference in a remote document that is not a URL is a refusal, not a thrown TypeError (the old code threw)", async () => {
@@ -67,6 +68,9 @@ describe("v1.13 FR-014: text the URL Standard cannot parse is left as written, s
     const d = failureOf(await resolveAt(vhost({ "/v/e.yaml": "$schema: https://example.test/a.yaml\n" }), "/v/e.yaml", { transport }));
     expect(d.map((x) => x.code)).toEqual(["unsupported-scheme"]);
     expect(d[0]?.primary).toMatchObject({ origin: { id: "https://example.test/a.yaml" } });
+    // It names the text and says what is wrong with it, not an empty scheme.
+    expect(d[0]?.message).toContain("'//[x' is not a valid URL");
+    expect(d[0]?.message).not.toContain("scheme ''");
   });
 });
 
