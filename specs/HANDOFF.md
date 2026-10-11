@@ -1,10 +1,45 @@
 # Handoff — what the specs and reports do not say
 
-Rewritten at the end of milestone 022 (v1.12, "after the review") for whoever takes 023. Assumes you have read
+Rewritten at the end of milestone 023 (v1.13, "graph identity") for whoever takes 024. Assumes you have read
 `CLAUDE.md` and nothing else. Per-milestone detail is in `specs/NNN-*/report.md`; this is only what is not there,
-or is where nobody would look. Earlier handoffs (017 to 020) are folded in where they still hold.
+or is where nobody would look. Earlier handoffs (017 to 022) are folded in where they still hold.
 
-## Where things live (and what a change must keep)
+## Graph identity (023): where it lives and what a change must keep
+
+**Two paths per document.** `DocumentIdentity.physical` (required) and `Origin.physical` (optional, present only when it
+differs from the label) beside the logical `location`/`id`/`label`. `id`, `label` and every message stay logical. A
+hand-built `DocumentIdentity` literal in a test needs `physical` (23 old test files got it in 023). `createOrigin(id, label,
+physical?)` drops an equal physical and throws on an empty one.
+
+**`PhysicalPaths` (`src/resolve/location.ts`) is the only thing that calls `host.canonicalize`.** One per `resolve()` call; it
+memoizes every question, ancestors included, which is what `graph-identity-paths.test.ts` counts (FR-003). The sandbox
+(`isWithinSandbox`/`isSandboxEscape`/`isDelegationSandboxEscape`) takes it, not the host. A new caller that asks the host
+directly breaks the count and lets the sandbox and the graph disagree about where a path is.
+
+**`GraphBuilder` (`src/graph/build.ts`)**: `beginVisit(location, incoming, physical = location)`, then `registerContent`
+(return type pinned by old tests), then `contentCycle(canonical)` (a hash match on the active path is a cycle, FR-006),
+`finishVisit`. A **remote** visit starts under its URL and settles with `learnPhysical(location, finalUrl)` after the
+fetch. The cycle test is `physical OR logical location` on purpose (a remote physical URL is unknown until fetched).
+`DelegationCycleTracker.enter(location, physical)` is the same idea for fragments; grafts are never deduplicated.
+
+**Where a relative reference starts** is `referenceBases(referrer)` (file: logical; remote: physical URL). Anything new that
+resolves a reference must take a `Referrer {location, physical}` and, if relative, call `linkNotice` (info, never a refusal;
+collected in a per-call `notices` array, returned first in `ok:true`'s `diagnostics`; dropped on `ok:false` like every info).
+`resource()` cannot raise it (no host); it carries `otherLocation` instead.
+
+**Remote**: `classifyReferenceLocation` normalizes with `new URL(..).href`; `fetchDocument`'s `finalUrl` flows through
+`resolveRemoteDocument` and is stored in the cache meta (`StoredMeta.finalUrl`; absent in a v1.12 entry, which answers its own
+URL). `.href` keeps a fragment, userinfo and a trailing-dot host (report, Ambiguities 7): not folded.
+
+**Testing it.** `tests/unit/graph-identity-helpers.ts`: `vhost(files, canonical, canonicalizeIsIdentity)` and `resolveAt`. In
+the in-memory host `files` is keyed by the **logical** path (that is what `read` is given) and `canonical` answers the
+physical one; to model a link that a map cannot (a directory linked to itself) subclass `InMemoryHost` and override `read` and
+`canonicalize` (see case "4b" in `graph-identity-cycles.test.ts`). A case that a content-hash net would also catch must assert
+`host.reads` to discriminate the path rule. Real-disk tests make their venue under `os.tmpdir()` **without** canonicalizing it
+(on macOS `/var` is a link, so FR-013's naming fires on purpose); take expectations from `realpathSync.native`, not the library.
+The corpus runner does not assert an `ok:true` result's diagnostics, so `link-changes-reference` cases are unit tests.
+
+## Where things live (and what a change must keep) — 017 to 022, unchanged
 
 **Positions (017, 022).** `src/adapters/yaml/parse.ts` owns every YAML span. `ctx.text` is the *stored* text
 (marks and CRs included); `yamlText` is what `yaml` reads. Two substitutions: a lone CR becomes LF (same length),
@@ -37,7 +72,7 @@ where it can hold the value; a kept tag does not relax quoting (`!!str "4"`).
 **Shared values (022).** `findYaml(…, sharedEdits)`: under `"refuse"` a path through an alias or merge key is
 refused at the alias, as since 018; under `"warn"`/`"allow"` the walk resolves the final alias too and answers the
 anchored node's bytes. `locate` calls it with the writer's own policy (v1.12.1; it had always passed `"refuse"`). `editTarget`
-(`src/edit-target.ts`) counts copies in the document *and* every other origin whose location is the same file —
+(`src/edit-target.ts`) counts copies in the document *and* every other origin whose **physical** path is the same file (023; it was the location text before) —
 a graft (`delegationBreadcrumbs.has(id)` → its label is the location) or a layer read from that file — via
 `originsInTree` and `pointersAt` in `src/model/pointer.ts`.
 
@@ -84,14 +119,33 @@ the writers under the case's own policy.
   command) is the driver used this round and is worth recreating.
 - `anchor-table.test.ts` (~20 s) and `duplicate-keys.test.ts` are the slow main-suite files.
 
+- **Load makes the serial timing suite fail.** Three timing tests failed at a load average of 70 to 96 (other processes on
+  the machine), one of them over code 023 did not touch; they passed at 12 to 16. Check `uptime` before believing a timing
+  failure either way, and rerun when it is quiet; never loosen a bound.
+
 ## How I verified (reusable)
 
-- Hand counts first, written beside the expectation (`a0 :1 sp2 …`). Two of mine were wrong this round and the
-  runs caught them; the spec's hand counts were right except one label (FR-011's "3..8 including its space").
+- Hand counts first, written beside the expectation (`a0 :1 sp2 …`). In 023 every position is counted from the text
+  (`$adopts: ` is nine bytes, so a value starts at 9); one expectation was wrong (the order of `why()`'s chain: winner
+  first) and the run caught it.
+- **Sabotage driver.** `/tmp/cascata-023/sab.py` (one sabotage: file, old, new, tests; backs up, appends a `/* SABOTAGE */`
+  marker, prints the red tests, restores from the backup) and `batch.py` (a list of 28) are worth recreating; run the batch in
+  the background, and do not touch `src/` or `tests/` while it runs. **A trap of mine:** `open(p,"w").write(open(p).read())`
+  truncates the file before it reads it. It emptied `src/graph/build.ts` once; `git checkout --` saved it only because nothing
+  else in it was uncommitted. Never write a file back in the same expression that reads it.
+- A new test that "is red before" is also worth running against the previous milestone's source in a `git worktree` of the
+  old commit (symlink `node_modules`, copy the tests in); in 023 that showed 55 of 74 failing, and that the probe gate and
+  the controls pass on the old code, as they should.
 - Sabotage every claim, including ones you expect to stay green; three stayed green and one of them exposed a
   real defect (the vacuous copies read-back).
 
 ## Open edges (noticed, not fixed)
+
+- **023:** `resource()` has no `link-changes-reference` (it carries `otherLocation`); the remote notice compares URL strings and
+  can over-report where two URLs redirect to one file; `GraphBuilder.learnPhysical`'s "duplicate" outcome is reachable only
+  in a unit test (a chain is linear); `package.json` is still 1.12.1; `docs/reference.md` was updated but `README.md` and the
+  older `specs/*/contracts/` still show a two-field `DocumentIdentity`; the `SPEC.md` items flagged in the 023 report
+  (§15's "ran to `depth-limit-exceeded`" is wrong; §7/§8.4 are silent on logical versus physical) are the owner's.
 
 - **Unreachable safety net:** `edit-read-back` (an edit that would not read back), kept as a refusal so a writer
   bug reaches a live editor as a refusal rather than a crash; no known input reaches it.
