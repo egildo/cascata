@@ -36,7 +36,7 @@ describe("v1.15 FR-001 -- openDocument", () => {
   it("is exported from the package root and answers ok with a document", () => {
     const result = openDocument(ENC.encode("a: 1\n"), yaml);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(Object.keys(result.document).sort()).toEqual(["add", "locate", "remove", "setValue"]);
+    if (result.ok) expect(Object.keys(result.document).sort()).toEqual(["add", "amend", "locate", "remove", "setValue", "shifted"]);
   });
 
   it("a document that does not parse gives the parse's own diagnostics, as locate does", () => {
@@ -267,7 +267,7 @@ describe("v1.15 FR-006 -- writers gain open", () => {
     const opened = yamlWriter().open(bytes);
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
-    expect(Object.keys(opened.document).sort()).toEqual(["add", "locate", "remove", "write"]);
+    expect(Object.keys(opened.document).sort()).toEqual(["add", "amend", "locate", "remove", "shifted", "write"]);
     expect(opened.document.locate("/b")).toEqual(yamlWriter().locate(bytes, "/b"));
     expect(opened.document.locate("/b")).toEqual({ ok: true, start: 8, end: 9 });
     expect(opened.document.write("/b", 3)).toEqual(yamlWriter().write(bytes, "/b", 3));

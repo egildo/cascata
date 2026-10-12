@@ -17,7 +17,7 @@
  */
 
 import { formatForLocation } from "./adapters/registry.js";
-import { locate, openDocument, setValue, type Edit, type EditData, type EditFormat, type EditValue, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
+import { locate, openDocument, setValue, type AmendOperation, type AmendResult, type Edit, type EditData, type EditFormat, type EditValue, type OpenedDocument, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
 import { createOrigin } from "./model/span.js";
 
 export type WriterLocateResult = { readonly ok: true; readonly start: number; readonly end: number } | { readonly ok: false; readonly reason: string };
@@ -40,6 +40,10 @@ export interface WriterDocument {
   add(path: string, value: EditData): WriterWriteResult;
   /** v1.15: delete the entry at `path`, with the comments attached to it. */
   remove(path: string): WriterWriteResult;
+  /** v1.16: whether a list along `path` has a different length in `newer`, a later version opened by a writer of this library. */
+  shifted(path: string, newer: WriterDocument): boolean;
+  /** v1.16: `operation` applied inside the value staged at `staged.path`; `{ inside: false }` when it is not below it. */
+  amend(staged: { readonly path: string; readonly value: EditData }, operation: AmendOperation): AmendResult;
 }
 
 export type WriterOpenResult = { readonly ok: true; readonly document: WriterDocument } | { readonly ok: false; readonly reason: string };
@@ -58,15 +62,16 @@ export interface Writer {
 
 const ORIGIN = createOrigin("writer", "writer");
 
+/** The opened document behind each writer document, so `shifted` can compare two versions (v1.16). */
+const underlying = new WeakMap<WriterDocument, OpenedDocument>();
+
 function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
   const options = { format, origin: ORIGIN, ...(writerOptions.sharedEdits !== undefined ? { sharedEdits: writerOptions.sharedEdits } : {}) };
   const open = (bytes: Uint8Array): WriterOpenResult => {
     const opened = openDocument(bytes, options);
     if (!opened.ok) return { ok: false, reason: opened.diagnostics[0]?.message ?? "not parsed" };
     const { document } = opened;
-    return {
-      ok: true,
-      document: {
+    const answered: WriterDocument = {
         locate(path) {
           const result = document.locate(path);
           return result.ok ? { ok: true, start: result.start, end: result.end } : { ok: false, reason: result.diagnostics[0]?.message ?? "not located" };
@@ -83,8 +88,15 @@ function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
           const result = document.remove(path);
           return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not removed" };
         },
-      },
+        shifted(path, newer) {
+          const other = underlying.get(newer);
+          if (other === undefined) throw new TypeError("shifted() takes, as `newer`, a document a writer of this library opened");
+          return document.shifted(path, other);
+        },
+        amend: (staged, operation) => document.amend(staged, operation),
     };
+    underlying.set(answered, document);
+    return { ok: true, document: answered };
   };
   // The one-shot verbs are the core's, which are open-then-ask (v1.15 FR-005).
   return {
@@ -111,4 +123,4 @@ export function jsonWriter(options?: WriterOptions): Writer {
   return writer("json", options);
 }
 
-export type { Edit, EditData, EditValue, SharedEdits };
+export type { AmendOperation, AmendResult, Edit, EditData, EditValue, SharedEdits };

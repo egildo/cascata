@@ -78,6 +78,7 @@ export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, Proven
 // Writing a value back (v1.10, SPEC.md Article IX): `locate` and `setValue`.
 export { locate, openDocument, setValue } from "./adapters/edit.js";
 export type { Edit, EditData, EditFormat, EditOptions, EditValue, LocatedKind, LocateResult, OpenedDocument, OpenResult, SetValueResult, SharedEdits } from "./adapters/edit.js";
+export type { AmendOperation, AmendResult } from "./adapters/amend.js";
 
 // Which document an edit belongs in (v1.11, SPEC.md Article IX): `editTarget`.
 export { editTarget } from "./edit-target.js";

@@ -30,6 +30,9 @@ import type { Origin, SourceSpan } from "../model/span.js";
 import { resolveLimits, type ParseLimits } from "./limits.js";
 import { dataEqualsNode, equalsValue, hasLoneSurrogate, inspectData, isContainerData, plainScalarText, type EditData, type EditValue } from "./edit-data.js";
 import { treeMatches, type Op } from "./readback.js";
+import { amendValue, type AmendOperation, type AmendResult } from "./amend.js";
+
+export type { AmendOperation, AmendResult };
 import type { Plan } from "./plan.js";
 import { openJson, parseBack as parseBackJson, renderJsonString } from "./json/write.js";
 import { openYaml, parseBack as parseBackYaml, renderYamlString, yamlNonFinite, yamlPadding } from "./yaml/write.js";
@@ -193,6 +196,19 @@ export interface OpenedDocument {
   add(pointer: string, value: EditData): SetValueResult;
   /** v1.15: delete the entry at `pointer`, with the comments attached to it. */
   remove(pointer: string): SetValueResult;
+  /**
+   * v1.16: whether a list along `pointer` has a different length in `newer` -- a later version of this document,
+   * opened by this library -- than here, so an index step may now name another item. `-` names the end and is never
+   * shifted; a step whose parent is a list in one version and not in the other is. A prefix absent from either
+   * version stops the walk: that is "gone", `locate`'s answer, not this one.
+   */
+  shifted(pointer: string, newer: OpenedDocument): boolean;
+  /**
+   * v1.16: the operation `operation` applied inside the value `staged.value` that a caller has staged at `staged.path`
+   * -- RFC 6902 on the value, with this library's meanings (`add` creates, `set` changes). `{ inside: false }` when
+   * `operation.path` is not strictly below `staged.path`. Pure: no bytes are read, and the staged value is unchanged.
+   */
+  amend(staged: { readonly path: string; readonly value: EditData }, operation: AmendOperation): AmendResult;
 }
 
 export type OpenResult = { readonly ok: true; readonly document: OpenedDocument } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -220,15 +236,49 @@ export function openDocumentUsing(bytes: Uint8Array, options: EditOptions, wrap:
     return parsed;
   }
   const doc: Doc = { bytes: stored, options: fixed, sharedEdits: fixed.sharedEdits ?? "refuse", limits: resolveLimits(fixed.limits), format: wrap(parsed.opened) };
-  return {
-    ok: true,
-    document: {
-      locate: (pointer) => locateIn(doc, pointer),
-      setValue: (pointer, value) => setValueIn(doc, pointer, value),
-      add: (pointer, value) => addIn(doc, pointer, value),
-      remove: (pointer) => removeIn(doc, pointer),
+  const document: OpenedDocument = {
+    locate: (pointer) => locateIn(doc, pointer),
+    setValue: (pointer, value) => setValueIn(doc, pointer, value),
+    add: (pointer, value) => addIn(doc, pointer, value),
+    remove: (pointer) => removeIn(doc, pointer),
+    shifted: (pointer, newer) => shiftedIn(doc, pointer, newer),
+    amend: (staged, operation) => {
+      requirePointer(staged.path, "amend");
+      requirePointer(operation.path, "amend");
+      inspect(doc, staged.value, "amend");
+      if (operation.op !== "remove") inspect(doc, operation.value, "amend");
+      return amendValue(staged, operation);
     },
   };
+  opened.set(document, doc);
+  return { ok: true, document };
+}
+
+/** Every document this library opened, so `shifted` can read a newer one's tree (v1.16). */
+const opened = new WeakMap<OpenedDocument, Doc>();
+
+function shiftedIn(doc: Doc, pointer: string, newer: OpenedDocument): boolean {
+  requirePointer(pointer, "shifted");
+  const other = opened.get(newer);
+  if (other === undefined) throw new TypeError("shifted() takes, as `newer`, a document opened by openDocument() or a writer's open()");
+  if (pointer === "") return false;
+  let a: Node | undefined = doc.format.tree;
+  let b: Node | undefined = other.format.tree;
+  for (const segment of pointer.slice(1).split("/").map(unescapePointerSegment)) {
+    if (a === undefined || b === undefined) return false;
+    if ((a.type === "sequence" || b.type === "sequence") && segment !== "-") {
+      if (a.type !== "sequence" || b.type !== "sequence" || a.items.length !== b.items.length) return true;
+    }
+    a = childNode(a, segment);
+    b = childNode(b, segment);
+  }
+  return false;
+}
+
+function childNode(node: Node, segment: string): Node | undefined {
+  if (node.type === "mapping") return node.entries.get(segment);
+  if (node.type === "sequence") return ARRAY_INDEX.test(segment) ? node.items[Number(segment)] : undefined;
+  return undefined;
 }
 
 function inspect(doc: Doc, value: unknown, fnName: string) {

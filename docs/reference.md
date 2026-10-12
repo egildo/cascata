@@ -1809,3 +1809,26 @@ v1.14 with a hand-written grammar and matcher (a strict subset of the LSP `GlobP
 names `picomatch` on its allow-list and needs no amendment for using fewer than it allows — see
 `CLAUDE.md`'s non-negotiables, corrected for the same reason a second time. Everything else is a dev
 dependency.
+
+## v1.16 — `shifted` and `amend`: two verbs for a caller that rebases
+
+Specs/026-shift-and-amend; `SPEC.md` Article IX. Both are on `OpenedDocument` and on a writer's opened document.
+
+```ts
+document.shifted(pointer: string, newer: OpenedDocument): boolean;
+document.amend(staged: { path: string; value: EditData }, operation: AmendOperation): AmendResult;
+
+type AmendOperation = { op: "set" | "add"; path: string; value: EditData } | { op: "remove"; path: string };
+type AmendResult = { inside: false } | { inside: true; ok: true; value: EditData } | { inside: true; ok: false; reason: string };
+```
+
+- **`shifted`** answers whether a list along `pointer` has a different length in `newer` (a later version of the
+  document, opened by this library, in either format) than here, so that an index step may now name another item.
+  `-` never shifts. A step whose parent is a list in one version and not in the other is shifted. A prefix absent
+  from either version stops the walk with `false`: that is `locate`'s "gone". A `newer` this library did not open
+  throws `TypeError`.
+- **`amend`** applies `operation` inside a value the caller has staged at `staged.path`: RFC 6902 on the value, with
+  Cascata's meanings (`add` creates, `set` changes, `remove` deletes; `-` appends and names no item). `{ inside: false }`
+  when `operation.path` is not strictly below `staged.path` — at it, beside it (`/walls/W30` is not inside
+  `/walls/W3`), or above it. Refusals are answers. The staged value is never changed; values are checked as
+  `setValue` checks them.
