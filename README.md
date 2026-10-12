@@ -174,7 +174,7 @@ Remote schemas are pinned by SHA-256 (`$pin`), fetched over HTTPS only, cached p
 Cascata is not on npm yet (the name is taken by an unrelated package). Install from git, using a `-dist` tag, which carries the built output so consumers need no compiler:
 
 ```bash
-pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.15.0-dist"
+pnpm add "git+ssh://git@github.com/egildo/cascata.git#v1.16.0-dist"
 ```
 
 Node 22 or later. TypeScript declarations are included. Exports: `@egildo/cascata`, `@egildo/cascata/generate`, `@egildo/cascata/paths`, `@egildo/cascata/writers`, `@egildo/cascata/host/node`.
@@ -191,7 +191,7 @@ Node 22 or later. TypeScript declarations are included. Exports: `@egildo/cascat
 
 ## Status
 
-**v1.15.0.** v1.13 gave every document a logical and a physical path, identity being the physical one. v1.14 brought `glob` back: checked like a `path`, expanded by `expand()` through the host. v1.15 opens a document once and answers many lookups and edits against it, adds `add` and `remove` (entries inserted in their neighbours' style, removed with their attached comments), and writes containers. A new whole `number` is written as a decimal and a `bigint` as an integer, and each release's changes of behaviour are named in `SPEC.md` §15.
+**v1.16.0.** v1.13 gave every document a logical and a physical path, identity being the physical one. v1.14 brought `glob` back: checked like a `path`, expanded by `expand()` through the host. v1.15 opens a document once and answers many lookups and edits against it, adds `add` and `remove` (entries inserted in their neighbours' style, removed with their attached comments), and writes containers; v1.16 adds `shifted`, `amend` and `inside`, for a caller that rebases staged edits. A new whole `number` is written as a decimal and a `bigint` as an integer, and each release's changes of behaviour are named in `SPEC.md` §15.
 
 The specification was frozen from v1.0 to v1.12 — every release in that span was an addition, a correction, or both, and nothing a schema meant changed. At v1.12.1 the freeze was retired: `SPEC.md` is now a living document, amended by named article with an entry in its §15, which names every change of behaviour in a sentence. v1.12.1 itself refuses three things that used to load (a second `<<` merge key, an unknown keyword in a type entry, a malformed type entry) and splits one diagnostic code into four.
 
