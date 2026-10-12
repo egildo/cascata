@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-a-merged-key-is-a-shared-value",
+  "cites": "v1.15 FR-018",
+  "format": "yaml",
+  "call": "remove",
+  "input": "base: &b\n  x: 1\nd:\n  <<: *b\n",
+  "pointer": "/d/x",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-shared",
+      "start": 25,
+      "end": 27
+    }
+  }
+}

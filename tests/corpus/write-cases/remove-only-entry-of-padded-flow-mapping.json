@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-only-entry-of-padded-flow-mapping",
+  "cites": "v1.15 FR-017",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: { x: 1 }\n",
+  "pointer": "/a/x",
+  "expect": {
+    "edit": {
+      "start": 4,
+      "end": 10,
+      "bytes": ""
+    }
+  }
+}

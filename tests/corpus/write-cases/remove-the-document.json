@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-the-document",
+  "cites": "v1.15 FR-018",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: 1\n",
+  "pointer": "",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-remove-document",
+      "start": 0,
+      "end": 4
+    }
+  }
+}

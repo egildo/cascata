@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-only-entry-keeps-the-parents-comment-and-takes-the-attached-one",
+  "cites": "v1.15 FR-017",
+  "format": "yaml",
+  "call": "remove",
+  "input": "walls: # the walls\n  # about W1\n  W1: 1\nnext: 1\n",
+  "pointer": "/walls/W1",
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 40,
+      "bytes": " {} # the walls\n"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-crlf",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: 1\r\nb: 2\r\nc: 3\r\n",
+  "pointer": "/b",
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 12,
+      "bytes": ""
+    }
+  }
+}

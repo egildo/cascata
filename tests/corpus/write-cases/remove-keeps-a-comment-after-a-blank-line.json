@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-keeps-a-comment-after-a-blank-line",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: 1\n# note\n\nb: 2\nc: 3\n",
+  "pointer": "/b",
+  "expect": {
+    "edit": {
+      "start": 13,
+      "end": 18,
+      "bytes": ""
+    }
+  }
+}

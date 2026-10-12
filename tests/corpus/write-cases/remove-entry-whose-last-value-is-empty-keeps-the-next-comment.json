@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-entry-whose-last-value-is-empty-keeps-the-next-comment",
+  "cites": "v1.15 FR-023",
+  "format": "yaml",
+  "call": "remove",
+  "input": "- alpha: null\n  beta:\n      delta: 1\n      name: # one\n  # emoji\n  other: 2\n",
+  "pointer": "/0/beta",
+  "expect": {
+    "edit": {
+      "start": 14,
+      "end": 55,
+      "bytes": ""
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-non-ascii-key",
+  "cites": "v1.15 FR-023",
+  "format": "yaml",
+  "call": "remove",
+  "input": "ключ: 1\nb: 2\n",
+  "pointer": "/ключ",
+  "expect": {
+    "edit": {
+      "start": 0,
+      "end": 12,
+      "bytes": ""
+    }
+  }
+}

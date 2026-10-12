@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-first-item-of-a-nested-sequence",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "- - a\n  - b\n",
+  "pointer": "/0/0",
+  "expect": {
+    "edit": {
+      "start": 2,
+      "end": 8,
+      "bytes": ""
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-only-item-of-a-root-sequence",
+  "cites": "v1.15 FR-017",
+  "format": "yaml",
+  "call": "remove",
+  "input": "- a\n",
+  "pointer": "/0",
+  "expect": {
+    "edit": {
+      "start": 0,
+      "end": 4,
+      "bytes": "[]\n"
+    }
+  }
+}

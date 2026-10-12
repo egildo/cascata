@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-first-entry-of-a-map-in-a-seq-item-pulls-the-next-up",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "- a: 1\n  b: 2\n",
+  "pointer": "/0/a",
+  "expect": {
+    "edit": {
+      "start": 2,
+      "end": 9,
+      "bytes": ""
+    }
+  }
+}

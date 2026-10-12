@@ -1,0 +1,16 @@
+{
+  "name": "write/remove-through-an-alias-allowed",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "remove",
+  "input": "base: &b\n  x: 1\n  y: 2\nd: *b\n",
+  "pointer": "/d/x",
+  "sharedEdits": "allow",
+  "expect": {
+    "edit": {
+      "start": 9,
+      "end": 16,
+      "bytes": ""
+    }
+  }
+}

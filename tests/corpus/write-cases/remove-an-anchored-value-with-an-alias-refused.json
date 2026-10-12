@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-an-anchored-value-with-an-alias-refused",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "remove",
+  "input": "k: &v 1\nj: *v\n",
+  "pointer": "/k",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-shared",
+      "start": 11,
+      "end": 13
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-middle-member-multi-line",
+  "cites": "v1.15 FR-016",
+  "format": "json",
+  "call": "remove",
+  "input": "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3\n}\n",
+  "pointer": "/b",
+  "expect": {
+    "edit": {
+      "start": 14,
+      "end": 24,
+      "bytes": ""
+    }
+  }
+}

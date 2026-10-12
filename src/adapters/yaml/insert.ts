@@ -20,7 +20,7 @@ import type { Found } from "../edit.js";
 import { flowAdd, flowRemove, type FlowBox, type FlowEntry } from "../flow.js";
 import { edit, refusal, type Plan } from "../plan.js";
 import { attachedCommentsStart, breakLengthBefore, entryLineEnd, isBreak, lineContentEnd, lineStartOf, nextLineStart, skipBlanksBackward, skipBlanksForward, startsItsLine } from "../text.js";
-import { asNode, byteAt, columnOf, firstAtOrAbove, indicatorsIn, lastBelow, lineBreakOf, rangeBytes, siteOf, styleOf, type Facts, type Indicators, type Site } from "./facts.js";
+import { asNode, byteAt, columnOf, firstAtOrAbove, indicatorsIn, lastBelow, lineBreakOf, parentsIn, rangeBytes, siteOf, styleOf, type Facts, type Indicators, type Site } from "./facts.js";
 import { blockLines, entryAt, flowText, inlineText, isInline, itemAt, keySpelling, scalarSpelling, Unrepresentable, type YamlStyle } from "./render.js";
 import { yamlPadding } from "./spell.js";
 
@@ -513,16 +513,17 @@ export function planYamlRemove(facts: Facts, target: Found): Plan {
   const lineEnd = entryLineEnd(bytes, entry.valueEnd);
   const atEof = lineEnd >= bytes.length && !isBreak(bytes[lineEnd - 1]);
   const wholeLine = startsItsLine(bytes, entry.start);
-  // The site of the collection itself, one step up the path the pointer took: a node reached through an alias on the way has none here.
-  const outer = site.up !== undefined && site.up.node === parent ? site.up : undefined;
+  // The site of the collection itself, one step up the path the pointer took -- or, where the path went through an alias to reach it,
+  // found from the AST (a walk of the whole document, once, the lazily built parents).
+  const outer = site.up !== undefined && site.up.node === parent ? site.up : enclosingSite(facts, parent);
   const root = outer !== undefined && outer.parent === undefined;
-  if (outer === undefined && parent !== rootOf(facts)) return refusal("edit-read-back", "The place of this collection could not be found in the document");
+  if (outer === undefined) return refusal("edit-read-back", "The place of this collection could not be found in the document");
 
   if (count > 1) {
     if (wholeLine) {
       const lineStart = lineStartOf(bytes, entry.start);
       const previous = extents[site.index - 1];
-      const floor = previous !== undefined ? entryLineEnd(bytes, previous.valueEnd) : outer === undefined || root ? 0 : firstLineAfterHead(facts, outer, parent);
+      const floor = previous !== undefined ? entryLineEnd(bytes, previous.valueEnd) : root ? 0 : firstLineAfterHead(facts, outer, parent);
       let from = attachedCommentsStart(bytes, lineStart, floor);
       if (atEof && from > 0) from -= breakLengthBefore(bytes, from);
       return edit(from, lineEnd, "");
@@ -539,7 +540,7 @@ export function planYamlRemove(facts: Facts, target: Found): Plan {
   // The only entry: the collection keeps its kind and is written where it was, on its parent's line.
   const empty = isMap(parent) ? "{}" : "[]";
   const brk = atEof ? "" : text(bytes, lineEnd - breakLengthBefore(bytes, lineEnd), lineEnd);
-  if (root || outer === undefined) {
+  if (root) {
     if (!wholeLine) return refusal("edit-read-back", "This entry could not be removed in the document's layout");
     return edit(lineStartOf(bytes, entry.start), lineEnd, empty + brk);
   }
@@ -553,6 +554,19 @@ export function planYamlRemove(facts: Facts, target: Found): Plan {
   return edit(head, lineEnd, ` ${empty}${keep}`);
 }
 
-function rootOf(facts: Facts): YamlNode | null {
-  return asNode(facts.doc.contents);
+/** Where a collection sits in its own parent, from the AST: the site `Found` made no record of when the pointer reached it through an alias. */
+function enclosingSite(facts: Facts, collection: YamlNode): Site | undefined {
+  if (asNode(facts.doc.contents) === collection) return { node: collection, parent: undefined, pair: undefined, index: 0, inFlow: false };
+  const parent = parentsIn(facts).get(collection);
+  if (parent === undefined) return undefined;
+  if (isMap(parent)) {
+    const index = parent.items.findIndex((pair) => asNode(pair.value) === collection);
+    const pair = parent.items[index];
+    return pair === undefined ? undefined : { node: collection, parent, pair, index, inFlow: parent.flow === true };
+  }
+  if (isSeq(parent)) {
+    const index = parent.items.findIndex((item) => asNode(item) === collection);
+    return index < 0 ? undefined : { node: collection, parent, pair: undefined, index, inFlow: parent.flow === true };
+  }
+  return undefined;
 }

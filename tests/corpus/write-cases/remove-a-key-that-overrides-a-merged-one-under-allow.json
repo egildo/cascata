@@ -1,0 +1,16 @@
+{
+  "name": "write/remove-a-key-that-overrides-a-merged-one-under-allow",
+  "cites": "v1.15 FR-021",
+  "format": "yaml",
+  "call": "remove",
+  "input": "base: &b\n  x: 1\nd:\n  <<: *b\n  x: 2\n",
+  "pointer": "/d/x",
+  "sharedEdits": "allow",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-reveals-merged",
+      "start": 30,
+      "end": 31
+    }
+  }
+}

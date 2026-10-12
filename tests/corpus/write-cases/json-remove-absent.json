@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-absent",
+  "cites": "v1.15 FR-018",
+  "format": "json",
+  "call": "remove",
+  "input": "{\"a\": 1}",
+  "pointer": "/x",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-absent",
+      "start": 0,
+      "end": 8
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-first-of-flow-sequence",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: [1, 2, 3]\n",
+  "pointer": "/a/0",
+  "expect": {
+    "edit": {
+      "start": 4,
+      "end": 7,
+      "bytes": ""
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-last-member",
+  "cites": "v1.15 FR-016",
+  "format": "json",
+  "call": "remove",
+  "input": "{\"a\": 1, \"b\": 2, \"c\": 3}",
+  "pointer": "/c",
+  "expect": {
+    "edit": {
+      "start": 15,
+      "end": 23,
+      "bytes": ""
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-middle-of-multiline-flow-sequence",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: [\n  1,\n  2,\n  3\n]\n",
+  "pointer": "/a/1",
+  "expect": {
+    "edit": {
+      "start": 12,
+      "end": 17,
+      "bytes": ""
+    }
+  }
+}

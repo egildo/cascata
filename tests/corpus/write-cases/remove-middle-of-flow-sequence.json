@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-middle-of-flow-sequence",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: [1, 2, 3]\n",
+  "pointer": "/a/1",
+  "expect": {
+    "edit": {
+      "start": 7,
+      "end": 10,
+      "bytes": ""
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-an-entry-with-a-nested-block",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "top:\n  a: 1\n  b:\n    c: 2\n  d: 3\nz: 1\n",
+  "pointer": "/top/b",
+  "expect": {
+    "edit": {
+      "start": 12,
+      "end": 26,
+      "bytes": ""
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-only-member",
+  "cites": "v1.15 FR-017",
+  "format": "json",
+  "call": "remove",
+  "input": "{\"a\": 1}",
+  "pointer": "/a",
+  "expect": {
+    "edit": {
+      "start": 1,
+      "end": 7,
+      "bytes": ""
+    }
+  }
+}

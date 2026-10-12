@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-from-block-sequence",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "- a\n- b\n- c\n",
+  "pointer": "/1",
+  "expect": {
+    "edit": {
+      "start": 4,
+      "end": 8,
+      "bytes": ""
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-last-of-block-mapping",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: 1\nb: 2\nc: 3\n",
+  "pointer": "/c",
+  "expect": {
+    "edit": {
+      "start": 10,
+      "end": 15,
+      "bytes": ""
+    }
+  }
+}

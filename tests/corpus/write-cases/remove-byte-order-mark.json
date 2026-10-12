@@ -1,0 +1,29 @@
+{
+  "name": "write/remove-byte-order-mark",
+  "cites": "v1.15 FR-016",
+  "format": "yaml",
+  "call": "remove",
+  "inputBytes": [
+    239,
+    187,
+    191,
+    97,
+    58,
+    32,
+    49,
+    10,
+    98,
+    58,
+    32,
+    50,
+    10
+  ],
+  "pointer": "/a",
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 8,
+      "bytes": ""
+    }
+  }
+}

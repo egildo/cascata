@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-last-of-array",
+  "cites": "v1.15 FR-016",
+  "format": "json",
+  "call": "remove",
+  "input": "[1, 2, 3]",
+  "pointer": "/2",
+  "expect": {
+    "edit": {
+      "start": 5,
+      "end": 8,
+      "bytes": ""
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-dash-is-absent",
+  "cites": "v1.15 FR-018",
+  "format": "json",
+  "call": "remove",
+  "input": "[1]",
+  "pointer": "/-",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-absent",
+      "start": 0,
+      "end": 3
+    }
+  }
+}

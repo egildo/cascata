@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-only-entry-leaves-braces-on-the-parents-line",
+  "cites": "v1.15 FR-017",
+  "format": "yaml",
+  "call": "remove",
+  "input": "walls:\n  W1:\n    h: 3\nnext: 1\n",
+  "pointer": "/walls/W1",
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 22,
+      "bytes": " {}\n"
+    }
+  }
+}

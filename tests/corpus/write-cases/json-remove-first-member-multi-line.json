@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-first-member-multi-line",
+  "cites": "v1.15 FR-016",
+  "format": "json",
+  "call": "remove",
+  "input": "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3\n}\n",
+  "pointer": "/a",
+  "expect": {
+    "edit": {
+      "start": 4,
+      "end": 14,
+      "bytes": ""
+    }
+  }
+}

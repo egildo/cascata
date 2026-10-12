@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-only-member-of-a-nested-object",
+  "cites": "v1.15 FR-017",
+  "format": "json",
+  "call": "remove",
+  "input": "{\n  \"a\": {\n    \"b\": 1\n  },\n  \"c\": 2\n}\n",
+  "pointer": "/a/b",
+  "expect": {
+    "edit": {
+      "start": 10,
+      "end": 24,
+      "bytes": ""
+    }
+  }
+}

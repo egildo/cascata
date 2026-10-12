@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-a-block-scalar-entry",
+  "cites": "v1.15 FR-023",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: |\n  text\nb: 1\n",
+  "pointer": "/a",
+  "expect": {
+    "edit": {
+      "start": 0,
+      "end": 12,
+      "bytes": ""
+    }
+  }
+}

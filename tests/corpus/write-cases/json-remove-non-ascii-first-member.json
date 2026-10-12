@@ -1,0 +1,15 @@
+{
+  "name": "write/json-remove-non-ascii-first-member",
+  "cites": "v1.15 FR-023",
+  "format": "json",
+  "call": "remove",
+  "input": "{\"é\": 1, \"b\": 2}",
+  "pointer": "/é",
+  "expect": {
+    "edit": {
+      "start": 1,
+      "end": 10,
+      "bytes": ""
+    }
+  }
+}
