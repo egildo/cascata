@@ -1,6 +1,6 @@
 {
   "name": "@egildo/cascata",
-  "version": "1.16.0",
+  "version": "1.16.1",
   "description": "Schema-governed cascading configuration: a folder of human-readable documents turned into one validated, provenance-rich configuration object.",
   "type": "module",
   "license": "MIT",
