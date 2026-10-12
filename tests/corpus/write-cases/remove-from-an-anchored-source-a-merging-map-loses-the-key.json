@@ -1,0 +1,19 @@
+{
+  "name": "write/remove-from-an-anchored-source-a-merging-map-loses-the-key",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "remove",
+  "input": "base: &b\n  x: 1\n  y: 2\nd:\n  <<: *b\n",
+  "pointer": "/base/x",
+  "sharedEdits": "warn",
+  "dependents": [
+    "/d"
+  ],
+  "expect": {
+    "edit": {
+      "start": 9,
+      "end": 16,
+      "bytes": ""
+    }
+  }
+}

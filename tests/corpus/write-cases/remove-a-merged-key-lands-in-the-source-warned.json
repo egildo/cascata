@@ -1,0 +1,19 @@
+{
+  "name": "write/remove-a-merged-key-lands-in-the-source-warned",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "remove",
+  "input": "base: &b\n  x: 1\n  y: 2\nd:\n  <<: *b\n",
+  "pointer": "/d/x",
+  "sharedEdits": "warn",
+  "dependents": [
+    "/base"
+  ],
+  "expect": {
+    "edit": {
+      "start": 9,
+      "end": 16,
+      "bytes": ""
+    }
+  }
+}

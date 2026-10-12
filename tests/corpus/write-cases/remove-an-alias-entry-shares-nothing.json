@@ -1,0 +1,15 @@
+{
+  "name": "write/remove-an-alias-entry-shares-nothing",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "remove",
+  "input": "base: &b\n  x: 1\nd: *b\n",
+  "pointer": "/d",
+  "expect": {
+    "edit": {
+      "start": 16,
+      "end": 22,
+      "bytes": ""
+    }
+  }
+}

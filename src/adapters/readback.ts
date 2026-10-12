@@ -12,19 +12,25 @@ import { dataEqualsNode, type EditData } from "./edit-data.js";
 
 export type At = { readonly key: string } | { readonly index: number };
 
+/**
+ * `tolerant` is a mapping that merges the one being edited (v1.15 FR-020, `<<: *base`): it gains or loses the key too, unless it
+ * overrides it or another source supplies it, so its value for that one key is not checked -- and every other key of it is.
+ */
 export type Op =
   | { readonly kind: "replace"; readonly path: readonly string[]; readonly data: EditData }
-  | { readonly kind: "add"; readonly parent: readonly string[]; readonly at: At; readonly data: EditData }
-  | { readonly kind: "remove"; readonly parent: readonly string[]; readonly at: At };
+  | { readonly kind: "add"; readonly parent: readonly string[]; readonly at: At; readonly data: EditData; readonly tolerant?: true }
+  | { readonly kind: "remove"; readonly parent: readonly string[]; readonly at: At; readonly tolerant?: true };
 
 interface Trie {
   readonly children: Map<string, Trie>;
   replace: { readonly data: EditData } | undefined;
   readonly adds: { readonly at: At; readonly data: EditData }[];
   readonly removes: At[];
+  /** Keys a merging mapping may have gained or lost (not checked). */
+  readonly tolerated: Set<string>;
 }
 
-const newTrie = (): Trie => ({ children: new Map(), replace: undefined, adds: [], removes: [] });
+const newTrie = (): Trie => ({ children: new Map(), replace: undefined, adds: [], removes: [], tolerated: new Set() });
 
 function walk(root: Trie, path: readonly string[]): Trie {
   let at = root;
@@ -45,6 +51,16 @@ function matches(original: Node, after: Node, trie: Trie | undefined): boolean {
   if (original.type === "scalar") return false;
   if (original.type === "mapping") {
     if (after.type !== "mapping") return false;
+    if (trie.tolerated.size > 0) {
+      // A merging mapping: its other keys are as they were, and it has no key it did not have, bar the tolerated ones.
+      for (const [key, child] of original.entries) {
+        if (trie.tolerated.has(key)) continue;
+        const counterpart = after.entries.get(key);
+        if (counterpart === undefined || !matches(child, counterpart, trie.children.get(key))) return false;
+      }
+      for (const key of after.entries.keys()) if (!original.entries.has(key) && !trie.tolerated.has(key)) return false;
+      return true;
+    }
     const removed = new Set<string>();
     for (const at of trie.removes) if ("key" in at) removed.add(at.key);
     const added = new Map<string, EditData>();
@@ -91,7 +107,9 @@ export function treeMatches(original: Node, after: Node, ops: readonly Op[]): bo
       at.replace = { data: op.data };
     } else {
       const at = walk(root, op.parent);
-      if (op.kind === "add") at.adds.push({ at: op.at, data: op.data });
+      if (op.tolerant === true) {
+        if ("key" in op.at) at.tolerated.add(op.at.key);
+      } else if (op.kind === "add") at.adds.push({ at: op.at, data: op.data });
       else at.removes.push(op.at);
     }
   }

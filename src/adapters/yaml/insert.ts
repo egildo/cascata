@@ -258,7 +258,10 @@ export function planYamlReplace(facts: Facts, found: Found, data: EditData, forc
 
 function replaceValue(facts: Facts, found: Found, data: EditData, forceBlock: boolean): Plan {
   const { bytes } = facts;
-  const site = siteOf(found);
+  // Where the value written sits: through an alias (under `warn` or `allow`) it is the anchored node, whose place is its own.
+  const reached = siteOf(found);
+  const resolved = reached.node !== null && (reached.pair !== undefined ? asNode(reached.pair.value) !== reached.node : reached.parent !== undefined && isSeq(reached.parent) && asNode(reached.parent.items[reached.index]) !== reached.node);
+  const site = resolved && reached.node !== null ? (enclosingSite(facts, reached.node) ?? reached) : reached;
   const where = whereOf(site);
   const node = site.node;
   const eol = lineBreakOf(facts);

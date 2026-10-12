@@ -1,0 +1,19 @@
+{
+  "name": "write/remove-from-a-merge-list-source",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: &a\n  x: 1\nb: &b\n  y: 2\nc:\n  <<: [*a, *b]\n",
+  "pointer": "/b/y",
+  "sharedEdits": "warn",
+  "dependents": [
+    "/c"
+  ],
+  "expect": {
+    "edit": {
+      "start": 18,
+      "end": 26,
+      "bytes": " {}\n"
+    }
+  }
+}

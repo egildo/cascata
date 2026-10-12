@@ -1,0 +1,26 @@
+{
+  "name": "write/set-container-through-an-alias-warned-writes-the-anchored-bytes",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &b\n  x: 1\nd: *b\n",
+  "pointer": "/d",
+  "value": {
+    "map": [
+      [
+        "x",
+        {
+          "number": 5
+        }
+      ]
+    ]
+  },
+  "sharedEdits": "warn",
+  "expect": {
+    "edit": {
+      "start": 11,
+      "end": 15,
+      "bytes": "x: 5"
+    }
+  }
+}

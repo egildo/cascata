@@ -45,6 +45,8 @@ export function openJson(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
         const range = jsonKeyRange(facts, container, key);
         return range === undefined ? undefined : spanOf(range.start, range.end);
       },
+      owner: (_target, container) => container,
+      dependents: () => [],
       mergedUnder: () => undefined,
     },
   };

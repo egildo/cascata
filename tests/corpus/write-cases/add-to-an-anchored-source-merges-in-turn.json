@@ -1,0 +1,23 @@
+{
+  "name": "write/add-to-an-anchored-source-merges-in-turn",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: &a\n  x: 1\nb: &b\n  <<: *a\nc:\n  <<: *b\n",
+  "pointer": "/a/m",
+  "value": {
+    "number": 2
+  },
+  "sharedEdits": "warn",
+  "dependents": [
+    "/b",
+    "/c"
+  ],
+  "expect": {
+    "edit": {
+      "start": 13,
+      "end": 13,
+      "bytes": "  m: 2\n"
+    }
+  }
+}

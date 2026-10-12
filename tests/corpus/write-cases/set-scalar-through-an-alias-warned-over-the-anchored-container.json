@@ -1,0 +1,19 @@
+{
+  "name": "write/set-scalar-through-an-alias-warned-over-the-anchored-container",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &b\n  x: 1\nd: *b\n",
+  "pointer": "/d",
+  "value": {
+    "number": 5
+  },
+  "sharedEdits": "warn",
+  "expect": {
+    "edit": {
+      "start": 8,
+      "end": 16,
+      "bytes": " 5\n"
+    }
+  }
+}

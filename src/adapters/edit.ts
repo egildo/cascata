@@ -89,6 +89,8 @@ export interface Found {
   readonly inFlow: boolean;
   /** YAML: the first alias that shares this value (it, or a container above it, is anchored and aliased). `locate` still answers; `setValue` refuses under `"refuse"`. */
   readonly sharedBy?: SourceSpan;
+  /** YAML (v1.15): the value is written as an alias (`d: *b`). Removing the entry that holds it changes nothing it shares. */
+  readonly valueIsAlias?: true;
   /** YAML, under `"warn"` (v1.12 FR-005): every alias whose expansion holds this value, in document order — the other places the write changes. */
   readonly sharedWith?: readonly SourceSpan[];
   /** YAML, under `"warn"` and `"allow"` (v1.12 FR-007): the pointer of every node of the document that holds these bytes, read before the edit — each must read the value set after it. */
@@ -150,6 +152,13 @@ export interface FormatOpened {
   remove(target: Found, container: Found, at: EntryAt): Plan;
   /** The span of the key `key` in the mapping `container`, wherever it is written or supplied. */
   keySpan(container: Found, key: string): SourceSpan | undefined;
+  /**
+   * The container that really holds `target`'s entry: `container` itself, except in YAML where the pointer reached the entry through a merge key
+   * -- the entry then lives in the merge source, and that mapping (with its copies and the maps that merge it) is what an edit changes.
+   */
+  owner(target: Found, container: Found): Found;
+  /** YAML: the pointers of the mappings that merge (`<<: *base`) the mapping `container` is, directly or through others -- they gain or lose the key an edit adds or removes. */
+  dependents(container: Found): readonly string[];
   /** YAML: whether `target` is a key that overrides one a merge key supplies, with both spans. */
   mergedUnder(target: Found): { readonly key: SourceSpan; readonly merged: SourceSpan } | undefined;
 }
@@ -453,7 +462,8 @@ function addIn(doc: Doc, pointer: string, value: EditData): SetValueResult {
   const limited = pastLimits(facts, container.span);
   if (limited !== undefined) return limited;
   const parents = new Set([parent, ...(container.copies ?? [])]);
-  const ops: Op[] = [...parents].map((place) => ({ kind: "add", parent: segmentsOf(place), at, data: value }));
+  const ops: Op[] = [...parents, ].map((place) => ({ kind: "add", parent: segmentsOf(place), at, data: value }));
+  if ("key" in at) for (const place of doc.format.dependents(container)) ops.push({ kind: "add", parent: segmentsOf(place), at, data: value, tolerant: true });
   return finish(doc, doc.format.add(container, at, value), ops, container.span, shared.diagnostics, `${describeValue(value)} could not be added here and read back as the entry added`);
 }
 
@@ -461,10 +471,17 @@ function removeIn(doc: Doc, pointer: string): SetValueResult {
   requirePointer(pointer, "remove");
   if (pointer === "") return refuseAt("edit-remove-document", "The whole document cannot be removed", doc.format.tree.span);
   const { parent, last } = splitPointer(pointer);
-  const targetFound = doc.format.find(pointer, doc.sharedEdits);
+  // An entry whose value is an alias (`d: *b`) shares nothing with what it points at: taking the entry out changes no other place.
+  // So the policy is asked about the container then, and about the target (reached through an alias? anchored and aliased?) otherwise.
+  const probe = doc.format.find(pointer, "allow");
+  if (!probe.ok) return probe;
+  const targetFound = probe.found.valueIsAlias === true ? probe : doc.format.find(pointer, doc.sharedEdits);
   if (!targetFound.ok) return targetFound;
   const target = targetFound.found;
-  const shared = sharing(doc, target);
+  const containerFound = doc.format.find(parent, doc.sharedEdits);
+  if (!containerFound.ok) return containerFound;
+  const container = containerFound.found;
+  const shared = sharing(doc, target.valueIsAlias === true ? container : target);
   if (shared.refusal !== undefined) return shared.refusal;
   const merged = doc.format.mergedUnder(target);
   if (merged !== undefined) {
@@ -481,15 +498,14 @@ function removeIn(doc: Doc, pointer: string): SetValueResult {
       ],
     };
   }
-  const containerFound = doc.format.find(parent, doc.sharedEdits);
-  if (!containerFound.ok) return containerFound;
-  const container = containerFound.found;
-  const node = container.node;
+  const holder = doc.format.owner(target, container);
+  const node = holder.node;
   if (node.type === "scalar") throw new Error("Internal error: remove(): the parent of a value is a scalar");
   const at: EntryAt = node.type === "mapping" ? { key: last } : { index: Number(last) };
-  const parents = new Set([parent, ...(container.copies ?? [])]);
+  const parents = new Set(holder === container ? [parent, ...(container.copies ?? [])] : holder.copies ?? []);
   const ops: Op[] = [...parents].map((place) => ({ kind: "remove", parent: segmentsOf(place), at }));
-  return finish(doc, doc.format.remove(target, container, at), ops, target.span, shared.diagnostics, `'${pointer}' could not be removed here and read back as the entry gone`);
+  if ("key" in at) for (const place of doc.format.dependents(holder)) ops.push({ kind: "remove", parent: segmentsOf(place), at, tolerant: true });
+  return finish(doc, doc.format.remove(target, holder, at), ops, target.span, shared.diagnostics, `'${pointer}' could not be removed here and read back as the entry gone`);
 }
 
 /** Under `"warn"`: the edit is answered, and this says so — at the value, naming every alias that shares it (v1.12 FR-005). */

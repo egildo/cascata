@@ -99,6 +99,17 @@ function yamlBlockMap(r: Rng, st: YamlStyle, indent: string, depth: number): str
 
 function yamlEntry(r: Rng, st: YamlStyle, indent: string, key: string, depth: number): string[] {
   const tail = r.chance(st.comments) ? ` # ${r.pick(WORDS)}` : "";
+  // The shapes that put a block entry's last line in doubt (specs/025 FR-023): an anchor, a tag, a continued scalar, an explicit key,
+  // a flow collection over several lines, a quoted scalar over two.
+  const odd = r.int(30);
+  if (odd === 0) return [`${indent}${key}: &anc${r.int(1000)} ${yamlScalar(r, false)}${tail}`];
+  if (odd === 1) return [`${indent}${key}: !!str ${r.pick(["plain", "x y", "7"])}${tail}`];
+  if (odd === 2) return [`${indent}${key}: ${r.pick(WORDS)}`, `${indent}${" ".repeat(st.indent)}continued here${tail}`];
+  if (odd === 3) return [`${indent}? ${key}`, `${indent}: ${yamlScalar(r, false)}${tail}`];
+  if (odd === 4) return [`${indent}${key}: [`, `${indent}${" ".repeat(st.indent)}1, # one`, `${indent}${" ".repeat(st.indent)}2`, `${indent}]${tail}`];
+  if (odd === 5) return [`${indent}${key}: "first`, `${indent}${" ".repeat(st.indent)}second"${tail}`];
+  if (odd === 6) return [`${indent}${key}: |-${tail}`, `${indent}${" ".repeat(st.indent)}${r.pick(["text", "# not a comment"])}`, "", `${indent}${" ".repeat(st.indent)}after blank`];
+  if (odd === 7) return [`${indent}${key}:   ${yamlScalar(r, false)}${tail}`];
   const kind = r.int(depth >= 2 ? 6 : 10);
   if (kind < 3) return [`${indent}${key}: ${yamlScalar(r, false)}${tail}`];
   if (kind === 3) return [`${indent}${key}: ${yamlFlow(r, 0)}${tail}`];
@@ -339,6 +350,7 @@ function property(format: "yaml" | "json", generate: (r: Rng) => string, trials:
 describe("v1.15 FR-024 -- generated documents (fixed seed)", () => {
   it("YAML: every answered add and remove reads back as specified, and the writer never needs its safety net", { timeout: 120_000 }, () => {
     const result = property("yaml", genYaml, Number(process.env["PROP_TRIALS"] ?? 600), Number(process.env["PROP_SEED"] ?? 20261012));
+    if (process.env["PROP_STATS"] !== undefined) console.log("yaml", JSON.stringify({ answered: result.answered, refused: result.refused, skipped: result.skipped }));
     expect(result.failures.slice(0, 5)).toEqual([]);
     expect(result.answered).toBeGreaterThan(800);
     expect(result.skipped).toBeLessThan(60);
@@ -346,8 +358,84 @@ describe("v1.15 FR-024 -- generated documents (fixed seed)", () => {
 
   it("JSON: the same", { timeout: 120_000 }, () => {
     const result = property("json", genJson, Number(process.env["PROP_TRIALS"] ?? 600), Number(process.env["PROP_SEED"] ?? 20261013));
+    if (process.env["PROP_STATS"] !== undefined) console.log("json", JSON.stringify({ answered: result.answered, refused: result.refused, skipped: result.skipped }));
     expect(result.failures.slice(0, 5)).toEqual([]);
     expect(result.answered).toBeGreaterThan(800);
     expect(result.skipped).toBeLessThan(30);
+  });
+});
+
+// --- shared values (Part E): anchors, aliases and merge keys, under `allow` ----------------------------------------------------
+
+function genShared(r: Rng): string {
+  const eol = r.chance(0.2) ? "\r\n" : "\n";
+  const unit = " ".repeat(r.pick([2, 4]));
+  const lines: string[] = [];
+  const body = (indent: string, keys: string[]): string[] => keys.map((k) => `${indent}${k}: ${r.int(100)}`);
+  lines.push("base: &b", ...body(unit, ["x", "y"].slice(0, 1 + r.int(2))));
+  if (r.chance(0.5)) lines.push("other: &o", ...body(unit, ["p", "q"].slice(0, 1 + r.int(2))));
+  lines.push("alias: *b");
+  lines.push("merged:", `${unit}<<: ${r.chance(0.5) ? "*b" : "[*b, *o]".slice(0, r.chance(0.5) ? 8 : 4)}`);
+  if (r.chance(0.5)) lines.push(...body(unit, [r.pick(["x", "own", "z"])]));
+  const text = lines.join(eol) + eol;
+  return text;
+}
+
+describe("v1.15 FR-020 -- generated shared documents under allow: no safety net, and the pointer reads as asked", () => {
+  it("add and remove through anchors, aliases and merge keys", { timeout: 120_000 }, () => {
+    const options: EditOptions = { format: "yaml", origin, sharedEdits: "allow" };
+    const failures: string[] = [];
+    let answered = 0;
+    const refused: Record<string, number> = {};
+    for (let trial = 0; trial < Number(process.env["PROP_TRIALS"] ?? 600); trial += 1) {
+      const r = rng(Number(process.env["PROP_SEED"] ?? 77) + trial * 104729);
+      const text = genShared(r);
+      const before = plainOf(text, "yaml");
+      const opened = openDocument(ENC.encode(text), options);
+      if (before === undefined || !opened.ok) {
+        // `[*b, *o]` without an `o` anchor does not parse: the generator drops it.
+        continue;
+      }
+      const places = enumerate(before).filter((p) => p.path.length > 0 && "m" in (at(before, p.path.slice(0, -1)) ?? { s: "" }));
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const homes = enumerate(before).filter((p) => "m" in p.plain);
+        const home = r.pick(homes);
+        if (r.chance(0.5)) {
+          const key = r.pick(["x", "y", "z", "p", "fresh"]);
+          const pointer = pointerOf([...home.path, key]);
+          const result = opened.document.add(pointer, 7);
+          if (!result.ok) {
+            refused[result.diagnostics[0]?.code ?? "?"] = (refused[result.diagnostics[0]?.code ?? "?"] ?? 0) + 1;
+            if (result.diagnostics[0]?.code === "edit-read-back") failures.push(`add ${pointer} refused as edit-read-back in ${JSON.stringify(text)}`);
+            continue;
+          }
+          answered += 1;
+          const reread = openDocument(ENC.encode(applyEdit(text, result.edit)), options);
+          const found = reread.ok ? reread.document.locate(pointer) : undefined;
+          if (found === undefined || !found.ok) failures.push(`add ${pointer}: the document does not read it back: ${JSON.stringify(applyEdit(text, result.edit))} from ${JSON.stringify(text)}`);
+        } else if (places.length > 0) {
+          const place = r.pick(places);
+          const pointer = pointerOf(place.path);
+          const result = opened.document.remove(pointer);
+          if (!result.ok) {
+            refused[result.diagnostics[0]?.code ?? "?"] = (refused[result.diagnostics[0]?.code ?? "?"] ?? 0) + 1;
+            if (result.diagnostics[0]?.code === "edit-read-back" && !/dangling|alias/.test(JSON.stringify(text.length ? "" : ""))) {
+              // A removal that leaves an alias with nothing to point at is refused as edit-read-back by design; it is the only such case.
+              const removedAnchor = place.path.length === 1 && (place.path[0] === "base" || place.path[0] === "other");
+              if (!removedAnchor) failures.push(`remove ${pointer} refused as edit-read-back in ${JSON.stringify(text)}`);
+            }
+            continue;
+          }
+          answered += 1;
+          const after = applyEdit(text, result.edit);
+          const reread = openDocument(ENC.encode(after), options);
+          if (!reread.ok) failures.push(`remove ${pointer}: the edited document does not parse: ${JSON.stringify(after)} from ${JSON.stringify(text)}`);
+          else if (reread.document.locate(pointer).ok && !/<</.test(text)) failures.push(`remove ${pointer}: the entry is still there: ${JSON.stringify(after)}`);
+        }
+      }
+    }
+    if (process.env["PROP_STATS"] !== undefined) console.log("shared", JSON.stringify({ answered, refused }));
+    expect(failures.slice(0, 5)).toEqual([]);
+    expect(answered).toBeGreaterThan(300);
   });
 });

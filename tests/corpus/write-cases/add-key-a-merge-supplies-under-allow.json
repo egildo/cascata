@@ -1,0 +1,19 @@
+{
+  "name": "write/add-key-a-merge-supplies-under-allow",
+  "cites": "v1.15 FR-021",
+  "format": "yaml",
+  "call": "add",
+  "input": "base: &b\n  x: 1\nd:\n  <<: *b\n  y: 2\n",
+  "pointer": "/d/x",
+  "value": {
+    "number": 9
+  },
+  "sharedEdits": "allow",
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-exists",
+      "start": 11,
+      "end": 12
+    }
+  }
+}

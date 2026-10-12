@@ -1,0 +1,22 @@
+{
+  "name": "write/add-to-an-anchored-source-a-merging-map-gains-the-key",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "add",
+  "input": "base: &b\n  x: 1\nd:\n  <<: *b\n  y: 2\n",
+  "pointer": "/base/z",
+  "value": {
+    "number": 3
+  },
+  "sharedEdits": "warn",
+  "dependents": [
+    "/d"
+  ],
+  "expect": {
+    "edit": {
+      "start": 16,
+      "end": 16,
+      "bytes": "  z: 3\n"
+    }
+  }
+}

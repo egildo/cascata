@@ -146,6 +146,15 @@ function applyEdit(bytes: Uint8Array, edit: { readonly start: number; readonly e
 
 const isContainerData = (data: EditData): boolean => Array.isArray(data) || data instanceof Map;
 
+function at(plain: Plain, segments: readonly string[]): Plain | undefined {
+  let here: Plain | undefined = plain;
+  for (const segment of segments) {
+    if (here === undefined) return undefined;
+    here = "m" in here ? here.m.get(segment) : "q" in here ? here.q[Number(segment)] : undefined;
+  }
+  return here;
+}
+
 function describe(diagnostics: readonly Diagnostic[]): string {
   return diagnostics.map((d) => `${d.code} at ${d.primary.start}-${d.primary.end}`).join(", ");
 }
@@ -197,14 +206,6 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
     return { name: testCase.name, passed: false, failures };
   }
   const { edit } = result;
-  // v1.12 FR-005: under "warn" one info names what else the edit changes; under "refuse" and "allow", nothing is said.
-  const infos = result.diagnostics.map((d) => `${d.level} ${d.code} at ${d.primary.start}-${d.primary.end}`);
-  if (testCase.sharedEdits === "warn") {
-    if (infos.length !== 1 || !/^info edit-target-shared at \d+-\d+$/.test(infos[0] ?? "")) failures.push(`under warn, expected one info edit-target-shared, got [${infos.join(", ")}]`);
-    else if (testCase.call === "setValue" && infos[0] !== `info edit-target-shared at ${edit.start}-${edit.end}` && !isContainerData(value as EditData)) failures.push(`under warn, expected the info at the value, got [${infos.join(", ")}]`);
-  } else if (infos.length !== 0) {
-    failures.push(`under ${testCase.sharedEdits}, expected no diagnostic with the edit, got [${infos.join(", ")}]`);
-  }
   const text = new TextDecoder("utf-8", { fatal: false, ignoreBOM: true }).decode(edit.bytes);
   if (edit.start !== expect.edit.start || edit.end !== expect.edit.end) {
     failures.push(`expected range ${expect.edit.start}-${expect.edit.end}, got ${edit.start}-${edit.end}`);
@@ -218,6 +219,17 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
   if (!before.ok) {
     failures.push("the input does not parse, but an edit was answered");
     return { name: testCase.name, passed: false, failures };
+  }
+  // v1.12 FR-005: under "warn" one info names what else the edit changes -- at the value (its span; an edit that widens over a tag
+  // or rewrites around a container is not that range) or, for add and remove, at the container; under "refuse" and "allow", nothing is said.
+  const infos = result.diagnostics.map((d) => `${d.level} ${d.code} at ${d.primary.start}-${d.primary.end}`);
+  if (testCase.sharedEdits === "warn") {
+    const here = testCase.call === "setValue" ? resolvePointer(before.tree, testCase.pointer)?.span : undefined;
+    const acceptable = here === undefined ? [] : [`info edit-target-shared at ${here.start}-${here.end}`, `info edit-target-shared at ${edit.start}-${edit.end}`];
+    if (infos.length !== 1 || !/^info edit-target-shared at \d+-\d+$/.test(infos[0] ?? "")) failures.push(`under warn, expected one info edit-target-shared, got [${infos.join(", ")}]`);
+    else if (testCase.call === "setValue" && !acceptable.includes(infos[0] ?? "")) failures.push(`under warn, expected the info at the value, got [${infos.join(", ")}]`);
+  } else if (infos.length !== 0) {
+    failures.push(`under ${testCase.sharedEdits}, expected no diagnostic with the edit, got [${infos.join(", ")}]`);
   }
   const applied = applyEdit(bytes, edit);
   const after = parseAs(testCase.format, applied);
@@ -250,6 +262,13 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
   const pointers = testCase.call === "setValue" ? (places.includes(testCase.pointer) ? places : [...places, testCase.pointer]) : places.map((parent) => `${parent}/${last}`);
   if (testCase.sharedEdits === "refuse" && pointers.length > 1) failures.push(`under refuse, an edit was answered for a place with copies: ${pointers.join(", ")}`);
   for (const pointer of pointers) expected = applyAt(expected, segmentsOf(pointer), operation);
+  // The mappings the case says merge the container: the key an add creates appears there too unless they have it; the one a remove deletes goes.
+  for (const dependent of testCase.dependents) {
+    const merging = at(expected, segmentsOf(dependent));
+    if (merging === undefined || !("m" in merging)) continue;
+    if (operation.kind === "add" && merging.m.has(last)) continue;
+    expected = applyAt(expected, [...segmentsOf(dependent), last], operation);
+  }
   if (canon(expected) !== canon(plainOfNode(after.tree))) {
     failures.push(`the edited tree is not the original with the operation applied:\n  expected ${canon(expected)}\n  got      ${canon(plainOfNode(after.tree))}`);
   }

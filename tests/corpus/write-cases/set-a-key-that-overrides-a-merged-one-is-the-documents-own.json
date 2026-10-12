@@ -1,0 +1,18 @@
+{
+  "name": "write/set-a-key-that-overrides-a-merged-one-is-the-documents-own",
+  "cites": "v1.15 FR-021",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &b\n  x: 1\nd:\n  <<: *b\n  x: 2\n",
+  "pointer": "/d/x",
+  "value": {
+    "number": 5
+  },
+  "expect": {
+    "edit": {
+      "start": 33,
+      "end": 34,
+      "bytes": "5"
+    }
+  }
+}

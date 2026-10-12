@@ -47,6 +47,8 @@ export interface WriteCase {
   readonly value?: WriteValue;
   /** v1.12 FR-005: the policy the call is made under; `"refuse"` when absent. */
   readonly sharedEdits: "refuse" | "warn" | "allow";
+  /** v1.15 FR-020: the mappings that merge (`<<: *base`) the container edited, by pointer -- they gain the key an `add` creates (unless they have it) and lose the one a `remove` deletes. Written by hand in the case. */
+  readonly dependents: readonly string[];
   readonly expect: WriteExpect;
 }
 
@@ -159,6 +161,8 @@ export function parseWriteCase(raw: unknown, source: string): WriteCase {
   if ((call === "locate" || call === "remove") && hasValue) fail(source, `a ${call} case takes no 'value'`);
   const sharedEdits = raw["sharedEdits"] ?? "refuse";
   if (sharedEdits !== "refuse" && sharedEdits !== "warn" && sharedEdits !== "allow") fail(source, "'sharedEdits' must be 'refuse', 'warn' or 'allow'");
+  const dependents = raw["dependents"] ?? [];
+  if (!Array.isArray(dependents) || !dependents.every((p) => typeof p === "string")) fail(source, "'dependents' must be an array of pointers");
   const expect = parseExpect(raw["expect"], source);
   if (call === "locate" && "edit" in expect) fail(source, "a locate case cannot expect an edit");
   if (call !== "locate" && "located" in expect) fail(source, `a ${call} case cannot expect a location`);
@@ -169,6 +173,7 @@ export function parseWriteCase(raw: unknown, source: string): WriteCase {
     call,
     pointer,
     sharedEdits,
+    dependents: dependents.map(String),
     expect,
     ...(typeof input === "string" ? { input } : {}),
     ...(Array.isArray(inputBytes) ? { inputBytes: inputBytes.map(Number) } : {}),

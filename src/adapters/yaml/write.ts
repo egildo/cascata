@@ -104,6 +104,56 @@ export function yamlKeySpan(facts: Facts, container: Found, key: string): Source
 }
 
 /**
+ * The mapping that holds the entry `target` is. It is the parent the pointer names, unless the pointer went through a merge key to
+ * reach the entry: then it is the merge source, found by the pair (v1.15 FR-020). Answered as a `Found` of its own, with the pointers
+ * of every place that holds its bytes.
+ */
+function yamlOwner(facts: Facts, target: Found, container: Found): Found {
+  const site = siteOf(target);
+  const containerNode = siteOf(container).node;
+  if (site.parent === undefined || site.parent === containerNode) return container;
+  const span = spanOfNode(site.parent, facts.spans);
+  const copies = span === undefined ? [] : pointersInDocument(facts.tree, span);
+  const first = copies[0];
+  const modelNode = first === undefined ? undefined : resolvePointer(facts.tree, first);
+  if (span === undefined || modelNode === undefined) throw new Error("Internal error: the merge source of an entry could not be found");
+  const owner: Found = { start: span.start, end: span.end, node: modelNode, span, style: "plain", inFlow: (isMap(site.parent) || isSeq(site.parent)) && site.parent.flow === true, copies, ...(container.sharedBy !== undefined ? { sharedBy: container.sharedBy } : {}) };
+  recordSite(owner, { node: site.parent, parent: undefined, pair: undefined, index: 0, inFlow: false });
+  return owner;
+}
+
+/**
+ * The pointers of the mappings whose merge keys (`<<: *base`, or a list of aliases) take `container`'s keys, and of those that merge
+ * those in turn (v1.15 FR-020). Writing into the anchored bytes writes into all of them, though none holds the container's bytes
+ * (the places that do are its copies). Found from the aliases to the container and the parents of the aliases: one walk, once.
+ */
+function yamlDependents(facts: Facts, container: Found): string[] {
+  const start = siteOf(container).node;
+  if (start === null || !isMap(start)) return [];
+  const parents = parentsIn(facts);
+  const found = new Set<YamlNode>();
+  const work: YamlNode[] = [start];
+  for (let source = work.pop(); source !== undefined; source = work.pop()) {
+    for (const alias of facts.anchors.aliasesTo(source)) {
+      const holder = parents.get(alias);
+      const map = holder !== undefined && isSeq(holder) ? parents.get(holder) : holder;
+      if (map === undefined || !isMap(map) || found.has(map)) continue;
+      const merges = map.items.some((pair) => isMergeKey(pair.key) && (asNode(pair.value) === alias || asNode(pair.value) === holder));
+      if (!merges) continue;
+      found.add(map);
+      work.push(map);
+    }
+  }
+  const pointers = new Set<string>();
+  for (const map of found) {
+    const span = spanOfNode(map, facts.spans);
+    if (span === undefined) continue;
+    for (const pointer of pointersInDocument(facts.tree, span)) pointers.add(pointer);
+  }
+  return [...pointers];
+}
+
+/**
  * Whether the pair `target` is, in a mapping whose merge keys supply the same key, overrides a merged value (v1.15 FR-018):
  * removing it would let the merged value show through. Answers the key's span and the merged value's.
  */
@@ -198,6 +248,8 @@ export function openYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
       add: (container, at, data) => planYamlAdd(facts, container, at, data),
       remove: (target) => planYamlRemove(facts, target),
       keySpan: (container, key) => yamlKeySpan(facts, container, key),
+      owner: (target, container) => yamlOwner(facts, target, container),
+      dependents: (container) => yamlDependents(facts, container),
       mergedUnder: (target) => yamlMergedUnder(facts, target),
     },
   };
@@ -279,6 +331,7 @@ function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindRe
   }
 
   let { node, via } = reach;
+  const valueIsAlias = isAlias(node);
   if (isAlias(node)) {
     const aliasSpan = node.range != null ? spans.spanOf(node.range) : undefined;
     via ??= aliasSpan;
@@ -309,6 +362,7 @@ function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindRe
     span,
     style: styleOf(node),
     inFlow: reach.inFlow,
+    ...(valueIsAlias ? { valueIsAlias: true as const } : {}),
     ...(sharedBy !== undefined ? { sharedBy } : {}),
     ...(sharedWith !== undefined ? { sharedWith } : {}),
     ...(copies !== undefined ? { copies } : {}),
