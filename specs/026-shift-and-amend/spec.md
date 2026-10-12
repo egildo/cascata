@@ -30,7 +30,9 @@ owner's rulings there need an answer only the format can give, because Provenanc
   changes (an absent key or the end is refused), `remove` deletes (`-` names nothing). Refusals are answers with
   a reason. The staged value is never changed: every container along the path is rebuilt. Values are checked as
   `setValue` checks them; malformed pointers and non-`EditData` throw.
-- **FR-003** A writer's opened document answers both; its `shifted` takes another writer document of this library.
+  `inside(pointer, within)` answers the question `amend` asks first, for a caller that only needs to know (a staged
+  delete, inside which every edit is refused).
+- **FR-003** A writer's opened document answers all three; its `shifted` takes another writer document of this library.
 - **FR-004** Cases before code (`tests/unit/shift-amend.test.ts`, hand-derived); each rule sabotaged: shifted
   always false (6 red), the `-` exemption (1), a kind change (1), an absent prefix (1), the slash in the prefix test
   (1), the copy along the path (5), `add` over an existing key (1), `set` at the end (0 red at first — two cases

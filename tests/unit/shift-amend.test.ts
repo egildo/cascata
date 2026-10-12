@@ -136,6 +136,21 @@ describe("v1.16 FR-002 -- amend: an operation inside a staged value", () => {
   });
 });
 
+describe("v1.16 FR-002 -- inside: the question amend asks first", () => {
+  const doc = open("a: 1\n");
+  it("strictly below, by whole segments", () => {
+    expect(doc.inside("/walls/W3/h", "/walls/W3")).toBe(true);
+    expect(doc.inside("/walls/W3", "/walls/W3")).toBe(false);
+    expect(doc.inside("/walls/W30", "/walls/W3")).toBe(false);
+    expect(doc.inside("/walls", "/walls/W3")).toBe(false);
+    expect(doc.inside("/a", "")).toBe(true);
+    expect(doc.inside("", "")).toBe(false);
+  });
+  it("a malformed pointer is programmer error", () => {
+    expect(() => doc.inside("walls", "")).toThrow();
+  });
+});
+
 describe("v1.16 FR-003 -- a writer's document answers both", () => {
   it("yamlWriter and jsonWriter", () => {
     for (const [writer, older, newer] of [
@@ -148,6 +163,7 @@ describe("v1.16 FR-003 -- a writer's document answers both", () => {
       expect(a.document.shifted("/l/0", b.document)).toBe(true);
       expect(a.document.shifted("/l/0", a.document)).toBe(false);
       expect(a.document.amend({ path: "/w", value: [1n] }, { op: "add", path: "/w/-", value: 2n })).toEqual({ inside: true, ok: true, value: [1n, 2n] });
+      expect(a.document.inside("/w/0", "/w")).toBe(true);
     }
   });
   it("a writer's document with a newer one from another writer of the same library is accepted", () => {

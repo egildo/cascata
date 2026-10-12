@@ -44,6 +44,8 @@ export interface WriterDocument {
   shifted(path: string, newer: WriterDocument): boolean;
   /** v1.16: `operation` applied inside the value staged at `staged.path`; `{ inside: false }` when it is not below it. */
   amend(staged: { readonly path: string; readonly value: EditData }, operation: AmendOperation): AmendResult;
+  /** v1.16: whether `path` lies strictly below `within`. */
+  inside(path: string, within: string): boolean;
 }
 
 export type WriterOpenResult = { readonly ok: true; readonly document: WriterDocument } | { readonly ok: false; readonly reason: string };
@@ -94,6 +96,7 @@ function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
           return document.shifted(path, other);
         },
         amend: (staged, operation) => document.amend(staged, operation),
+        inside: (path, within) => document.inside(path, within),
     };
     underlying.set(answered, document);
     return { ok: true, document: answered };

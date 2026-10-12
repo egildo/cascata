@@ -30,7 +30,7 @@ import type { Origin, SourceSpan } from "../model/span.js";
 import { resolveLimits, type ParseLimits } from "./limits.js";
 import { dataEqualsNode, equalsValue, hasLoneSurrogate, inspectData, isContainerData, plainScalarText, type EditData, type EditValue } from "./edit-data.js";
 import { treeMatches, type Op } from "./readback.js";
-import { amendValue, type AmendOperation, type AmendResult } from "./amend.js";
+import { amendValue, isInside, type AmendOperation, type AmendResult } from "./amend.js";
 
 export type { AmendOperation, AmendResult };
 import type { Plan } from "./plan.js";
@@ -209,6 +209,8 @@ export interface OpenedDocument {
    * `operation.path` is not strictly below `staged.path`. Pure: no bytes are read, and the staged value is unchanged.
    */
   amend(staged: { readonly path: string; readonly value: EditData }, operation: AmendOperation): AmendResult;
+  /** v1.16: whether `pointer` lies strictly below `within` -- what `amend` asks first, for a caller that only needs to know. */
+  inside(pointer: string, within: string): boolean;
 }
 
 export type OpenResult = { readonly ok: true; readonly document: OpenedDocument } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -242,6 +244,11 @@ export function openDocumentUsing(bytes: Uint8Array, options: EditOptions, wrap:
     add: (pointer, value) => addIn(doc, pointer, value),
     remove: (pointer) => removeIn(doc, pointer),
     shifted: (pointer, newer) => shiftedIn(doc, pointer, newer),
+    inside: (pointer, within) => {
+      requirePointer(pointer, "inside");
+      requirePointer(within, "inside");
+      return isInside(pointer, within);
+    },
     amend: (staged, operation) => {
       requirePointer(staged.path, "amend");
       requirePointer(operation.path, "amend");

@@ -24,8 +24,13 @@ export type AmendResult =
 
 type Step = { readonly ok: true; readonly value: EditData } | { readonly ok: false; readonly reason: string };
 
+/** Whether `path` is strictly below `within`: an RFC 6901 prefix followed by `/` (`/walls/W30` is not inside `/walls/W3`). */
+export function isInside(path: string, within: string): boolean {
+  return path.startsWith(`${within}/`);
+}
+
 export function amendValue(staged: { readonly path: string; readonly value: EditData }, operation: AmendOperation): AmendResult {
-  if (!operation.path.startsWith(`${staged.path}/`)) return { inside: false };
+  if (!isInside(operation.path, staged.path)) return { inside: false };
   const segments = operation.path.slice(staged.path.length + 1).split("/").map(unescapePointerSegment);
   const where = (depth: number) => `'${operation.path.split("/").slice(0, staged.path.split("/").length + depth + 1).join("/")}'`;
 

@@ -1817,6 +1817,7 @@ Specs/026-shift-and-amend; `SPEC.md` Article IX. Both are on `OpenedDocument` an
 ```ts
 document.shifted(pointer: string, newer: OpenedDocument): boolean;
 document.amend(staged: { path: string; value: EditData }, operation: AmendOperation): AmendResult;
+document.inside(pointer: string, within: string): boolean;
 
 type AmendOperation = { op: "set" | "add"; path: string; value: EditData } | { op: "remove"; path: string };
 type AmendResult = { inside: false } | { inside: true; ok: true; value: EditData } | { inside: true; ok: false; reason: string };
@@ -1832,3 +1833,4 @@ type AmendResult = { inside: false } | { inside: true; ok: true; value: EditData
   when `operation.path` is not strictly below `staged.path` — at it, beside it (`/walls/W30` is not inside
   `/walls/W3`), or above it. Refusals are answers. The staged value is never changed; values are checked as
   `setValue` checks them.
+- **`inside`** is `amend`'s first question alone: whether `pointer` is strictly below `within`, by whole segments.
