@@ -152,6 +152,18 @@ describe("v1.15 FR-012 -- an add into a non-empty container is an insertion and 
   });
 });
 
+describe("v1.15 FR-009, FR-012 -- a lone carriage return is a line break, and the lines added end in it", () => {
+  it("appending to a lone-CR file adds a CR-ended line at the end of the last line", () => {
+    // `a: 1\rb: 2\r` is ten bytes; the second line ends at 10.
+    const result = open("a: 1\rb: 2\r").add("/c", 3);
+    expect(result.ok && [result.edit.start, result.edit.end, DEC.decode(result.edit.bytes)]).toEqual([10, 10, "c: 3\r"]);
+  });
+  it("inserting before an item in a lone-CR file", () => {
+    const result = open("- a\r- b\r").add("/1", "x");
+    expect(result.ok && [result.edit.start, result.edit.end, DEC.decode(result.edit.bytes)]).toEqual([4, 4, "- x\r"]);
+  });
+});
+
 describe("v1.15 FR-013 -- refusals", () => {
   it("every refusal is a diagnostic, never a throw", () => {
     const document = open("a: 1\nb: [1]\n");

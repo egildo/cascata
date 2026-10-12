@@ -6,11 +6,14 @@
  * format. The shape is met, not imported: this module names nothing but Cascata's own verbs, as
  * a read pass's host satisfies Article VI's `Host` without importing the caller.
  *
+ * Since v1.15 a writer also **opens** a document (`open(bytes)`): parsed once, it answers `locate`, `write`, `add` and `remove`
+ * as often as asked, each against the bytes as opened, and `write` takes a mapping (a `Map`) or a sequence, nested.
+ *
  * A writer adds no behaviour. `path` is an RFC 6901 pointer; the bytes are the document as
  * stored (§4.2), a byte-order mark and every carriage return counted; the origin is synthetic
  * because a writer is handed bytes, not a document's identity. A refusal's `reason` is the first
  * diagnostic's message. As with the verbs, only programmer error throws (a pointer that is
- * neither empty nor starts with `/`, a value that is not a scalar).
+ * neither empty nor starts with `/`, a value that is not scalar, array or `Map` data).
  */
 
 import { formatForLocation } from "./adapters/registry.js";

@@ -1416,13 +1416,13 @@ All `level: "error"`, positioned at the span named — except `edit-target-share
 |---|---|---|
 | `edit-target-absent` | no value at the pointer | the nearest existing ancestor |
 | `edit-target-shared` | the value is reached through a YAML alias or merge key, **or it, or a container above it, is anchored and an alias points there** — writing it would change every place that shares it. Since v1.12, `level: "error"` only under `sharedEdits: "refuse"` (the default); under `"warn"` the edit is answered with this code at `level: "info"`, at the value, `related` naming each alias (v1.12, above) | the (first) alias |
-| `edit-container` | a mapping or a sequence: setting a container is an insertion, not written yet | the value |
+| `edit-container` | a mapping or a sequence — **from `editTarget` only since v1.15**, which writes containers (see "v1.15" below) | the value |
 | `edit-block-scalar` | a block scalar (`\|`, `>`), whose style is not reproduced | the value |
 | `edit-bare-key-in-flow` | a key with no value inside a flow collection (`{a}`, `{? a}`; v1.12) | the value |
-| `edit-read-back` | a scalar that would not read back as the value set (the safety net; no known input reaches it) | the value |
+| `edit-read-back` | an edit that would not read back as the value set (the safety net; no known input reaches it). Since v1.15 also a value past the document's depth or size limits, and a tag on a container that cannot hold the new value | the value |
 | `edit-unrepresentable` | JSON asked for `NaN` or an infinity; any format asked for a string with an unpaired surrogate | the value it would have replaced |
 
-Inserting and deleting are not here (§19).
+Inserting and deleting arrived in v1.15 (below).
 
 ## v1.11 — which document an edit belongs in, and writers
 
@@ -1502,10 +1502,10 @@ const writer = yamlWriter();
 writer.claims("/project/Walls.YML");                     // true — .yaml and .yml, any case; jsonWriter(): .json
 writer.locate(bytes, "/walls/W2/height");                // { ok: true, start: 47, end: 50 }
 writer.write(bytes, "/walls/W2/height", 3.4);            // { ok: true, edit: { start: 47, end: 50, bytes }, diagnostics: [] }
-writer.write(bytes, "/walls", 1);                        // { ok: false, reason: "…" }
+writer.write(bytes, "/walls/W9/height", 1);              // { ok: false, reason: "No value at …" }
 ```
 
-`{ claims(location), locate(bytes, path), write(bytes, path, value) }` — the shape a source-graph library's editing
+`{ claims(location), locate(bytes, path), write(bytes, path, value) }` (and, since v1.15, `open(bytes)`) — the shape a source-graph library's editing
 stage expects, met by shape (nothing here names or imports that library). They are `locate` and `setValue` with
 a synthetic origin and add no behaviour: `path` is an RFC 6901 pointer, `value` is `string | number | bigint |
 boolean | null`, the bytes are the document as stored, and a refusal's `reason` is the first diagnostic's message.
@@ -1709,6 +1709,64 @@ All `level: "error"`, positioned at the value, from `expand()` only.
 | `glob-limit-exceeded` | the walk did more work than `limits.maxSteps` allows (default 100,000; per value): directories entered at each pattern position, plus entries examined there |
 
 A pattern that leads outside the sandbox is the existing `sandbox-escape`. A grammar mismatch is the existing `type-mismatch`.
+
+## v1.15 — the opened document: parse once, then set, add and remove
+
+`SPEC.md` Article IX (§19). `openDocument` parses a document once; the document then answers `locate`, `setValue`, `add`
+and `remove` as often as asked, **each against the bytes as opened**. Its edits are independent: the caller applies several
+together only where they do not overlap (the Language Server Protocol's rule for a batch of text edits), and to build on an
+edit applies it and opens the result. The one-shot `locate` and `setValue` are open-then-ask and answer as they always did.
+
+```ts
+import { openDocument } from "@egildo/cascata";
+
+const opened = openDocument(bytes, { format: "yaml", origin, sharedEdits: "refuse" }); // copies the bytes
+if (!opened.ok) throw new Error(opened.diagnostics[0]?.message);
+const doc = opened.document;
+
+doc.locate("/walls/W2/height");                                   // costs no parse after the opening
+doc.setValue("/walls/W2", new Map([["height", 3.4], ["thickness", 0.2]])); // a container, as a Map
+doc.add("/walls/W3", new Map([["height", 3.2]]));                 // creates; refuses a key that exists
+doc.add("/tags/-", "new");                                        // `-` appends to a sequence, an index inserts before
+doc.remove("/walls/W1");                                          // with the comments attached to it
+// each answers { ok: true, edit: { start, end, bytes }, diagnostics } or { ok: false, diagnostics }
+```
+
+- **Counted, not timed.** Opening parses once; `locate` parses nothing more; `setValue`, `add` and `remove` each parse once
+  more, to read their edit back, and only when they answer an edit to check. The one-shot verbs cost what they cost.
+- **Values.** `EditData` is a scalar, a sequence of `EditData`, or a `Map` of string keys to `EditData` (a plain object
+  reorders array-index keys and swallows `__proto__`). A plain object, a `Map` with a non-string key, a cycle, a sparse
+  array or anything else throws, naming what it found and where. Depth and size are the document's `limits`: a value past them
+  is refused as `edit-read-back`.
+- **Style is copied from the nearest sibling, then from the document**: block or flow, indentation, the blanks after `:` and
+  `,`, a sequence's dash (`key:\n- a` or `key:\n  - a`); the document's first indentation increase is its step, else two
+  spaces; the line ending is the file's. JSON: one line or one member per line, spaces or tabs. Strings and keys follow the
+  spelling rule above (a key `"1"` or `"yes"` is quoted; a multi-line string is double-quoted, never a block scalar). Nothing
+  writes an anchor, a tag or an alias.
+- **`add`.** A mapping entry goes after the last entry's line and same-line comment, before comments or blank lines that
+  follow; a sequence item goes before the item at the pointer's index (and before the comments directly above it), `-`
+  appends. An empty `{}` or `[]` whose own entry is block-style is rewritten block-style when it gains its first entry.
+  Appends to one non-empty container, applied together in the order given, read back as all of them added. An add into an
+  *empty* container rewrites the brackets, so two of them overlap: reopen between them.
+- **`remove`.** The entry's whole lines, its same-line comment and the comment lines directly above it with no blank line
+  between. A flow entry or JSON member takes exactly one comma. A container that empties keeps its kind (`walls: {}`; a root
+  becomes `{}` or `[]`, the comments before it kept). Removing every entry of a mapping one edit at a time and applying the
+  edits together leaves `walls:` with nothing under it, which reads as null: each edit alone is right, and a batch read-back is
+  parked.
+- **One policy for all three verbs.** `sharedEdits` decides whether an entry is added to or removed from a container an alias
+  shares; a mapping that merges (`<<: *base`) the one edited gains or loses the key too. Two merge-key cases are refused
+  whatever it says.
+
+| Code (new in v1.15) | When | Positioned at |
+|---|---|---|
+| `edit-parent-scalar` | `add` into something that is not a mapping or a sequence | the scalar |
+| `edit-target-exists` | `add` of a key the mapping has, one a merge key supplies included (RFC 6902 would replace; Cascata does not); also `add` at the empty pointer | the existing key |
+| `edit-remove-document` | `remove` of the empty pointer | the root |
+| `edit-reveals-merged` | `remove` of a key that overrides one a merge key supplies; `related` is the merged value | the key |
+
+`setValue` on a container no longer gives `edit-container` (that code is `editTarget`'s alone: which document a container
+belongs in is the view-update question, still open). Writers gain `open(bytes)`, answering a document with `locate`, `write`,
+`add` and `remove`. Exports: `openDocument`, `OpenedDocument`, `OpenResult`, `EditData`.
 
 ## Scripts
 

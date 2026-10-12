@@ -123,6 +123,13 @@ describe("v1.15 ruling 2 -- the documented limit: independent edits, each right 
   });
 });
 
+describe("v1.15 FR-016 -- a lone carriage return is a line break", () => {
+  it("removes whole lines of a lone-CR file", () => {
+    const result = open("a: 1\r# about b\rb: 2\rc: 3\r").remove("/b");
+    expect(result.ok && [result.edit.start, result.edit.end]).toEqual([5, 20]);
+  });
+});
+
 describe("v1.15 FR-018 -- refusals", () => {
   it("every refusal is a diagnostic, never a throw", () => {
     const document = open("a: 1\nb: [1]\n");

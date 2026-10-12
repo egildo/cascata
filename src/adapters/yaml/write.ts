@@ -320,7 +320,9 @@ function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindRe
       const mapSpan = spanOfNode(node, spans);
       const indicator = inFlow || mapSpan === undefined ? undefined : `\n${" ".repeat(mapSpan.column - 1)}: `;
       const shared = next.via ?? sharedBy;
-      const bare: Found = { start: modelNode.span.start, end: modelNode.span.end, node: modelNode, span: modelNode.span, style: "plain", inFlow, bareKey: { indicator }, ...(shared !== undefined ? { sharedBy: shared } : {}) };
+      // Under "warn" and "allow" every node that holds these bytes must read the value written (v1.12 FR-007): the key's copies through an alias.
+      const bareCopies = shared !== undefined ? pointersInDocument(outcome.tree, modelNode.span) : undefined;
+      const bare: Found = { start: modelNode.span.start, end: modelNode.span.end, node: modelNode, span: modelNode.span, style: "plain", inFlow, bareKey: { indicator }, ...(shared !== undefined ? { sharedBy: shared } : {}), ...(bareCopies !== undefined ? { copies: bareCopies } : {}) };
       recordSite(bare, { node: null, parent: nextHolder?.parent, pair: nextHolder?.pair, index: nextHolder?.index ?? 0, inFlow, up });
       return { ok: true, found: bare };
     }

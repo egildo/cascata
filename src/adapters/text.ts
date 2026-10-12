@@ -31,11 +31,17 @@ export function marksAtStart(bytes: Uint8Array): number {
   return at;
 }
 
-/** The first byte of the line `at` is on (`at` may be the document's length); the first line begins after any byte-order marks. */
+const startsWithMark = (bytes: Uint8Array, at: number): boolean => bytes[at] === 0xef && bytes[at + 1] === 0xbb && bytes[at + 2] === 0xbf;
+
+/**
+ * The first byte of the line `at` is on (`at` may be the document's length). A byte-order mark that opens the line -- the document's own
+ * first bytes, or one that follows a comment in the prefix (v1.9) -- is no part of the line's indentation: the line begins after it.
+ */
 export function lineStartOf(bytes: Uint8Array, at: number): number {
   let i = at;
   while (i > 0 && !isBreak(bytes[i - 1])) i -= 1;
-  return i === 0 ? Math.min(marksAtStart(bytes), at) : i;
+  while (i + 3 <= at && startsWithMark(bytes, i)) i += 3;
+  return i;
 }
 
 /** The index of the line break that ends the line `at` is on, or the document's length. */

@@ -130,10 +130,37 @@ function itemExtent(facts: Facts, item: unknown, block: boolean): Extent | undef
   return { start: dash, valueStart: range.start, valueEnd: contentEnd(facts, node) };
 }
 
-function extentsOf(facts: Facts, collection: YamlNode): (Extent | undefined)[] {
-  if (isMap(collection)) return collection.items.map((pair) => pairExtent(facts, pair));
-  if (isSeq(collection)) return collection.items.map((item) => itemExtent(facts, item, collection.flow !== true));
-  return [];
+/** The entries of a collection, measured when asked for and not before: an add or a remove touches two or three of them, not all. */
+class Extents {
+  private readonly known = new Map<number, Extent | undefined>();
+  constructor(
+    private readonly facts: Facts,
+    private readonly collection: YamlNode,
+  ) {}
+  get length(): number {
+    return isMap(this.collection) || isSeq(this.collection) ? this.collection.items.length : 0;
+  }
+  at(index: number): Extent | undefined {
+    if (index < 0 || index >= this.length) return undefined;
+    if (!this.known.has(index)) {
+      const collection = this.collection;
+      if (isMap(collection)) {
+        const pair = collection.items[index];
+        this.known.set(index, pair === undefined ? undefined : pairExtent(this.facts, pair));
+      } else if (isSeq(collection)) this.known.set(index, itemExtent(this.facts, collection.items[index], collection.flow !== true));
+    }
+    return this.known.get(index);
+  }
+  /** Every entry, or `undefined` if one could not be measured (a flow collection is edited as a whole list). */
+  all(): Extent[] | undefined {
+    const found: Extent[] = [];
+    for (let index = 0; index < this.length; index += 1) {
+      const extent = this.at(index);
+      if (extent === undefined) return undefined;
+      found.push(extent);
+    }
+    return found;
+  }
 }
 
 // --- where a value sits ------------------------------------------------------------
@@ -178,8 +205,9 @@ function entryStartOf(facts: Facts, site: Site): number | undefined {
 
 // --- style, copied from the neighbours ---------------------------------------------
 
+/** Siblings by distance from `index`, nearest first, as far as 32 away: a donor of style further off than that is not a neighbour. */
 function* byDistance(count: number, index: number): Generator<number> {
-  for (let distance = 1; distance < count; distance += 1) {
+  for (let distance = 1; distance < Math.min(count, 33); distance += 1) {
     if (index - distance >= 0) yield index - distance;
     if (index + distance < count) yield index + distance;
   }
@@ -417,18 +445,16 @@ function addEntry(facts: Facts, container: Found, at: AddAt, data: EditData): Pl
   }
 
   const block = node.flow !== true;
-  const extents = extentsOf(facts, node);
-  const last = extents[count - 1];
+  const extents = new Extents(facts, node);
+  const last = extents.at(count - 1);
   if (last === undefined) return refusal("edit-read-back", "The entries of this collection could not be found in the document");
 
   if (!block) {
     const range = rangeBytes(facts, node);
     if (range === undefined) throw new Error("Internal error: a flow collection has no range");
-    const entries: FlowEntry[] = [];
-    for (const extent of extents) {
-      if (extent === undefined) return refusal("edit-read-back", "The entries of this flow collection could not be found in the document");
-      entries.push({ start: extent.start, end: extent.valueEnd });
-    }
+    const all = extents.all();
+    if (all === undefined) return refusal("edit-read-back", "The entries of this flow collection could not be found in the document");
+    const entries: FlowEntry[] = all.map((extent) => ({ start: extent.start, end: extent.valueEnd }));
     const box: FlowBox = { open: range.start, close: range.valueEnd - 1, entries };
     const colon = mapping ? flowColon(facts, node) : ": ";
     const entry = mapping ? `${keySpelling(key, true)}${colon}${flowText(data)}` : flowText(data);
@@ -439,7 +465,7 @@ function addEntry(facts: Facts, container: Found, at: AddAt, data: EditData): Pl
   // A block collection: new lines in the style of the entry nearest to where they go.
   const near = Math.min(index, count - 1);
   const style = styleNear(facts, node, near);
-  const nearExtent = extents[near] ?? last;
+  const nearExtent = extents.at(near) ?? last;
   const indent = columnString(bytes, nearExtent.start);
   const lines = mapping ? entryAt(key, data, indent, style) : itemAt(data, indent, style);
 
@@ -451,7 +477,7 @@ function addEntry(facts: Facts, container: Found, at: AddAt, data: EditData): Pl
   }
 
   // Before the entry at `index`, and before the comments directly above it, which belong to it.
-  const target = extents[index];
+  const target = extents.at(index);
   if (target === undefined) return refusal("edit-read-back", "The entries of this collection could not be found in the document");
   if (!startsItsLine(bytes, target.start)) {
     // The first item of a nested sequence rides on its parent's dash (`- - a`): the new item goes first on that line.
@@ -459,7 +485,7 @@ function addEntry(facts: Facts, container: Found, at: AddAt, data: EditData): Pl
     return edit(target.start, target.start, body + eol + indent);
   }
   const lineStart = lineStartOf(bytes, target.start);
-  const previous = extents[index - 1];
+  const previous = extents.at(index - 1);
   const floor = previous === undefined ? firstLineAfterHead(facts, site, node) : entryLineEnd(bytes, previous.valueEnd);
   const from = attachedCommentsStart(bytes, lineStart, floor);
   return edit(from, from, lines.join(eol) + eol);
@@ -496,19 +522,17 @@ export function planYamlRemove(facts: Facts, target: Found): Plan {
   const site = siteOf(target);
   const parent = site.parent;
   if (parent === undefined || !(isMap(parent) || isSeq(parent))) throw new Error("Internal error: remove() was given the root");
-  const extents = extentsOf(facts, parent);
+  const extents = new Extents(facts, parent);
   const count = parent.items.length;
-  const entry = extents[site.index];
+  const entry = extents.at(site.index);
   if (entry === undefined) return refusal("edit-read-back", "The entries of this collection could not be found in the document");
 
   if (parent.flow === true) {
     const range = rangeBytes(facts, parent);
     if (range === undefined) throw new Error("Internal error: a flow collection has no range");
-    const entries: FlowEntry[] = [];
-    for (const extent of extents) {
-      if (extent === undefined) return refusal("edit-read-back", "The entries of this flow collection could not be found in the document");
-      entries.push({ start: extent.start, end: extent.valueEnd });
-    }
+    const all = extents.all();
+    if (all === undefined) return refusal("edit-read-back", "The entries of this flow collection could not be found in the document");
+    const entries: FlowEntry[] = all.map((extent) => ({ start: extent.start, end: extent.valueEnd }));
     const planned = flowRemove(bytes, { open: range.start, close: range.valueEnd - 1, entries }, site.index);
     return edit(planned.start, planned.end, planned.text);
   }
@@ -525,7 +549,7 @@ export function planYamlRemove(facts: Facts, target: Found): Plan {
   if (count > 1) {
     if (wholeLine) {
       const lineStart = lineStartOf(bytes, entry.start);
-      const previous = extents[site.index - 1];
+      const previous = extents.at(site.index - 1);
       const floor = previous !== undefined ? entryLineEnd(bytes, previous.valueEnd) : root ? 0 : firstLineAfterHead(facts, outer, parent);
       let from = attachedCommentsStart(bytes, lineStart, floor);
       if (atEof && from > 0) from -= breakLengthBefore(bytes, from);
@@ -534,7 +558,7 @@ export function planYamlRemove(facts: Facts, target: Found): Plan {
     // The first entry of a collection that begins on its parent's line (`- a: 1`): where only its own indentation separates it
     // from the next entry, the next is pulled up to where it was; where a comment or a blank line comes between, the entry's
     // own lines go and the rest stays (`- # about b` and the entries below it are the same item).
-    const next = extents[site.index + 1];
+    const next = extents.at(site.index + 1);
     if (next === undefined || site.index !== 0) return refusal("edit-read-back", "This entry could not be removed in the document's layout");
     if (startsItsLine(bytes, next.start) && text(bytes, lineEnd, next.start).trim() === "") return edit(entry.start, next.start, "");
     return edit(entry.start, lineEnd, "");
