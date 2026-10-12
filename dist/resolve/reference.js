@@ -1,0 +1,159 @@
+/**
+ * `Reference` — data-model.md "Reference"; SPEC.md §3, §6.1, §9.
+ *
+ * One document's pointer at another: a `$schema` a config names, or an
+ * `$adopts` a schema names. Constructible only with a span, exactly as a
+ * `Node` is (Principle III) — there is no path by which a reference can
+ * exist without a position to blame a resolution failure on (v0.2 FR-023).
+ *
+ * `extractSchemaReference`/`extractAdoptsReference` (User Story 2, T025)
+ * read `$schema`/`$adopts` out of a parsed tree. SPEC.md §9 settles the
+ * value's shape explicitly: **a single string scalar**. A sequence is
+ * always refused with `multiple-adoption` (T032) — this was originally
+ * an implementer-invented reading (a sequence accepted when its items
+ * collapsed to one distinct location, refused otherwise) written before
+ * §9 said anything about the shape at all; §9 now settles it the other
+ * way, and that reading is withdrawn. See the milestone report.
+ *
+ * `src/resolve/` is one of the two new format-blind boundaries this
+ * milestone adds (plan.md, Principle IV): it deals in bytes and locations
+ * and must never import from `src/adapters/` — enforced mechanically by
+ * tests/unit/layering.test.ts (T012).
+ */
+import { createDiagnostic } from "../diagnostics/diagnostic.js";
+/** A config names its governing schema; a schema names exactly one parent (v0.2 FR-005). */
+/**
+ * Which document carries the reference — decided by *where the reference
+ * was written*, never by the reference's own text (data-model.md's
+ * invariant), so a schema cannot claim config authority to escape the
+ * sandbox (D6). Config-authored references are exempt from the sandbox;
+ * schema-authored ones are confined to it (v0.2 FR-020, FR-021 — User Story 4,
+ * out of scope for this slice, but the distinction is recorded here where
+ * the `Reference` itself is defined).
+ */
+/** One document's pointer at another, with everything a resolution diagnostic needs to blame it. */
+/**
+ * Construct a Reference. `span` is required, matching every other
+ * span-carrying entity in this codebase (`Node`, and now `Reference`) —
+ * there is no optional-span overload and no setter.
+ */
+export function createReference(fields) {
+    return {
+        text: fields.text,
+        span: fields.span,
+        kind: fields.kind,
+        authority: fields.authority,
+        ...(fields.pin !== undefined ? { pin: fields.pin } : {}),
+    };
+}
+/**
+ * Build a resolution `Diagnostic` anchored to `reference`'s own span
+ * (v0.2 FR-023, FR-024; tasks.md T064; contracts/diagnostics.md's rule:
+ * "a resolution code MUST anchor to a reference, never to a fetched
+ * document alone"). Not the only place a resolution diagnostic is built
+ * in this codebase — most of `src/index.ts`'s call sites predate this
+ * helper and already pass `candidate.span` as `primary` directly, which
+ * satisfies the identical invariant by construction (verified by
+ * inspection, not refactored wholesale here to avoid churning already-
+ * conformance-tested call sites — see the milestone report) — but every
+ * *new* resolution diagnostic this milestone slice adds (`sandbox-escape`,
+ * `chain-limit-exceeded`) goes through this one function, so there is
+ * exactly one place in `src/resolve/` that can construct one, and it
+ * cannot be constructed without a `Reference` to anchor it to.
+ */
+export function referenceDiagnostic(code, reference, message, related) {
+    return createDiagnostic({ level: "error", code, message, primary: reference.span, ...(related !== undefined ? { related } : {}) });
+}
+// --- Extraction from a parsed tree (v0.2 User Story 2, T025-T026, T032) ---
+//
+// `$schema` and `$adopts` are reserved document keys (SPEC.md §9). A
+// document plays exactly one of two roles when this milestone reads it:
+// the **entry document** (a "config") names its governing schema with
+// `$schema`; every document reached *through* that chain (a "schema")
+// names its own parent, if any, with `$adopts` (SPEC.md §6.1's worked
+// chain: `site.yaml` has `$schema`, `house.yaml` and `core.yaml` have
+// `$adopts`). Which key a given document is read for is therefore a
+// property of *how the caller reached it*, not something inferrable from
+// the document's own content — so these two extraction entry points take
+// the role as an explicit parameter (`extractSchemaReference` /
+// `extractAdoptsReference`) rather than guessing from which key happens
+// to be present.
+//
+// `authority` follows data-model.md's invariant: it is fixed by which
+// extractor is called (config vs. schema role), never by anything the
+// reference's own text says (D6) — a schema cannot claim config
+// authority to escape the sandbox that FR-021 (User Story 4, out of
+// scope for this slice) will enforce on schema-authored references only.
+function lookupMappingEntry(tree, key) {
+    if (tree.type !== "mapping") {
+        return undefined;
+    }
+    return tree.entries.get(key);
+}
+/** `undefined` unless `node` is a `Scalar` of kind `"string"` — every other shape (a mapping, a non-string scalar) is not a legal reference text and is treated as absent (see the report's note on malformed `$schema`/`$adopts` values, which this milestone's diagnostic catalogue does not cover). */
+function asStringScalar(node) {
+    if (node === undefined || node.type !== "scalar" || node.kind !== "string") {
+        return undefined;
+    }
+    return { value: node.value, span: node.span };
+}
+/**
+ * `$pin`, if present as a sibling of `$schema`/`$adopts` in the same
+ * document (SPEC.md §6.1's worked chain: `house.yaml` carries both
+ * `$adopts` and `$pin`, naming the parent and pinning it). Raw text only
+ * — parsing and verification are `identity.ts`'s job (T008); this
+ * milestone's local-only chains never call `verifyPin` on it (see the
+ * report: pin verification is wired up in `resolve/fetch.ts`, User Story
+ * 3, not here).
+ */
+function lookupPin(tree) {
+    return asStringScalar(lookupMappingEntry(tree, "$pin"))?.value;
+}
+function extractReference(tree, key, refKind, authority) {
+    const raw = lookupMappingEntry(tree, key);
+    if (raw === undefined) {
+        return { kind: "none" };
+    }
+    const pin = lookupPin(tree);
+    if (raw.type === "scalar" && raw.kind === "string") {
+        return {
+            kind: "single",
+            reference: createReference({ text: raw.value, span: raw.span, kind: refKind, authority, pin }),
+        };
+    }
+    if (raw.type === "sequence") {
+        const entries = [];
+        for (const item of raw.items) {
+            const found = asStringScalar(item);
+            if (found !== undefined) {
+                entries.push(createReference({ text: found.value, span: found.span, kind: refKind, authority, pin }));
+            }
+        }
+        return { kind: "sequence", sequenceSpan: raw.span, entries };
+    }
+    return { kind: "none" };
+}
+/**
+ * A config's `$schema` — kind `"schema"`, authority `"config-authored"`
+ * (FR-020: the config author wrote it, which is consent).
+ */
+export function extractSchemaReference(tree) {
+    return extractReference(tree, "$schema", "schema", "config-authored");
+}
+/**
+ * A schema's `$adopts` — kind `"adopts"`, authority `"schema-authored"`
+ * (FR-021: confined to the sandbox, out of scope this slice, but the
+ * authority is fixed here regardless).
+ *
+ * A sequence value is refused with `multiple-adoption` (SPEC.md §9,
+ * FR-005) — not because it names more than one *distinct* parent, but
+ * because the shape itself is illegal in v1: it is what multi-adoption
+ * will look like once C3 linearization lands, so an author writing it
+ * now is ahead of the version, not merely wrong. The caller
+ * (`src/index.ts`) turns an `ExtractedReference` of kind `"sequence"`
+ * into that diagnostic.
+ */
+export function extractAdoptsReference(tree) {
+    return extractReference(tree, "$adopts", "adopts", "schema-authored");
+}
+//# sourceMappingURL=reference.js.map

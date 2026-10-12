@@ -1,0 +1,116 @@
+/**
+ * Per-schema `authority:` — SPEC.md §6.3, §11; specs/007-sealing-and-embedding,
+ * v0.7 FR-016 through FR-020.
+ *
+ * Format-blind and IO-blind, exactly like the rest of `src/graph/` — reads
+ * already-parsed schema trees and pure `GraphDocument`/`GraphReference`
+ * shapes, never a byte or an adapter (`tests/unit/layering.test.ts`).
+ * Runs during `resolve()`'s own pedigree assembly, before `merge()` ever
+ * sees the graph — the pinning demand is a *resolution-time* policy, not a
+ * merge-time one (SPEC.md §11: "the library verifies, the pedigree
+ * legislates").
+ *
+ * **Presence, not verification** (research.md D5): `checkPinningDemand`
+ * refuses an `$adopts`/`$schema` that *lacks* a `$pin` — a syntactic
+ * check. Whether a **local** document's bytes actually match a stated
+ * `$pin` is a pre-existing gap this milestone does not close: v0.2 never
+ * wired `$pin` verification for local reads (only remote fetches verify
+ * — `src/index.ts`'s `readAtTarget`, local branch, always returns
+ * `verified: false`). `demandPinnedAdoption` therefore only ever
+ * guarantees a pin is *written*, not that a local schema's bytes match
+ * it — recorded here and in the milestone report, not silently assumed
+ * away.
+ */
+import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import { extend } from "../extend.js";
+const KNOWN_AUTHORITY_MEMBERS = new Set(["demandPinnedAdoption", "finalAgainstForking"]);
+function isTrueBool(node) {
+    return node.type === "scalar" && node.kind === "bool" && node.value === true;
+}
+/**
+ * Read one schema layer's own top-level `authority:` mapping (FR-016). An
+ * absent `authority:`, or one that is not a mapping, contributes nothing
+ * — the same "not a mapping → nothing" reading `src/merge/strategy.ts`'s
+ * `readKeysVocabulary` already gives `keys:`. A member outside the closed
+ * vocabulary is refused (`unknown-authority-member`) at its own position,
+ * naming what is supported — the same posture `delegate`/`cascade` each
+ * already hold for their own closed vocabularies. A member present but
+ * not `true` (a malformed shape, or an explicit `false`) is read as
+ * simply not asserted — no FR in this milestone names a distinct
+ * `malformed-authority-value` refusal, so this is a deliberate scope
+ * decision (recorded in the milestone report), not an oversight.
+ */
+export function readAuthoritySection(schemaTree, declaringRank) {
+    if (schemaTree.type !== "mapping") {
+        return { section: {}, diagnostics: [] };
+    }
+    const authorityNode = schemaTree.entries.get("authority");
+    if (authorityNode === undefined || authorityNode.type !== "mapping") {
+        return { section: {}, diagnostics: [] };
+    }
+    const diagnostics = [];
+    let demandPinnedAdoption;
+    let finalAgainstForking;
+    for (const [member, valueNode] of authorityNode.entries) {
+        if (!KNOWN_AUTHORITY_MEMBERS.has(member)) {
+            diagnostics.push(createDiagnostic({
+                level: "error",
+                code: "unknown-authority-member",
+                message: `'authority.${member}' is not one of SPEC.md §6.3's closed vocabulary ('demandPinnedAdoption', 'finalAgainstForking') (v0.7 FR-016)`,
+                primary: valueNode.span,
+                pedigreePosition: declaringRank,
+            }));
+            continue;
+        }
+        if (member === "demandPinnedAdoption") {
+            demandPinnedAdoption = isTrueBool(valueNode);
+        }
+        else {
+            finalAgainstForking = isTrueBool(valueNode);
+        }
+    }
+    return { section: { ...(demandPinnedAdoption !== undefined ? { demandPinnedAdoption } : {}), ...(finalAgainstForking !== undefined ? { finalAgainstForking } : {}) }, diagnostics };
+}
+/**
+ * Walk the pedigree once, root to leaf (§6.1's chain — no diamonds
+ * possible, so one linear pass is exhaustive): for each schema document,
+ * first check its own **incoming** reference (`document.via` — the
+ * `$adopts`/`$schema` that named it) against whatever demand an earlier
+ * (more rootward) document already armed, refusing `adoption-not-pinned`
+ * if a demand is active and this reference carries no `$pin` (FR-017);
+ * *then* read this document's own `authority.demandPinnedAdoption` and,
+ * if `true`, arm the demand for every document after it.
+ *
+ * **Check-before-arm is what makes FR-018 and FR-019 true by
+ * construction, not by a special case**: a document's own declaration is
+ * read only *after* its own incoming reference has already been checked
+ * against the *previous* state, so a root's demand can never protect its
+ * own fetch (FR-019) — and there is no `false`-branch semantics to
+ * retract a demand with (FR-018): `demandPinnedAdoption` is a boolean an
+ * author can only ever assert `true`; anything else simply never arms
+ * it, and once armed nothing in this vocabulary un-arms it.
+ */
+export function checkPinningDemand(schemaDocumentsRootToLeaf) {
+    const diagnostics = [];
+    const sections = [];
+    let demandedBy;
+    schemaDocumentsRootToLeaf.forEach((document, rank) => {
+        if (demandedBy !== undefined && document.via !== undefined && document.via.pin === undefined) {
+            diagnostics.push(createDiagnostic({
+                level: "error",
+                code: "adoption-not-pinned",
+                message: `Reference '${document.via.text}' carries no '$pin', but '${demandedBy.location}' demands pinned adoption for every reference beneath it (SPEC.md §6.3, §11, v0.7 FR-017)`,
+                primary: document.via.span,
+                pedigreePosition: rank,
+            }));
+        }
+        const { section, diagnostics: memberDiagnostics } = readAuthoritySection(document.tree, rank);
+        extend(diagnostics, memberDiagnostics);
+        sections.push(section);
+        if (section.demandPinnedAdoption === true) {
+            demandedBy = { location: document.identity.location };
+        }
+    });
+    return { sections, diagnostics };
+}
+//# sourceMappingURL=authority.js.map
