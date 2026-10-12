@@ -1,0 +1,25 @@
+{
+  "name": "write/set-container-map-over-seq-dash-flush",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a:\n- x\n- y\nb: 1\n",
+  "pointer": "/a",
+  "value": {
+    "map": [
+      [
+        "k",
+        {
+          "number": 1
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 10,
+      "bytes": "  k: 1"
+    }
+  }
+}

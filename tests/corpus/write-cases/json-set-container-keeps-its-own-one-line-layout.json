@@ -1,0 +1,25 @@
+{
+  "name": "write/json-set-container-keeps-its-own-one-line-layout",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\n  \"a\": [1, 2],\n  \"b\": 2\n}\n",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "number": 3
+      },
+      {
+        "number": 4
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 9,
+      "end": 15,
+      "bytes": "[3, 4]"
+    }
+  }
+}

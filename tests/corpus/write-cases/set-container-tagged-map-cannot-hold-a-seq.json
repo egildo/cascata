@@ -1,0 +1,22 @@
+{
+  "name": "write/set-container-tagged-map-cannot-hold-a-seq",
+  "cites": "v1.15 FR-014",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: !!map\n  b: 1\n",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "number": 1
+      }
+    ]
+  },
+  "expect": {
+    "diagnostic": {
+      "code": "edit-read-back",
+      "start": 11,
+      "end": 15
+    }
+  }
+}

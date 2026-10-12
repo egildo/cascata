@@ -1,0 +1,25 @@
+{
+  "name": "write/json-set-container-copies-a-one-line-sibling",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\n  \"a\": 1,\n  \"b\": [1, 2]\n}\n",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "number": 3
+      },
+      {
+        "number": 4
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 9,
+      "end": 10,
+      "bytes": "[3, 4]"
+    }
+  }
+}

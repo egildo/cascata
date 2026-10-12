@@ -1,0 +1,25 @@
+{
+  "name": "write/set-container-root-map-over-map",
+  "cites": "v1.15 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: 1\nb: 2\n",
+  "pointer": "",
+  "value": {
+    "map": [
+      [
+        "c",
+        {
+          "number": 3
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 0,
+      "end": 9,
+      "bytes": "c: 3"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "write/set-container-equal-keeps-bytes",
+  "cites": "v1.15 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "m:\n  b: 2\n  a: 1\n",
+  "pointer": "/m",
+  "value": {
+    "map": [
+      [
+        "a",
+        {
+          "number": 1
+        }
+      ],
+      [
+        "b",
+        {
+          "number": 2
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 5,
+      "end": 16,
+      "bytes": "b: 2\n  a: 1"
+    }
+  }
+}

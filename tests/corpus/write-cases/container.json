@@ -1,6 +1,6 @@
 {
   "name": "write/container",
-  "cites": "v1.10 FR-009",
+  "cites": "v1.15 FR-008",
   "format": "yaml",
   "call": "setValue",
   "input": "walls:\n  W1:\n    height: 3.2\n  W2:\n    height: 3.2\n",
@@ -9,10 +9,10 @@
     "number": 1
   },
   "expect": {
-    "diagnostic": {
-      "code": "edit-container",
-      "start": 17,
-      "end": 28
+    "edit": {
+      "start": 12,
+      "end": 29,
+      "bytes": " 1\n"
     }
   }
 }

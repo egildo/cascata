@@ -9,26 +9,45 @@
  */
 
 import type { Diagnostic } from "../../diagnostics/diagnostic.js";
-import { editDiagnostic, type FindResult, type SharedEdits } from "../edit.js";
+import { editDiagnostic, type FindResult, type FormatOpened } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
 import type { Node } from "../../model/node.js";
 import { resolvePointer } from "../../model/pointer.js";
-import type { Origin, SourceSpan } from "../../model/span.js";
+import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span.js";
+import { locateByteOffset } from "../encoding.js";
+import { jsonKeyRange, newJsonFacts, planJsonAdd, planJsonRemove, planJsonReplace } from "./insert.js";
 import { parseJsonBytes } from "./parse.js";
 
 /** A JSON document parsed once (v1.15 FR-004): its tree, which `find` answers any number of pointers from. */
-export interface JsonOpened {
-  readonly tree: Node;
-  find(pointer: string, sharedEdits?: SharedEdits): FindResult;
-}
-
-export function openJson(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined): { readonly ok: true; readonly opened: JsonOpened } | { readonly ok: false; readonly diagnostics: Diagnostic[] } {
+export function openJson(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined): { readonly ok: true; readonly opened: FormatOpened } | { readonly ok: false; readonly diagnostics: Diagnostic[] } {
   const outcome = parseJsonBytes(bytes, origin, limits);
   if (!outcome.ok) {
     return outcome;
   }
   const { tree } = outcome;
-  return { ok: true, opened: { tree, find: (pointer) => findIn(tree, pointer) } };
+  const facts = newJsonFacts(bytes, tree);
+  const spanOf = (start: number, end: number): SourceSpan => {
+    const { line, column } = locateByteOffset(bytes, start);
+    return createSourceSpan({ origin, start, end, line, column, documentLength: bytes.length });
+  };
+  return {
+    ok: true,
+    opened: {
+      tree,
+      find: (pointer) => findIn(tree, pointer),
+      replace: (found, pointer, data) => {
+        const parent = pointer === "" ? undefined : findIn(tree, pointer.slice(0, pointer.lastIndexOf("/")));
+        return planJsonReplace(facts, found, pointer, data, parent?.ok === true ? parent.found : undefined);
+      },
+      add: (container, at, data) => planJsonAdd(facts, container, at, data),
+      remove: (_target, container, at) => planJsonRemove(facts, container, at),
+      keySpan: (container, key) => {
+        const range = jsonKeyRange(facts, container, key);
+        return range === undefined ? undefined : spanOf(range.start, range.end);
+      },
+      mergedUnder: () => undefined,
+    },
+  };
 }
 
 function findIn(tree: Node, pointer: string): FindResult {
@@ -55,6 +74,4 @@ export function parseBack(bytes: Uint8Array, origin: Origin, limits: Partial<Par
   return outcome.ok ? outcome.tree : undefined;
 }
 
-export function renderJsonString(text: string): string {
-  return JSON.stringify(text);
-}
+export { renderJsonString } from "./spell.js";

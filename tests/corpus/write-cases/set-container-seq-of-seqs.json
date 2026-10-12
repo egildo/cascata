@@ -1,0 +1,36 @@
+{
+  "name": "write/set-container-seq-of-seqs",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: 1\n",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "seq": [
+          {
+            "number": 1
+          },
+          {
+            "number": 2
+          }
+        ]
+      },
+      {
+        "seq": [
+          {
+            "number": 3
+          }
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 2,
+      "end": 4,
+      "bytes": "\n  - - 1\n    - 2\n  - - 3"
+    }
+  }
+}

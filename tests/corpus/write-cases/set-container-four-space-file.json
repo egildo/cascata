@@ -1,0 +1,32 @@
+{
+  "name": "write/set-container-four-space-file",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "walls:\n    W1:\n        height: 3.2\n",
+  "pointer": "/walls/W1",
+  "value": {
+    "map": [
+      [
+        "a",
+        {
+          "map": [
+            [
+              "b",
+              {
+                "number": 1
+              }
+            ]
+          ]
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 23,
+      "end": 34,
+      "bytes": "a:\n            b: 1"
+    }
+  }
+}

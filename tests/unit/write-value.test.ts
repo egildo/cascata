@@ -119,12 +119,13 @@ describe("never throws for a document or a value; throws for programmer error", 
       }
     }
   });
-  it("a missing origin, an unknown format, a malformed pointer or a non-scalar value is programmer error", () => {
+  it("a missing origin, an unknown format, a malformed pointer or a value that is not EditData is programmer error", () => {
     const doc = enc("a: 1\n");
     expect(() => locate(doc, { format: "yaml" } as unknown as EditOptions, "/a")).toThrow(/origin/);
     expect(() => locate(doc, { format: "toml", origin } as unknown as EditOptions, "/a")).toThrow(/format/);
     expect(() => locate(doc, yaml, "a")).toThrow(/Pointer/);
-    expect(() => setValue(doc, yaml, "/a", {} as unknown as EditValue)).toThrow(/scalar/);
+    // v1.15 FR-007: a value is a scalar, an array or a Map; a plain object still throws, and the message names what it found.
+    expect(() => setValue(doc, yaml, "/a", {} as unknown as EditValue)).toThrow(/plain object/);
   });
   it("pointer escapes: ~1 is a slash in a key, ~0 a tilde", () => {
     const doc = enc("'a/b': 1\n'c~d': 2\n");

@@ -63,15 +63,16 @@ describe("v1.11 FR-005 — the shape", () => {
     expect(jsonWriter().write(bytes, "/a", 2.5)).toEqual({ ok: true, edit: { start: 6, end: 7, bytes: ENCODER.encode("2.5") }, diagnostics: [] });
   });
 
-  it("a refusal is { ok: false, reason } with the first diagnostic's message — absent, container, unreadable", () => {
+  it("a refusal is { ok: false, reason } with the first diagnostic's message — absent, block scalar, unreadable", () => {
     const yaml = yamlWriter();
-    const bytes = ENCODER.encode("a:\n  b: 1\n");
+    const bytes = ENCODER.encode("a:\n  b: 1\nc: |\n  text\n");
     const absent = yaml.locate(bytes, "/zzz");
     expect(absent.ok).toBe(false);
     if (!absent.ok) expect(absent.reason).toContain("zzz");
-    const container = yaml.write(bytes, "/a", 1);
-    expect(container.ok).toBe(false);
-    if (!container.ok) expect(container.reason).toMatch(/mapping/);
+    // Until v1.15 this refused a container ("a mapping is an insertion"); a container is written now (FR-008), so a block scalar stands for it.
+    const block = yaml.write(bytes, "/c", 1);
+    expect(block.ok).toBe(false);
+    if (!block.ok) expect(block.reason).toMatch(/block scalar/);
     const unreadable = yaml.locate(ENCODER.encode("a: [1, 2\n"), "/a");
     expect(unreadable.ok).toBe(false);
     if (!unreadable.ok) expect(typeof unreadable.reason).toBe("string");

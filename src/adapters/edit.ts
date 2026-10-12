@@ -1,10 +1,11 @@
 /**
- * Writing a value back — SPEC.md Article IX (§19, v1.10); specs/018-write-value.
+ * Writing a value back — SPEC.md Article IX (§19, v1.10); specs/018-write-value, specs/025-open-insert-delete.
  *
- * Two verbs on one document. `locate` answers the stored byte range and the
- * model kind of the value at an RFC 6901 pointer; `setValue` answers an
- * **edit**: a byte range of the input and the bytes to put there. Neither
- * touches a file; applying the edit is the caller's.
+ * Four verbs on one document. `locate` answers the stored byte range and the
+ * model kind of the value at an RFC 6901 pointer; `setValue`, `add` and `remove`
+ * answer an **edit**: a byte range of the input and the bytes to put there.
+ * None touches a file; applying the edit is the caller's. Since v1.15 a document
+ * is **opened** (parsed once) and answers all four against the bytes as opened.
  *
  * Cascata's half of a design shared, by shape, with a caller that owns the
  * editing session: one plug-in per format that reads, locates and writes.
@@ -24,11 +25,16 @@
 import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticCode } from "../diagnostics/codes.js";
 import type { Node, ScalarKind } from "../model/node.js";
-import { resolvePointer } from "../model/pointer.js";
+import { ARRAY_INDEX, resolvePointer, unescapePointerSegment } from "../model/pointer.js";
 import type { Origin, SourceSpan } from "../model/span.js";
-import type { ParseLimits } from "./limits.js";
+import { resolveLimits, type ParseLimits } from "./limits.js";
+import { dataEqualsNode, equalsValue, hasLoneSurrogate, inspectData, isContainerData, plainScalarText, type EditData, type EditValue } from "./edit-data.js";
+import { treeMatches, type Op } from "./readback.js";
+import type { Plan } from "./plan.js";
 import { openJson, parseBack as parseBackJson, renderJsonString } from "./json/write.js";
 import { openYaml, parseBack as parseBackYaml, renderYamlString, yamlNonFinite, yamlPadding } from "./yaml/write.js";
+
+export type { EditData, EditValue } from "./edit-data.js";
 
 export type EditFormat = "yaml" | "json";
 
@@ -57,9 +63,6 @@ export type LocatedKind = ScalarKind | "mapping" | "sequence";
 export type LocateResult =
   | { readonly ok: true; readonly start: number; readonly end: number; readonly kind: LocatedKind }
   | { readonly ok: false; readonly diagnostics: Diagnostic[] };
-
-/** A scalar the caller can set: `string`, `number`, `bigint`, `boolean` or `null`. */
-export type EditValue = string | number | bigint | boolean | null;
 
 /** Put `bytes` in place of `[start, end)` of the input — the bytes of the document as stored (§4.2), a byte-order mark and every carriage return counted. */
 export interface Edit {
@@ -101,7 +104,7 @@ export interface Found {
    * where the tag starts and where the bytes kept after it begin (an anchor, a comment, a line break, then
    * the value); since v1.12.1 found wherever the tag is, so absent only when `yaml`'s tokens show none.
    */
-  readonly tag?: { readonly holds: ScalarKind | undefined; readonly drop: () => { readonly start: number; readonly kept: number } | undefined };
+  readonly tag?: { readonly holds: LocatedKind | undefined; readonly drop: () => { readonly start: number; readonly kept: number } | undefined };
 }
 
 export type FindResult = { readonly ok: true; readonly found: Found } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -132,30 +135,73 @@ function kindOf(node: Node): LocatedKind {
   return node.type === "scalar" ? node.kind : node.type;
 }
 
-/** One format's parsed document: the tree its reader built, and the finder over it. */
-interface Opened {
-  readonly find: (pointer: string, sharedEdits: SharedEdits) => FindResult;
+/** Where a new entry goes in a container: the key of a mapping entry, the index of a sequence item. */
+export type EntryAt = { readonly key: string } | { readonly index: number };
+
+/** One format's parsed document: the tree its reader built, the finder over it, and the plans that edit around what it found (v1.15). */
+export interface FormatOpened {
+  readonly tree: Node;
+  find(pointer: string, sharedEdits: SharedEdits): FindResult;
+  /** Make the value at `found` (pointer `pointer`) equal `data`, where either is a container. */
+  replace(found: Found, pointer: string, data: EditData): Plan;
+  /** Add `data` at `at` to the container `container` is. */
+  add(container: Found, at: EntryAt, data: EditData): Plan;
+  /** Remove the entry `target` is from `container`, with what is attached to it. */
+  remove(target: Found, container: Found, at: EntryAt): Plan;
+  /** The span of the key `key` in the mapping `container`, wherever it is written or supplied. */
+  keySpan(container: Found, key: string): SourceSpan | undefined;
+  /** YAML: whether `target` is a key that overrides one a merge key supplies, with both spans. */
+  mergedUnder(target: Found): { readonly key: SourceSpan; readonly merged: SourceSpan } | undefined;
+}
+
+/** What an opened document keeps. */
+interface Doc {
+  readonly bytes: Uint8Array;
+  readonly options: EditOptions;
+  readonly sharedEdits: SharedEdits;
+  readonly limits: ParseLimits;
+  readonly format: FormatOpened;
 }
 
 /**
  * A document parsed once (v1.15 FR-001 to FR-004, SPEC.md Article IX). Its bytes are its own copy; its answers
- * are always against them, never against an edit it has given. `locate` costs no parse after the opening;
- * `setValue` costs one, its read-back, and only when it answers an edit to check.
+ * are always against them, never against an edit it has given, so the edits it answers are independent and a
+ * caller applies several together only where they do not overlap (the Language Server Protocol's rule for a batch of
+ * text edits). `locate` costs no parse after the opening; `setValue`, `add` and `remove` cost one, their read-back,
+ * and only when they answer an edit to check.
+ *
+ * **Two limits of "independent", documented because the read-back cannot see them** (the parked batch read-back would):
+ * an `add` into an *empty* container rewrites the `{}` or `[]`, so two such adds overlap and the caller must reopen between
+ * them; and `remove`s of every entry of one mapping, answered one at a time and applied together, leave `walls:` with
+ * nothing under it, which reads as null. Each edit alone is right.
  */
 export interface OpenedDocument {
   /** As the one-shot `locate`, over the bytes as opened. */
   locate(pointer: string): LocateResult;
   /** As the one-shot `setValue`, over the bytes as opened. */
-  setValue(pointer: string, value: EditValue): SetValueResult;
+  setValue(pointer: string, value: EditData): SetValueResult;
+  /** v1.15: create the entry at `pointer`, which must not exist; a sequence index, or `-` to append. */
+  add(pointer: string, value: EditData): SetValueResult;
+  /** v1.15: delete the entry at `pointer`, with the comments attached to it. */
+  remove(pointer: string): SetValueResult;
 }
 
 export type OpenResult = { readonly ok: true; readonly document: OpenedDocument } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
 /**
- * Parse `bytes` once and answer `locate` and `setValue` as often as asked. A document that does not parse gives
- * the parse's own diagnostics. Only programmer error throws (a missing origin or format, a bad policy).
+ * Parse `bytes` once and answer `locate`, `setValue`, `add` and `remove` as often as asked. A document that does not parse
+ * gives the parse's own diagnostics. Only programmer error throws (a missing origin or format, a bad policy, a value that is
+ * not `EditData`).
  */
 export function openDocument(bytes: Uint8Array, options: EditOptions): OpenResult {
+  return openDocumentUsing(bytes, options, (format) => format);
+}
+
+/**
+ * `openDocument` with the format's plans passed through `wrap` first. Not exported from the package: it is how a test hands
+ * the read-back a plan that is wrong (one that eats the next entry, say) to see that the read-back refuses it.
+ */
+export function openDocumentUsing(bytes: Uint8Array, options: EditOptions, wrap: (format: FormatOpened) => FormatOpened): OpenResult {
   requireOptions(options, "openDocument");
   // The document is its own: a caller who changes the array or the options afterwards changes nothing it answers (FR-002).
   const stored = Uint8Array.from(bytes);
@@ -164,22 +210,27 @@ export function openDocument(bytes: Uint8Array, options: EditOptions): OpenResul
   if (!parsed.ok) {
     return parsed;
   }
-  const doc: Opened = parsed.opened;
-  const sharedEdits = fixed.sharedEdits ?? "refuse";
+  const doc: Doc = { bytes: stored, options: fixed, sharedEdits: fixed.sharedEdits ?? "refuse", limits: resolveLimits(fixed.limits), format: wrap(parsed.opened) };
   return {
     ok: true,
     document: {
-      locate: (pointer) => locateIn(doc, pointer, sharedEdits),
-      setValue: (pointer, value) => setValueIn(stored, fixed, doc, pointer, value),
+      locate: (pointer) => locateIn(doc, pointer),
+      setValue: (pointer, value) => setValueIn(doc, pointer, value),
+      add: (pointer, value) => addIn(doc, pointer, value),
+      remove: (pointer) => removeIn(doc, pointer),
     },
   };
+}
+
+function inspect(doc: Doc, value: unknown, fnName: string) {
+  return inspectData(value, fnName, doc.limits.maxDepth, doc.limits.maxBytes);
 }
 
 /**
  * The stored byte range and model kind of the value at `pointer`, or why
  * there is none. A document that does not parse gives the parse's own
  * diagnostics. A container or a block scalar is located like any value --
- * only `setValue` refuses them (until v1.15, containers too).
+ * only `setValue` refuses a block scalar.
  */
 export function locate(bytes: Uint8Array, options: EditOptions, pointer: string): LocateResult {
   requireOptions(options, "locate");
@@ -188,10 +239,10 @@ export function locate(bytes: Uint8Array, options: EditOptions, pointer: string)
   return result.ok ? result.document.locate(pointer) : result;
 }
 
-function locateIn(doc: Opened, pointer: string, sharedEdits: SharedEdits): LocateResult {
+function locateIn(doc: Doc, pointer: string): LocateResult {
   requirePointer(pointer, "locate");
   // Under "warn" and "allow" a value reached through an alias is located at the bytes `setValue` would write (v1.12.1).
-  const result = doc.find(pointer, sharedEdits);
+  const result = doc.format.find(pointer, doc.sharedEdits);
   if (!result.ok) {
     return result;
   }
@@ -200,8 +251,6 @@ function locateIn(doc: Opened, pointer: string, sharedEdits: SharedEdits): Locat
 }
 
 // --- what a value is, and how a number is spelled ------------------------
-
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 /** FR-006: the kind `value` must read back as, given the kind of the scalar it replaces. */
 export function kindForValue(value: EditValue, replaced: Node): ScalarKind {
@@ -213,95 +262,73 @@ export function kindForValue(value: EditValue, replaced: Node): ScalarKind {
   return Number.isInteger(value) ? "int" : "float";
 }
 
-/** §4.2's equality of a model scalar and a value of the given kind; `NaN` equals `NaN` here, because setting it again must write nothing new. */
-function equalsValue(node: Node, kind: ScalarKind, value: EditValue): boolean {
-  if (node.type !== "scalar" || node.kind !== kind) return false;
-  switch (node.kind) {
-    case "string":
-    case "bool":
-      return node.value === value;
-    case "int":
-      return typeof value !== "string" && typeof value !== "boolean" && value !== null && node.value === BigInt(value);
-    case "float":
-      return typeof value === "number" && (node.value === value || (Number.isNaN(node.value) && Number.isNaN(value)));
-    case "null":
-      return true;
-  }
-}
-
-/** The shortest round-trip spelling with a decimal point or an exponent guaranteed (FR-006): `3` is `3.0`, `-0` is `-0.0`, `1e21` is `1e+21`. */
-function floatText(value: number): string {
-  if (Object.is(value, -0)) return "-0.0";
-  const text = String(value);
-  return /^-?\d+$/.test(text) ? `${text}.0` : text;
-}
-
 function scalarText(value: EditValue, kind: ScalarKind, options: EditOptions, found: Found): string | undefined {
-  switch (kind) {
-    case "bool":
-      return value === true ? "true" : "false";
-    case "null":
-      return "null";
-    case "int":
-      return BigInt(value as number | bigint).toString();
-    case "float": {
-      const number = value as number;
-      if (!Number.isFinite(number)) {
-        return options.format === "yaml" ? yamlNonFinite(number) : undefined;
-      }
-      return floatText(number);
-    }
-    case "string":
-      return options.format === "yaml" ? renderYamlString(value as string, found) : renderJsonString(value as string);
-  }
+  if (kind !== "string") return plainScalarText(value, kind, options.format === "yaml" ? yamlNonFinite : undefined);
+  return options.format === "yaml" ? renderYamlString(value as string, found) : renderJsonString(value as string);
 }
 
-function describeValue(value: EditValue): string {
+function describeValue(value: EditData): string {
+  if (Array.isArray(value)) return `a sequence of ${value.length}`;
+  if (value instanceof Map) return `a mapping of ${value.size}`;
   return typeof value === "string" ? JSON.stringify(value) : typeof value === "bigint" ? `${value}n` : String(value);
+}
+
+const refuseAt = (code: DiagnosticCode, message: string, span: SourceSpan): SetValueResult => ({ ok: false, diagnostics: [editDiagnostic(code, message, span)] });
+
+/** A value deeper or larger than the document's limits would meet on being read: refused as the read-back would, earlier, with its code (v1.15 FR-007). */
+function pastLimits(facts: ReturnType<typeof inspectData>, span: SourceSpan): SetValueResult | undefined {
+  if (facts.tooDeep) return refuseAt("edit-read-back", "The value nests deeper than the document's depth limit allows", span);
+  if (facts.tooBig) return refuseAt("edit-read-back", "The value holds more nodes than the document's size limit allows", span);
+  return undefined;
 }
 
 /**
  * The edit that makes the value at `pointer` equal `value` (FR-002 to
- * FR-009), or why not. Never throws for a document or a value — only for
+ * FR-009), or why not. Never throws for a document or a value -- only for
  * programmer error (a missing origin or format, a malformed pointer, a value
- * that is not a scalar).
+ * that is not `EditData`).
  */
-export function setValue(bytes: Uint8Array, options: EditOptions, pointer: string, value: EditValue): SetValueResult {
+export function setValue(bytes: Uint8Array, options: EditOptions, pointer: string, value: EditData): SetValueResult {
   requireOptions(options, "setValue");
   requirePointer(pointer, "setValue");
-  requireScalar(value);
+  inspectData(value, "setValue", resolveLimits(options.limits).maxDepth, resolveLimits(options.limits).maxBytes);
   const result = openDocument(bytes, options);
   return result.ok ? result.document.setValue(pointer, value) : result;
 }
 
-function requireScalar(value: EditValue): void {
-  if (!(typeof value === "string" || typeof value === "number" || typeof value === "bigint" || typeof value === "boolean" || value === null)) {
-    throw new TypeError("setValue() takes a scalar value: string, number, bigint, boolean or null");
-  }
-}
-
-function setValueIn(bytes: Uint8Array, options: EditOptions, doc: Opened, pointer: string, value: EditValue): SetValueResult {
+function setValueIn(doc: Doc, pointer: string, value: EditData): SetValueResult {
   requirePointer(pointer, "setValue");
-  requireScalar(value);
-  const sharedEdits = options.sharedEdits ?? "refuse";
-  const result = doc.find(pointer, sharedEdits);
+  const facts = inspect(doc, value, "setValue");
+  const { bytes, options, sharedEdits } = doc;
+  const result = doc.format.find(pointer, sharedEdits);
   if (!result.ok) {
     return result;
   }
   const { found } = result;
-  const refuse = (code: DiagnosticCode, message: string): SetValueResult => ({ ok: false, diagnostics: [editDiagnostic(code, message, found.span)] });
+  const refuse = (code: DiagnosticCode, message: string): SetValueResult => refuseAt(code, message, found.span);
 
   if (found.sharedBy !== undefined && sharedEdits === "refuse") {
     return { ok: false, diagnostics: [editDiagnostic("edit-target-shared", "This value is anchored and an alias shares it; writing it would change every place that shares it", found.sharedBy)] };
   }
   const diagnostics: readonly Diagnostic[] = found.sharedBy !== undefined && sharedEdits === "warn" ? [sharedInfo(found)] : [];
-  if (found.node.type !== "scalar") {
-    return refuse("edit-container", `Setting a ${found.node.type} is an insertion, which is not written yet; only a scalar can be replaced`);
-  }
   if (found.style === "block") {
     return refuse("edit-block-scalar", "A block scalar ('|' or '>') is not rewritten; only a plain or quoted scalar can be replaced");
   }
-  if (typeof value === "string" && LONE_SURROGATE.test(value)) {
+
+  if (isContainerData(value) || found.node.type !== "scalar") {
+    // v1.15 FR-008: a container replaced, or written over a scalar. The kind is the value's.
+    const limited = pastLimits(facts, found.span);
+    if (limited !== undefined) return limited;
+    if (dataEqualsNode(value, found.node)) {
+      // L1: the value is already there (a mapping's key order is no part of it), so the bytes already there stay.
+      return { ok: true, edit: { start: found.start, end: found.end, bytes: Uint8Array.from(bytes.subarray(found.start, found.end)) }, diagnostics };
+    }
+    const pointers = new Set([pointer, ...(found.copies ?? [])]);
+    const ops: Op[] = [...pointers].map((at) => ({ kind: "replace", path: segmentsOf(at), data: value }));
+    return finish(doc, doc.format.replace(found, pointer, value), ops, found.span, diagnostics, `${describeValue(value)} could not be written here and read back as the same value`);
+  }
+
+  if (typeof value === "string" && hasLoneSurrogate(value)) {
     return refuse("edit-unrepresentable", "A string with an unpaired UTF-16 surrogate cannot be encoded as UTF-8");
   }
 
@@ -343,10 +370,143 @@ function setValueIn(bytes: Uint8Array, options: EditOptions, doc: Opened, pointe
 
   // The safety net: read the edit back. A value that does not come back as the
   // value set (an explicit `!!str` tag over a number, say) is refused, not returned.
-  if (!readsBack(bytes, options, [pointer, ...(found.copies ?? [])], edit, kind, value)) {
+  if (!readsBack(doc, [pointer, ...(found.copies ?? [])], edit, kind, value)) {
     return refuse("edit-read-back", `${describeValue(value)} could not be written here and read back as the same value`);
   }
   return { ok: true, edit, diagnostics };
+}
+
+const segmentsOf = (pointer: string): string[] => (pointer === "" ? [] : pointer.slice(1).split("/").map(unescapePointerSegment));
+
+function applyTo(bytes: Uint8Array, edit: Edit): Uint8Array {
+  const applied = new Uint8Array(bytes.length - (edit.end - edit.start) + edit.bytes.length);
+  applied.set(bytes.subarray(0, edit.start), 0);
+  applied.set(edit.bytes, edit.start);
+  applied.set(bytes.subarray(edit.end), edit.start + edit.bytes.length);
+  return applied;
+}
+
+function parseBackOf(doc: Doc, applied: Uint8Array): Node | undefined {
+  return doc.options.format === "yaml" ? parseBackYaml(applied, doc.options.origin, doc.options.limits) : parseBackJson(applied, doc.options.origin, doc.options.limits);
+}
+
+/**
+ * A plan becomes an edit only if it reads back (v1.15 FR-014, FR-019): the edited bytes are parsed once, and the tree must be the
+ * original with every operation applied -- the whole tree, so that a sibling lost or a key moved is caught, not just the place edited.
+ */
+function finish(doc: Doc, plan: Plan, ops: readonly Op[], span: SourceSpan, diagnostics: readonly Diagnostic[], failure: string): SetValueResult {
+  if (!plan.ok) {
+    return { ok: false, diagnostics: [createDiagnostic({ level: "error", code: plan.code, message: plan.message, primary: plan.span ?? span, ...(plan.related !== undefined ? { related: [...plan.related] } : {}) })] };
+  }
+  const bytes = new TextEncoder().encode(plan.text);
+  if (doc.bytes.length - (plan.end - plan.start) + bytes.length > doc.limits.maxBytes) {
+    return refuseAt("edit-read-back", "The document would be larger than the size limit allows", span);
+  }
+  const edit: Edit = { start: plan.start, end: plan.end, bytes };
+  const tree = parseBackOf(doc, applyTo(doc.bytes, edit));
+  if (tree === undefined || !treeMatches(doc.format.tree, tree, ops)) return refuseAt("edit-read-back", failure, span);
+  return { ok: true, edit, diagnostics };
+}
+
+// --- add and remove ------------------------------------------------------------------
+
+/** The edit that creates the entry at `pointer` (v1.15 FR-012, FR-013). */
+export function add(bytes: Uint8Array, options: EditOptions, pointer: string, value: EditData): SetValueResult {
+  requireOptions(options, "add");
+  requirePointer(pointer, "add");
+  inspectData(value, "add", resolveLimits(options.limits).maxDepth, resolveLimits(options.limits).maxBytes);
+  const result = openDocument(bytes, options);
+  return result.ok ? result.document.add(pointer, value) : result;
+}
+
+/** The edit that deletes the entry at `pointer` (v1.15 FR-016, FR-018). */
+export function remove(bytes: Uint8Array, options: EditOptions, pointer: string): SetValueResult {
+  requireOptions(options, "remove");
+  requirePointer(pointer, "remove");
+  const result = openDocument(bytes, options);
+  return result.ok ? result.document.remove(pointer) : result;
+}
+
+function splitPointer(pointer: string): { readonly parent: string; readonly last: string } {
+  const at = pointer.lastIndexOf("/");
+  return { parent: pointer.slice(0, at), last: unescapePointerSegment(pointer.slice(at + 1)) };
+}
+
+/** Under "refuse" a shared container is refused (the first alias that shares it); under "warn" the edit says what else it changes. */
+function sharing(doc: Doc, found: Found): { readonly refusal?: SetValueResult; readonly diagnostics: readonly Diagnostic[] } {
+  if (found.sharedBy !== undefined && doc.sharedEdits === "refuse") {
+    return { refusal: { ok: false, diagnostics: [editDiagnostic("edit-target-shared", "This value is anchored and an alias shares it; writing it would change every place that shares it", found.sharedBy)] }, diagnostics: [] };
+  }
+  return { diagnostics: found.sharedBy !== undefined && doc.sharedEdits === "warn" ? [sharedInfo(found)] : [] };
+}
+
+function addIn(doc: Doc, pointer: string, value: EditData): SetValueResult {
+  requirePointer(pointer, "add");
+  const facts = inspect(doc, value, "add");
+  const root = doc.format.tree.span;
+  // The empty pointer names the document, which exists: add creates, setValue changes.
+  if (pointer === "") return refuseAt("edit-target-exists", "The root of the document exists; add creates and setValue changes", root);
+  const { parent, last } = splitPointer(pointer);
+  const found = doc.format.find(parent, doc.sharedEdits);
+  if (!found.ok) return found;
+  const container = found.found;
+  const shared = sharing(doc, container);
+  if (shared.refusal !== undefined) return shared.refusal;
+  const node = container.node;
+  if (node.type === "scalar") return refuseAt("edit-parent-scalar", `The value at '${parent}' is a scalar; an entry can only be added to a mapping or a sequence`, container.span);
+  let at: EntryAt;
+  if (node.type === "mapping") {
+    const existing = node.entries.get(last);
+    if (existing !== undefined) {
+      return refuseAt("edit-target-exists", `A value already exists at '${pointer}'; add creates, setValue changes`, doc.format.keySpan(container, last) ?? existing.span);
+    }
+    at = { key: last };
+  } else {
+    const length = node.items.length;
+    const index = last === "-" ? length : ARRAY_INDEX.test(last) ? Number(last) : -1;
+    if (index < 0 || index > length) return refuseAt("edit-target-absent", `No place at '${pointer}'; a sequence of ${length} takes an index from 0 to ${length}, or '-'`, container.span);
+    at = { index };
+  }
+  const limited = pastLimits(facts, container.span);
+  if (limited !== undefined) return limited;
+  const parents = new Set([parent, ...(container.copies ?? [])]);
+  const ops: Op[] = [...parents].map((place) => ({ kind: "add", parent: segmentsOf(place), at, data: value }));
+  return finish(doc, doc.format.add(container, at, value), ops, container.span, shared.diagnostics, `${describeValue(value)} could not be added here and read back as the entry added`);
+}
+
+function removeIn(doc: Doc, pointer: string): SetValueResult {
+  requirePointer(pointer, "remove");
+  if (pointer === "") return refuseAt("edit-remove-document", "The whole document cannot be removed", doc.format.tree.span);
+  const { parent, last } = splitPointer(pointer);
+  const targetFound = doc.format.find(pointer, doc.sharedEdits);
+  if (!targetFound.ok) return targetFound;
+  const target = targetFound.found;
+  const shared = sharing(doc, target);
+  if (shared.refusal !== undefined) return shared.refusal;
+  const merged = doc.format.mergedUnder(target);
+  if (merged !== undefined) {
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          level: "error",
+          code: "edit-reveals-merged",
+          message: `Removing '${pointer}' would let the value a merge key supplies show through; the key overrides it and is the document's own`,
+          primary: merged.key,
+          related: [{ label: "the value a merge key supplies", span: merged.merged }],
+        }),
+      ],
+    };
+  }
+  const containerFound = doc.format.find(parent, doc.sharedEdits);
+  if (!containerFound.ok) return containerFound;
+  const container = containerFound.found;
+  const node = container.node;
+  if (node.type === "scalar") throw new Error("Internal error: remove(): the parent of a value is a scalar");
+  const at: EntryAt = node.type === "mapping" ? { key: last } : { index: Number(last) };
+  const parents = new Set([parent, ...(container.copies ?? [])]);
+  const ops: Op[] = [...parents].map((place) => ({ kind: "remove", parent: segmentsOf(place), at }));
+  return finish(doc, doc.format.remove(target, container, at), ops, target.span, shared.diagnostics, `'${pointer}' could not be removed here and read back as the entry gone`);
 }
 
 /** Under `"warn"`: the edit is answered, and this says so — at the value, naming every alias that shares it (v1.12 FR-005). */
@@ -361,12 +521,8 @@ function sharedInfo(found: Found): Diagnostic {
   });
 }
 
-function readsBack(bytes: Uint8Array, options: EditOptions, pointers: readonly string[], edit: Edit, kind: ScalarKind, value: EditValue): boolean {
-  const applied = new Uint8Array(bytes.length - (edit.end - edit.start) + edit.bytes.length);
-  applied.set(bytes.subarray(0, edit.start), 0);
-  applied.set(edit.bytes, edit.start);
-  applied.set(bytes.subarray(edit.end), edit.start + edit.bytes.length);
-  const tree = options.format === "yaml" ? parseBackYaml(applied, options.origin, options.limits) : parseBackJson(applied, options.origin, options.limits);
+function readsBack(doc: Doc, pointers: readonly string[], edit: Edit, kind: ScalarKind, value: EditValue): boolean {
+  const tree = parseBackOf(doc, applyTo(doc.bytes, edit));
   if (tree === undefined) return false;
   // The pointer asked about, and under "warn" and "allow" every place that shared the value's bytes before the edit
   // (v1.12 FR-007): each reads the value set, or the edit did not land where the value is held.

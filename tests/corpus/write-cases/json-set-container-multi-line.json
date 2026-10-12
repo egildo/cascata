@@ -1,0 +1,38 @@
+{
+  "name": "write/json-set-container-multi-line",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\n  \"a\": {\n    \"x\": 1\n  },\n  \"b\": 2\n}\n",
+  "pointer": "/a",
+  "value": {
+    "map": [
+      [
+        "w",
+        {
+          "number": 2
+        }
+      ],
+      [
+        "z",
+        {
+          "seq": [
+            {
+              "number": 1
+            },
+            {
+              "number": 2
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 9,
+      "end": 25,
+      "bytes": "{\n    \"w\": 2,\n    \"z\": [\n      1,\n      2\n    ]\n  }"
+    }
+  }
+}

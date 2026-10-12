@@ -1,0 +1,31 @@
+{
+  "name": "write/set-container-crlf",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "walls:\r\n  W1:\r\n    height: 3.2\r\n",
+  "pointer": "/walls/W1",
+  "value": {
+    "map": [
+      [
+        "a",
+        {
+          "number": 1
+        }
+      ],
+      [
+        "b",
+        {
+          "number": 2
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 19,
+      "end": 30,
+      "bytes": "a: 1\r\n    b: 2"
+    }
+  }
+}

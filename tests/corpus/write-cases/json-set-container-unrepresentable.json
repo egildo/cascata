@@ -1,0 +1,22 @@
+{
+  "name": "write/json-set-container-unrepresentable",
+  "cites": "v1.15 FR-007",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\"a\": 1}",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "number": "NaN"
+      }
+    ]
+  },
+  "expect": {
+    "diagnostic": {
+      "code": "edit-unrepresentable",
+      "start": 6,
+      "end": 7
+    }
+  }
+}

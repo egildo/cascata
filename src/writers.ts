@@ -14,7 +14,7 @@
  */
 
 import { formatForLocation } from "./adapters/registry.js";
-import { locate, openDocument, setValue, type Edit, type EditFormat, type EditValue, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
+import { locate, openDocument, setValue, type Edit, type EditData, type EditFormat, type EditValue, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
 import { createOrigin } from "./model/span.js";
 
 export type WriterLocateResult = { readonly ok: true; readonly start: number; readonly end: number } | { readonly ok: false; readonly reason: string };
@@ -32,7 +32,7 @@ export interface WriterDocument {
   /** The stored byte range of the value at the pointer `path`. */
   locate(path: string): WriterLocateResult;
   /** The edit that makes the value at the pointer `path` equal `value`. Independent of every other edit this document has answered: each is against the bytes as opened. */
-  write(path: string, value: EditValue): WriterWriteResult;
+  write(path: string, value: EditData): WriterWriteResult;
 }
 
 export type WriterOpenResult = { readonly ok: true; readonly document: WriterDocument } | { readonly ok: false; readonly reason: string };
@@ -44,7 +44,7 @@ export interface Writer {
   /** The stored byte range of the value at the pointer `path`. */
   locate(bytes: Uint8Array, path: string): WriterLocateResult;
   /** The edit that makes the value at the pointer `path` equal `value`. */
-  write(bytes: Uint8Array, path: string, value: EditValue): WriterWriteResult;
+  write(bytes: Uint8Array, path: string, value: EditData): WriterWriteResult;
   /** v1.15: parse `bytes` once and answer `locate` and `write` as often as asked (it copies the bytes). */
   open(bytes: Uint8Array): WriterOpenResult;
 }
@@ -96,4 +96,4 @@ export function jsonWriter(options?: WriterOptions): Writer {
   return writer("json", options);
 }
 
-export type { Edit, EditValue, SharedEdits };
+export type { Edit, EditData, EditValue, SharedEdits };

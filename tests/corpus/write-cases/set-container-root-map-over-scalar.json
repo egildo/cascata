@@ -1,0 +1,25 @@
+{
+  "name": "write/set-container-root-map-over-scalar",
+  "cites": "v1.15 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "5\n",
+  "pointer": "",
+  "value": {
+    "map": [
+      [
+        "a",
+        {
+          "number": 1
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 0,
+      "end": 1,
+      "bytes": "a: 1"
+    }
+  }
+}

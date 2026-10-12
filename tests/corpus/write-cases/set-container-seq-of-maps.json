@@ -1,0 +1,45 @@
+{
+  "name": "write/set-container-seq-of-maps",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: 1\n",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "map": [
+          [
+            "x",
+            {
+              "number": 1
+            }
+          ],
+          [
+            "w",
+            {
+              "number": 2
+            }
+          ]
+        ]
+      },
+      {
+        "map": [
+          [
+            "x",
+            {
+              "number": 3
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 2,
+      "end": 4,
+      "bytes": "\n  - x: 1\n    w: 2\n  - x: 3"
+    }
+  }
+}

@@ -306,13 +306,26 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  *   under `sharedEdits: "refuse"` (the default); under `"warn"` (v1.12) the
  *   edit is answered with this code at `level: "info"`, positioned at the
  *   value, `related` naming every other place the write changes.
- * - `edit-container` — a mapping or a sequence: setting a container is an
- *   insertion, not written yet (also from `editTarget`).
+ * - `edit-container` — a mapping or a sequence: from `editTarget` only since v1.15, which
+ *   writes containers (a container has no edit target: which document it belongs in is
+ *   the view-update question, left open).
  * - `edit-block-scalar` — a block scalar (`|`, `>`), whose style is not reproduced.
  * - `edit-bare-key-in-flow` — a key with no value inside a flow collection
  *   (`{a}`), which has nowhere to put a `:` (v1.12).
  * - `edit-read-back` — the edit did not read back as the value set: the
- *   safety net, which no known input reaches.
+ *   safety net. Since v1.15 it is also what a value past the document's depth or size
+ *   limits, or a tag on a container that cannot hold the new value, is refused as.
+ *
+ * v1.15 (specs/025-open-insert-delete), from `add` and `remove`; each `level: "error"`:
+ * - `edit-parent-scalar` — `add` into something that is not a mapping or a sequence;
+ *   positioned at the scalar.
+ * - `edit-target-exists` — `add` of a key the mapping already has, one a YAML merge key
+ *   supplies included; positioned at the existing key. (`add` creates, `setValue` changes.)
+ *   Also what `add` at the empty pointer is, the document existing.
+ * - `edit-remove-document` — `remove` of the empty pointer; positioned at the root.
+ * - `edit-reveals-merged` — `remove` of a key that overrides one a YAML merge key supplies,
+ *   which would let the merged value show through; positioned at the key, the merged
+ *   value's span related. Refused whatever the shared-edits policy.
  *
  * All positioned at the value. They are v1.12.1's split of `edit-unsupported`,
  * which named seven refusals: these four; a key with no value inside a shared
@@ -322,7 +335,19 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  *   `NaN` or infinity; no format has a lone surrogate); positioned at the
  *   value it would have replaced.
  */
-export const EDIT_CODES = ["edit-target-absent", "edit-target-shared", "edit-unrepresentable", "edit-container", "edit-block-scalar", "edit-bare-key-in-flow", "edit-read-back"] as const;
+export const EDIT_CODES = [
+  "edit-target-absent",
+  "edit-target-shared",
+  "edit-unrepresentable",
+  "edit-container",
+  "edit-block-scalar",
+  "edit-bare-key-in-flow",
+  "edit-read-back",
+  "edit-parent-scalar",
+  "edit-target-exists",
+  "edit-remove-document",
+  "edit-reveals-merged",
+] as const;
 
 /**
  * Which document an edit belongs in (v1.11, `SPEC.md` Article IX, §19) — specs/020-edit-targets

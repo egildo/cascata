@@ -1,0 +1,31 @@
+{
+  "name": "write/json-set-container-tab-indented",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\n\t\"a\": 1\n}\n",
+  "pointer": "/a",
+  "value": {
+    "map": [
+      [
+        "x",
+        {
+          "number": 1
+        }
+      ],
+      [
+        "y",
+        {
+          "number": 2
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 8,
+      "end": 9,
+      "bytes": "{\n\t\t\"x\": 1,\n\t\t\"y\": 2\n\t}"
+    }
+  }
+}

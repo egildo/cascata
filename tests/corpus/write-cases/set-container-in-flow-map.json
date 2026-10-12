@@ -1,0 +1,31 @@
+{
+  "name": "write/set-container-in-flow-map",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: [1, {b: 2}]\n",
+  "pointer": "/a/1",
+  "value": {
+    "map": [
+      [
+        "c",
+        {
+          "number": 3
+        }
+      ],
+      [
+        "d",
+        {
+          "number": 4
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 7,
+      "end": 13,
+      "bytes": "{c: 3, d: 4}"
+    }
+  }
+}

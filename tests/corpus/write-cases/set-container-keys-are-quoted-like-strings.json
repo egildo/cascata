@@ -1,0 +1,37 @@
+{
+  "name": "write/set-container-keys-are-quoted-like-strings",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: 1\n",
+  "pointer": "/a",
+  "value": {
+    "map": [
+      [
+        "1",
+        {
+          "string": "p"
+        }
+      ],
+      [
+        "yes",
+        {
+          "string": "q"
+        }
+      ],
+      [
+        "a b",
+        {
+          "string": "r"
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 2,
+      "end": 4,
+      "bytes": "\n  \"1\": p\n  \"yes\": q\n  a b: r"
+    }
+  }
+}

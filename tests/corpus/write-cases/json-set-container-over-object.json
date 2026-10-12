@@ -1,0 +1,38 @@
+{
+  "name": "write/json-set-container-over-object",
+  "cites": "v1.15 FR-008",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\"a\": {\"x\": 1}, \"b\": 2}\n",
+  "pointer": "/a",
+  "value": {
+    "map": [
+      [
+        "w",
+        {
+          "number": 2
+        }
+      ],
+      [
+        "z",
+        {
+          "seq": [
+            {
+              "number": 1
+            },
+            {
+              "number": 2
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 14,
+      "bytes": "{\"w\": 2, \"z\": [1, 2]}"
+    }
+  }
+}

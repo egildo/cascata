@@ -1,0 +1,25 @@
+{
+  "name": "write/json-set-container-crlf",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\r\n  \"a\": 1\r\n}\r\n",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "number": 1
+      },
+      {
+        "number": 2
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 10,
+      "end": 11,
+      "bytes": "[\r\n    1,\r\n    2\r\n  ]"
+    }
+  }
+}

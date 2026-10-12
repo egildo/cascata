@@ -36,7 +36,7 @@ describe("v1.15 FR-001 -- openDocument", () => {
   it("is exported from the package root and answers ok with a document", () => {
     const result = openDocument(ENC.encode("a: 1\n"), yaml);
     expect(result.ok).toBe(true);
-    if (result.ok) expect(Object.keys(result.document).sort()).toEqual(["locate", "setValue"]);
+    if (result.ok) expect(Object.keys(result.document).sort()).toEqual(["add", "locate", "remove", "setValue"]);
   });
 
   it("a document that does not parse gives the parse's own diagnostics, as locate does", () => {

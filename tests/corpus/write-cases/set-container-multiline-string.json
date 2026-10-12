@@ -1,0 +1,25 @@
+{
+  "name": "write/set-container-multiline-string",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: 1\n",
+  "pointer": "/a",
+  "value": {
+    "map": [
+      [
+        "t",
+        {
+          "string": "one\ntwo"
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 2,
+      "end": 4,
+      "bytes": "\n  t: \"one\\ntwo\""
+    }
+  }
+}

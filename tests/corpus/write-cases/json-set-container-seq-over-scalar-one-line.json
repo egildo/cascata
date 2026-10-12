@@ -1,0 +1,25 @@
+{
+  "name": "write/json-set-container-seq-over-scalar-one-line",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\"a\": 1}",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "number": 1
+      },
+      {
+        "string": "b"
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 7,
+      "bytes": "[1, \"b\"]"
+    }
+  }
+}

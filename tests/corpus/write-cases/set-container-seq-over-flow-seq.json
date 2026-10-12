@@ -1,0 +1,28 @@
+{
+  "name": "write/set-container-seq-over-flow-seq",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "tags: [a, b]\nn: 1\n",
+  "pointer": "/tags",
+  "value": {
+    "seq": [
+      {
+        "string": "x"
+      },
+      {
+        "string": "q"
+      },
+      {
+        "string": "z"
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 12,
+      "bytes": "[x, q, z]"
+    }
+  }
+}

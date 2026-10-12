@@ -1,0 +1,31 @@
+{
+  "name": "write/set-container-map-over-map",
+  "cites": "v1.15 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "walls:\n  W1:\n    height: 3.2\n  W2:\n    height: 3.2\n",
+  "pointer": "/walls/W1",
+  "value": {
+    "map": [
+      [
+        "height",
+        {
+          "number": 3.4
+        }
+      ],
+      [
+        "depth",
+        {
+          "number": 0.2
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 17,
+      "end": 28,
+      "bytes": "height: 3.4\n    depth: 0.2"
+    }
+  }
+}

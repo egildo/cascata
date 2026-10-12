@@ -1,0 +1,25 @@
+{
+  "name": "write/set-container-in-flow-seq",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: [1, 2]\n",
+  "pointer": "/a/0",
+  "value": {
+    "seq": [
+      {
+        "number": 7
+      },
+      {
+        "number": 8
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 4,
+      "end": 5,
+      "bytes": "[7, 8]"
+    }
+  }
+}

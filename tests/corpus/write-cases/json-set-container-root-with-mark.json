@@ -1,0 +1,33 @@
+{
+  "name": "write/json-set-container-root-with-mark",
+  "cites": "v1.15 FR-008",
+  "format": "json",
+  "call": "setValue",
+  "inputBytes": [
+    239,
+    187,
+    191,
+    123,
+    34,
+    97,
+    34,
+    58,
+    49,
+    125
+  ],
+  "pointer": "",
+  "value": {
+    "seq": [
+      {
+        "number": 1
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 3,
+      "end": 10,
+      "bytes": "[1]"
+    }
+  }
+}

@@ -20,16 +20,17 @@
  * The probe behind each clause is in `specs/018-write-value/plan.md`.
  */
 
-import { isAlias, isMap, isNode, isScalar, isSeq, Parser } from "yaml";
-import type { Document, Node as YamlNode } from "yaml";
+import { isAlias, isMap, isScalar, isSeq } from "yaml";
+import type { Document, Node as YamlNode, Pair } from "yaml";
 import type { Diagnostic } from "../../diagnostics/diagnostic.js";
-import type { Node, ScalarKind } from "../../model/node.js";
+import type { Node } from "../../model/node.js";
 import { ARRAY_INDEX, pointersInDocument, resolvePointer, unescapePointerSegment } from "../../model/pointer.js";
 import type { Origin, SourceSpan } from "../../model/span.js";
-import { editDiagnostic, type FindResult, type Found, type ScalarStyle, type SharedEdits } from "../edit.js";
+import { editDiagnostic, type FindResult, type Found, type FormatOpened, type LocatedKind, type ScalarStyle, type SharedEdits } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
 import type { AnchorTable } from "./anchors.js";
-import { countParentWalk, countTokenize } from "../parse-count.js";
+import { asNode, newFacts, parentsIn, recordSite, siteOf, tokensIn, type Facts, type Site } from "./facts.js";
+import { planYamlAdd, planYamlRemove, planYamlReplace } from "./insert.js";
 import { parseYamlBytes, type YamlSpans } from "./parse.js";
 
 // --- finding a value ------------------------------------------------------
@@ -39,11 +40,6 @@ interface Reach {
   /** The first alias (or merge key's alias) the path went through. */
   readonly via: SourceSpan | undefined;
   readonly inFlow: boolean;
-}
-
-/** `yaml` types a pair's key and value `unknown`; this narrows them with the library's own guard instead of a cast. */
-function asNode(value: unknown): YamlNode | null {
-  return isNode(value) ? value : null;
 }
 
 function isMergeKey(key: unknown): boolean {
@@ -60,14 +56,29 @@ function keyText(key: YamlNode | null, anchors: AnchorTable): string | undefined
   return undefined;
 }
 
+/** What `lookup` found: the value, the alias it came through, and the pair and the map that holds the pair (a merge source, when found through a merge key). */
+interface Looked {
+  readonly value: YamlNode | null;
+  readonly via: SourceSpan | undefined;
+  readonly pair: Pair;
+  readonly owner: YamlNode;
+  readonly index: number;
+}
+
 /** `segment` in `map`: a direct pair, else through a merge key (earlier sources win), remembering the alias it came through. */
-function lookup(map: YamlNode, segment: string, anchors: AnchorTable, spans: YamlSpans, via: SourceSpan | undefined): { value: YamlNode | null; via: SourceSpan | undefined } | undefined {
+function lookup(map: YamlNode, segment: string, anchors: AnchorTable, spans: YamlSpans, via: SourceSpan | undefined): Looked | undefined {
   if (!isMap(map)) return undefined;
-  for (const pair of map.items) {
+  for (const [index, pair] of map.items.entries()) {
     if (!isMergeKey(pair.key) && keyText(asNode(pair.key), anchors) === segment) {
-      return { value: asNode(pair.value), via };
+      return { value: asNode(pair.value), via, pair, owner: map, index };
     }
   }
+  return lookupMerged(map, segment, anchors, spans, via);
+}
+
+/** `segment` in the sources of `map`'s merge keys only. */
+function lookupMerged(map: YamlNode, segment: string, anchors: AnchorTable, spans: YamlSpans, via: SourceSpan | undefined): Looked | undefined {
+  if (!isMap(map)) return undefined;
   for (const pair of map.items) {
     const value = asNode(pair.value);
     if (!isMergeKey(pair.key) || value === null) continue;
@@ -81,6 +92,33 @@ function lookup(map: YamlNode, segment: string, anchors: AnchorTable, spans: Yam
     }
   }
   return undefined;
+}
+
+/** The span of the key `key` of the mapping `container` is, whether the pair is its own or a merge key supplies it (v1.15 FR-013). */
+export function yamlKeySpan(facts: Facts, container: Found, key: string): SourceSpan | undefined {
+  const node = siteOf(container).node;
+  if (node === null || !isMap(node)) return undefined;
+  const looked = lookup(node, key, facts.anchors, facts.spans, undefined);
+  const keyNode = looked === undefined ? null : asNode(looked.pair.key);
+  return keyNode?.range == null ? undefined : facts.spans.spanOf(keyNode.range);
+}
+
+/**
+ * Whether the pair `target` is, in a mapping whose merge keys supply the same key, overrides a merged value (v1.15 FR-018):
+ * removing it would let the merged value show through. Answers the key's span and the merged value's.
+ */
+export function yamlMergedUnder(facts: Facts, target: Found): { readonly key: SourceSpan; readonly merged: SourceSpan } | undefined {
+  const site = siteOf(target);
+  const owner = site.parent;
+  if (owner === undefined || !isMap(owner) || site.pair === undefined) return undefined;
+  const keyNode = asNode(site.pair.key);
+  const name = keyText(keyNode, facts.anchors);
+  if (keyNode?.range == null || name === undefined) return undefined;
+  const supplied = lookupMerged(owner, name, facts.anchors, facts.spans, undefined);
+  const mergedNode = supplied === undefined ? null : supplied.value;
+  if (supplied === undefined || mergedNode === null) return undefined;
+  const merged = spanOfNode(mergedNode, facts.spans);
+  return merged === undefined ? undefined : { key: facts.spans.spanOf(keyNode.range), merged };
 }
 
 function spanOfNode(node: YamlNode, spans: YamlSpans): SourceSpan | undefined {
@@ -109,34 +147,6 @@ function firstAliasTo(node: YamlNode, anchors: AnchorTable, spans: YamlSpans): S
   return alias?.range != null ? spans.spanOf(alias.range) : undefined;
 }
 
-/** Each node's parent in the AST (a pair is skipped: a key's and a value's parent is the mapping). One walk. */
-function parentsOf(doc: Document): Map<YamlNode, YamlNode> {
-  countParentWalk();
-  const parents = new Map<YamlNode, YamlNode>();
-  const stack: YamlNode[] = doc.contents !== null && isNode(doc.contents) ? [doc.contents] : [];
-  for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
-    const children: YamlNode[] = [];
-    if (isMap(node)) {
-      for (const pair of node.items) {
-        const key = asNode(pair.key);
-        const value = asNode(pair.value);
-        if (key !== null) children.push(key);
-        if (value !== null) children.push(value);
-      }
-    } else if (isSeq(node)) {
-      for (const item of node.items) {
-        const child = asNode(item);
-        if (child !== null) children.push(child);
-      }
-    }
-    for (const child of children) {
-      parents.set(child, node);
-      stack.push(child);
-    }
-  }
-  return parents;
-}
-
 /**
  * Every alias whose expansion holds `holder` (v1.12 FR-005, `"warn"`): an alias to it or to any
  * container above it — a merge key's alias among them — and, since such an alias is itself a
@@ -161,20 +171,10 @@ function aliasesHolding(holder: YamlNode, facts: Facts): SourceSpan[] {
   return found.sort((a, b) => a.start - b.start);
 }
 
-/**
- * A YAML document parsed once (v1.15 FR-004): the reader's tree, the `yaml` AST it was built from and the
- * functions that measured it. `find` answers any number of pointers from them without parsing again; the
- * facts a find may need that cost a walk over the whole document (every node's parent, `yaml`'s CST tokens)
- * are built the first time one is asked for and kept.
- */
-export interface YamlOpened {
-  readonly tree: Node;
-  find(pointer: string, sharedEdits: SharedEdits): FindResult;
-}
-
 type OpenOutcome<T> = { readonly ok: true; readonly opened: T } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
 
-export function openYaml(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined): OpenOutcome<YamlOpened> {
+/** Every document is parsed once (v1.15 FR-004); what the writer keeps of the parse is in `facts.ts`. */
+export function openYaml(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined): OpenOutcome<FormatOpened> {
   const captured: { doc?: Document; spans?: YamlSpans; anchors?: AnchorTable } = {};
   const outcome = parseYamlBytes(bytes, origin, limits, (doc, spans, anchors) => {
     captured.doc = doc;
@@ -188,29 +188,19 @@ export function openYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
   if (doc === undefined || spans === undefined || anchors === undefined) {
     throw new Error("Internal error: the YAML reader parsed a document without handing it over");
   }
-  const facts: Facts = { bytes, doc, spans, anchors, tree: outcome.tree, parents: undefined, tokens: undefined };
-  return { ok: true, opened: { tree: outcome.tree, find: (pointer, sharedEdits) => findIn(facts, pointer, sharedEdits) } };
-}
-
-/** What one parse of a document leaves, and the lazily built facts about it. */
-interface Facts {
-  readonly bytes: Uint8Array;
-  readonly doc: Document;
-  readonly spans: YamlSpans;
-  readonly anchors: AnchorTable;
-  readonly tree: Node;
-  parents: Map<YamlNode, YamlNode> | undefined;
-  tokens: { readonly type: string; readonly offset: number; readonly end: number }[] | undefined;
-}
-
-function parentsIn(facts: Facts): Map<YamlNode, YamlNode> {
-  facts.parents ??= parentsOf(facts.doc);
-  return facts.parents;
-}
-
-function tokensIn(facts: Facts): { readonly type: string; readonly offset: number; readonly end: number }[] {
-  facts.tokens ??= sourceTokens(facts.spans.parserText);
-  return facts.tokens;
+  const facts = newFacts(bytes, doc, spans, anchors, outcome.tree);
+  return {
+    ok: true,
+    opened: {
+      tree: outcome.tree,
+      find: (pointer, sharedEdits) => findIn(facts, pointer, sharedEdits),
+      replace: (found, _pointer, data) => planYamlReplace(facts, found, data),
+      add: (container, at, data) => planYamlAdd(facts, container, at, data),
+      remove: (target) => planYamlRemove(facts, target),
+      keySpan: (container, key) => yamlKeySpan(facts, container, key),
+      mergedUnder: (target) => yamlMergedUnder(facts, target),
+    },
+  };
 }
 
 /**
@@ -232,7 +222,10 @@ function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindRe
 
   // An empty document is a null scalar the reader invented, with nothing in the AST to walk.
   if (doc.contents === null) {
-    return segments.length > 0 ? absent(rootSpan) : { ok: true, found: { start: rootSpan.start, end: rootSpan.end, node: outcome.tree, span: rootSpan, style: "plain", inFlow: false } };
+    if (segments.length > 0) return absent(rootSpan);
+    const empty: Found = { start: rootSpan.start, end: rootSpan.end, node: outcome.tree, span: rootSpan, style: "plain", inFlow: false };
+    recordSite(empty, { node: null, parent: undefined, pair: undefined, index: 0, inFlow: false });
+    return { ok: true, found: empty };
   }
 
   // A value is shared not only when reached through an alias but when it, or
@@ -241,6 +234,9 @@ function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindRe
   let sharedBy: SourceSpan | undefined = firstAliasTo(doc.contents, anchors, spans);
   let reach: Reach = { node: doc.contents, via: undefined, inFlow: false };
   let ancestor = spanOfNode(doc.contents, spans) ?? rootSpan;
+  let holder: { readonly parent: YamlNode; readonly pair: Pair | undefined; readonly index: number } | undefined;
+  // The sites on the way down, each knowing the one above it (`Site.up`).
+  let up: Site = { node: doc.contents, parent: undefined, pair: undefined, index: 0, inFlow: false };
   for (const segment of segments) {
     let { node, via, inFlow } = reach;
     if (isAlias(node)) {
@@ -250,12 +246,16 @@ function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindRe
       node = target;
     }
     let next: { value: YamlNode | null; via: SourceSpan | undefined } | undefined;
+    let nextHolder: typeof holder;
     if (isMap(node)) {
-      next = lookup(node, segment, anchors, spans, via);
+      const looked = lookup(node, segment, anchors, spans, via);
+      next = looked;
+      nextHolder = looked === undefined ? undefined : { parent: looked.owner, pair: looked.pair, index: looked.index };
       inFlow ||= node.flow === true;
     } else if (isSeq(node)) {
       const item = ARRAY_INDEX.test(segment) ? node.items[Number(segment)] : undefined;
       next = item === undefined ? undefined : { value: asNode(item), via };
+      nextHolder = item === undefined ? undefined : { parent: node, pair: undefined, index: Number(segment) };
       inFlow ||= node.flow === true;
     }
     ancestor = spanOfNode(node, spans) ?? ancestor;
@@ -268,13 +268,14 @@ function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindRe
       const mapSpan = spanOfNode(node, spans);
       const indicator = inFlow || mapSpan === undefined ? undefined : `\n${" ".repeat(mapSpan.column - 1)}: `;
       const shared = next.via ?? sharedBy;
-      return {
-        ok: true,
-        found: { start: modelNode.span.start, end: modelNode.span.end, node: modelNode, span: modelNode.span, style: "plain", inFlow, bareKey: { indicator }, ...(shared !== undefined ? { sharedBy: shared } : {}) },
-      };
+      const bare: Found = { start: modelNode.span.start, end: modelNode.span.end, node: modelNode, span: modelNode.span, style: "plain", inFlow, bareKey: { indicator }, ...(shared !== undefined ? { sharedBy: shared } : {}) };
+      recordSite(bare, { node: null, parent: nextHolder?.parent, pair: nextHolder?.pair, index: nextHolder?.index ?? 0, inFlow, up });
+      return { ok: true, found: bare };
     }
     sharedBy ??= firstAliasTo(next.value, anchors, spans);
     reach = { node: next.value, via: next.via, inFlow };
+    holder = nextHolder;
+    up = { node: next.value, parent: nextHolder?.parent, pair: nextHolder?.pair, index: nextHolder?.index ?? 0, inFlow, up };
   }
 
   let { node, via } = reach;
@@ -294,32 +295,33 @@ function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindRe
   if (span === undefined || modelNode === undefined) {
     throw new Error("Internal error: the YAML reader and the AST walk disagree about where a value is");
   }
-  const valueAt = isScalar(node) && node.range != null ? node.range[0] : undefined;
+  const valueAt = !isAlias(node) && node.range != null ? node.range[0] : undefined;
   // The tag's bytes are found in `yaml`'s tokens the first time an edit needs to drop it (v1.15 FR-004), not when it is merely located.
   const tag = valueAt !== undefined && typeof node.tag === "string" ? { holds: TAG_HOLDS.get(node.tag), drop: () => tagDrop(facts, valueAt) } : undefined;
   const sharedWith = sharedBy !== undefined && sharedEdits === "warn" ? aliasesHolding(node, facts) : undefined;
   // Every node the reader says holds this value's bytes — the value, its alias and merge-key copies, by the model's
   // span rather than the walk's, so a walk that stopped short of the bytes is caught — for the read-back to check each.
   const copies = sharedBy !== undefined ? pointersInDocument(outcome.tree, modelNode.span) : undefined;
-  return {
-    ok: true,
-    found: {
-      start: span.start,
-      end: span.end,
-      node: modelNode,
-      span,
-      style: styleOf(node),
-      inFlow: reach.inFlow,
-      ...(sharedBy !== undefined ? { sharedBy } : {}),
-      ...(sharedWith !== undefined ? { sharedWith } : {}),
-      ...(copies !== undefined ? { copies } : {}),
-      ...(tag !== undefined ? { tag } : {}),
-    },
+  const found: Found = {
+    start: span.start,
+    end: span.end,
+    node: modelNode,
+    span,
+    style: styleOf(node),
+    inFlow: reach.inFlow,
+    ...(sharedBy !== undefined ? { sharedBy } : {}),
+    ...(sharedWith !== undefined ? { sharedWith } : {}),
+    ...(copies !== undefined ? { copies } : {}),
+    ...(tag !== undefined ? { tag } : {}),
   };
+  recordSite(found, { node, parent: holder?.parent, pair: holder?.pair, index: holder?.index ?? 0, inFlow: reach.inFlow, ...(segments.length > 0 ? { up: up.up } : {}) });
+  return { ok: true, found };
 }
 
 /** The kind each core-schema scalar tag holds (v1.12 FR-011). */
-const TAG_HOLDS: ReadonlyMap<string, ScalarKind> = new Map<string, ScalarKind>([
+const TAG_HOLDS: ReadonlyMap<string, LocatedKind> = new Map<string, LocatedKind>([
+  ["tag:yaml.org,2002:map", "mapping"],
+  ["tag:yaml.org,2002:seq", "sequence"],
   ["tag:yaml.org,2002:str", "string"],
   ["tag:yaml.org,2002:int", "int"],
   ["tag:yaml.org,2002:float", "float"],
@@ -328,26 +330,6 @@ const TAG_HOLDS: ReadonlyMap<string, ScalarKind> = new Map<string, ScalarKind>([
 ]);
 
 const isBlank = (byte: number | undefined): boolean => byte === 0x20 || byte === 0x09;
-
-/** Every token `yaml`'s CST holds, in the parser's text, in document order. Iterative: a document may nest deeply. */
-function sourceTokens(text: string): { readonly type: string; readonly offset: number; readonly end: number }[] {
-  countTokenize();
-  const found: { type: string; offset: number; end: number }[] = [];
-  const work: unknown[] = [];
-  for (const token of new Parser().parse(text)) work.push(token);
-  while (work.length > 0) {
-    const at = work.pop();
-    if (Array.isArray(at)) {
-      for (const item of at) work.push(item);
-    } else if (typeof at === "object" && at !== null) {
-      const fields: Record<string, unknown> = { ...at };
-      const { type, offset, source } = fields;
-      if (typeof type === "string" && typeof offset === "number" && typeof source === "string") found.push({ type, offset, end: offset + source.length });
-      for (const value of Object.values(fields)) if (typeof value === "object" && value !== null) work.push(value);
-    }
-  }
-  return found.sort((a, b) => a.offset - b.offset);
-}
 
 /**
  * Where the explicit tag of the value starting at stored index `valueAt` is, and where the bytes kept after it
@@ -388,73 +370,4 @@ export function parseBack(bytes: Uint8Array, origin: Origin, limits: Partial<Par
   return outcome.ok ? outcome.tree : undefined;
 }
 
-// --- spelling -------------------------------------------------------------
-
-/** YAML spells the three non-finite floats `.nan`, `.inf`, `-.inf`. */
-export function yamlNonFinite(value: number): string {
-  return Number.isNaN(value) ? ".nan" : value > 0 ? ".inf" : "-.inf";
-}
-
-/**
- * A value that has no bytes yet (`a:` followed by a line break, `a: # c`) is
- * replaced at an empty range, so the text needs the space the colon wanted
- * before it, and the space a comment needs after it. Both are inside the
- * edit; no byte outside it moves.
- */
-export function yamlPadding(bytes: Uint8Array, at: number, text: string): string {
-  const before = bytes[at - 1];
-  const after = bytes[at];
-  // Nor after a byte-order mark: the value of an empty document starts right after the prefix marks (v1.12 FR-009).
-  const afterMark = at >= 3 && bytes[at - 3] === 0xef && bytes[at - 2] === 0xbb && before === 0xbf;
-  const needsBefore = before !== undefined && before !== 0x20 && before !== 0x09 && before !== 0x0a && before !== 0x0d && !afterMark;
-  return `${needsBefore ? " " : ""}${text}${after === 0x23 ? " " : ""}`;
-}
-
-/** Controls (tab excepted), DEL, C1, the line and paragraph separators, the byte-order mark, and the two noncharacters: never raw in a quoted scalar we write. */
-const NEEDS_ESCAPE = /[\u0000-\u0008\u000A-\u001F\u007F-\u009F\u2028\u2029\uFEFF\uFFFE\uFFFF]/;
-
-/** Forms a reader may take for something other than a string: YAML 1.2's core schema and 1.1's (booleans, numbers with `_`, `:` or a base prefix, timestamps, `<<`, `=`). Conservative: a false positive costs a pair of quotes. */
-const NOT_A_PLAIN_STRING: readonly RegExp[] = [
-  /^(y|n|yes|no|on|off|true|false|null|~)$/i,
-  /^[-+]?(\.inf|\.nan)$/i,
-  /^[-+]?(\.|\d)[\d_.:,eExXoObBa-fA-F+-]*$/,
-  /^\d{4}-\d\d?-\d\d?/,
-  /^(<<|=)$/,
-];
-
-/** FR-008: may `text` be written plain, here? */
-function plainSafe(text: string, inFlow: boolean): boolean {
-  if (text === "" || /^\s|\s$/.test(text) || NEEDS_ESCAPE.test(text)) return false;
-  if (/^[-?:,[\]{}#&*!|>'"%@`]/.test(text) || text.startsWith("...")) return false;
-  if (/:(\s|$)/.test(text) || /[ \t]#/.test(text)) return false;
-  if (inFlow && /[,[\]{}]/.test(text)) return false;
-  return !NOT_A_PLAIN_STRING.some((pattern) => pattern.test(text));
-}
-
-function doubleQuote(text: string): string {
-  let out = '"';
-  for (const character of text) {
-    const code = character.codePointAt(0) ?? 0;
-    if (character === '"') out += '\\"';
-    else if (character === "\\") out += "\\\\";
-    else if (character === "\n") out += "\\n";
-    else if (character === "\r") out += "\\r";
-    else if (character === "\t") out += "\\t";
-    else if (code === 0x2028 || code === 0x2029 || code === 0xfeff || code === 0xfffe || code === 0xffff) out += `\\u${code.toString(16).toUpperCase().padStart(4, "0")}`;
-    else if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) out += `\\x${code.toString(16).toUpperCase().padStart(2, "0")}`;
-    else out += character;
-  }
-  return `${out}"`;
-}
-
-/** Single quotes hold anything printable on one line; an embedded `'` is doubled. */
-function singleQuote(text: string): string | undefined {
-  return NEEDS_ESCAPE.test(text) ? undefined : `'${text.replace(/'/g, "''")}'`;
-}
-
-export function renderYamlString(text: string, found: Found): string {
-  if (found.style === "single") return singleQuote(text) ?? doubleQuote(text);
-  if (found.style === "double") return doubleQuote(text);
-  return plainSafe(text, found.inFlow) ? text : doubleQuote(text);
-}
-
+export { renderYamlString, yamlNonFinite, yamlPadding } from "./spell.js";

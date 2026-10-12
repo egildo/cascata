@@ -1,0 +1,25 @@
+{
+  "name": "write/json-set-container-escapes",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\"a\": 1}",
+  "pointer": "/a",
+  "value": {
+    "map": [
+      [
+        "k\"q",
+        {
+          "string": "é\n"
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 7,
+      "bytes": "{\"k\\\"q\": \"é\\n\"}"
+    }
+  }
+}

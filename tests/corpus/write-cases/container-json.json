@@ -1,6 +1,6 @@
 {
   "name": "write/container-json",
-  "cites": "v1.10 FR-009",
+  "cites": "v1.15 FR-008",
   "format": "json",
   "call": "setValue",
   "input": "{\"a\": [1, 2]}",
@@ -9,10 +9,10 @@
     "number": 1
   },
   "expect": {
-    "diagnostic": {
-      "code": "edit-container",
+    "edit": {
       "start": 6,
-      "end": 12
+      "end": 12,
+      "bytes": "1"
     }
   }
 }

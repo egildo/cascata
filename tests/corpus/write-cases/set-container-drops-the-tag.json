@@ -1,0 +1,22 @@
+{
+  "name": "write/set-container-drops-the-tag",
+  "cites": "v1.15 FR-008",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "a: !!int 1\n",
+  "pointer": "/a",
+  "value": {
+    "seq": [
+      {
+        "number": 1
+      }
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 2,
+      "end": 10,
+      "bytes": "\n  - 1"
+    }
+  }
+}
