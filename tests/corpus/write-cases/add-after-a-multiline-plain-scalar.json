@@ -6,7 +6,7 @@
   "input": "a: foo\n  bar\n",
   "pointer": "/b",
   "value": {
-    "number": 1
+    "bigint": "1"
   },
   "expect": {
     "edit": {

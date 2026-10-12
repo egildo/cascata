@@ -174,7 +174,9 @@ export function kindOfNew(value: EditValue): ScalarKind {
   if (typeof value === "boolean") return "bool";
   if (value === null) return "null";
   if (typeof value === "bigint") return "int";
-  return Number.isInteger(value) ? "int" : "float";
+  // v1.15 (the owner's ruling): with no number to keep the kind of, a `number` is a decimal (`3` is written `3.0`) and
+  // a `bigint` an integer — the value view's own convention, so a value read and written back keeps its kind.
+  return "float";
 }
 
 /** §4.2's equality of a model scalar and a value of the given kind; `NaN` equals `NaN` here, because setting it again must write nothing new. */

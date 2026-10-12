@@ -200,7 +200,7 @@ function plainOf(text: string, format: "yaml" | "json"): Plain | undefined {
 function plainOfData(data: EditData): Plain {
   if (Array.isArray(data)) return { q: data.map(plainOfData) };
   if (data instanceof Map) return { m: new Map([...data].map(([k, v]) => [k, plainOfData(v)] as const)) };
-  const kind = typeof data === "string" ? "string" : typeof data === "boolean" ? "bool" : data === null ? "null" : typeof data === "bigint" ? "int" : Number.isInteger(data) ? "int" : "float";
+  const kind = typeof data === "string" ? "string" : typeof data === "boolean" ? "bool" : data === null ? "null" : typeof data === "bigint" ? "int" : "float"; // v1.15: a new `number` is a decimal
   return { s: `${kind}:${String(data)}` };
 }
 

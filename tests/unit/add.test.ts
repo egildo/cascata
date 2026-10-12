@@ -155,7 +155,7 @@ describe("v1.15 FR-012 -- an add into a non-empty container is an insertion and 
 describe("v1.15 FR-009, FR-012 -- a lone carriage return is a line break, and the lines added end in it", () => {
   it("appending to a lone-CR file adds a CR-ended line at the end of the last line", () => {
     // `a: 1\rb: 2\r` is ten bytes; the second line ends at 10.
-    const result = open("a: 1\rb: 2\r").add("/c", 3);
+    const result = open("a: 1\rb: 2\r").add("/c", 3n);
     expect(result.ok && [result.edit.start, result.edit.end, DEC.decode(result.edit.bytes)]).toEqual([10, 10, "c: 3\r"]);
   });
   it("inserting before an item in a lone-CR file", () => {
@@ -201,12 +201,12 @@ describe("v1.15 FR-013 -- refusals", () => {
   });
 
   it("an index '-' on a mapping is a key named '-'", () => {
-    const result = open("a: 1\n").add("/-", 2);
+    const result = open("a: 1\n").add("/-", 2n);
     expect(result.ok && DEC.decode(result.edit.bytes)).toBe('"-": 2\n');
   });
 
   it("a key beyond the escape: the empty key", () => {
-    const result = open("a: 1\n").add("/", 2);
+    const result = open("a: 1\n").add("/", 2n);
     expect(result.ok && DEC.decode(result.edit.bytes)).toBe('"": 2\n');
   });
 });
@@ -227,7 +227,7 @@ describe("v1.15 FR-006 -- a writer's document adds", () => {
   it("add answers the shapes write has", () => {
     const opened = yamlWriter().open(ENC.encode("a: 1\n"));
     if (!opened.ok) throw new Error("did not open");
-    expect(opened.document.add("/b", 2)).toEqual({ ok: true, edit: { start: 5, end: 5, bytes: ENC.encode("b: 2\n") }, diagnostics: [] });
+    expect(opened.document.add("/b", 2n)).toEqual({ ok: true, edit: { start: 5, end: 5, bytes: ENC.encode("b: 2\n") }, diagnostics: [] });
     const refused = opened.document.add("/a", 2);
     expect(refused.ok).toBe(false);
     if (!refused.ok) expect(typeof refused.reason).toBe("string");

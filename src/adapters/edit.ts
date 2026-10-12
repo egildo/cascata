@@ -267,8 +267,10 @@ export function kindForValue(value: EditValue, replaced: Node): ScalarKind {
   if (typeof value === "boolean") return "bool";
   if (value === null) return "null";
   if (typeof value === "bigint") return "int";
-  if (replaced.type === "scalar" && replaced.kind === "float") return "float";
-  return Number.isInteger(value) ? "int" : "float";
+  // v1.15 (the owner's ruling): a whole number keeps an integer's kind; with no integer to keep, a `number` is a
+  // decimal, as the value view hands decimals out as `number` and integers as `bigint`.
+  if (replaced.type === "scalar" && replaced.kind === "int") return Number.isInteger(value) ? "int" : "float";
+  return "float";
 }
 
 function scalarText(value: EditValue, kind: ScalarKind, options: EditOptions, found: Found): string | undefined {

@@ -6,7 +6,7 @@
   "input": "x: &a 1\ny: *a\n",
   "pointer": "/z",
   "value": {
-    "number": 3
+    "bigint": "3"
   },
   "expect": {
     "edit": {

@@ -1,0 +1,18 @@
+{
+  "name": "write/add-a-bigint-is-an-integer",
+  "cites": "v1.15 FR-027",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: 1\n",
+  "pointer": "/b",
+  "value": {
+    "bigint": "3"
+  },
+  "expect": {
+    "edit": {
+      "start": 5,
+      "end": 5,
+      "bytes": "b: 3\n"
+    }
+  }
+}

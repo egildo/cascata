@@ -10,13 +10,13 @@
       [
         "x",
         {
-          "number": 1
+          "bigint": "1"
         }
       ],
       [
         "y",
         {
-          "number": 2
+          "bigint": "2"
         }
       ]
     ]

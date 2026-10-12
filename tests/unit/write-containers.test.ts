@@ -64,7 +64,7 @@ describe("v1.15 FR-007 -- what is not EditData throws, naming what it found", ()
   });
 
   it("the same array twice in one array is not a cycle", () => {
-    const shared: EditData = [1, 2];
+    const shared: EditData = [1n, 2n];
     expect(write("a: 1\n", "/a", [shared, shared])).toBe("a:\n  - - 1\n    - 2\n  - - 1\n    - 2\n");
   });
 
@@ -130,37 +130,37 @@ describe("v1.15 FR-007 -- depth and size are the document's limits, refused as t
 describe("v1.15 FR-007, FR-009 -- a mapping is a Map: its order is its own", () => {
   it("array-index keys stay where they were put, after a key that sorts later", () => {
     // A plain object would list `2` and `10` ahead of `b`; a Map keeps b, 2, 10 (CLAUDE.md, Known traps).
-    expect(write("a: 1\n", "/a", new Map<string, EditData>([["b", 1], ["2", 2], ["10", 3]]))).toBe('a:\n  b: 1\n  "2": 2\n  "10": 3\n');
+    expect(write("a: 1\n", "/a", new Map<string, EditData>([["b", 1n], ["2", 2n], ["10", 3n]]))).toBe('a:\n  b: 1\n  "2": 2\n  "10": 3\n');
   });
 
   it("a key `__proto__` is an ordinary key", () => {
-    const text = write("a: 1\n", "/a", new Map<string, EditData>([["__proto__", 1], ["x", 2]]));
+    const text = write("a: 1\n", "/a", new Map<string, EditData>([["__proto__", 1n], ["x", 2n]]));
     expect(text).toBe("a:\n  __proto__: 1\n  x: 2\n");
     const reread = openDocument(ENC.encode(text), yaml);
     expect(reread.ok && reread.document.locate("/a/__proto__").ok).toBe(true);
   });
 
   it("an empty key and a key with a colon are quoted", () => {
-    expect(write("a: 1\n", "/a", new Map<string, EditData>([["", 1], ["k: v", 2], ["#c", 3]]))).toBe('a:\n  "": 1\n  "k: v": 2\n  "#c": 3\n');
+    expect(write("a: 1\n", "/a", new Map<string, EditData>([["", 1n], ["k: v", 2n], ["#c", 3n]]))).toBe('a:\n  "": 1\n  "k: v": 2\n  "#c": 3\n');
   });
 });
 
 describe("v1.15 FR-008 -- the kind is the value's", () => {
   it("a container replaces a scalar and the reverse, in both formats", () => {
-    expect(write("a: 1\nb: 2\n", "/a", [1, 2])).toBe("a:\n  - 1\n  - 2\nb: 2\n");
+    expect(write("a: 1\nb: 2\n", "/a", [1n, 2n])).toBe("a:\n  - 1\n  - 2\nb: 2\n");
     expect(write("a:\n  - 1\n  - 2\nb: 2\n", "/a", "s")).toBe("a: s\nb: 2\n");
-    expect(write('{"a": 1}', "/a", [1, 2], json)).toBe('{"a": [1, 2]}');
+    expect(write('{"a": 1}', "/a", [1n, 2n], json)).toBe('{"a": [1, 2]}');
     expect(write('{"a": [1, 2]}', "/a", "s", json)).toBe('{"a": "s"}');
   });
 
   it("a mapping over a sequence and a sequence over a mapping", () => {
-    expect(write("a:\n  - 1\nb: 2\n", "/a", new Map<string, EditData>([["k", 1]]))).toBe("a:\n  k: 1\nb: 2\n");
-    expect(write("a:\n  k: 1\nb: 2\n", "/a", [1])).toBe("a:\n  - 1\nb: 2\n");
+    expect(write("a:\n  - 1\nb: 2\n", "/a", new Map<string, EditData>([["k", 1n]]))).toBe("a:\n  k: 1\nb: 2\n");
+    expect(write("a:\n  k: 1\nb: 2\n", "/a", [1n])).toBe("a:\n  - 1\nb: 2\n");
   });
 
   it("setting a container to an equal one writes the bytes already there, key order ignored (L1)", () => {
     const text = "m:\n  b: 2\n  a: 1\n";
-    const result = setValue(ENC.encode(text), yaml, "/m", new Map<string, EditData>([["a", 1], ["b", 2]]));
+    const result = setValue(ENC.encode(text), yaml, "/m", new Map<string, EditData>([["a", 1n], ["b", 2n]]));
     expect(result.ok && applied(text, result.edit)).toBe(text);
     const same = setValue(ENC.encode('{"x": [1, 2]}'), json, "/x", [1n, 2n]);
     expect(same.ok && DEC.decode(same.edit.bytes)).toBe("[1, 2]");
@@ -168,7 +168,7 @@ describe("v1.15 FR-008 -- the kind is the value's", () => {
 
   it("a container equal in shape but not in kind is not equal: 1 is an integer, 1.5 a float", () => {
     expect(write("a: [1]\n", "/a", [1.5])).toBe("a: [1.5]\n");
-    expect(write("a: [1.0]\n", "/a", [1])).toBe("a: [1]\n");
+    expect(write("a: [1.0]\n", "/a", [1n])).toBe("a: [1]\n");
   });
 
   it("an empty container is written inline", () => {
@@ -184,44 +184,44 @@ describe("v1.15 FR-008 -- the kind is the value's", () => {
 
 describe("v1.15 FR-009 -- style is copied from the neighbours", () => {
   it("a sibling written flow makes the new container flow", () => {
-    expect(write("a: [1, 2]\nb: 1\n", "/b", [3, 4])).toBe("a: [1, 2]\nb: [3, 4]\n");
-    expect(write("a: {x: 1}\nb: 1\n", "/b", new Map<string, EditData>([["w", 2]]))).toBe("a: {x: 1}\nb: {w: 2}\n");
+    expect(write("a: [1, 2]\nb: 1\n", "/b", [3n, 4n])).toBe("a: [1, 2]\nb: [3, 4]\n");
+    expect(write("a: {x: 1}\nb: 1\n", "/b", new Map<string, EditData>([["w", 2n]]))).toBe("a: {x: 1}\nb: {w: 2}\n");
   });
 
   it("a sibling written block makes it block", () => {
-    expect(write("a:\n  - 1\nb: 1\n", "/b", [3, 4])).toBe("a:\n  - 1\nb:\n  - 3\n  - 4\n");
+    expect(write("a:\n  - 1\nb: 1\n", "/b", [3n, 4n])).toBe("a:\n  - 1\nb:\n  - 3\n  - 4\n");
   });
 
   it("the replaced container's own style wins: a flow sequence stays flow, a block one stays block", () => {
-    expect(write("a: [1]\nb:\n  - 1\n", "/a", [2, 3])).toBe("a: [2, 3]\nb:\n  - 1\n");
-    expect(write("a: [1]\nb:\n  - 1\n", "/b", [2, 3])).toBe("a: [1]\nb:\n  - 2\n  - 3\n");
+    expect(write("a: [1]\nb:\n  - 1\n", "/a", [2n, 3n])).toBe("a: [2, 3]\nb:\n  - 1\n");
+    expect(write("a: [1]\nb:\n  - 1\n", "/b", [2n, 3n])).toBe("a: [1]\nb:\n  - 2\n  - 3\n");
   });
 
   it("a sequence dash flush with its key stays flush; indented stays indented", () => {
-    expect(write("x:\n- 1\ny: 1\n", "/y", [2, 3])).toBe("x:\n- 1\ny:\n- 2\n- 3\n");
-    expect(write("x:\n  - 1\ny: 1\n", "/y", [2, 3])).toBe("x:\n  - 1\ny:\n  - 2\n  - 3\n");
+    expect(write("x:\n- 1\ny: 1\n", "/y", [2n, 3n])).toBe("x:\n- 1\ny:\n- 2\n- 3\n");
+    expect(write("x:\n  - 1\ny: 1\n", "/y", [2n, 3n])).toBe("x:\n  - 1\ny:\n  - 2\n  - 3\n");
   });
 
   it("the blanks after a colon are the sibling's", () => {
     // Three blanks after the sibling's colon; the new entry's `k:` takes the same three.
-    expect(write("a:   1\nb: 2\n", "/b", new Map<string, EditData>([["k", 1]]))).toBe("a:   1\nb:\n  k:   1\n");
+    expect(write("a:   1\nb: 2\n", "/b", new Map<string, EditData>([["k", 1n]]))).toBe("a:   1\nb:\n  k:   1\n");
   });
 
   it("with no sibling to copy, the document's own step is used: a four-space file nests by four", () => {
-    expect(write("top:\n    inner: 1\nother: 1\n", "/other", new Map<string, EditData>([["a", new Map<string, EditData>([["b", 1]])]]))).toBe("top:\n    inner: 1\nother:\n    a:\n        b: 1\n");
+    expect(write("top:\n    inner: 1\nother: 1\n", "/other", new Map<string, EditData>([["a", new Map<string, EditData>([["b", 1n]])]]))).toBe("top:\n    inner: 1\nother:\n    a:\n        b: 1\n");
   });
 
   it("with no step in the document at all, two spaces", () => {
-    expect(write("a: 1\n", "/a", new Map<string, EditData>([["b", new Map<string, EditData>([["c", 1]])]]))).toBe("a:\n  b:\n    c: 1\n");
+    expect(write("a: 1\n", "/a", new Map<string, EditData>([["b", new Map<string, EditData>([["c", 1n]])]]))).toBe("a:\n  b:\n    c: 1\n");
   });
 
   it("a document with no line break uses LF", () => {
-    expect(write("a: 1", "/a", [1, 2])).toBe("a:\n  - 1\n  - 2");
+    expect(write("a: 1", "/a", [1n, 2n])).toBe("a:\n  - 1\n  - 2");
   });
 
   it("a CRLF file gets CRLF lines and a lone-CR file gets CR lines", () => {
-    expect(write("a: 1\r\nb: 2\r\n", "/a", [1, 2])).toBe("a:\r\n  - 1\r\n  - 2\r\nb: 2\r\n");
-    expect(write("a: 1\rb: 2\r", "/a", [1, 2])).toBe("a:\r  - 1\r  - 2\rb: 2\r");
+    expect(write("a: 1\r\nb: 2\r\n", "/a", [1n, 2n])).toBe("a:\r\n  - 1\r\n  - 2\r\nb: 2\r\n");
+    expect(write("a: 1\rb: 2\r", "/a", [1n, 2n])).toBe("a:\r  - 1\r  - 2\rb: 2\r");
   });
 
   it("nothing writes an anchor, a tag or an alias", () => {
@@ -237,8 +237,8 @@ describe("v1.15 FR-009 -- style is copied from the neighbours", () => {
     expect(write("a: [1]\n", "/a", ["x,y", "[z]", "plain"])).toBe('a: ["x,y", "[z]", plain]\n');
   });
 
-  it("numbers: an integer, a float, a bigint, and the non-finite floats in YAML", () => {
-    expect(write("a: 1\n", "/a", [3, 3.5, 12345678901234567890n, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -0])).toBe("a:\n  - 3\n  - 3.5\n  - 12345678901234567890\n  - .nan\n  - .inf\n  - -.inf\n  - 0\n");
+  it("numbers: a whole number is a decimal (v1.15 FR-027), a bigint an integer, a float, and the non-finite floats in YAML", () => {
+    expect(write("a: 1\n", "/a", [3, 3n, 3.5, 12345678901234567890n, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -0])).toBe("a:\n  - 3.0\n  - 3\n  - 3.5\n  - 12345678901234567890\n  - .nan\n  - .inf\n  - -.inf\n  - -0.0\n");
   });
 
   it("JSON has no NaN or infinity: refused as edit-unrepresentable, at the value it would have replaced", () => {
@@ -260,16 +260,16 @@ describe("v1.15 FR-009 -- style is copied from the neighbours", () => {
 
 describe("v1.15 FR-010 -- JSON layout is copied", () => {
   it("one line stays one line; a document in which no container spans a line stays on one", () => {
-    expect(write('{"a": 1, "b": 2}', "/a", [1, 2], json)).toBe('{"a": [1, 2], "b": 2}');
+    expect(write('{"a": 1, "b": 2}', "/a", [1n, 2n], json)).toBe('{"a": [1, 2], "b": 2}');
   });
 
   it("the blanks after the colon and the comma are the document's: a compact file stays compact", () => {
-    expect(write('{"a":1,"b":2}', "/a", new Map<string, EditData>([["x", 1], ["z", 2]]), json)).toBe('{"a":{"x": 1, "z": 2},"b":2}'.replace('"x": 1, "z": 2', '"x":1,"z":2'));
+    expect(write('{"a":1,"b":2}', "/a", new Map<string, EditData>([["x", 1n], ["z", 2n]]), json)).toBe('{"a":{"x": 1, "z": 2},"b":2}'.replace('"x": 1, "z": 2', '"x":1,"z":2'));
   });
 
   it("a nested container inside a multi-line one is multi-line too, at the document's step", () => {
     const text = '{\n    "a": 1\n}\n';
-    expect(write(text, "/a", new Map<string, EditData>([["x", [1]]]), json)).toBe('{\n    "a": {\n        "x": [\n            1\n        ]\n    }\n}\n');
+    expect(write(text, "/a", new Map<string, EditData>([["x", [1n]]]), json)).toBe('{\n    "a": {\n        "x": [\n            1\n        ]\n    }\n}\n');
   });
 });
 

@@ -6,7 +6,7 @@
   "input": "a: &a\n  x: 1\nb: &b\n  <<: *a\nc:\n  <<: *b\n",
   "pointer": "/a/m",
   "value": {
-    "number": 2
+    "bigint": "2"
   },
   "sharedEdits": "warn",
   "dependents": [

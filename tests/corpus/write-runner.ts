@@ -39,8 +39,9 @@ function expectedKind(value: EditValue, replaced: Node | undefined): Scalar["kin
   if (typeof value === "boolean") return "bool";
   if (value === null) return "null";
   if (typeof value === "bigint") return "int";
-  if (replaced !== undefined && replaced.type === "scalar" && replaced.kind === "float") return "float";
-  return Number.isInteger(value) ? "int" : "float";
+  // v1.15: a whole number keeps an integer's kind; with no integer to keep, a `number` is a decimal.
+  if (replaced !== undefined && replaced.type === "scalar" && replaced.kind === "int") return Number.isInteger(value) ? "int" : "float";
+  return "float";
 }
 
 function sameScalar(node: Node | undefined, kind: Scalar["kind"], value: EditValue): boolean {

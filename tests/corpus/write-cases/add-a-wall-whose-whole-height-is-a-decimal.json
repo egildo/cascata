@@ -1,0 +1,31 @@
+{
+  "name": "write/add-a-wall-whose-whole-height-is-a-decimal",
+  "cites": "v1.15 FR-027",
+  "format": "yaml",
+  "call": "add",
+  "input": "walls:\n  W1:\n    height: 3.2\n",
+  "pointer": "/walls/W2",
+  "value": {
+    "map": [
+      [
+        "height",
+        {
+          "number": 3
+        }
+      ],
+      [
+        "count",
+        {
+          "bigint": "2"
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 29,
+      "end": 29,
+      "bytes": "  W2:\n    height: 3.0\n    count: 2\n"
+    }
+  }
+}

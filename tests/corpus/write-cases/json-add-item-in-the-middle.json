@@ -6,7 +6,7 @@
   "input": "[1, 2, 3]",
   "pointer": "/1",
   "value": {
-    "number": 9
+    "bigint": "9"
   },
   "expect": {
     "edit": {

@@ -6,7 +6,7 @@
   "input": "base: &b\n  x: 1\nd:\n  <<: *b\n  z: 7\n",
   "pointer": "/base/z",
   "value": {
-    "number": 3
+    "bigint": "3"
   },
   "sharedEdits": "warn",
   "expect": {

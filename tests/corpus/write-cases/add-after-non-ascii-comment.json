@@ -6,7 +6,7 @@
   "input": "ключ: значение # комментарий\nb: 2\n",
   "pointer": "/c",
   "value": {
-    "number": 3
+    "bigint": "3"
   },
   "expect": {
     "edit": {

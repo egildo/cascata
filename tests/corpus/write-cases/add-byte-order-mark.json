@@ -15,7 +15,7 @@
   ],
   "pointer": "/b",
   "value": {
-    "number": 2
+    "bigint": "2"
   },
   "expect": {
     "edit": {

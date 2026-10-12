@@ -1,0 +1,18 @@
+{
+  "name": "write/add-a-number-is-a-decimal",
+  "cites": "v1.15 FR-027",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: 1\n",
+  "pointer": "/b",
+  "value": {
+    "number": 3
+  },
+  "expect": {
+    "edit": {
+      "start": 5,
+      "end": 5,
+      "bytes": "b: 3.0\n"
+    }
+  }
+}

@@ -14,7 +14,7 @@
         "null": true
       },
       {
-        "number": 3
+        "bigint": "3"
       },
       {
         "number": 3.5

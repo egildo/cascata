@@ -6,7 +6,7 @@
   "input": "a:\n  b: 1\n  # in\nc: 2\n",
   "pointer": "/a/d",
   "value": {
-    "number": 3
+    "bigint": "3"
   },
   "expect": {
     "edit": {

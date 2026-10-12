@@ -1391,7 +1391,9 @@ setValue(bytes, options, "/walls/W2/height", 3.4);
    a trailing comment out. CRLF, a byte-order mark, a lone CR, non-ASCII elsewhere: all outside the range.
 
 **Kind is kept.** A `number` over a `float` is a float (`3` over `3.2` is `3.0`); over an `int`, an int if
-`Number.isInteger`, otherwise a float. A `bigint` is an int. Anything else writes its own kind. A float is
+`Number.isInteger`, otherwise a float; over anything else — a string, a boolean, null, or nothing, as in a new entry or
+inside a written container — a float (since v1.15: `3` is written `3.0`). A `bigint` is an int. Anything else writes its own
+kind. A float is
 spelled in JavaScript's shortest round-trip form with a point or exponent guaranteed (`3.0`, `1e+21`,
 `-0.0`); no precision rule is applied (`0.1 + 0.2` is `0.30000000000000004`). YAML spells `NaN`, `Infinity`
 and `-Infinity` `.nan`, `.inf`, `-.inf`; JSON cannot spell them.
@@ -1737,7 +1739,8 @@ doc.remove("/walls/W1");                                          // with the co
 - **Values.** `EditData` is a scalar, a sequence of `EditData`, or a `Map` of string keys to `EditData` (a plain object
   reorders array-index keys and swallows `__proto__`). A plain object, a `Map` with a non-string key, a cycle, a sparse
   array or anything else throws, naming what it found and where. Depth and size are the document's `limits`: a value past them
-  is refused as `edit-read-back`.
+  is refused as `edit-read-back`. A `number` is written as a decimal (`3.0`) and a `bigint` as an integer, as the value view
+  hands them out, so pass `3n` for an integer.
 - **Style is copied from the nearest sibling, then from the document**: block or flow, indentation, the blanks after `:` and
   `,`, a sequence's dash (`key:\n- a` or `key:\n  - a`); the document's first indentation increase is its step, else two
   spaces; the line ending is the file's. JSON: one line or one member per line, spaces or tabs. Strings and keys follow the

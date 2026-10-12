@@ -8,10 +8,10 @@
   "value": {
     "seq": [
       {
-        "number": 7
+        "bigint": "7"
       },
       {
-        "number": 8
+        "bigint": "8"
       }
     ]
   },

@@ -6,7 +6,7 @@
   "input": "walls:\n  W1:\n    height: 3.2\n  W2:\n    height: 3.2\n",
   "pointer": "/walls/W1",
   "value": {
-    "number": 1
+    "bigint": "1"
   },
   "expect": {
     "edit": {

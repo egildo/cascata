@@ -10,7 +10,7 @@
       [
         "w",
         {
-          "number": 2
+          "bigint": "2"
         }
       ],
       [
@@ -18,10 +18,10 @@
         {
           "seq": [
             {
-              "number": 1
+              "bigint": "1"
             },
             {
-              "number": 2
+              "bigint": "2"
             }
           ]
         }

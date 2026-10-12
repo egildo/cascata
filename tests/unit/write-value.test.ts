@@ -100,8 +100,9 @@ describe("FR-006: numbers read back as the kind the rule names", () => {
         const result = roundTrip(options, text, pointer, n);
         expect(result.ok, String(n)).toBe(true);
         if (result.ok && result.node?.type === "scalar") {
-          const overFloat = text.includes("1.5");
-          const kind = overFloat ? "float" : Number.isInteger(n) ? "int" : "float";
+          // v1.15: a whole number keeps an integer's kind; over anything else a `number` is a decimal.
+          const overInt = label.endsWith("over an int");
+          const kind = overInt && Number.isInteger(n) ? "int" : "float";
           expect(result.node.kind, String(n)).toBe(kind);
           expect(Number(result.node.value) === n, String(n)).toBe(true); // -0 over an int is the int 0, and 0 === -0 in the model
         }

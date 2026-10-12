@@ -111,6 +111,16 @@ in the first commit that adds a case.
   again; inside a flow collection it stays flow. In JSON, an empty `{}` or `[]` gains its first member
   on its own indented line if the document has any multi-line container, on the same line otherwise.
 
+## Part B′ — The owner's ruling after the implementer's report (2026-10-12)
+
+- **FR-027** **A new number's kind.** Where there is no number whose kind to keep — a new entry, a number inside a
+  written container, a number over a string, a boolean or null — a `number` is a decimal and a `bigint` an integer, the
+  value view's convention. `3` there is written `3.0`. Over an integer a whole `number` stays an integer, over a decimal a
+  decimal (unchanged). The implementer found that `height: 3.0` in a new wall could not be written. The change of
+  behaviour is named in §15. Applied by the coordinator: style cases that used a whole `number` for an integer now pass a
+  `bigint`, their bytes unchanged; the v1.10 and v1.12 cases whose number landed over a non-number expect `.0`, recounted
+  by hand.
+
 ## Part C — `add`
 
 - **FR-012** **Placement.** A mapping entry goes after the last entry: after its last line and that

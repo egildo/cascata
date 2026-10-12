@@ -6,7 +6,7 @@
   "input": "{\"a\": {}}",
   "pointer": "/a/k",
   "value": {
-    "number": 1
+    "bigint": "1"
   },
   "expect": {
     "edit": {
