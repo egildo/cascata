@@ -1,0 +1,18 @@
+{
+  "name": "write/add-after-non-ascii-comment",
+  "cites": "v1.15 FR-023",
+  "format": "yaml",
+  "call": "add",
+  "input": "ключ: значение # комментарий\nb: 2\n",
+  "pointer": "/c",
+  "value": {
+    "number": 3
+  },
+  "expect": {
+    "edit": {
+      "start": 57,
+      "end": 57,
+      "bytes": "c: 3\n"
+    }
+  }
+}

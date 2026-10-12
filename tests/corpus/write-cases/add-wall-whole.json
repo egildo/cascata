@@ -1,0 +1,31 @@
+{
+  "name": "write/add-wall-whole",
+  "cites": "v1.15 FR-012",
+  "format": "yaml",
+  "call": "add",
+  "input": "walls:\n  W1:\n    height: 3.2\n",
+  "pointer": "/walls/W2",
+  "value": {
+    "map": [
+      [
+        "height",
+        {
+          "number": 3.2
+        }
+      ],
+      [
+        "thickness",
+        {
+          "number": 0.2
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 29,
+      "end": 29,
+      "bytes": "  W2:\n    height: 3.2\n    thickness: 0.2\n"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "write/add-after-emoji-and-comment",
+  "cites": "v1.15 FR-023",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: 1\nb: 😀 # é\n",
+  "pointer": "/c",
+  "value": {
+    "number": 3
+  },
+  "expect": {
+    "edit": {
+      "start": 18,
+      "end": 18,
+      "bytes": "c: 3\n"
+    }
+  }
+}

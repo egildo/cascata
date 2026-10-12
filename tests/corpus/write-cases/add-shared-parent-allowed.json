@@ -1,0 +1,19 @@
+{
+  "name": "write/add-shared-parent-allowed",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "add",
+  "input": "base: &b\n  x: 1\nd: *b\n",
+  "pointer": "/d/z",
+  "value": {
+    "number": 2
+  },
+  "sharedEdits": "allow",
+  "expect": {
+    "edit": {
+      "start": 16,
+      "end": 16,
+      "bytes": "  z: 2\n"
+    }
+  }
+}

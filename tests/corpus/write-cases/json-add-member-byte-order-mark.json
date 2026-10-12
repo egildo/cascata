@@ -1,0 +1,30 @@
+{
+  "name": "write/json-add-member-byte-order-mark",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "add",
+  "inputBytes": [
+    239,
+    187,
+    191,
+    123,
+    34,
+    97,
+    34,
+    58,
+    32,
+    49,
+    125
+  ],
+  "pointer": "/b",
+  "value": {
+    "number": 2
+  },
+  "expect": {
+    "edit": {
+      "start": 10,
+      "end": 10,
+      "bytes": ", \"b\": 2"
+    }
+  }
+}

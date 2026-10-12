@@ -72,6 +72,34 @@ function withProperties(facts: Facts, at: number): number {
   return start;
 }
 
+/**
+ * Where the last thing a node holds ends, in bytes. A block collection's own `range` end is not that: when its last value is
+ * empty (`name: # one`) the comment lines that follow, and the next line's indentation, are part of the empty value's range and
+ * so of the collection's (probed: v1.15 report, FR-023). The end of an entry is the end of its last leaf.
+ */
+function contentEnd(facts: Facts, node: YamlNode): number {
+  let at: YamlNode = node;
+  for (;;) {
+    if ((isMap(at) || isSeq(at)) && at.flow !== true && at.items.length > 0) {
+      const last = at.items[at.items.length - 1];
+      if (isPair(last)) {
+        const value = asNode(last.value);
+        if (value === null) {
+          const key = asNode(last.key);
+          return key?.range == null ? byteAt(facts, at.range?.[1] ?? 0) : byteAt(facts, key.range[1]);
+        }
+        at = value;
+      } else {
+        const item = asNode(last);
+        if (item === null) return byteAt(facts, at.range?.[1] ?? 0);
+        at = item;
+      }
+    } else {
+      return rangeBytes(facts, at)?.valueEnd ?? 0;
+    }
+  }
+}
+
 function pairExtent(facts: Facts, pair: Pair): Extent | undefined {
   const key = asNode(pair.key);
   if (key === null || key.range == null) return undefined;
@@ -85,7 +113,7 @@ function pairExtent(facts: Facts, pair: Pair): Extent | undefined {
   if (mark !== undefined && skipBlanksForward(bytes, mark + 1) >= start) start = mark;
   const value = asNode(pair.value);
   const range = value === null ? undefined : rangeBytes(facts, value);
-  return { start, valueStart: range?.start ?? keyEnd, valueEnd: range?.valueEnd ?? keyEnd, keyStart, keyEnd };
+  return { start, valueStart: range?.start ?? keyEnd, valueEnd: value === null ? keyEnd : contentEnd(facts, value), keyStart, keyEnd };
 }
 
 /** An item of a block sequence (its dash is found) or of a flow one (its first byte is its own). */
@@ -99,7 +127,7 @@ function itemExtent(facts: Facts, item: unknown, block: boolean): Extent | undef
   const dashes = indicatorsIn(facts).dashes;
   const dash = dashes[lastBelow(dashes, range.start)];
   if (dash === undefined) return undefined;
-  return { start: dash, valueStart: range.start, valueEnd: range.valueEnd };
+  return { start: dash, valueStart: range.start, valueEnd: contentEnd(facts, node) };
 }
 
 function extentsOf(facts: Facts, collection: YamlNode): (Extent | undefined)[] {
@@ -237,7 +265,8 @@ function replaceValue(facts: Facts, found: Found, data: EditData, forceBlock: bo
   const oldContainer = node !== null && (isMap(node) || isSeq(node));
   const oldBlock = oldContainer && node.flow !== true;
   const oldStart = found.start;
-  const oldEnd = found.end;
+  // A block collection's span can run on over comment lines that follow an empty last value; the replaced bytes end with its last line.
+  const oldEnd = oldBlock && node !== null ? Math.min(found.end, lineContentEnd(bytes, contentEnd(facts, node))) : found.end;
 
   // A tag that cannot hold the new value is dropped from a scalar (v1.12 FR-011) and refuses a container, which it would contradict.
   let start = oldStart;
@@ -305,8 +334,10 @@ function replaceValue(facts: Facts, found: Found, data: EditData, forceBlock: bo
       const at = lineContentEnd(bytes, oldStart);
       return edit(at, at, eol + lines.join(eol));
     }
+    // What follows the old value on its line (a comment) stays on that line, ahead of the new lines.
+    const lineEnd = lineContentEnd(bytes, oldEnd);
     const carriedText = carried.replace(/\s+$/, "");
-    return edit(carriedText === "" ? skipBlanksBackward(bytes, start) : start, oldEnd, carriedText + eol + lines.join(eol));
+    return edit(carriedText === "" ? skipBlanksBackward(bytes, start) : start, lineEnd, carriedText + text(bytes, oldEnd, lineEnd) + eol + lines.join(eol));
   }
 
   // where === "item"
@@ -378,7 +409,8 @@ function addEntry(facts: Facts, container: Found, at: AddAt, data: EditData): Pl
     const range = rangeBytes(facts, node);
     if (range === undefined) throw new Error("Internal error: an empty collection has no range");
     const entry = mapping ? `${keySpelling(key, true)}: ${flowText(data)}` : flowText(data);
-    return edit(range.start + 1, range.valueEnd - 1, entry);
+    // The brackets are rewritten, not just filled: two adds into one empty container overlap, as FR-015 says, and cannot be applied together.
+    return edit(range.start, range.valueEnd, `${mapping ? "{" : "["}${entry}${mapping ? "}" : "]"}`);
   }
 
   const block = node.flow !== true;
@@ -495,13 +527,13 @@ export function planYamlRemove(facts: Facts, target: Found): Plan {
       if (atEof && from > 0) from -= breakLengthBefore(bytes, from);
       return edit(from, lineEnd, "");
     }
-    // The first entry of a collection that begins on its parent's line (`- a: 1`): the next one is pulled up to where it was.
+    // The first entry of a collection that begins on its parent's line (`- a: 1`): where only its own indentation separates it
+    // from the next entry, the next is pulled up to where it was; where a comment or a blank line comes between, the entry's
+    // own lines go and the rest stays (`- # about b` and the entries below it are the same item).
     const next = extents[site.index + 1];
     if (next === undefined || site.index !== 0) return refusal("edit-read-back", "This entry could not be removed in the document's layout");
-    if (!startsItsLine(bytes, next.start) || text(bytes, lineEnd, next.start).trim() !== "") {
-      return refusal("edit-read-back", "This entry begins on its parent's line and a comment or blank line follows it; it is not removed");
-    }
-    return edit(entry.start, next.start, "");
+    if (startsItsLine(bytes, next.start) && text(bytes, lineEnd, next.start).trim() === "") return edit(entry.start, next.start, "");
+    return edit(entry.start, lineEnd, "");
   }
 
   // The only entry: the collection keeps its kind and is written where it was, on its parent's line.

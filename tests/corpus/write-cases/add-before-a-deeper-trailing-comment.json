@@ -1,0 +1,18 @@
+{
+  "name": "write/add-before-a-deeper-trailing-comment",
+  "cites": "v1.15 FR-023",
+  "format": "yaml",
+  "call": "add",
+  "input": "a:\n  b: 1\n  # in\nc: 2\n",
+  "pointer": "/a/d",
+  "value": {
+    "number": 3
+  },
+  "expect": {
+    "edit": {
+      "start": 10,
+      "end": 10,
+      "bytes": "  d: 3\n"
+    }
+  }
+}

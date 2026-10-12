@@ -1,0 +1,18 @@
+{
+  "name": "write/add-shared-parent-refused",
+  "cites": "v1.15 FR-020",
+  "format": "yaml",
+  "call": "add",
+  "input": "base: &b\n  x: 1\nd: *b\n",
+  "pointer": "/d/z",
+  "value": {
+    "number": 2
+  },
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-shared",
+      "start": 19,
+      "end": 21
+    }
+  }
+}

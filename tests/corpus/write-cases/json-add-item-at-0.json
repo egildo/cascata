@@ -1,0 +1,18 @@
+{
+  "name": "write/json-add-item-at-0",
+  "cites": "v1.15 FR-012",
+  "format": "json",
+  "call": "add",
+  "input": "[1, 2, 3]",
+  "pointer": "/0",
+  "value": {
+    "number": 9
+  },
+  "expect": {
+    "edit": {
+      "start": 1,
+      "end": 1,
+      "bytes": "9, "
+    }
+  }
+}

@@ -267,7 +267,7 @@ describe("v1.15 FR-006 -- writers gain open", () => {
     const opened = yamlWriter().open(bytes);
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
-    expect(Object.keys(opened.document).sort()).toEqual(["locate", "write"]);
+    expect(Object.keys(opened.document).sort()).toEqual(["add", "locate", "remove", "write"]);
     expect(opened.document.locate("/b")).toEqual(yamlWriter().locate(bytes, "/b"));
     expect(opened.document.locate("/b")).toEqual({ ok: true, start: 8, end: 9 });
     expect(opened.document.write("/b", 3)).toEqual(yamlWriter().write(bytes, "/b", 3));

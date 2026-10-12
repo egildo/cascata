@@ -1,0 +1,25 @@
+{
+  "name": "write/add-crlf",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: 1\r\nb: 2\r\n",
+  "pointer": "/c",
+  "value": {
+    "map": [
+      [
+        "x",
+        {
+          "number": 1
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 12,
+      "end": 12,
+      "bytes": "c:\r\n  x: 1\r\n"
+    }
+  }
+}

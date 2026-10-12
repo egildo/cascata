@@ -1,0 +1,25 @@
+{
+  "name": "write/json-add-member-multi-line",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "add",
+  "input": "{\n  \"a\": 1,\n  \"b\": 2\n}\n",
+  "pointer": "/c",
+  "value": {
+    "map": [
+      [
+        "x",
+        {
+          "number": 1
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 20,
+      "end": 20,
+      "bytes": ",\n  \"c\": {\n    \"x\": 1\n  }"
+    }
+  }
+}

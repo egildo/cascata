@@ -1,0 +1,18 @@
+{
+  "name": "write/add-after-a-block-scalar",
+  "cites": "v1.15 FR-023",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: |\n  text\n",
+  "pointer": "/b",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "edit": {
+      "start": 12,
+      "end": 12,
+      "bytes": "b: 1\n"
+    }
+  }
+}

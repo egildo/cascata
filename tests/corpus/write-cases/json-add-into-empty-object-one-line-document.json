@@ -1,0 +1,18 @@
+{
+  "name": "write/json-add-into-empty-object-one-line-document",
+  "cites": "v1.15 FR-011",
+  "format": "json",
+  "call": "add",
+  "input": "{\"a\": {}}",
+  "pointer": "/a/k",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 8,
+      "bytes": "{\"k\": 1}"
+    }
+  }
+}

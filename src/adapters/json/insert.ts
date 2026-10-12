@@ -280,7 +280,9 @@ export function planJsonAdd(facts: JsonFacts, container: Found, at: AddAt, data:
       const indent = indentationOf(bytes, open);
       const inner = `${indent}${layout.unit}`;
       const entry = (mapping ? `${renderKey("key" in at ? at.key : "")}${layout.colon}` : "") + render(data, inner, multiline, layout);
-      return edit(open + 1, close, multiline ? `${eol}${inner}${entry}${eol}${indent}` : entry);
+      // The brackets are rewritten, not just filled: two adds into one empty container overlap, as FR-015 says.
+      const [left, right] = mapping ? ["{", "}"] : ["[", "]"];
+      return edit(open, close + 1, `${left}${multiline ? `${eol}${inner}${entry}${eol}${indent}` : entry}${right}`);
     }
 
     const anchor = members[Math.max(near, 0)];

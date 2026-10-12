@@ -1,0 +1,18 @@
+{
+  "name": "write/json-add-member-crlf",
+  "cites": "v1.15 FR-010",
+  "format": "json",
+  "call": "add",
+  "input": "{\r\n  \"a\": 1\r\n}\r\n",
+  "pointer": "/b",
+  "value": {
+    "number": 2
+  },
+  "expect": {
+    "edit": {
+      "start": 11,
+      "end": 11,
+      "bytes": ",\r\n  \"b\": 2"
+    }
+  }
+}

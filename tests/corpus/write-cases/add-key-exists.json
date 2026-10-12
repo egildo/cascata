@@ -1,0 +1,18 @@
+{
+  "name": "write/add-key-exists",
+  "cites": "v1.15 FR-013",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: 1\nb: 2\n",
+  "pointer": "/b",
+  "value": {
+    "number": 5
+  },
+  "expect": {
+    "diagnostic": {
+      "code": "edit-target-exists",
+      "start": 5,
+      "end": 6
+    }
+  }
+}

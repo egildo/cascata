@@ -1,0 +1,27 @@
+{
+  "name": "write/add-byte-order-mark",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "add",
+  "inputBytes": [
+    239,
+    187,
+    191,
+    97,
+    58,
+    32,
+    49,
+    10
+  ],
+  "pointer": "/b",
+  "value": {
+    "number": 2
+  },
+  "expect": {
+    "edit": {
+      "start": 8,
+      "end": 8,
+      "bytes": "b: 2\n"
+    }
+  }
+}

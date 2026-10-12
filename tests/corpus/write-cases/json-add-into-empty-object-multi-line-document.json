@@ -1,0 +1,18 @@
+{
+  "name": "write/json-add-into-empty-object-multi-line-document",
+  "cites": "v1.15 FR-011",
+  "format": "json",
+  "call": "add",
+  "input": "{\n  \"a\": {},\n  \"b\": [\n    1\n  ]\n}\n",
+  "pointer": "/a/k",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "edit": {
+      "start": 9,
+      "end": 11,
+      "bytes": "{\n    \"k\": 1\n  }"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "write/add-into-empty-root-braces",
+  "cites": "v1.15 FR-011",
+  "format": "yaml",
+  "call": "add",
+  "input": "{}\n",
+  "pointer": "/a",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "edit": {
+      "start": 0,
+      "end": 2,
+      "bytes": "a: 1"
+    }
+  }
+}

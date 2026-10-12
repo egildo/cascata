@@ -1,0 +1,18 @@
+{
+  "name": "write/add-multiline-string",
+  "cites": "v1.15 FR-009",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: 1\n",
+  "pointer": "/t",
+  "value": {
+    "string": "one\ntwo"
+  },
+  "expect": {
+    "edit": {
+      "start": 5,
+      "end": 5,
+      "bytes": "t: \"one\\ntwo\"\n"
+    }
+  }
+}

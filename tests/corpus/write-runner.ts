@@ -182,11 +182,7 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
   }
   const { document } = opened;
   const value = testCase.value;
-  if (testCase.call !== "setValue") {
-    failures.push(`${testCase.call} is not built yet`);
-    return { name: testCase.name, passed: false, failures };
-  }
-  const result = document.setValue(testCase.pointer, value as EditData);
+  const result = testCase.call === "setValue" ? document.setValue(testCase.pointer, value as EditData) : testCase.call === "add" ? document.add(testCase.pointer, value as EditData) : document.remove(testCase.pointer);
   if ("diagnostic" in expect) {
     checkDiagnostic(result.ok ? undefined : result.diagnostics, expect.diagnostic, failures);
     if (result.ok) failures.push(`expected ${expect.diagnostic.code}, got an edit ${result.edit.start}-${result.edit.end}`);
@@ -245,14 +241,13 @@ export function runWriteCase(testCase: WriteCase): WriteCaseResult {
 
   // v1.15: the original tree with the operation applied is the edited tree. The copies (an alias, a merge key) of the
   // container written to hold the same bytes before the edit, so each must read the same afterwards (v1.12 FR-007).
-  const segments = segmentsOf(testCase.pointer);
-  const target = testCase.call === "setValue" ? replaced : resolvePointer(before.tree, segments.length === 0 ? "" : `/${testCase.pointer.slice(1).split("/").slice(0, -1).join("/")}`);
+  const parentPointer = testCase.pointer.slice(0, testCase.pointer.lastIndexOf("/"));
+  const target = testCase.call === "setValue" ? replaced : resolvePointer(before.tree, parentPointer);
   const places = target === undefined ? [testCase.pointer] : nodesAt(before.tree, "", target.span.start, target.span.end);
-  const parentPointers = testCase.call === "setValue" ? places : places;
   let expected = plainOfNode(before.tree);
   const operation: Operation = testCase.call === "setValue" ? { kind: "replace", data: value as EditData, replaced } : testCase.call === "add" ? { kind: "add", data: value as EditData } : { kind: "remove" };
   const last = testCase.pointer.slice(testCase.pointer.lastIndexOf("/") + 1);
-  const pointers = testCase.call === "setValue" ? (places.includes(testCase.pointer) ? places : [...places, testCase.pointer]) : parentPointers.map((parent) => `${parent}/${last}`);
+  const pointers = testCase.call === "setValue" ? (places.includes(testCase.pointer) ? places : [...places, testCase.pointer]) : places.map((parent) => `${parent}/${last}`);
   if (testCase.sharedEdits === "refuse" && pointers.length > 1) failures.push(`under refuse, an edit was answered for a place with copies: ${pointers.join(", ")}`);
   for (const pointer of pointers) expected = applyAt(expected, segmentsOf(pointer), operation);
   if (canon(expected) !== canon(plainOfNode(after.tree))) {

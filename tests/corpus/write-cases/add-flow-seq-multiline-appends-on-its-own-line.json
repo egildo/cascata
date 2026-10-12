@@ -1,0 +1,18 @@
+{
+  "name": "write/add-flow-seq-multiline-appends-on-its-own-line",
+  "cites": "v1.15 FR-010",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: [\n  1,\n  2\n]\n",
+  "pointer": "/a/-",
+  "value": {
+    "number": 3
+  },
+  "expect": {
+    "edit": {
+      "start": 13,
+      "end": 13,
+      "bytes": ",\n  3"
+    }
+  }
+}

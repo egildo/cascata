@@ -1,0 +1,25 @@
+{
+  "name": "write/add-a-map-item-to-a-seq",
+  "cites": "v1.15 FR-012",
+  "format": "yaml",
+  "call": "add",
+  "input": "- a: 1\n  b: 2\n",
+  "pointer": "/-",
+  "value": {
+    "map": [
+      [
+        "k",
+        {
+          "number": 1
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 14,
+      "end": 14,
+      "bytes": "- k: 1\n"
+    }
+  }
+}

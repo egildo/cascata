@@ -410,23 +410,6 @@ function finish(doc: Doc, plan: Plan, ops: readonly Op[], span: SourceSpan, diag
 
 // --- add and remove ------------------------------------------------------------------
 
-/** The edit that creates the entry at `pointer` (v1.15 FR-012, FR-013). */
-export function add(bytes: Uint8Array, options: EditOptions, pointer: string, value: EditData): SetValueResult {
-  requireOptions(options, "add");
-  requirePointer(pointer, "add");
-  inspectData(value, "add", resolveLimits(options.limits).maxDepth, resolveLimits(options.limits).maxBytes);
-  const result = openDocument(bytes, options);
-  return result.ok ? result.document.add(pointer, value) : result;
-}
-
-/** The edit that deletes the entry at `pointer` (v1.15 FR-016, FR-018). */
-export function remove(bytes: Uint8Array, options: EditOptions, pointer: string): SetValueResult {
-  requireOptions(options, "remove");
-  requirePointer(pointer, "remove");
-  const result = openDocument(bytes, options);
-  return result.ok ? result.document.remove(pointer) : result;
-}
-
 function splitPointer(pointer: string): { readonly parent: string; readonly last: string } {
   const at = pointer.lastIndexOf("/");
   return { parent: pointer.slice(0, at), last: unescapePointerSegment(pointer.slice(at + 1)) };

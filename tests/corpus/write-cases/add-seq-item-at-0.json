@@ -1,0 +1,18 @@
+{
+  "name": "write/add-seq-item-at-0",
+  "cites": "v1.15 FR-012",
+  "format": "yaml",
+  "call": "add",
+  "input": "- a\n- b\n- c\n",
+  "pointer": "/0",
+  "value": {
+    "string": "x"
+  },
+  "expect": {
+    "edit": {
+      "start": 0,
+      "end": 0,
+      "bytes": "- x\n"
+    }
+  }
+}

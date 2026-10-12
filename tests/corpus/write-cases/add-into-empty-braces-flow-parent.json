@@ -1,0 +1,18 @@
+{
+  "name": "write/add-into-empty-braces-flow-parent",
+  "cites": "v1.15 FR-011",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: {b: {}}\n",
+  "pointer": "/a/b/k",
+  "value": {
+    "number": 1
+  },
+  "expect": {
+    "edit": {
+      "start": 7,
+      "end": 9,
+      "bytes": "{k: 1}"
+    }
+  }
+}

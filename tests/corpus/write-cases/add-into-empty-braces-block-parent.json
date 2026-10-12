@@ -1,0 +1,25 @@
+{
+  "name": "write/add-into-empty-braces-block-parent",
+  "cites": "v1.15 FR-011",
+  "format": "yaml",
+  "call": "add",
+  "input": "walls: {}\nnext: 1\n",
+  "pointer": "/walls/W1",
+  "value": {
+    "map": [
+      [
+        "h",
+        {
+          "number": 3
+        }
+      ]
+    ]
+  },
+  "expect": {
+    "edit": {
+      "start": 6,
+      "end": 9,
+      "bytes": "\n  W1:\n    h: 3"
+    }
+  }
+}

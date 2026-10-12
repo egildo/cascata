@@ -25,7 +25,7 @@ export function breakLengthBefore(bytes: Uint8Array, at: number): number {
 }
 
 /** The number of bytes of byte-order marks the document opens with: a mark is no part of a line's indentation (v1.9). */
-function marksAtStart(bytes: Uint8Array): number {
+export function marksAtStart(bytes: Uint8Array): number {
   let at = 0;
   while (bytes[at] === 0xef && bytes[at + 1] === 0xbb && bytes[at + 2] === 0xbf) at += 3;
   return at;
@@ -100,10 +100,11 @@ export function isBlankLine(bytes: Uint8Array, start: number): boolean {
  * like a comment).
  */
 export function attachedCommentsStart(bytes: Uint8Array, lineStart: number, floor: number): number {
+  const top = Math.max(floor, marksAtStart(bytes));
   let start = lineStart;
-  while (start > floor) {
+  while (start > top) {
     const previous = lineStartOf(bytes, start - breakLengthBefore(bytes, start));
-    if (previous < floor || !isCommentLine(bytes, previous)) break;
+    if (previous < top || previous >= start || !isCommentLine(bytes, previous)) break;
     start = previous;
   }
   return start;

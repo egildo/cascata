@@ -33,6 +33,10 @@ export interface WriterDocument {
   locate(path: string): WriterLocateResult;
   /** The edit that makes the value at the pointer `path` equal `value`. Independent of every other edit this document has answered: each is against the bytes as opened. */
   write(path: string, value: EditData): WriterWriteResult;
+  /** v1.15: create the entry at `path`, which must not exist; a sequence index, or `-` to append. Independent of every other edit this document has answered. */
+  add(path: string, value: EditData): WriterWriteResult;
+  /** v1.15: delete the entry at `path`, with the comments attached to it. */
+  remove(path: string): WriterWriteResult;
 }
 
 export type WriterOpenResult = { readonly ok: true; readonly document: WriterDocument } | { readonly ok: false; readonly reason: string };
@@ -67,6 +71,14 @@ function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
         write(path, value) {
           const result = document.setValue(path, value);
           return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not written" };
+        },
+        add(path, value) {
+          const result = document.add(path, value);
+          return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not added" };
+        },
+        remove(path) {
+          const result = document.remove(path);
+          return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not removed" };
         },
       },
     };
