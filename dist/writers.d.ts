@@ -1,0 +1,76 @@
+/**
+ * Writers — SPEC.md Article IX (§19, v1.11); the entry point `@egildo/cascata/writers`.
+ *
+ * `locate` and `setValue` offered in the shape a source-graph library's editing stage expects:
+ * `claims(location)`, `locate(bytes, path)` and `write(bytes, path, value)`, one writer per
+ * format. The shape is met, not imported: this module names nothing but Cascata's own verbs, as
+ * a read pass's host satisfies Article VI's `Host` without importing the caller.
+ *
+ * Since v1.15 a writer also **opens** a document (`open(bytes)`): parsed once, it answers `locate`, `write`, `add` and `remove`
+ * as often as asked, each against the bytes as opened, and `write` takes a mapping (a `Map`) or a sequence, nested.
+ *
+ * A writer adds no behaviour. `path` is an RFC 6901 pointer; the bytes are the document as
+ * stored (§4.2), a byte-order mark and every carriage return counted; the origin is synthetic
+ * because a writer is handed bytes, not a document's identity. A refusal's `reason` is the first
+ * diagnostic's message. As with the verbs, only programmer error throws (a pointer that is
+ * neither empty nor starts with `/`, a value that is not scalar, array or `Map` data).
+ */
+import { type Edit, type EditData, type EditValue, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
+export type WriterLocateResult = {
+    readonly ok: true;
+    readonly start: number;
+    readonly end: number;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+/** `diagnostics` on success (v1.12): empty, or under `sharedEdits: "warn"` the one `info` naming what else the edit changes. */
+export type WriterWriteResult = {
+    readonly ok: true;
+    readonly edit: Edit;
+    readonly diagnostics: Extract<SetValueResult, {
+        ok: true;
+    }>["diagnostics"];
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+/** What a writer is made with (v1.12 FR-005): whether it writes a shared value. JSON has no sharing and accepts it, so one object can make both. */
+export interface WriterOptions {
+    readonly sharedEdits?: SharedEdits;
+}
+/** A document a writer has parsed once (v1.15 FR-006): `locate` and `write` as the writer's own, over the bytes as opened. */
+export interface WriterDocument {
+    /** The stored byte range of the value at the pointer `path`. */
+    locate(path: string): WriterLocateResult;
+    /** The edit that makes the value at the pointer `path` equal `value`. Independent of every other edit this document has answered: each is against the bytes as opened. */
+    write(path: string, value: EditData): WriterWriteResult;
+    /** v1.15: create the entry at `path`, which must not exist; a sequence index, or `-` to append. Independent of every other edit this document has answered. */
+    add(path: string, value: EditData): WriterWriteResult;
+    /** v1.15: delete the entry at `path`, with the comments attached to it. */
+    remove(path: string): WriterWriteResult;
+}
+export type WriterOpenResult = {
+    readonly ok: true;
+    readonly document: WriterDocument;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+/** One format's editing plug-in. */
+export interface Writer {
+    /** Whether this writer handles the document at `location`, by extension, case-insensitively. */
+    claims(location: string): boolean;
+    /** The stored byte range of the value at the pointer `path`. */
+    locate(bytes: Uint8Array, path: string): WriterLocateResult;
+    /** The edit that makes the value at the pointer `path` equal `value`. */
+    write(bytes: Uint8Array, path: string, value: EditData): WriterWriteResult;
+    /** v1.15: parse `bytes` once and answer `locate` and `write` as often as asked (it copies the bytes). */
+    open(bytes: Uint8Array): WriterOpenResult;
+}
+/** Claims `.yaml` and `.yml`. */
+export declare function yamlWriter(options?: WriterOptions): Writer;
+/** Claims `.json`. Accepts `sharedEdits`, which changes nothing: JSON shares no value. */
+export declare function jsonWriter(options?: WriterOptions): Writer;
+export type { Edit, EditData, EditValue, SharedEdits };
+//# sourceMappingURL=writers.d.ts.map
