@@ -10,7 +10,7 @@ and the rule that was broken. Format-blind above the adapter, provenance-rich th
 performs no I/O of its own: everything it needs from outside the call it was given, it asks its host
 for (`SPEC.md` Article VI).
 
-**v1.12.1.** `SPEC.md` is a living document since v1.12.1: amended by named article with an entry in
+**v1.15.0.** Since v1.12.1: graph identity by physical path (v1.13), `glob` (v1.14), and the opened document with `add` and `remove` (v1.15), each below. `SPEC.md` is a living document since v1.12.1: amended by named article with an entry in
 §15, which names every change of behaviour in a sentence, and no longer gated by version. All eight
 milestones of its §14 roadmap shipped at v1.0, which froze it (§15's freeze rule, retired at v1.12.1: a
 *correction* always, an *addition* while no existing meaning changed, a changed meaning only at v2.0).

@@ -173,7 +173,8 @@ section of a report has been worth more than the diff.
 The release drill, confirmed by the owner at v1.12.1. "Bump it up" approves exactly this.
 
 1. Tree clean on `main`; `pnpm typecheck` and `pnpm test` green, or stop.
-2. Bump `version` in `package.json` and the `#vX.Y.Z-dist` install line in `README.md`. There is no
+2. Bump `version` in `package.json` and the `#vX.Y.Z-dist` install line in `README.md`, and bring the version-led status
+   paragraphs up to date: `README.md`'s Status and the opening of `docs/reference.md`. There is no
    changelog file: `SPEC.md` §15 is the record. Commit as `vX.Y.Z: <the round's name>`.
 3. `git tag vX.Y.Z`, then `sh scripts/dist-tag.sh vX.Y.Z` for the `vX.Y.Z-dist` tag (built `dist/` on a
    detached head, for git consumers).
