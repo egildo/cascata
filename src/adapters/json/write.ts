@@ -8,26 +8,38 @@
  * demands them, every other character, non-ASCII included, as itself.
  */
 
-import { editDiagnostic, type FindResult } from "../edit.js";
+import type { Diagnostic } from "../../diagnostics/diagnostic.js";
+import { editDiagnostic, type FindResult, type SharedEdits } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
 import type { Node } from "../../model/node.js";
 import { resolvePointer } from "../../model/pointer.js";
 import type { Origin, SourceSpan } from "../../model/span.js";
 import { parseJsonBytes } from "./parse.js";
 
-export function findJson(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined, pointer: string): FindResult {
+/** A JSON document parsed once (v1.15 FR-004): its tree, which `find` answers any number of pointers from. */
+export interface JsonOpened {
+  readonly tree: Node;
+  find(pointer: string, sharedEdits?: SharedEdits): FindResult;
+}
+
+export function openJson(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined): { readonly ok: true; readonly opened: JsonOpened } | { readonly ok: false; readonly diagnostics: Diagnostic[] } {
   const outcome = parseJsonBytes(bytes, origin, limits);
   if (!outcome.ok) {
     return outcome;
   }
-  const node = resolvePointer(outcome.tree, pointer);
+  const { tree } = outcome;
+  return { ok: true, opened: { tree, find: (pointer) => findIn(tree, pointer) } };
+}
+
+function findIn(tree: Node, pointer: string): FindResult {
+  const node = resolvePointer(tree, pointer);
   if (node === undefined) {
     // The nearest existing ancestor: the longest prefix of the pointer that names something.
     const segments = pointer.slice(1).split("/");
-    let ancestor: SourceSpan = outcome.tree.span;
+    let ancestor: SourceSpan = tree.span;
     for (let length = segments.length - 1; length >= 0; length -= 1) {
       const prefix = length === 0 ? "" : `/${segments.slice(0, length).join("/")}`;
-      const found = resolvePointer(outcome.tree, prefix);
+      const found = resolvePointer(tree, prefix);
       if (found !== undefined) {
         ancestor = found.span;
         break;

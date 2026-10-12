@@ -14,7 +14,7 @@
  */
 
 import { formatForLocation } from "./adapters/registry.js";
-import { locate, setValue, type Edit, type EditFormat, type EditValue, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
+import { locate, openDocument, setValue, type Edit, type EditFormat, type EditValue, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
 import { createOrigin } from "./model/span.js";
 
 export type WriterLocateResult = { readonly ok: true; readonly start: number; readonly end: number } | { readonly ok: false; readonly reason: string };
@@ -27,6 +27,16 @@ export interface WriterOptions {
   readonly sharedEdits?: SharedEdits;
 }
 
+/** A document a writer has parsed once (v1.15 FR-006): `locate` and `write` as the writer's own, over the bytes as opened. */
+export interface WriterDocument {
+  /** The stored byte range of the value at the pointer `path`. */
+  locate(path: string): WriterLocateResult;
+  /** The edit that makes the value at the pointer `path` equal `value`. Independent of every other edit this document has answered: each is against the bytes as opened. */
+  write(path: string, value: EditValue): WriterWriteResult;
+}
+
+export type WriterOpenResult = { readonly ok: true; readonly document: WriterDocument } | { readonly ok: false; readonly reason: string };
+
 /** One format's editing plug-in. */
 export interface Writer {
   /** Whether this writer handles the document at `location`, by extension, case-insensitively. */
@@ -35,12 +45,33 @@ export interface Writer {
   locate(bytes: Uint8Array, path: string): WriterLocateResult;
   /** The edit that makes the value at the pointer `path` equal `value`. */
   write(bytes: Uint8Array, path: string, value: EditValue): WriterWriteResult;
+  /** v1.15: parse `bytes` once and answer `locate` and `write` as often as asked (it copies the bytes). */
+  open(bytes: Uint8Array): WriterOpenResult;
 }
 
 const ORIGIN = createOrigin("writer", "writer");
 
 function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
   const options = { format, origin: ORIGIN, ...(writerOptions.sharedEdits !== undefined ? { sharedEdits: writerOptions.sharedEdits } : {}) };
+  const open = (bytes: Uint8Array): WriterOpenResult => {
+    const opened = openDocument(bytes, options);
+    if (!opened.ok) return { ok: false, reason: opened.diagnostics[0]?.message ?? "not parsed" };
+    const { document } = opened;
+    return {
+      ok: true,
+      document: {
+        locate(path) {
+          const result = document.locate(path);
+          return result.ok ? { ok: true, start: result.start, end: result.end } : { ok: false, reason: result.diagnostics[0]?.message ?? "not located" };
+        },
+        write(path, value) {
+          const result = document.setValue(path, value);
+          return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not written" };
+        },
+      },
+    };
+  };
+  // The one-shot verbs are the core's, which are open-then-ask (v1.15 FR-005).
   return {
     claims: (location) => formatForLocation(location) === format,
     locate(bytes, path) {
@@ -51,6 +82,7 @@ function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
       const result = setValue(bytes, options, path, value);
       return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not written" };
     },
+    open,
   };
 }
 

@@ -76,8 +76,8 @@ export type { Host, HostListEntry, HostListResult, HostReadResult } from "./reso
 export type { Layer, MergeStrategy, MergedConfiguration, ProvenanceEntry, ProvenanceRecord, WhyEntry, WhyResult } from "./merge/provenance.js";
 
 // Writing a value back (v1.10, SPEC.md Article IX): `locate` and `setValue`.
-export { locate, setValue } from "./adapters/edit.js";
-export type { Edit, EditFormat, EditOptions, EditValue, LocatedKind, LocateResult, SetValueResult, SharedEdits } from "./adapters/edit.js";
+export { locate, openDocument, setValue } from "./adapters/edit.js";
+export type { Edit, EditFormat, EditOptions, EditValue, LocatedKind, LocateResult, OpenedDocument, OpenResult, SetValueResult, SharedEdits } from "./adapters/edit.js";
 
 // Which document an edit belongs in (v1.11, SPEC.md Article IX): `editTarget`.
 export { editTarget } from "./edit-target.js";

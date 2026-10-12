@@ -27,8 +27,8 @@ import type { Node, ScalarKind } from "../model/node.js";
 import { resolvePointer } from "../model/pointer.js";
 import type { Origin, SourceSpan } from "../model/span.js";
 import type { ParseLimits } from "./limits.js";
-import { findJson, parseBack as parseBackJson, renderJsonString } from "./json/write.js";
-import { findYaml, parseBack as parseBackYaml, renderYamlString, yamlNonFinite, yamlPadding } from "./yaml/write.js";
+import { openJson, parseBack as parseBackJson, renderJsonString } from "./json/write.js";
+import { openYaml, parseBack as parseBackYaml, renderYamlString, yamlNonFinite, yamlPadding } from "./yaml/write.js";
 
 export type EditFormat = "yaml" | "json";
 
@@ -101,7 +101,7 @@ export interface Found {
    * where the tag starts and where the bytes kept after it begin (an anchor, a comment, a line break, then
    * the value); since v1.12.1 found wherever the tag is, so absent only when `yaml`'s tokens show none.
    */
-  readonly tag?: { readonly holds: ScalarKind | undefined; readonly drop?: { readonly start: number; readonly kept: number } };
+  readonly tag?: { readonly holds: ScalarKind | undefined; readonly drop: () => { readonly start: number; readonly kept: number } | undefined };
 }
 
 export type FindResult = { readonly ok: true; readonly found: Found } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
@@ -110,7 +110,7 @@ export function editDiagnostic(code: DiagnosticCode, message: string, primary: S
   return createDiagnostic({ level: "error", code, message, primary });
 }
 
-function requireArguments(options: EditOptions, pointer: string, fnName: string): void {
+function requireOptions(options: EditOptions, fnName: string): void {
   if (options === undefined || options === null || (options.format !== "yaml" && options.format !== "json")) {
     throw new Error(`${fnName}() requires options.format to be "yaml" or "json"`);
   }
@@ -120,29 +120,78 @@ function requireArguments(options: EditOptions, pointer: string, fnName: string)
   if (options.sharedEdits !== undefined && options.sharedEdits !== "refuse" && options.sharedEdits !== "warn" && options.sharedEdits !== "allow") {
     throw new Error(`${fnName}(): sharedEdits must be "refuse", "warn" or "allow", got ${JSON.stringify(options.sharedEdits)}`);
   }
+}
+
+function requirePointer(pointer: string, fnName: string): void {
   if (typeof pointer !== "string" || (pointer !== "" && !pointer.startsWith("/"))) {
     throw new Error(`${fnName}(): malformed JSON Pointer ${JSON.stringify(pointer)}: must be empty or start with '/'`);
   }
-}
-
-function find(bytes: Uint8Array, options: EditOptions, pointer: string, sharedEdits: SharedEdits): FindResult {
-  return options.format === "yaml" ? findYaml(bytes, options.origin, options.limits, pointer, sharedEdits) : findJson(bytes, options.origin, options.limits, pointer);
 }
 
 function kindOf(node: Node): LocatedKind {
   return node.type === "scalar" ? node.kind : node.type;
 }
 
+/** One format's parsed document: the tree its reader built, and the finder over it. */
+interface Opened {
+  readonly find: (pointer: string, sharedEdits: SharedEdits) => FindResult;
+}
+
+/**
+ * A document parsed once (v1.15 FR-001 to FR-004, SPEC.md Article IX). Its bytes are its own copy; its answers
+ * are always against them, never against an edit it has given. `locate` costs no parse after the opening;
+ * `setValue` costs one, its read-back, and only when it answers an edit to check.
+ */
+export interface OpenedDocument {
+  /** As the one-shot `locate`, over the bytes as opened. */
+  locate(pointer: string): LocateResult;
+  /** As the one-shot `setValue`, over the bytes as opened. */
+  setValue(pointer: string, value: EditValue): SetValueResult;
+}
+
+export type OpenResult = { readonly ok: true; readonly document: OpenedDocument } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+
+/**
+ * Parse `bytes` once and answer `locate` and `setValue` as often as asked. A document that does not parse gives
+ * the parse's own diagnostics. Only programmer error throws (a missing origin or format, a bad policy).
+ */
+export function openDocument(bytes: Uint8Array, options: EditOptions): OpenResult {
+  requireOptions(options, "openDocument");
+  // The document is its own: a caller who changes the array or the options afterwards changes nothing it answers (FR-002).
+  const stored = Uint8Array.from(bytes);
+  const fixed: EditOptions = { format: options.format, origin: options.origin, sharedEdits: options.sharedEdits ?? "refuse", ...(options.limits !== undefined ? { limits: { ...options.limits } } : {}) };
+  const parsed = fixed.format === "yaml" ? openYaml(stored, fixed.origin, fixed.limits) : openJson(stored, fixed.origin, fixed.limits);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const doc: Opened = parsed.opened;
+  const sharedEdits = fixed.sharedEdits ?? "refuse";
+  return {
+    ok: true,
+    document: {
+      locate: (pointer) => locateIn(doc, pointer, sharedEdits),
+      setValue: (pointer, value) => setValueIn(stored, fixed, doc, pointer, value),
+    },
+  };
+}
+
 /**
  * The stored byte range and model kind of the value at `pointer`, or why
  * there is none. A document that does not parse gives the parse's own
- * diagnostics. A container or a block scalar is located like any value —
- * only `setValue` refuses them.
+ * diagnostics. A container or a block scalar is located like any value --
+ * only `setValue` refuses them (until v1.15, containers too).
  */
 export function locate(bytes: Uint8Array, options: EditOptions, pointer: string): LocateResult {
-  requireArguments(options, pointer, "locate");
+  requireOptions(options, "locate");
+  requirePointer(pointer, "locate");
+  const result = openDocument(bytes, options);
+  return result.ok ? result.document.locate(pointer) : result;
+}
+
+function locateIn(doc: Opened, pointer: string, sharedEdits: SharedEdits): LocateResult {
+  requirePointer(pointer, "locate");
   // Under "warn" and "allow" a value reached through an alias is located at the bytes `setValue` would write (v1.12.1).
-  const result = find(bytes, options, pointer, options.sharedEdits ?? "refuse");
+  const result = doc.find(pointer, sharedEdits);
   if (!result.ok) {
     return result;
   }
@@ -218,12 +267,24 @@ function describeValue(value: EditValue): string {
  * that is not a scalar).
  */
 export function setValue(bytes: Uint8Array, options: EditOptions, pointer: string, value: EditValue): SetValueResult {
-  requireArguments(options, pointer, "setValue");
+  requireOptions(options, "setValue");
+  requirePointer(pointer, "setValue");
+  requireScalar(value);
+  const result = openDocument(bytes, options);
+  return result.ok ? result.document.setValue(pointer, value) : result;
+}
+
+function requireScalar(value: EditValue): void {
   if (!(typeof value === "string" || typeof value === "number" || typeof value === "bigint" || typeof value === "boolean" || value === null)) {
     throw new TypeError("setValue() takes a scalar value: string, number, bigint, boolean or null");
   }
+}
+
+function setValueIn(bytes: Uint8Array, options: EditOptions, doc: Opened, pointer: string, value: EditValue): SetValueResult {
+  requirePointer(pointer, "setValue");
+  requireScalar(value);
   const sharedEdits = options.sharedEdits ?? "refuse";
-  const result = find(bytes, options, pointer, sharedEdits);
+  const result = doc.find(pointer, sharedEdits);
   if (!result.ok) {
     return result;
   }
@@ -246,7 +307,7 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
 
   const kind = kindForValue(value, found.node);
   const existing = bytes.subarray(found.start, found.end);
-  // L1: the value is already there, so the bytes already there stay — whatever their spelling.
+  // L1: the value is already there, so the bytes already there stay -- whatever their spelling.
   if (equalsValue(found.node, kind, value)) {
     return { ok: true, edit: { start: found.start, end: found.end, bytes: Uint8Array.from(existing) }, diagnostics };
   }
@@ -269,12 +330,13 @@ export function setValue(bytes: Uint8Array, options: EditOptions, pointer: strin
     // A tag that cannot hold the value is not written over it (v1.12 FR-011): the edit widens over the tag and the
     // space after it, and carries again whatever sat between them and the value (an anchor written after the tag).
     // `yaml` resolved a tag, so its tokens hold one (v1.12.1): not finding it is a bug, not the document's fault.
-    if (found.tag.drop === undefined) throw new Error("Internal error: setValue(): the value has an explicit tag, and the parser's tokens show none");
-    const kept = bytes.subarray(found.tag.drop.kept, found.start);
+    const drop = found.tag.drop();
+    if (drop === undefined) throw new Error("Internal error: setValue(): the value has an explicit tag, and the parser's tokens show none");
+    const kept = bytes.subarray(drop.kept, found.start);
     const joined = new Uint8Array(kept.length + encoded.length);
     joined.set(kept, 0);
     joined.set(encoded, kept.length);
-    start = found.tag.drop.start;
+    start = drop.start;
     encoded = joined;
   }
   const edit: Edit = { start, end: found.end, bytes: encoded };

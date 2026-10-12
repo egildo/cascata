@@ -68,6 +68,7 @@ import { buildAnchorTable, type AnchorTable } from "./anchors.js";
 import { countWritten } from "./budget.js";
 import { allMarks, documentPrefixMarks, laterDocumentMark, removePrefixMarks, storedIndexer } from "./marks.js";
 import { findFirstInvalidUtf8ByteOffset, locateByteOffset, utf8ByteLength } from "../encoding.js";
+import { countParse } from "../parse-count.js";
 
 // `yaml` merges each of these classes with a `.Parsed` namespace member
 // carrying the concrete post-parse shape (a definite `range`, and — for
@@ -743,6 +744,7 @@ export interface YamlSpans {
 export type YamlDocumentHook = (doc: Document, spans: YamlSpans, anchors: AnchorTable) => void;
 
 export function parseYaml(rawText: string, origin: Origin, limitOverrides?: Partial<ParseLimits>, onDocument?: YamlDocumentHook): ParseOutcome {
+  countParse();
   const limits = resolveLimits(limitOverrides);
 
   // Checked before anything else is touched, on the raw input exactly as

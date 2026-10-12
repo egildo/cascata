@@ -48,6 +48,7 @@ import { createBoolScalar, createFloatScalar, createIntScalar, createMapping, cr
 import { createSourceSpan, type Origin, type SourceSpan } from "../../model/span.js";
 import { findFirstInvalidUtf8ByteOffset, locateByteOffset } from "../encoding.js";
 import { checkDepthLimit, checkSizeLimit, resolveLimits, type ParseLimits } from "../limits.js";
+import { countParse } from "../parse-count.js";
 import { hexDigitValue, isDigit, Scanner, type Position } from "./scan.js";
 
 /** Mirrors the YAML adapter's `ParseOutcome` and `src/adapters/registry.ts`'s `AdapterParseOutcome`. Never both a tree and diagnostics. */
@@ -683,6 +684,7 @@ function hasByteOrderMark(bytes: Uint8Array): boolean {
  *   4. The scan itself, from the byte after the mark.
  */
 export function parseJsonBytes(bytes: Uint8Array, origin: Origin, limitOverrides?: Partial<ParseLimits>): ParseOutcome {
+  countParse();
   const limits = resolveLimits(limitOverrides);
 
   const sizeDiagnostic = checkSizeLimit(bytes.length, limits, origin);

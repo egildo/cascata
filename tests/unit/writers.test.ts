@@ -45,9 +45,9 @@ describe("v1.11 FR-005 — claims", () => {
 });
 
 describe("v1.11 FR-005 — the shape", () => {
-  it("a writer is exactly claims, locate and write", () => {
-    expect(Object.keys(yamlWriter()).sort()).toEqual(["claims", "locate", "write"]);
-    expect(Object.keys(jsonWriter()).sort()).toEqual(["claims", "locate", "write"]);
+  it("a writer is claims, locate and write -- and, since v1.15 FR-006, open", () => {
+    expect(Object.keys(yamlWriter()).sort()).toEqual(["claims", "locate", "open", "write"]);
+    expect(Object.keys(jsonWriter()).sort()).toEqual(["claims", "locate", "open", "write"]);
   });
 
   it("YAML: `a: 1` is bytes 3-4; writing 2 replaces exactly them", () => {

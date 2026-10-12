@@ -29,6 +29,7 @@ import type { Origin, SourceSpan } from "../../model/span.js";
 import { editDiagnostic, type FindResult, type Found, type ScalarStyle, type SharedEdits } from "../edit.js";
 import type { ParseLimits } from "../limits.js";
 import type { AnchorTable } from "./anchors.js";
+import { countParentWalk, countTokenize } from "../parse-count.js";
 import { parseYamlBytes, type YamlSpans } from "./parse.js";
 
 // --- finding a value ------------------------------------------------------
@@ -110,6 +111,7 @@ function firstAliasTo(node: YamlNode, anchors: AnchorTable, spans: YamlSpans): S
 
 /** Each node's parent in the AST (a pair is skipped: a key's and a value's parent is the mapping). One walk. */
 function parentsOf(doc: Document): Map<YamlNode, YamlNode> {
+  countParentWalk();
   const parents = new Map<YamlNode, YamlNode>();
   const stack: YamlNode[] = doc.contents !== null && isNode(doc.contents) ? [doc.contents] : [];
   for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
@@ -140,8 +142,9 @@ function parentsOf(doc: Document): Map<YamlNode, YamlNode> {
  * container above it — a merge key's alias among them — and, since such an alias is itself a
  * place in the document, every alias to a container above that alias, and so on. Document order.
  */
-function aliasesHolding(holder: YamlNode, doc: Document, anchors: AnchorTable, spans: YamlSpans): SourceSpan[] {
-  const parents = parentsOf(doc);
+function aliasesHolding(holder: YamlNode, facts: Facts): SourceSpan[] {
+  const { anchors, spans } = facts;
+  const parents = parentsIn(facts);
   const seen = new Set<YamlNode>();
   const found: SourceSpan[] = [];
   const work: YamlNode[] = [holder];
@@ -159,13 +162,19 @@ function aliasesHolding(holder: YamlNode, doc: Document, anchors: AnchorTable, s
 }
 
 /**
- * The value at `pointer`, as the reader measured it. Under `sharedEdits: "refuse"` a value reached
- * through an alias or merge key is refused here (`edit-target-shared`, at the alias); under `"warn"`
- * and `"allow"` (v1.12 FR-007) the walk goes through the alias and answers the bytes that hold the
- * value — the anchored node's — with `sharedBy` set, so `setValue` knows the edit changes more than
- * one place.
+ * A YAML document parsed once (v1.15 FR-004): the reader's tree, the `yaml` AST it was built from and the
+ * functions that measured it. `find` answers any number of pointers from them without parsing again; the
+ * facts a find may need that cost a walk over the whole document (every node's parent, `yaml`'s CST tokens)
+ * are built the first time one is asked for and kept.
  */
-export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined, pointer: string, sharedEdits: SharedEdits): FindResult {
+export interface YamlOpened {
+  readonly tree: Node;
+  find(pointer: string, sharedEdits: SharedEdits): FindResult;
+}
+
+type OpenOutcome<T> = { readonly ok: true; readonly opened: T } | { readonly ok: false; readonly diagnostics: Diagnostic[] };
+
+export function openYaml(bytes: Uint8Array, origin: Origin, limits: Partial<ParseLimits> | undefined): OpenOutcome<YamlOpened> {
   const captured: { doc?: Document; spans?: YamlSpans; anchors?: AnchorTable } = {};
   const outcome = parseYamlBytes(bytes, origin, limits, (doc, spans, anchors) => {
     captured.doc = doc;
@@ -179,6 +188,41 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
   if (doc === undefined || spans === undefined || anchors === undefined) {
     throw new Error("Internal error: the YAML reader parsed a document without handing it over");
   }
+  const facts: Facts = { bytes, doc, spans, anchors, tree: outcome.tree, parents: undefined, tokens: undefined };
+  return { ok: true, opened: { tree: outcome.tree, find: (pointer, sharedEdits) => findIn(facts, pointer, sharedEdits) } };
+}
+
+/** What one parse of a document leaves, and the lazily built facts about it. */
+interface Facts {
+  readonly bytes: Uint8Array;
+  readonly doc: Document;
+  readonly spans: YamlSpans;
+  readonly anchors: AnchorTable;
+  readonly tree: Node;
+  parents: Map<YamlNode, YamlNode> | undefined;
+  tokens: { readonly type: string; readonly offset: number; readonly end: number }[] | undefined;
+}
+
+function parentsIn(facts: Facts): Map<YamlNode, YamlNode> {
+  facts.parents ??= parentsOf(facts.doc);
+  return facts.parents;
+}
+
+function tokensIn(facts: Facts): { readonly type: string; readonly offset: number; readonly end: number }[] {
+  facts.tokens ??= sourceTokens(facts.spans.parserText);
+  return facts.tokens;
+}
+
+/**
+ * The value at `pointer`, as the reader measured it, in a document already parsed. Under `sharedEdits: "refuse"` a value reached
+ * through an alias or merge key is refused here (`edit-target-shared`, at the alias); under `"warn"`
+ * and `"allow"` (v1.12 FR-007) the walk goes through the alias and answers the bytes that hold the
+ * value — the anchored node's — with `sharedBy` set, so `setValue` knows the edit changes more than
+ * one place.
+ */
+function findIn(facts: Facts, pointer: string, sharedEdits: SharedEdits): FindResult {
+  const { bytes, doc, spans, anchors } = facts;
+  const outcome = { tree: facts.tree };
   const segments = pointer === "" ? [] : pointer.slice(1).split("/").map(unescapePointerSegment);
   const rootSpan = outcome.tree.span;
   const absent = (ancestor: SourceSpan): FindResult => ({
@@ -250,8 +294,10 @@ export function findYaml(bytes: Uint8Array, origin: Origin, limits: Partial<Pars
   if (span === undefined || modelNode === undefined) {
     throw new Error("Internal error: the YAML reader and the AST walk disagree about where a value is");
   }
-  const tag = isScalar(node) && typeof node.tag === "string" && node.range != null ? { holds: TAG_HOLDS.get(node.tag), ...tagDrop(bytes, spans, node.range[0]) } : undefined;
-  const sharedWith = sharedBy !== undefined && sharedEdits === "warn" ? aliasesHolding(node, doc, anchors, spans) : undefined;
+  const valueAt = isScalar(node) && node.range != null ? node.range[0] : undefined;
+  // The tag's bytes are found in `yaml`'s tokens the first time an edit needs to drop it (v1.15 FR-004), not when it is merely located.
+  const tag = valueAt !== undefined && typeof node.tag === "string" ? { holds: TAG_HOLDS.get(node.tag), drop: () => tagDrop(facts, valueAt) } : undefined;
+  const sharedWith = sharedBy !== undefined && sharedEdits === "warn" ? aliasesHolding(node, facts) : undefined;
   // Every node the reader says holds this value's bytes — the value, its alias and merge-key copies, by the model's
   // span rather than the walk's, so a walk that stopped short of the bytes is caught — for the read-back to check each.
   const copies = sharedBy !== undefined ? pointersInDocument(outcome.tree, modelNode.span) : undefined;
@@ -285,6 +331,7 @@ const isBlank = (byte: number | undefined): boolean => byte === 0x20 || byte ===
 
 /** Every token `yaml`'s CST holds, in the parser's text, in document order. Iterative: a document may nest deeply. */
 function sourceTokens(text: string): { readonly type: string; readonly offset: number; readonly end: number }[] {
+  countTokenize();
   const found: { type: string; offset: number; end: number }[] = [];
   const work: unknown[] = [];
   for (const token of new Parser().parse(text)) work.push(token);
@@ -310,17 +357,18 @@ function sourceTokens(text: string): { readonly type: string; readonly offset: n
  * the blanks after it go; if a line break follows them, so do the blanks before it (`a:` keeps no trailing space).
  * Everything else between the tag and the value — a line break, a comment, an anchor — is carried again.
  */
-function tagDrop(bytes: Uint8Array, spans: YamlSpans, valueAt: number): { drop?: { start: number; kept: number } } {
-  const tokens = sourceTokens(spans.parserText);
+function tagDrop(facts: Facts, valueAt: number): { start: number; kept: number } | undefined {
+  const { bytes, spans } = facts;
+  const tokens = tokensIn(facts);
   let index = tokens.length - 1;
   while (index >= 0 && spans.toStored(tokens[index]?.offset ?? 0) >= valueAt) index -= 1;
   for (; index >= 0; index -= 1) {
     const token = tokens[index];
     if (token === undefined || token.type === "tag") break;
-    if (token.type !== "space" && token.type !== "newline" && token.type !== "comment" && token.type !== "anchor") return {};
+    if (token.type !== "space" && token.type !== "newline" && token.type !== "comment" && token.type !== "anchor") return undefined;
   }
   const tag = tokens[index];
-  if (tag === undefined) return {};
+  if (tag === undefined) return undefined;
   const byteAt = (parserIndex: number): number => {
     const stored = spans.toStored(parserIndex);
     return spans.spanOf([stored, stored, stored]).start;
@@ -331,7 +379,7 @@ function tagDrop(bytes: Uint8Array, spans: YamlSpans, valueAt: number): { drop?:
   if (bytes[kept] === 0x0a || bytes[kept] === 0x0d) {
     while (isBlank(bytes[start - 1])) start -= 1;
   }
-  return { drop: { start, kept } };
+  return { start, kept };
 }
 
 /** Parse bytes the way the reader does, for the read-back; `undefined` if they do not parse. */
