@@ -17,13 +17,19 @@
  */
 
 import { formatForLocation } from "./adapters/registry.js";
-import { locate, openDocument, setValue, type AmendOperation, type AmendResult, type Edit, type EditData, type EditFormat, type EditValue, type OpenedDocument, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
+import { locate, openDocument, setValue, type AmendOperation, type AmendResult, type Edit, type EditData, type EditFormat, type EditValue, type LocateResult, type OpenedDocument, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
 import { createOrigin } from "./model/span.js";
 
-export type WriterLocateResult = { readonly ok: true; readonly start: number; readonly end: number } | { readonly ok: false; readonly reason: string };
+/** A refusal: the first diagnostic's message, and (v1.16.1) its code, so a caller can tell one refusal from another without reading prose. */
+/** A diagnostic, as the verbs give it (named through their results, so this module imports nothing but the verbs). */
+type Diagnostic = Extract<LocateResult, { ok: false }>["diagnostics"][number];
+
+export type WriterRefusal = { readonly ok: false; readonly reason: string; readonly code: Diagnostic["code"] };
+
+export type WriterLocateResult = { readonly ok: true; readonly start: number; readonly end: number } | WriterRefusal;
 
 /** `diagnostics` on success (v1.12): empty, or under `sharedEdits: "warn"` the one `info` naming what else the edit changes. */
-export type WriterWriteResult = { readonly ok: true; readonly edit: Edit; readonly diagnostics: Extract<SetValueResult, { ok: true }>["diagnostics"] } | { readonly ok: false; readonly reason: string };
+export type WriterWriteResult = { readonly ok: true; readonly edit: Edit; readonly diagnostics: Extract<SetValueResult, { ok: true }>["diagnostics"] } | WriterRefusal;
 
 /** What a writer is made with (v1.12 FR-005): whether it writes a shared value. JSON has no sharing and accepts it, so one object can make both. */
 export interface WriterOptions {
@@ -48,7 +54,7 @@ export interface WriterDocument {
   inside(path: string, within: string): boolean;
 }
 
-export type WriterOpenResult = { readonly ok: true; readonly document: WriterDocument } | { readonly ok: false; readonly reason: string };
+export type WriterOpenResult = { readonly ok: true; readonly document: WriterDocument } | WriterRefusal;
 
 /** One format's editing plug-in. */
 export interface Writer {
@@ -64,6 +70,12 @@ export interface Writer {
 
 const ORIGIN = createOrigin("writer", "writer");
 
+function refusal(diagnostics: readonly Diagnostic[], fallback: string): WriterRefusal {
+  const first = diagnostics[0];
+  if (first === undefined) throw new Error(`Internal error: a writer refusal (${fallback}) carried no diagnostic`);
+  return { ok: false, reason: first.message, code: first.code };
+}
+
 /** The opened document behind each writer document, so `shifted` can compare two versions (v1.16). */
 const underlying = new WeakMap<WriterDocument, OpenedDocument>();
 
@@ -71,24 +83,24 @@ function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
   const options = { format, origin: ORIGIN, ...(writerOptions.sharedEdits !== undefined ? { sharedEdits: writerOptions.sharedEdits } : {}) };
   const open = (bytes: Uint8Array): WriterOpenResult => {
     const opened = openDocument(bytes, options);
-    if (!opened.ok) return { ok: false, reason: opened.diagnostics[0]?.message ?? "not parsed" };
+    if (!opened.ok) return refusal(opened.diagnostics, "not parsed");
     const { document } = opened;
     const answered: WriterDocument = {
         locate(path) {
           const result = document.locate(path);
-          return result.ok ? { ok: true, start: result.start, end: result.end } : { ok: false, reason: result.diagnostics[0]?.message ?? "not located" };
+          return result.ok ? { ok: true, start: result.start, end: result.end } : refusal(result.diagnostics, "not located");
         },
         write(path, value) {
           const result = document.setValue(path, value);
-          return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not written" };
+          return result.ok ? result : refusal(result.diagnostics, "not written");
         },
         add(path, value) {
           const result = document.add(path, value);
-          return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not added" };
+          return result.ok ? result : refusal(result.diagnostics, "not added");
         },
         remove(path) {
           const result = document.remove(path);
-          return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not removed" };
+          return result.ok ? result : refusal(result.diagnostics, "not removed");
         },
         shifted(path, newer) {
           const other = underlying.get(newer);
@@ -106,11 +118,11 @@ function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
     claims: (location) => formatForLocation(location) === format,
     locate(bytes, path) {
       const result = locate(bytes, options, path);
-      return result.ok ? { ok: true, start: result.start, end: result.end } : { ok: false, reason: result.diagnostics[0]?.message ?? "not located" };
+      return result.ok ? { ok: true, start: result.start, end: result.end } : refusal(result.diagnostics, "not located");
     },
     write(bytes, path, value) {
       const result = setValue(bytes, options, path, value);
-      return result.ok ? result : { ok: false, reason: result.diagnostics[0]?.message ?? "not written" };
+      return result.ok ? result : refusal(result.diagnostics, "not written");
     },
     open,
   };

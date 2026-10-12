@@ -100,7 +100,7 @@ describe("v1.11 FR-005 — equivalence with locate and setValue over every v1.10
       if (direct.ok) {
         expect(viaWriter).toEqual({ ok: true, start: direct.start, end: direct.end });
       } else {
-        expect(viaWriter).toEqual({ ok: false, reason: direct.diagnostics[0]?.message });
+        expect(viaWriter).toEqual({ ok: false, reason: direct.diagnostics[0]?.message, code: direct.diagnostics[0]?.code });
       }
     });
 
@@ -114,7 +114,7 @@ describe("v1.11 FR-005 — equivalence with locate and setValue over every v1.10
           const plain = (ds: readonly Diagnostic[]) => ds.map((d) => [d.level, d.code, d.message, d.primary.start, d.primary.end, d.related.map((r) => [r.label, r.span.start, r.span.end])]);
           expect(viaWriter.ok && { ...viaWriter, diagnostics: plain(viaWriter.diagnostics) }).toEqual({ ok: true, edit: direct.edit, diagnostics: plain(direct.diagnostics) });
         } else {
-          expect(viaWriter).toEqual({ ok: false, reason: direct.diagnostics[0]?.message });
+          expect(viaWriter).toEqual({ ok: false, reason: direct.diagnostics[0]?.message, code: direct.diagnostics[0]?.code });
         }
       });
     }

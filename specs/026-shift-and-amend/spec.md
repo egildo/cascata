@@ -37,3 +37,14 @@ owner's rulings there need an answer only the format can give, because Provenanc
   always false (6 red), the `-` exemption (1), a kind change (1), an absent prefix (1), the slash in the prefix test
   (1), the copy along the path (5), `add` over an existing key (1), `set` at the end (0 red at first — two cases
   added, then 1).
+
+## Revision after Provenance's report (v1.16.1)
+
+- **FR-005** **A writer's refusal names its code.** Every `{ ok: false }` a writer answers — the one-shot verbs, an
+  opened document's, and `open` itself — carries `code`, the first diagnostic's code, beside `reason`, its message.
+  Provenance's implementer found that a rebase cannot tell "the key exists" from "the parent is gone" from a message:
+  paths are opaque, so it had guessed by locating the key again, which mislabels an index insert. Cascata already had
+  the codes (`edit-target-exists`, `edit-parent-scalar`, `edit-target-absent`, …) and flattened them to prose. A
+  refusal with no diagnostic is now an internal error rather than a made-up message. Cases in
+  `tests/unit/writer-codes.test.ts`; the v1.11 equivalence test now also requires the code. Sabotage (every code
+  `edit-target-absent`): 34 red.

@@ -1833,4 +1833,6 @@ type AmendResult = { inside: false } | { inside: true; ok: true; value: EditData
   when `operation.path` is not strictly below `staged.path` — at it, beside it (`/walls/W30` is not inside
   `/walls/W3`), or above it. Refusals are answers. The staged value is never changed; values are checked as
   `setValue` checks them.
+- **A writer's refusal names its code** (v1.16.1): `{ ok: false, reason, code }`, the first diagnostic's message and
+  code, from the one-shot verbs, an opened document's, and `open`.
 - **`inside`** is `amend`'s first question alone: whether `pointer` is strictly below `within`, by whole segments.
