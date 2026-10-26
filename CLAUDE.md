@@ -173,12 +173,13 @@ section of a report has been worth more than the diff.
 The release drill, confirmed by the owner at v1.12.1. "Bump it up" approves exactly this.
 
 1. Tree clean on `main`; `pnpm typecheck` and `pnpm test` green, or stop.
-2. Bump `version` in `package.json` and the `#vX.Y.Z-dist` install line in `README.md`, and bring the version-led status
+2. Bump `version` in `package.json`, and bring the version-led status
    paragraphs up to date: `README.md`'s Status and the opening of `docs/reference.md`. There is no
    changelog file: `SPEC.md` §15 is the record. Commit as `vX.Y.Z: <the round's name>`.
-3. `git tag vX.Y.Z`, then `sh scripts/dist-tag.sh vX.Y.Z` for the `vX.Y.Z-dist` tag (built `dist/` on a
-   detached head, for git consumers).
-4. `git push origin main vX.Y.Z vX.Y.Z-dist`.
-5. `npm publish` (GitHub Packages, from `publishConfig`; `prepublishOnly` builds, so the tarball is never
-   empty). Verify: origin `main` equals local, both tags on origin, `npm view @egildo/cascata version`
-   answers the new version and `npm pack --dry-run` lists `dist/`.
+3. `git tag vX.Y.Z`, then `git push origin main vX.Y.Z`. The push reaches the GitHub mirror, and
+   `.github/workflows/publish.yml` publishes the tag to npmjs.org by trusted publishing (`prepublishOnly`
+   builds, so the tarball is never empty). The wall-clock tests do not run there. Verify: origin `main`
+   equals local, the tag is on origin, the run is green, `npm view @egildo/cascata version` answers the new
+   version and `npm pack --dry-run` lists `dist/`.
+
+`scripts/dist-tag.sh` and the `vX.Y.Z-dist` tags served consumers that installed from git; the package is on npm now.

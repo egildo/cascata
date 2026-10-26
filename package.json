@@ -1,13 +1,15 @@
 {
   "name": "@egildo/cascata",
-  "version": "1.16.1",
+  "version": "1.16.2",
   "description": "Schema-governed cascading configuration: a folder of human-readable documents turned into one validated, provenance-rich configuration object.",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/egildo/cascata.git"
+    "url": "git+https://codeberg.org/egildo/cascata.git"
   },
+  "homepage": "https://codeberg.org/egildo/cascata",
+  "bugs": "https://codeberg.org/egildo/cascata/issues",
   "engines": {
     "node": ">=22"
   },
@@ -81,6 +83,7 @@
     "vitest": "^3.2.4"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   }
 }
