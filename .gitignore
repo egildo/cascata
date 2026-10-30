@@ -15,3 +15,7 @@ dist/
 # v0.2 test cache — resolution tests write here; never committed
 .cascata-cache/
 
+.specify/
+.claude/
+CLAUDE.md
+CLAUDE.local.md
