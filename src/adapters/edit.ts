@@ -26,7 +26,7 @@ import { createDiagnostic, type Diagnostic } from "../diagnostics/diagnostic.js"
 import type { DiagnosticCode } from "../diagnostics/codes.js";
 import type { Node, ScalarKind } from "../model/node.js";
 import { ARRAY_INDEX, resolvePointer, unescapePointerSegment } from "../model/pointer.js";
-import type { Origin, SourceSpan } from "../model/span.js";
+import { createSourceSpan, type Origin, type SourceSpan } from "../model/span.js";
 import { resolveLimits, type ParseLimits } from "./limits.js";
 import { dataEqualsNode, equalsValue, hasLoneSurrogate, inspectData, isContainerData, plainScalarText, type EditData, type EditValue } from "./edit-data.js";
 import { treeMatches, type Op } from "./readback.js";
@@ -130,10 +130,26 @@ function requireOptions(options: EditOptions, fnName: string): void {
   }
 }
 
+/** v1.17 FR-003: whether `pointer` breaks RFC 6901's syntax -- neither empty nor led by `/`, or a `~` not followed by `0` or `1`. */
+const isMalformed = (pointer: string): boolean => (pointer !== "" && !pointer.startsWith("/")) || /~(?![01])/.test(pointer);
+
+/** v1.17 FR-002: a pointer that is not a string is programmer error, a `TypeError`. */
+function requireString(pointer: unknown, fnName: string): asserts pointer is string {
+  if (typeof pointer !== "string") throw new TypeError(`${fnName}(): a pointer is a string, got ${typeof pointer}`);
+}
+
+/** For `inside`, `amend` and `shifted`, which answer no refusal: a malformed pointer still throws. */
 function requirePointer(pointer: string, fnName: string): void {
-  if (typeof pointer !== "string" || (pointer !== "" && !pointer.startsWith("/"))) {
-    throw new Error(`${fnName}(): malformed JSON Pointer ${JSON.stringify(pointer)}: must be empty or start with '/'`);
-  }
+  requireString(pointer, fnName);
+  if (isMalformed(pointer)) throw new Error(`${fnName}(): malformed JSON Pointer ${JSON.stringify(pointer)}: must be empty or start with '/', and '~' is '~0' or '~1'`);
+}
+
+/** v1.17 FR-003: a malformed pointer refused, at the document's start (it names no place in it), as a size refusal is. */
+function malformed(doc: Doc, pointer: string, fnName: string): { readonly ok: false; readonly diagnostics: Diagnostic[] } | undefined {
+  requireString(pointer, fnName);
+  if (!isMalformed(pointer)) return undefined;
+  const at = createSourceSpan({ origin: doc.options.origin, start: 0, end: 0, line: 1, column: 1, documentLength: doc.bytes.length });
+  return { ok: false, diagnostics: [editDiagnostic("path-malformed", `${JSON.stringify(pointer)} is not an RFC 6901 pointer: it must be empty or start with '/', and '~' is '~0' or '~1'`, at)] };
 }
 
 function kindOf(node: Node): LocatedKind {
@@ -300,13 +316,14 @@ function inspect(doc: Doc, value: unknown, fnName: string) {
  */
 export function locate(bytes: Uint8Array, options: EditOptions, pointer: string): LocateResult {
   requireOptions(options, "locate");
-  requirePointer(pointer, "locate");
+  requireString(pointer, "locate");
   const result = openDocument(bytes, options);
   return result.ok ? result.document.locate(pointer) : result;
 }
 
 function locateIn(doc: Doc, pointer: string): LocateResult {
-  requirePointer(pointer, "locate");
+  const refused = malformed(doc, pointer, "locate");
+  if (refused !== undefined) return refused;
   // Under "warn" and "allow" a value reached through an alias is located at the bytes `setValue` would write (v1.12.1).
   const result = doc.format.find(pointer, doc.sharedEdits);
   if (!result.ok) {
@@ -352,28 +369,45 @@ function pastLimits(facts: ReturnType<typeof inspectData>, span: SourceSpan): Se
 
 /**
  * The edit that makes the value at `pointer` equal `value` (FR-002 to
- * FR-009), or why not. Never throws for a document or a value -- only for
- * programmer error (a missing origin or format, a malformed pointer, a value
- * that is not `EditData`).
+ * FR-009), or why not. Never throws for a document, a value or a malformed
+ * pointer (refused as `path-malformed`, v1.17) -- only for programmer error
+ * (a missing origin or format, a pointer that is not a string, a value that
+ * is not `EditData`).
  */
 export function setValue(bytes: Uint8Array, options: EditOptions, pointer: string, value: EditData): SetValueResult {
   requireOptions(options, "setValue");
-  requirePointer(pointer, "setValue");
+  requireString(pointer, "setValue");
   inspectData(value, "setValue", resolveLimits(options.limits).maxDepth, resolveLimits(options.limits).maxBytes);
   const result = openDocument(bytes, options);
   return result.ok ? result.document.setValue(pointer, value) : result;
 }
 
+/** L1's question: whether `value` is what `node` already holds (a mapping's key order is no part of it). */
+function isUnchanged(value: EditData, node: Node): boolean {
+  return isContainerData(value) || node.type !== "scalar" ? dataEqualsNode(value, node) : equalsValue(node, kindForValue(value, node), value);
+}
+
 function setValueIn(doc: Doc, pointer: string, value: EditData): SetValueResult {
-  requirePointer(pointer, "setValue");
   const facts = inspect(doc, value, "setValue");
+  const refused = malformed(doc, pointer, "setValue");
+  if (refused !== undefined) return refused;
   const { bytes, options, sharedEdits } = doc;
+  const keep = (start: number, end: number): SetValueResult => ({ ok: true, edit: { start, end, bytes: Uint8Array.from(bytes.subarray(start, end)) }, diagnostics: [] });
   const result = doc.format.find(pointer, sharedEdits);
   if (!result.ok) {
+    // v1.17 FR-001: a value reached through an alias, set to what it already is, keeps the bytes that hold it.
+    if (result.diagnostics[0]?.code === "edit-target-shared") {
+      const through = doc.format.find(pointer, "allow");
+      if (through.ok && isUnchanged(value, through.found.node)) return keep(through.found.start, through.found.end);
+    }
     return result;
   }
   const { found } = result;
   const refuse = (code: DiagnosticCode, message: string): SetValueResult => refuseAt(code, message, found.span);
+
+  // v1.17 FR-001, L1 first: a value set to what it already is changes no place, shared or not, block or not, so the
+  // bytes already there stay, whatever their spelling, before any refusal is asked.
+  if (isUnchanged(value, found.node)) return keep(found.start, found.end);
 
   if (found.sharedBy !== undefined && sharedEdits === "refuse") {
     return { ok: false, diagnostics: [editDiagnostic("edit-target-shared", "This value is anchored and an alias shares it; writing it would change every place that shares it", found.sharedBy)] };
@@ -387,10 +421,6 @@ function setValueIn(doc: Doc, pointer: string, value: EditData): SetValueResult 
     // v1.15 FR-008: a container replaced, or written over a scalar. The kind is the value's.
     const limited = pastLimits(facts, found.span);
     if (limited !== undefined) return limited;
-    if (dataEqualsNode(value, found.node)) {
-      // L1: the value is already there (a mapping's key order is no part of it), so the bytes already there stay.
-      return { ok: true, edit: { start: found.start, end: found.end, bytes: Uint8Array.from(bytes.subarray(found.start, found.end)) }, diagnostics };
-    }
     const pointers = new Set([pointer, ...(found.copies ?? [])]);
     const ops: Op[] = [...pointers].map((at) => ({ kind: "replace", path: segmentsOf(at), data: value }));
     return finish(doc, doc.format.replace(found, pointer, value), ops, found.span, diagnostics, `${describeValue(value)} could not be written here and read back as the same value`);
@@ -401,11 +431,6 @@ function setValueIn(doc: Doc, pointer: string, value: EditData): SetValueResult 
   }
 
   const kind = kindForValue(value, found.node);
-  const existing = bytes.subarray(found.start, found.end);
-  // L1: the value is already there, so the bytes already there stay -- whatever their spelling.
-  if (equalsValue(found.node, kind, value)) {
-    return { ok: true, edit: { start: found.start, end: found.end, bytes: Uint8Array.from(existing) }, diagnostics };
-  }
 
   const text = scalarText(value, kind, options, found);
   if (text === undefined) {
@@ -492,8 +517,9 @@ function sharing(doc: Doc, found: Found): { readonly refusal?: SetValueResult; r
 }
 
 function addIn(doc: Doc, pointer: string, value: EditData): SetValueResult {
-  requirePointer(pointer, "add");
   const facts = inspect(doc, value, "add");
+  const refused = malformed(doc, pointer, "add");
+  if (refused !== undefined) return refused;
   const root = doc.format.tree.span;
   // The empty pointer names the document, which exists: add creates, setValue changes.
   if (pointer === "") return refuseAt("edit-target-exists", "The root of the document exists; add creates and setValue changes", root);
@@ -527,7 +553,8 @@ function addIn(doc: Doc, pointer: string, value: EditData): SetValueResult {
 }
 
 function removeIn(doc: Doc, pointer: string): SetValueResult {
-  requirePointer(pointer, "remove");
+  const refused = malformed(doc, pointer, "remove");
+  if (refused !== undefined) return refused;
   if (pointer === "") return refuseAt("edit-remove-document", "The whole document cannot be removed", doc.format.tree.span);
   const { parent, last } = splitPointer(pointer);
   // An entry whose value is an alias (`d: *b`) shares nothing with what it points at: taking the entry out changes no other place.

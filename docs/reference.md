@@ -1376,9 +1376,12 @@ setValue(bytes, options, "/walls/W2/height", 3.4);
   empty except under `sharedEdits: "warn"`, v1.12) or
   `{ ok: false, diagnostics }`. `value` is `string`, `number`, `bigint`, `boolean` or `null`. Neither function
   throws for a document or a value — only for programmer error (no `origin`, a `format` other than
-  `"yaml"`/`"json"`, a pointer that is neither empty nor starts with `/`, a value that is not a scalar, and
+  `"yaml"`/`"json"`, a pointer that is not a string, a value that is not a scalar, and
   since v1.12 a `sharedEdits` that is none of the three), or on an internal inconsistency (an
   `Internal error: …` guard in the YAML writer, unreachable in every probe), which is a bug to report.
+  Since v1.17 a pointer that is not RFC 6901 (neither empty nor led by `/`, or a `~` not followed by `0` or `1`) is
+  refused as `path-malformed` at the document's start, and a value set to what it already holds is answered with the
+  edit that changes nothing even where it is shared or a block scalar.
 - `EditOptions`, `Edit`, `EditValue`, `LocatedKind`, `LocateResult`, `SetValueResult` are exported types.
 
 **The three laws**, each a conformance case, each also checked by round-tripping the edit through `parse`:

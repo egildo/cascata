@@ -1,0 +1,9 @@
+{
+  "name": "write/remove-at-a-malformed-pointer",
+  "cites": "v1.17 FR-003",
+  "format": "yaml",
+  "call": "remove",
+  "input": "a: 1\n",
+  "pointer": "a",
+  "expect": { "diagnostic": { "code": "path-malformed", "start": 0, "end": 0 } }
+}

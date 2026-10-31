@@ -1,0 +1,10 @@
+{
+  "name": "write/add-at-a-malformed-pointer",
+  "cites": "v1.17 FR-003",
+  "format": "yaml",
+  "call": "add",
+  "input": "a: 1\n",
+  "pointer": "/b~",
+  "value": { "bigint": "2" },
+  "expect": { "diagnostic": { "code": "path-malformed", "start": 0, "end": 0 } }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "write/unchanged-through-an-alias",
+  "cites": "v1.17 FR-001",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "base: &h 3.2\nW1: *h\n",
+  "pointer": "/W1",
+  "value": { "number": 3.2 },
+  "expect": { "edit": { "start": 9, "end": 12, "bytes": "3.2" } }
+}

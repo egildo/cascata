@@ -12,8 +12,9 @@
  * A writer adds no behaviour. `path` is an RFC 6901 pointer; the bytes are the document as
  * stored (§4.2), a byte-order mark and every carriage return counted; the origin is synthetic
  * because a writer is handed bytes, not a document's identity. A refusal's `reason` is the first
- * diagnostic's message. As with the verbs, only programmer error throws (a pointer that is
- * neither empty nor starts with `/`, a value that is not scalar, array or `Map` data).
+ * diagnostic's message. As with the verbs, only programmer error throws, as a `TypeError` (a
+ * pointer that is not a string, a value that is not scalar, array or `Map` data); a malformed
+ * pointer is refused as `path-malformed` (v1.17, the stenographer contract).
  */
 
 import { formatForLocation } from "./adapters/registry.js";

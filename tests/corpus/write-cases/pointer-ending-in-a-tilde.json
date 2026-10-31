@@ -1,0 +1,10 @@
+{
+  "name": "write/pointer-ending-in-a-tilde",
+  "cites": "v1.17 FR-003",
+  "format": "json",
+  "call": "setValue",
+  "input": "{\"a~\": 1}",
+  "pointer": "/a~",
+  "value": { "bigint": "2" },
+  "expect": { "diagnostic": { "code": "path-malformed", "start": 0, "end": 0 } }
+}

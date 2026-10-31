@@ -1,0 +1,10 @@
+{
+  "name": "write/unchanged-block-scalar",
+  "cites": "v1.17 FR-001",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "note: |\n  one\n  two\n",
+  "pointer": "/note",
+  "value": { "string": "one\ntwo\n" },
+  "expect": { "edit": { "start": 6, "end": 20, "bytes": "|\n  one\n  two\n" } }
+}

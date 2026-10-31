@@ -53,7 +53,7 @@ export interface WriteCase {
 }
 
 /** `v1.10 FR-003`, `v1.12 FR-011`, `v1.15 FR-009` — a write case cites the milestone's own requirement numbers, qualified. */
-const CITES_PATTERN = /^v1\.1(?:0|2|5) FR-\d+$/;
+const CITES_PATTERN = /^v1\.1(?:0|2|5|7) FR-\d+$/;
 
 function fail(source: string, reason: string): never {
   throw new Error(`Write case ${source} cannot be interpreted: ${reason}`);

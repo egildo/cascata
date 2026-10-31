@@ -1,0 +1,9 @@
+{
+  "name": "write/locate-a-malformed-pointer",
+  "cites": "v1.17 FR-003",
+  "format": "json",
+  "call": "locate",
+  "input": "{\"a\": 1}",
+  "pointer": "a",
+  "expect": { "diagnostic": { "code": "path-malformed", "start": 0, "end": 0 } }
+}

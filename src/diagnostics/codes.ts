@@ -327,6 +327,11 @@ export const OVERRIDE_CODES = ["override-reserved-key"] as const;
  *   which would let the merged value show through; positioned at the key, the merged
  *   value's span related. Refused whatever the shared-edits policy.
  *
+ * v1.17 (specs/027-stenography), from every verb that takes a pointer and answers a refusal:
+ * - `path-malformed` — the pointer is not RFC 6901: neither empty nor starting with `/`, or a
+ *   `~` not followed by `0` or `1`. It names no place in the document, so it is positioned at
+ *   the document's start, as a size refusal is. The stenographer contract's shared code.
+ *
  * All positioned at the value. They are v1.12.1's split of `edit-unsupported`,
  * which named seven refusals: these four; a key with no value inside a shared
  * mapping, dropped; and a tag the writer could not find and a format with no
@@ -347,6 +352,7 @@ export const EDIT_CODES = [
   "edit-target-exists",
   "edit-remove-document",
   "edit-reveals-merged",
+  "path-malformed",
 ] as const;
 
 /**

@@ -295,7 +295,9 @@ function runScalarSetValue(testCase: WriteCase, bytes: Uint8Array, edit: { reado
   // and merge-key copy of it (v1.12 FR-007) -- each read the value set; every other leaf is untouched.
   const sharing = nodesAt(beforeTree, "", replaced.span.start, replaced.span.end);
   if (!sharing.includes(testCase.pointer)) sharing.push(testCase.pointer);
-  if (testCase.sharedEdits === "refuse" && sharing.length > 1) failures.push(`under refuse, an edit was answered for a value with copies: ${sharing.join(", ")}`);
+  // v1.17 FR-001: the edit that changes nothing is answered even for a shared value; any other is refused under "refuse".
+  const changes = text !== new TextDecoder().decode(bytes.subarray(edit.start, edit.end));
+  if (testCase.sharedEdits === "refuse" && sharing.length > 1 && changes) failures.push(`under refuse, an edit that changes bytes was answered for a value with copies: ${sharing.join(", ")}`);
   for (const pointer of sharing) {
     if (!sameScalar(resolvePointer(afterTree, pointer), kind, value)) {
       failures.push(`L2: the edited document does not read ${String(value)} as a ${kind} at ${pointer}`);

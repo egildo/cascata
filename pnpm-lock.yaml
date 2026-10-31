@@ -12,6 +12,9 @@ importers:
         specifier: ^2.9.0
         version: 2.9.0
     devDependencies:
+      '@stenographers/stenography':
+        specifier: 0.1.0
+        version: 0.1.0
       '@types/node':
         specifier: ^26.4.0
         version: 26.4.0
@@ -327,6 +330,10 @@ packages:
     resolution: {integrity: sha512-at8QVep6S3h5Y6gSbdGU06bRY5WJkf6WUduM9YtvYMbYhB1MOFfUgc6kehitQXzOtMSaT70q7f9ydPhpqu821w==}
     cpu: [x64]
     os: [win32]
+
+  '@stenographers/stenography@0.1.0':
+    resolution: {integrity: sha512-mfZB/0RkrlEmGqMRl13O7gNHZUCGq2+seQ9Pn0p5qihuwwh+j/Bp+fdmQX23fznRVs+sKuZ9dzcLZo235wfyHw==}
+    engines: {node: '>=22'}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -755,6 +762,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.63.1':
     optional: true
+
+  '@stenographers/stenography@0.1.0': {}
 
   '@types/chai@5.2.3':
     dependencies:

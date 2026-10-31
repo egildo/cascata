@@ -120,19 +120,22 @@ describe("never throws for a document or a value; throws for programmer error", 
       }
     }
   });
-  it("a missing origin, an unknown format, a malformed pointer or a value that is not EditData is programmer error", () => {
+  it("a missing origin, an unknown format, a pointer or a value of the wrong type is programmer error", () => {
     const doc = enc("a: 1\n");
     expect(() => locate(doc, { format: "yaml" } as unknown as EditOptions, "/a")).toThrow(/origin/);
     expect(() => locate(doc, { format: "toml", origin } as unknown as EditOptions, "/a")).toThrow(/format/);
-    expect(() => locate(doc, yaml, "a")).toThrow(/Pointer/);
+    // v1.17 FR-002 and FR-003: a pointer that is not a string throws a TypeError; a malformed one is refused.
+    expect(() => locate(doc, yaml, 1 as unknown as string)).toThrow(TypeError);
+    expect(locate(doc, yaml, "a")).toMatchObject({ ok: false, diagnostics: [{ code: "path-malformed", primary: { start: 0, end: 0 } }] });
     // v1.15 FR-007: a value is a scalar, an array or a Map; a plain object still throws, and the message names what it found.
     expect(() => setValue(doc, yaml, "/a", {} as unknown as EditValue)).toThrow(/plain object/);
   });
-  it("pointer escapes: ~1 is a slash in a key, ~0 a tilde", () => {
+  it("pointer escapes: ~1 is a slash in a key, ~0 a tilde, any other ~ malformed", () => {
     const doc = enc("'a/b': 1\n'c~d': 2\n");
     expect(locate(doc, yaml, "/a~1b")).toMatchObject({ ok: true, start: 7, end: 8 });
     const tilde = locate(doc, yaml, "/c~0d");
     expect(tilde).toMatchObject({ ok: true, kind: "int" });
+    for (const pointer of ["/c~d", "/c~2d", "/a~"]) expect(locate(doc, yaml, pointer)).toMatchObject({ ok: false, diagnostics: [{ code: "path-malformed" }] });
   });
   it("an empty root pointer on a scalar document", () => {
     const result = roundTrip(yaml, "3\n", "", 4);

@@ -1,0 +1,10 @@
+{
+  "name": "write/pointer-with-a-bad-escape",
+  "cites": "v1.17 FR-003",
+  "format": "yaml",
+  "call": "setValue",
+  "input": "\"~2\": 1\n",
+  "pointer": "/~2",
+  "value": { "bigint": "2" },
+  "expect": { "diagnostic": { "code": "path-malformed", "start": 0, "end": 0 } }
+}

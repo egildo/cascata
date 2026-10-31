@@ -60,10 +60,14 @@ describe("v1.15 FR-001 -- openDocument", () => {
     expect(() => openDocument(bytes, { ...yaml, sharedEdits: "sometimes" } as unknown as EditOptions)).toThrow(/sharedEdits/);
   });
 
-  it("a malformed pointer given to the document throws, as to the one-shot verbs", () => {
+  // v1.17 FR-002 and FR-003: a malformed pointer is a refusal, as the stenographer contract has it; a pointer that is not a string throws a TypeError.
+  it("a malformed pointer given to the document is refused as path-malformed, as by the one-shot verbs", () => {
     const document = opened("a: 1\n");
-    expect(() => document.locate("a")).toThrow(/JSON Pointer/);
-    expect(() => document.setValue("a", 1)).toThrow(/JSON Pointer/);
+    for (const answer of [document.locate("a"), document.setValue("a", 1), document.add("/~2", 1), document.remove("/a~")]) {
+      expect(answer).toMatchObject({ ok: false, diagnostics: [{ code: "path-malformed" }] });
+    }
+    expect(() => document.locate(1 as unknown as string)).toThrow(TypeError);
+    expect(() => document.setValue(1 as unknown as string, 1)).toThrow(TypeError);
   });
 });
 
