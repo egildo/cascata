@@ -12,8 +12,12 @@
  * asks it to delegate to a path built from `hops` `../` segments followed
  * by a filename. `hops <= depth` lands at-or-inside the sandbox root
  * (`isWithinSandbox` treats the root itself as inside, per its own doc
- * comment); `hops > depth` walks past the root into the surrounding temp
- * directory, which must be refused regardless of how far past it goes.
+ * comment); `hops > depth` walks past the root, which must be refused
+ * regardless of how far past it goes. The root sits three padding
+ * directories inside the trial's own temp directory, one for each hop it
+ * can walk past it, so every file a trial writes is inside that directory
+ * and removed with it -- on a runner whose temp directory is `/tmp`, three
+ * hops past a root directly inside it reached `/` (v1.17.1).
  * The fragment file is written at the literal resolved location for
  * every trial, escaping or not, so the only variable under test is the
  * sandbox check itself -- never a coincidental `document-unreachable`.
@@ -52,7 +56,7 @@ describe("v0.6 SC-004 -- delegated paths are confined to the sandbox root", () =
 
       const outerDir = mkdtempSync(join(tmpdir(), "cascata-sandbox-confinement-"));
       try {
-        const sandboxRoot = join(outerDir, "sandbox");
+        const sandboxRoot = join(outerDir, "p0", "p1", "p2", "sandbox");
         const segments = Array.from({ length: depth }, (_, i) => `d${i}`);
         const configDir = join(sandboxRoot, ...segments);
         mkdirSync(configDir, { recursive: true });
