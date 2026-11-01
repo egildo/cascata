@@ -1837,5 +1837,7 @@ type AmendResult = { inside: false } | { inside: true; ok: true; value: EditData
   `/walls/W3`), or above it. Refusals are answers. The staged value is never changed; values are checked as
   `setValue` checks them.
 - **A writer's refusal names its code** (v1.16.1): `{ ok: false, reason, code }`, the first diagnostic's message and
-  code, from the one-shot verbs, an opened document's, and `open`.
+  code, from the one-shot verbs, an opened document's, and `open`. Bytes that cannot be read — not the encoding,
+  not parseable, past a size or depth limit — are `open-unreadable`, the stenographer contract's one code for them,
+  from `open` and the one-shot verbs alike; the parser's code leads the `reason` (`malformed-document: …`) (v1.17.2).
 - **`inside`** is `amend`'s first question alone: whether `pointer` is strictly below `within`, by whole segments.

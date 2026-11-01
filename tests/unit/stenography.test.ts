@@ -58,8 +58,6 @@ function host(format: "yaml" | "json"): Host {
   return {
     writer: format === "yaml" ? yamlWriter() : jsonWriter(),
     features: ["add", "remove", "inside", "amend", "shifted"],
-    // The one gap left: the shared name for bytes `open` cannot read is still a candidate in the contract.
-    known: { refusal: "open refuses with the parser's own code (invalid-encoding, malformed-document) until the contract rules on open-unreadable" },
     corpus: [...inputs].map((s) => ENCODER.encode(s)).filter((b) => read(b) !== undefined),
     read,
     edits(bytes) {

@@ -29,9 +29,22 @@ describe("v1.16.1 FR-005 -- every writer refusal names its code", () => {
     expect(code(doc.remove(""))).toBe("edit-remove-document");
     expect(code(doc.remove("/x"))).toBe("edit-target-absent");
   });
-  it("a document that does not parse names the parse's code", () => {
-    expect(code(writer.open(ENC.encode("a: [1\n")))).toBe("malformed-document");
-    expect(code(jsonWriter().open(ENC.encode('{"a": ')))).toBe("malformed-document");
+  // v1.17.2 (specs/027-stenography FR-005): the contract's one code for bytes that cannot be read; the parser's own in the reason.
+  it("a document that does not parse is open-unreadable, the parse's code in the reason", () => {
+    for (const result of [
+      writer.open(ENC.encode("a: [1\n")),
+      jsonWriter().open(ENC.encode('{"a": ')),
+      writer.locate(ENC.encode("a: [1\n"), "/a"),
+      jsonWriter().write(ENC.encode('{"a": '), "/a", 1n),
+    ]) {
+      expect(code(result)).toBe("open-unreadable");
+      expect(!result.ok && result.reason.startsWith("malformed-document: ")).toBe(true);
+    }
+  });
+  it("bytes that are not the encoding are open-unreadable too", () => {
+    const result = jsonWriter().open(new Uint8Array([0x7b, 0xff, 0x7d]));
+    expect(code(result)).toBe("open-unreadable");
+    expect(!result.ok && result.reason.startsWith("invalid-encoding: ")).toBe(true);
   });
   it("the message is still there", () => {
     const result = writer.write(bytes, "/x", 1n);

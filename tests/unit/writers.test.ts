@@ -7,7 +7,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { locate, setValue, createOrigin } from "../../src/index.js";
+import { locate, openDocument, setValue, createOrigin } from "../../src/index.js";
 import type { Diagnostic, EditValue } from "../../src/index.js";
 import { jsonWriter, yamlWriter } from "../../src/writers.js";
 import { loadWriteCase, writeSourceOf } from "../corpus/write-case.js";
@@ -92,6 +92,10 @@ describe("v1.11 FR-005 — equivalence with locate and setValue over every v1.10
     const bytes = writeSourceOf(testCase);
     // v1.12: each made under the case's own policy.
     const writer = testCase.format === "yaml" ? yamlWriter({ sharedEdits: testCase.sharedEdits }) : jsonWriter({ sharedEdits: testCase.sharedEdits });
+    // v1.17.2: bytes that do not open refuse as `open-unreadable`, the parser's code leading the reason.
+    const unreadable = !openDocument(bytes, { format: testCase.format, origin }).ok;
+    const refusalOf = (ds: readonly Diagnostic[]) =>
+      unreadable ? { ok: false, reason: `${ds[0]?.code}: ${ds[0]?.message}`, code: "open-unreadable" } : { ok: false, reason: ds[0]?.message, code: ds[0]?.code };
 
     it(`${testCase.name}: locate`, () => {
       // v1.12.1: the direct call under the same policy, since `locate` follows it.
@@ -100,7 +104,7 @@ describe("v1.11 FR-005 — equivalence with locate and setValue over every v1.10
       if (direct.ok) {
         expect(viaWriter).toEqual({ ok: true, start: direct.start, end: direct.end });
       } else {
-        expect(viaWriter).toEqual({ ok: false, reason: direct.diagnostics[0]?.message, code: direct.diagnostics[0]?.code });
+        expect(viaWriter).toEqual(refusalOf(direct.diagnostics));
       }
     });
 
@@ -114,7 +118,7 @@ describe("v1.11 FR-005 — equivalence with locate and setValue over every v1.10
           const plain = (ds: readonly Diagnostic[]) => ds.map((d) => [d.level, d.code, d.message, d.primary.start, d.primary.end, d.related.map((r) => [r.label, r.span.start, r.span.end])]);
           expect(viaWriter.ok && { ...viaWriter, diagnostics: plain(viaWriter.diagnostics) }).toEqual({ ok: true, edit: direct.edit, diagnostics: plain(direct.diagnostics) });
         } else {
-          expect(viaWriter).toEqual({ ok: false, reason: direct.diagnostics[0]?.message, code: direct.diagnostics[0]?.code });
+          expect(viaWriter).toEqual(refusalOf(direct.diagnostics));
         }
       });
     }

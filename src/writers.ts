@@ -14,18 +14,20 @@
  * because a writer is handed bytes, not a document's identity. A refusal's `reason` is the first
  * diagnostic's message. As with the verbs, only programmer error throws, as a `TypeError` (a
  * pointer that is not a string, a value that is not scalar, array or `Map` data); a malformed
- * pointer is refused as `path-malformed` (v1.17, the stenographer contract).
+ * pointer is refused as `path-malformed` (v1.17, the stenographer contract), and bytes that cannot be read as
+ * `open-unreadable`, the parser's code leading the `reason` (v1.17.2).
  */
 
 import { formatForLocation } from "./adapters/registry.js";
-import { locate, openDocument, setValue, type AmendOperation, type AmendResult, type Edit, type EditData, type EditFormat, type EditValue, type LocateResult, type OpenedDocument, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
+import { openDocument, type AmendOperation, type AmendResult, type Edit, type EditData, type EditFormat, type EditValue, type LocateResult, type OpenedDocument, type SetValueResult, type SharedEdits } from "./adapters/edit.js";
 import { createOrigin } from "./model/span.js";
 
 /** A refusal: the first diagnostic's message, and (v1.16.1) its code, so a caller can tell one refusal from another without reading prose. */
 /** A diagnostic, as the verbs give it (named through their results, so this module imports nothing but the verbs). */
 type Diagnostic = Extract<LocateResult, { ok: false }>["diagnostics"][number];
 
-export type WriterRefusal = { readonly ok: false; readonly reason: string; readonly code: Diagnostic["code"] };
+/** `code` is the diagnostic's, or `open-unreadable` for bytes that cannot be read (v1.17.2), the parser's code then leading `reason`. */
+export type WriterRefusal = { readonly ok: false; readonly reason: string; readonly code: Diagnostic["code"] | "open-unreadable" };
 
 export type WriterLocateResult = { readonly ok: true; readonly start: number; readonly end: number } | WriterRefusal;
 
@@ -77,6 +79,12 @@ function refusal(diagnostics: readonly Diagnostic[], fallback: string): WriterRe
   return { ok: false, reason: first.message, code: first.code };
 }
 
+/** The stenographer contract's one code for bytes `open` cannot read, whatever the parser's reason (v1.17.2). */
+function unreadable(diagnostics: readonly Diagnostic[]): WriterRefusal {
+  const { reason, code } = refusal(diagnostics, "not parsed");
+  return { ok: false, reason: `${code}: ${reason}`, code: "open-unreadable" };
+}
+
 /** The opened document behind each writer document, so `shifted` can compare two versions (v1.16). */
 const underlying = new WeakMap<WriterDocument, OpenedDocument>();
 
@@ -84,7 +92,7 @@ function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
   const options = { format, origin: ORIGIN, ...(writerOptions.sharedEdits !== undefined ? { sharedEdits: writerOptions.sharedEdits } : {}) };
   const open = (bytes: Uint8Array): WriterOpenResult => {
     const opened = openDocument(bytes, options);
-    if (!opened.ok) return refusal(opened.diagnostics, "not parsed");
+    if (!opened.ok) return unreadable(opened.diagnostics);
     const { document } = opened;
     const answered: WriterDocument = {
         locate(path) {
@@ -114,16 +122,16 @@ function writer(format: EditFormat, writerOptions: WriterOptions = {}): Writer {
     underlying.set(answered, document);
     return { ok: true, document: answered };
   };
-  // The one-shot verbs are the core's, which are open-then-ask (v1.15 FR-005).
+  // The one-shot verbs are open-then-ask (v1.15 FR-005), so bytes that cannot be read refuse as `open` does.
   return {
     claims: (location) => formatForLocation(location) === format,
     locate(bytes, path) {
-      const result = locate(bytes, options, path);
-      return result.ok ? { ok: true, start: result.start, end: result.end } : refusal(result.diagnostics, "not located");
+      const opened = open(bytes);
+      return opened.ok ? opened.document.locate(path) : opened;
     },
     write(bytes, path, value) {
-      const result = setValue(bytes, options, path, value);
-      return result.ok ? result : refusal(result.diagnostics, "not written");
+      const opened = open(bytes);
+      return opened.ok ? opened.document.write(path, value) : opened;
     },
     open,
   };

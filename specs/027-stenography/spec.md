@@ -11,7 +11,7 @@
 is that Cascata's YAML and JSON writers run the suite inside Cascata first. Its first run found three places where
 they broke the laws, and the owner ruled that Cascata changes to meet them.
 
-**Ships as v1.17.** `SPEC.md` Article IX, §14 and §15 are amended in the same commit.
+**Ships as v1.17**, FR-005 as v1.17.2. `SPEC.md` Article IX, §14 and §15 are amended in the same commit.
 
 - **FR-001** *Nothing changed* first. A value set to what it already holds answers the edit whose bytes are the
   bytes already there before any refusal is asked: a shared value (anchored and aliased, or reached through an
@@ -24,11 +24,19 @@ they broke the laws, and the owner ruled that Cascata changes to meet them.
 - **FR-004** The suite runs in `tests/unit/stenography.test.ts` on both writers, through `check` (vitest, not
   `node:test`). The host reads with Cascata's own parsers; its corpus is every write case's input that parses; its
   edits add one to each integer, in YAML only where the document has no alias, since a shared value is refused by
-  default. **Known, by name:** the refusal law is a recorded skip until the contract rules on `open-unreadable`;
-  `open` answers the parser's code.
+  default. Until v1.17.2 the refusal law was a recorded skip, pending the contract's ruling on `open-unreadable`.
+- **FR-005** (v1.17.2, ruled by the owner 2026-11-01) Bytes a writer cannot read are refused as `open-unreadable`,
+  the contract's one code, by `open` and by the one-shot `locate` and `write`, whatever the parser's reason: not the
+  encoding, not parseable, past a limit. The parser's code leads the `reason` (`malformed-document: …`). The verbs
+  and their diagnostics are unchanged. The suite's refusal law runs, no longer skipped.
 
 Cases before code: nine write cases (`unchanged-*`, `pointer-*`, `*-malformed-pointer`), and the two unit tests
 that asserted a malformed pointer throws now assert the refusal (the rule changed by ruling; no assertion was
 relaxed). The corpus runner's check that no edit is answered for a shared value under `refuse` now exempts the
 edit that changes nothing, which is FR-001. Sabotage: no early nothing-changed (2 suite laws and 11 cases red),
 no nothing-changed through an alias (2), no `~` rule (5), `Error` for `TypeError` (2).
+
+FR-005, cases before code: the writer-code test that asserted the parser's code now asserts `open-unreadable` (the
+rule changed by ruling), with one-shot and encoding cases added; the writer-equivalence test expects the new code
+for a case whose bytes do not open. Sabotage: `open` answering the parser's code (7 red), the parser's code dropped
+from the `reason` (5).
